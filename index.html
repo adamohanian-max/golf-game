@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Golf — Phase 1</title>
+  <link rel="stylesheet" href="style.css?v=23">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="scorecard">
+    <span class="line"><b id="holeLabel">Hole 1</b></span>
+    <span class="line" id="course"></span>
+    <span class="line">Par <span id="par">4</span> · <span id="yards">450</span> yds</span>
+    <span class="line">Strokes: <span id="strokes">0</span></span>
+    <span class="line">Score: <span id="score">E</span></span>
+  </div>
+
+  <div id="stats" class="hidden">
+    <div class="srow"><span class="slabel">Lie</span><span class="sval" id="st-lie">—</span></div>
+    <div class="snote" id="st-lie-note"></div>
+    <div class="srow"><span class="slabel">Carry</span><span class="sval" id="st-carry">—</span></div>
+    <div class="srow"><span class="slabel">Total</span><span class="sval" id="st-total">—</span></div>
+    <div class="srow"><span class="slabel">Ball speed</span><span class="sval" id="st-speed">—</span></div>
+    <div class="srow"><span class="slabel">To pin</span><span class="sval" id="st-pin">—</span></div>
+  </div>
+
+  <button id="course-menu-btn" class="hidden" aria-label="Menu">☰</button>
+
+  <div id="course-menu" class="hidden">
+    <div class="cm-box">
+      <h2>Select Hole</h2>
+      <div id="hole-grid"></div>
+      <div class="cm-actions">
+        <button id="cm-resume" class="menu-btn secondary">Resume</button>
+        <button id="cm-home" class="menu-btn">Home</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="course-controls" class="hidden">
+    <button id="aim-btn" aria-label="Aim camera at hole" title="Aim at hole">⛳</button>
+    <button id="measure-btn" aria-label="Range finder" title="Range finder">📏</button>
+  </div>
+
+  <div id="club-bar" class="hidden">
+    <div id="club-current"><b id="club-name">Driver</b><small id="club-yds">282y</small></div>
+  </div>
+
+  <div id="hint">Pull back, then swing forward · ← → to aim</div>
+
+  <div id="range-ui" class="hidden">
+    <div class="range-row">
+      <label for="range-slider">Target</label>
+      <input id="range-slider" type="range" min="50" max="300" step="5" value="150">
+      <span id="range-yards">150</span><span class="unit">yds</span>
+      <button id="range-menu-btn">Menu</button>
+    </div>
+    <div id="range-result">Aim up the range</div>
+  </div>
+
+  <div id="menu">
+    <div class="menu-box">
+      <h1>GOLF</h1>
+      <p class="menu-sub">Pinehurst No. 2</p>
+      <button id="play-course" class="menu-btn">Play Course</button>
+      <button id="play-range" class="menu-btn secondary">Driving Range</button>
+    </div>
+  </div>
+
+  <div id="result" class="hidden">
+    <div class="result-box">
+      <h2 id="result-title">In the hole!</h2>
+      <p id="result-detail"></p>
+      <button id="play-again">Next hole</button>
+    </div>
+  </div>
+
+  <script src="game.js?v=23"></script>
+</body>
+</html>

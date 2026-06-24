@@ -1,0 +1,19 @@
+# Debug screenshots (Playwright MCP captures)
+.playwright-mcp/
+phone-course.png
+*.local.png
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+
+# Local server / scratch
+*.log
+
+# Claude Code local settings
+.claude/settings.local.json
