@@ -2178,8 +2178,8 @@ function stepClub(delta) { // +1 = longer club, -1 = shorter
   selectedClub = CLUB_ORDER[Math.max(0, Math.min(CLUB_ORDER.length - 1, i - delta))];
   updateClubUI();
 }
-document.getElementById("hm-club-up").addEventListener("click", () => stepClub(1));
-document.getElementById("hm-club-down").addEventListener("click", () => stepClub(-1));
+// tap club display to cycle forward; arrow keys still work for full step control
+document.getElementById("hm-club-cur").addEventListener("click", () => stepClub(1));
 
 // ← / → aim: a single tap is one small eased nudge; holding (OS auto-repeat)
 // switches to a smooth continuous turn (updateCamera). Swipe up fires along it.

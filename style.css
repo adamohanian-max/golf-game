@@ -181,6 +181,37 @@ html, body {
 }
 .menu-btn.secondary:active { transform: scale(0.97); }
 
+/* Course picker list */
+#course-list {
+  width: 260px;
+  max-width: 82vw;
+  margin: 0 auto 14px;
+}
+.course-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin: 7px 0;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.12s, border-color 0.12s, background 0.12s;
+}
+.course-opt:active { transform: scale(0.98); }
+.course-opt.selected {
+  border-color: #2f9e44;
+  background: rgba(47, 158, 68, 0.16);
+  color: #fff;
+}
+.course-opt-name { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+.course-opt-sub { font-size: 12px; font-weight: 500; opacity: 0.7; }
+
 /* ---- Driving-range controls ---- */
 #range-ui {
   position: fixed;
@@ -282,11 +313,9 @@ html, body {
 #hm-club-row {
   position: fixed;
   right: 12px;
-  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  top: calc(env(safe-area-inset-top, 0px) + 156px);
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
+  padding: 6px 10px;
   background: rgba(8, 22, 14, 0.5);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
@@ -294,14 +323,12 @@ html, body {
   border-radius: 12px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
   z-index: 15;
-  min-width: 160px;
 }
 #hm-club-row.hidden { display: none; }
-#hm-club-row.putting .hm-step { opacity: 0.3; pointer-events: none; }
 #hud-menu {
   position: fixed;
   right: 12px;
-  top: calc(env(safe-area-inset-top, 0px) + 126px);
+  top: calc(env(safe-area-inset-top, 0px) + 210px);
   background: rgba(8, 22, 14, 0.94);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
@@ -327,7 +354,7 @@ html, body {
 }
 .hm-step:active { transform: scale(0.92); }
 #hm-club-cur {
-  flex: 1;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
