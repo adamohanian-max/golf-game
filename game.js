@@ -38,9 +38,9 @@ const TUNE = {
   // green field's gradient. slopeAccel folds the field's vertical scale + gravity
   // into one knob (world-units/frame^2 per unit gradient); calibrate by feel.
   // Slope is ignored below slopeStopSpeed so a ball settles instead of creeping.
-  slopeAccel: 0.005,
+  slopeAccel: 0.006,
   fairwaySlopeAccel: 0.0003, // terrain slope accel on fairway/rough (gentler than green break)
-  slopeStopSpeed: 0.02,
+  slopeStopSpeed: 0.04,
   // Shaded-relief topo overlay (greens only). Intensity = drawImage globalAlpha.
   reliefAmbient: 0.14,   // always-on whisper on the in-play / target green
   reliefFull: 0.32,      // boosted by the slope button (+ fall-line arrows)
@@ -166,7 +166,7 @@ function clubForYards(y) {
   return best;
 }
 let autoClubEnabled = true;
-let windEnabled = true;
+let windEnabled = false;
 // Auto-select the club for the current shot (course only; putter is auto on green).
 function autoClub() {
   if (!autoClubEnabled || mode === "range" || !HOLE) return;
