@@ -1186,8 +1186,8 @@ function drawAerial() {
 // Green: collar + fill + topo contours. `photo` => translucent over the aerial.
 function drawGreen(photo) {
   const cssW = window.innerWidth, cssH = window.innerHeight, s = HOLE.surfaces;
-  ctx.strokeStyle = photo ? "rgba(190,235,195,0.7)" : "#5aa563";
-  ctx.lineWidth = ws(photo ? 2 : 3);
+  ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(90,165,99,0.35)";
+  ctx.lineWidth = ws(photo ? 1.2 : 1.5);
   ctx.lineJoin = "round";
   for (const poly of s.green || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
   for (const g of HOLE._greens || []) {
