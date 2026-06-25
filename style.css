@@ -17,6 +17,17 @@ html, body {
   touch-action: none;   /* stop browser hijacking swipes (scroll/zoom) */
 }
 
+/* iOS haptic switch — present but off-screen (display:none would disable the haptic) */
+#haptic-switch {
+  position: fixed;
+  bottom: -100px;
+  left: -100px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 #scorecard {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 12px);
