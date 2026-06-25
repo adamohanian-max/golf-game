@@ -23,7 +23,7 @@ const TUNE = {
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.011,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
-  spinFactor: 0.040,     // how hard a curved swipe bends flight (draw/fade)
+  spinFactor: 0.030,     // how hard a curved swipe bends flight (draw/fade)
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
@@ -614,9 +614,31 @@ function pointerPos(e) {
   return { x: src.clientX - rect.left, y: src.clientY - rect.top };
 }
 
+// Two-finger camera state: { id0, id1, cx, cy, dist, angle, camAngle, camScale, focusX, focusY }
+let camTouch = null;
+function camTouchOf(touches, id) {
+  for (let i = 0; i < touches.length; i++) if (touches[i].identifier === id) return touches[i];
+  return null;
+}
+
 function swingStart(e) {
   if (measureMode) { const p = pointerPos(e); measurePoint = screenToWorld(p.x, p.y); measureDragging = true; return; }
+  if (e.touches && e.touches.length >= 2) {
+    // second finger landed — cancel any pending swing, enter camera-manipulation mode
+    swipe = null; swipePath = null; aimPreview = null;
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const dx = t1.clientX - t0.clientX, dy = t1.clientY - t0.clientY;
+    camTouch = {
+      id0: t0.identifier, id1: t1.identifier,
+      cx: (t0.clientX + t1.clientX) / 2, cy: (t0.clientY + t1.clientY) / 2,
+      dist: Math.hypot(dx, dy), angle: Math.atan2(dy, dx),
+      camAngle: camera.angle, camScale: camera.scale,
+      focusX: camera.focus.x, focusY: camera.focus.y,
+    };
+    return;
+  }
   if (!canSwing()) return;
+  camTouch = null;
   const p = pointerPos(e);
   const now = performance.now();
   swipe = { x: p.x, y: p.y, t: now };
@@ -624,10 +646,51 @@ function swingStart(e) {
 }
 function swingMove(e) {
   if (measureMode) { if (measureDragging) { e.preventDefault(); const p = pointerPos(e); measurePoint = screenToWorld(p.x, p.y); } return; }
+  if (camTouch && e.touches && e.touches.length >= 2) {
+    // two-finger camera: pinch (zoom), drag (pan), twist (rotate)
+    e.preventDefault();
+    const t0 = camTouchOf(e.touches, camTouch.id0);
+    const t1 = camTouchOf(e.touches, camTouch.id1);
+    if (!t0 || !t1) return;
+    const dx = t1.clientX - t0.clientX, dy = t1.clientY - t0.clientY;
+    const cx = (t0.clientX + t1.clientX) / 2, cy = (t0.clientY + t1.clientY) / 2;
+    const newDist = Math.hypot(dx, dy), newAng = Math.atan2(dy, dx);
+
+    // zoom: clamp to 0.25× – 4× the original hole-fit scale
+    const minScale = camTouch.camScale * 0.25, maxScale = camTouch.camScale * 4;
+    camera.tScale = Math.max(minScale, Math.min(maxScale, camTouch.camScale * newDist / camTouch.dist));
+    camera.scale = camera.tScale;
+
+    // rotate
+    const dAng = angDiff(newAng, camTouch.angle);
+    camera.tAngle = camTouch.camAngle - dAng;
+    camera.angle = camera.tAngle;
+
+    // pan: midpoint shift in world coords (accounting for rotation)
+    const dcx = cx - camTouch.cx, dcy = cy - camTouch.cy;
+    const cos = Math.cos(camera.angle), sin = Math.sin(camera.angle);
+    camera.tFocus.x = camTouch.focusX - (dcx * cos + dcy * sin) / camera.scale;
+    camera.tFocus.y = camTouch.focusY - (-dcx * sin + dcy * cos) / camera.scale;
+    camera.focus.x = camera.tFocus.x;
+    camera.focus.y = camera.tFocus.y;
+    return;
+  }
   if (!swipe) return;
   e.preventDefault();
   const p = pointerPos(e);
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
+  // update aim preview from pull-back direction
+  if (swipePath.length > 2) {
+    const s0 = swipePath[0], sc = swipePath[swipePath.length - 1];
+    const pullDx = sc.x - s0.x, pullDy = sc.y - s0.y;
+    const pullDist = Math.hypot(pullDx, pullDy);
+    if (pullDist > 8) {
+      const backDist = pullDist / refScale;
+      const frac = Math.min(Math.pow(Math.min(backDist / TUNE.backswingFull, 1), 1.7), 1);
+      // aim direction = opposite of pull (screen space)
+      aimPreview = { dx: -pullDx / pullDist, dy: -pullDy / pullDist, frac };
+    }
+  }
 }
 // Backswing distance (world units) + forward-swing speed (world u/s) -> launch
 // speed. Backswing length is the PRIMARY control: distance is ~linear in how far
@@ -671,8 +734,8 @@ function launchShot(ang, frac, spin, onGreen) {
     const H = (c.maxH / YARDS_PER_UNIT) * f;     // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * f);           // real ball speed for the HUD
     // Amplify swipe curvature so small deviations produce visible draw/fade.
-    // Convex power curve (exp < 1): 10° off-line (raw ≈ 0.17) → stored 0.37 (2.2×).
-    b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.65);
+    // Convex power curve (exp < 1): 10° off-line (raw ≈ 0.17) → stored 0.28 (1.6×).
+    b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.75);
     // Chips/pitches: partial swings with lofted clubs still impart near-full spin rpm.
     // Scale spinN up toward full as f drops below 0.6 (short shots check hard).
     const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
@@ -737,6 +800,12 @@ function analyzeSwing(path) {
 
 function swingEnd(e) {
   if (measureMode) { measureDragging = false; return; }
+  // finger count dropped below 2 → exit camera mode (don't fire a shot)
+  if (camTouch) {
+    if (!e.touches || e.touches.length < 2) camTouch = null;
+    swipe = null; swipePath = null; aimPreview = null;
+    return;
+  }
   if (!swipe || !canSwing()) { swipe = null; swipePath = null; aimPreview = null; return; }
   const p = pointerPos(e);
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
@@ -744,11 +813,10 @@ function swingEnd(e) {
   swipe = null; swipePath = null; aimPreview = null;
   if (!sw) return;
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  // screen direction -> world direction (undo the camera rotation)
   launchShot(sw.ang - view.angle, swingFraction(sw.forwardSpeed, sw.backDist), sw.spin, onGreen);
 }
 
-canvas.addEventListener("touchstart", swingStart, { passive: true });
+canvas.addEventListener("touchstart", swingStart, { passive: false });
 canvas.addEventListener("touchmove", swingMove, { passive: false });
 canvas.addEventListener("touchend", swingEnd);
 canvas.addEventListener("mousedown", swingStart);
@@ -1441,7 +1509,46 @@ function draw() {
   }
   }
 
-  // (no aim line — feel-based: read the hole, not a guide line)
+  // Aim indicator: shown during pull-back to make swing intent obvious
+  if (aimPreview && !state.moving && !state.inHole) {
+    const bx = wx(state.ball.x, state.ball.y), by = wy(state.ball.x, state.ball.y);
+    const { dx, dy, frac } = aimPreview;
+    // dashed shot-direction line, length 40–140px proportional to power
+    const lineLen = 40 + frac * 100;
+    const ex = bx + dx * lineLen, ey = by + dy * lineLen;
+    const alpha = 0.35 + frac * 0.55;
+    ctx.save();
+    ctx.setLineDash([8, 5]);
+    ctx.lineDashOffset = 0;
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
+    // arrowhead
+    ctx.setLineDash([]);
+    const headLen = 10, headAng = Math.atan2(dy, dx);
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - headLen * Math.cos(headAng - 0.38), ey - headLen * Math.sin(headAng - 0.38));
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - headLen * Math.cos(headAng + 0.38), ey - headLen * Math.sin(headAng + 0.38));
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // power label (yardage estimate) when pulled back enough
+    if (frac > 0.12) {
+      const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
+      const club = TUNE.clubs[onGreen ? "putter" : selectedClub];
+      const estYds = onGreen
+        ? Math.round(frac * frac * 50)
+        : Math.round(club.carry * Math.pow(frac, 1.7));
+      ctx.font = "bold 13px -apple-system, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fillText(`~${estYds}y`, ex + dx * 18, ey + dy * 18);
+    }
+    ctx.restore();
+  }
 
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
   if (!state.inHole) {
