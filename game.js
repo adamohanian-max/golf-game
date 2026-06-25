@@ -1297,6 +1297,18 @@ function greensInPlay() {
 }
 
 // Stylized vector rendering (used when no aerial, e.g. offline / St Andrews).
+function drawOOBOverlay(s) {
+  if (!s.woods || !s.woods.length) return;
+  ctx.save();
+  ctx.globalAlpha = 0.32;
+  fillPolys(s.woods, "#cc1f1f");
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "rgba(210,40,40,0.65)";
+  ctx.lineWidth = 1.5;
+  for (const poly of s.woods) { tracePoly(poly); ctx.stroke(); }
+  ctx.restore();
+}
+
 function drawVectorSurfaces() {
   const cssW = window.innerWidth, cssH = window.innerHeight, s = HOLE.surfaces;
   const bg = ctx.createLinearGradient(0, 0, 0, cssH);
@@ -1332,6 +1344,7 @@ function drawVectorSurfaces() {
   }
 
   fillPolys(s.woods, "#2f5d34");                  // tree stands
+  drawOOBOverlay(s);                               // red OOB tint on top
   ctx.strokeStyle = "rgba(225,220,205,0.8)";       // cart paths
   ctx.lineWidth = Math.max(ws(0.8), 1);
   for (const poly of s.cartpath || []) strokePolyline(poly);
@@ -1366,6 +1379,7 @@ function drawPhotoSurfaces() {
   fillPolys(s.water, "#1f86d8");
   ctx.globalAlpha = 1;
   drawGreen(true);
+  drawOOBOverlay(s);                               // red OOB tint over aerial
 }
 
 let ballTrail = [];   // recent airborne ball positions (screen px) for motion trail
