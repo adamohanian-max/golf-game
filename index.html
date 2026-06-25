@@ -4,10 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
   <canvas id="game"></canvas>
+
+  <!-- iOS web-haptic hack: toggling a <input switch> emits a system tick on iOS 17.4+
+       (iOS Safari has no navigator.vibrate). Kept off-screen, not display:none. -->
+  <label id="haptic-switch" aria-hidden="true"><input type="checkbox" switch></label>
 
   <div id="scorecard">
     <span class="line"><b id="holeLabel">Hole 1</b></span>
@@ -52,7 +56,7 @@
     <button class="club-step" id="club-up" aria-label="Longer club">+</button>
   </div>
 
-  <div id="hint">Pull back, then swing forward · ← → to aim</div>
+  <div id="hint">Swipe to swing · ← → to aim</div>
 
   <div id="range-ui" class="hidden">
     <div class="range-row">
@@ -105,6 +109,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=34"></script>
+  <script src="game.js?v=36"></script>
 </body>
 </html>

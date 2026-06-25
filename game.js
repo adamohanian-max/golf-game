@@ -11,14 +11,6 @@ const TUNE = {
   captureSpeed: 0.22,    // ball must be slower than this to drop in cup (low = hard)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
 
-  // --- Two-phase swing: pull back (backswing), then swing forward & release.
-  // Backswing LENGTH is the primary, precise power control (distance is linear in
-  // pull-back); forward-swing speed is a secondary tempo modifier.
-  backswingFull: 80,     // backswing distance (world units) = full power
-  tempoSpeed: 500,       // forward-swing speed (world u/s) read as "normal" tempo
-  tempoMin: 0.90,        // slow forward swing trims distance to this fraction
-  tempoMax: 1.12,        // fast forward swing adds distance up to this fraction
-
   // --- Ball flight ---
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.011,        // downward accel (world units / frame^2) while airborne
@@ -402,6 +394,7 @@ function ballisticFlightStep(b) {
       state.airborne = false;
     } else if (down > TUNE.bounceStopVz) {
       const bo = TUNE.bounce[surf] || TUNE.bounce.fairway;
+      haptic(Math.max(2, Math.round(down * 35)));  // intensity scales with impact speed
       b.vz = down * bo.e;   // bounce back up
       b.vx *= bo.h;         // scrub/grab forward speed
       b.vy *= bo.h;
@@ -580,11 +573,18 @@ function playHolePlunk() {
   o.start(t + 0.06); o.stop(t + 0.36);
 }
 
+// Light haptic. navigator.vibrate is Android-only (iOS Safari has NO web vibration
+// API), so we also toggle a hidden <input switch> — the one trick that emits a system
+// haptic tick on iOS 17.4+. Best-effort: iOS may ignore it outside a direct tap.
+const hapticSwitch = document.querySelector("#haptic-switch input");
+function haptic(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* ignore */ }
+  if (hapticSwitch) { try { hapticSwitch.checked = !hapticSwitch.checked; } catch (e) { /* ignore */ } }
+}
 function beginHoleDrop(x, y, vx, vy) {
   holeDrop = { t0: performance.now(), x, y, vx, vy };
   playHolePlunk();
-  // light haptic: tick · tick · thud, mirroring the ball settling into the cup
-  if (navigator.vibrate) navigator.vibrate([10, 26, 16]);
+  haptic([14, 22, 40]);   // tick · gap · firmer thud — the ball settling into the cup
 }
 // Open the result modal once the drop animation has played out.
 function tickHoleDrop() {
@@ -625,7 +625,7 @@ function swingStart(e) {
   if (measureMode) { const p = pointerPos(e); measurePoint = screenToWorld(p.x, p.y); measureDragging = true; return; }
   if (e.touches && e.touches.length >= 2) {
     // second finger landed — cancel any pending swing, enter camera-manipulation mode
-    swipe = null; swipePath = null; aimPreview = null;
+    swipe = null; swipePath = null;
     const t0 = e.touches[0], t1 = e.touches[1];
     const dx = t1.clientX - t0.clientX, dy = t1.clientY - t0.clientY;
     camTouch = {
@@ -679,32 +679,6 @@ function swingMove(e) {
   e.preventDefault();
   const p = pointerPos(e);
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
-  // update aim preview from pull-back direction
-  if (swipePath.length > 2) {
-    const s0 = swipePath[0], sc = swipePath[swipePath.length - 1];
-    const pullDx = sc.x - s0.x, pullDy = sc.y - s0.y;
-    const pullDist = Math.hypot(pullDx, pullDy);
-    if (pullDist > 8) {
-      const backDist = pullDist / refScale;
-      const frac = Math.min(Math.pow(Math.min(backDist / TUNE.backswingFull, 1), 1.7), 1);
-      // aim direction = opposite of pull (screen space)
-      aimPreview = { dx: -pullDx / pullDist, dy: -pullDy / pullDist, frac };
-    }
-  }
-}
-// Backswing distance (world units) + forward-swing speed (world u/s) -> launch
-// speed. Backswing length is the PRIMARY control: distance is ~linear in how far
-// you pull back (half pull-back ≈ half distance), so medium shots are precise and
-// repeatable. Forward-swing speed is a secondary tempo nudge (±). Capped per
-// surface (gentle on the green).
-// Swing -> fraction of a full shot (0..1). Backswing LENGTH is the primary,
-// precise control (linear); forward-swing speed is a secondary tempo nudge.
-function swingFraction(forwardSpeed, backDist) {
-  const backFactor = Math.min(backDist / TUNE.backswingFull, 1);
-  const tempo = Math.max(TUNE.tempoMin, Math.min(TUNE.tempoMax, forwardSpeed / TUNE.tempoSpeed));
-  // Power curve: concave (exp > 1) compresses the low end → more screen travel per
-  // distance unit on short shots. 50% pull → ~30% power; 25% pull → 9% power.
-  return Math.min(Math.pow(backFactor, 1.7) * tempo, 1);
 }
 
 // Fire the ball: `ang` direction, `frac` 0..1 swing fullness, `spin` (-1..1).
@@ -744,6 +718,7 @@ function launchShot(ang, frac, spin, onGreen) {
     state.airborne = true;
   }
   state.moving = true;
+  haptic(usePutter ? 3 : 9);  // light tick for putter, firm buzz for full shot
   if (onGreen) {
     state.putts++;
   } else {
@@ -768,52 +743,22 @@ function launch(dxs, dys, dt, spin = 0) {
   launchShot(Math.atan2(dys, dxs) - view.angle, frac, spin, onGreen);
 }
 
-// Two-phase touch/mouse swing: find the top of the backswing (apex), then the
-// forward swing (apex -> release) gives the shot direction, speed, and spin.
-function analyzeSwing(path) {
-  if (!path || path.length < 2) return null;
-  const start = path[0], end = path[path.length - 1];
-  // apex = top of backswing: farthest point from start, up to the reversal.
-  let apexIdx = 0, maxD = 0;
-  for (let i = 1; i < path.length; i++) {
-    const d = Math.hypot(path[i].x - start.x, path[i].y - start.y);
-    if (d > maxD) { maxD = d; apexIdx = i; }
-    else if (maxD > 12 && d < maxD * 0.75) break; // reversed -> downswing started
-  }
-  if (apexIdx >= path.length - 1) { apexIdx = 0; maxD = 0; } // pure forward drag
-  const fwd = path.slice(apexIdx);
-  const fStart = fwd[0], fEnd = fwd[fwd.length - 1];
-  let fdx = fEnd.x - fStart.x, fdy = fEnd.y - fStart.y;
-  let fdist = Math.hypot(fdx, fdy);
-  if (fdist < 1) {                          // no forward motion -> use whole gesture
-    fdx = end.x - start.x; fdy = end.y - start.y; fdist = Math.hypot(fdx, fdy);
-    if (fdist < 1) return null;
-  }
-  const fdt = Math.max((fEnd.t - fStart.t) / 1000, 0.001);
-  return {
-    ang: Math.atan2(fdy, fdx),
-    forwardSpeed: (fdist / refScale) / fdt, // world units / sec
-    backDist: maxD / refScale,              // world units
-    spin: curveFromPath(fwd),
-  };
-}
-
 function swingEnd(e) {
   if (measureMode) { measureDragging = false; return; }
-  // finger count dropped below 2 → exit camera mode (don't fire a shot)
   if (camTouch) {
     if (!e.touches || e.touches.length < 2) camTouch = null;
-    swipe = null; swipePath = null; aimPreview = null;
+    swipe = null; swipePath = null;
     return;
   }
-  if (!swipe || !canSwing()) { swipe = null; swipePath = null; aimPreview = null; return; }
+  if (!swipe || !canSwing()) { swipe = null; swipePath = null; return; }
   const p = pointerPos(e);
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
-  const sw = analyzeSwing(swipePath);
-  swipe = null; swipePath = null; aimPreview = null;
-  if (!sw) return;
-  const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  launchShot(sw.ang - view.angle, swingFraction(sw.forwardSpeed, sw.backDist), sw.spin, onGreen);
+  const path = swipePath;
+  swipe = null; swipePath = null;
+  const start = path[0], end = path[path.length - 1];
+  const dxs = end.x - start.x, dys = end.y - start.y;
+  const dt = (end.t - start.t) / 1000;
+  launch(dxs, dys, dt, curveFromPath(path));
 }
 
 canvas.addEventListener("touchstart", swingStart, { passive: false });
@@ -871,8 +816,6 @@ const ctx = canvas.getContext("2d");
 // World->screen as a full affine so the camera can ROTATE (each hole plays "up"
 // even on the connected global map). screen.x = a*x + b*y + c, screen.y = d*x + e*y + f.
 const view = { a: 1, b: 0, c: 0, d: 0, e: 1, f: 0, scale: 1, angle: 0 };
-let aimPreview = null;
-
 const VIEW_PAD_MIN = 3;     // world-unit margin when ball is right by the cup
 const VIEW_PAD_FRAC = 0.25; // extra margin as a fraction of the ball->cup span
 const VIEW_MIN = 7;         // smallest framed dimension (caps how far we zoom in)
@@ -1509,47 +1452,6 @@ function draw() {
   }
   }
 
-  // Aim indicator: shown during pull-back to make swing intent obvious
-  if (aimPreview && !state.moving && !state.inHole) {
-    const bx = wx(state.ball.x, state.ball.y), by = wy(state.ball.x, state.ball.y);
-    const { dx, dy, frac } = aimPreview;
-    // dashed shot-direction line, length 40–140px proportional to power
-    const lineLen = 40 + frac * 100;
-    const ex = bx + dx * lineLen, ey = by + dy * lineLen;
-    const alpha = 0.35 + frac * 0.55;
-    ctx.save();
-    ctx.setLineDash([8, 5]);
-    ctx.lineDashOffset = 0;
-    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
-    // arrowhead
-    ctx.setLineDash([]);
-    const headLen = 10, headAng = Math.atan2(dy, dx);
-    ctx.beginPath();
-    ctx.moveTo(ex, ey);
-    ctx.lineTo(ex - headLen * Math.cos(headAng - 0.38), ey - headLen * Math.sin(headAng - 0.38));
-    ctx.moveTo(ex, ey);
-    ctx.lineTo(ex - headLen * Math.cos(headAng + 0.38), ey - headLen * Math.sin(headAng + 0.38));
-    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    // power label (yardage estimate) when pulled back enough
-    if (frac > 0.12) {
-      const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-      const club = TUNE.clubs[onGreen ? "putter" : selectedClub];
-      const estYds = onGreen
-        ? Math.round(frac * frac * 50)
-        : Math.round(club.carry * Math.pow(frac, 1.7));
-      ctx.font = "bold 13px -apple-system, sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-      ctx.fillText(`~${estYds}y`, ex + dx * 18, ey + dy * 18);
-    }
-    ctx.restore();
-  }
-
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
   if (!state.inHole) {
     const b = state.ball;
@@ -1598,25 +1500,44 @@ function draw() {
     ctx.lineWidth = 1;
     ctx.stroke();
   } else if (holeDrop) {
-    // ball-into-cup: catch the lip, rattle to centre, then sink (shrink + darken)
+    // ball-into-cup. Two beats: (1) roll the last bit to the cup, decelerating, with a
+    // rim rattle if it arrived with pace; (2) the ball drops BELOW the lip — clipped to
+    // the cup so the near rim occludes it as it falls and darkens into the hole. That
+    // occlusion (not a shrink-to-nothing) is what reads as a real hole-out.
     const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
+    const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wy(HOLE.holePos.x, HOLE.holePos.y);
+    const hr = Math.max(ws(HOLE.holeRadius), 3);
     const p = Math.min(1, (performance.now() - holeDrop.t0) / HOLE_DROP_MS);
     const easeOut = (x) => 1 - Math.pow(1 - x, 3), easeIn = (x) => x * x * x;
-    const a = easeOut(Math.min(1, p / 0.28));          // settle to the cup centre
-    let wxp = holeDrop.x + (HOLE.holePos.x - holeDrop.x) * a;
-    let wyp = holeDrop.y + (HOLE.holePos.y - holeDrop.y) * a;
-    const sp = Math.hypot(holeDrop.vx, holeDrop.vy) || 1; // rim rattle: decaying wobble
-    const wob = (1 - p) * (1 - p) * 0.6 * Math.sin(p * 46);
-    wxp += (-holeDrop.vy / sp) * wob; wyp += (holeDrop.vx / sp) * wob;
-    const s = easeIn(Math.max(0, (p - 0.18) / 0.82));  // sink amount
-    const r = Math.max(baseR * (1 - 0.9 * s), 0.5);
-    const sx = wx(wxp, wyp), sy = wy(wxp, wyp) + s * baseR * 0.8; // slight drop
-    const mix = (c0, c1) => Math.round(c0 + (c1 - c0) * s);
-    ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, Math.PI * 2);
-    ctx.fillStyle = `rgb(${mix(245, 16)},${mix(245, 36)},${mix(238, 20)})`;
-    ctx.fill();
-    if (s < 0.6) { ctx.strokeStyle = `rgba(120,120,110,${0.7 * (1 - s)})`; ctx.lineWidth = 1; ctx.stroke(); }
+    // roll-in: entry point -> just past centre toward the FAR lip (catches it)
+    const a = easeOut(Math.min(1, p / 0.34));
+    const sp = Math.hypot(holeDrop.vx, holeDrop.vy) || 1;
+    const dirx = holeDrop.vx / sp, diry = holeDrop.vy / sp;       // heading
+    const overX = HOLE.holePos.x + dirx * HOLE.holeRadius * 0.45; // far-lip catch
+    const overY = HOLE.holePos.y + diry * HOLE.holeRadius * 0.45;
+    let wxp = holeDrop.x + (overX - holeDrop.x) * a;
+    let wyp = holeDrop.y + (overY - holeDrop.y) * a;
+    const wob = (1 - p) * (1 - p) * Math.min(0.5, sp * 2.2) * Math.sin(p * 50); // rattle
+    wxp += (-diry) * wob; wyp += (dirx) * wob;
+    const bx = wx(wxp, wyp), by = wy(wxp, wyp);
+    const s = easeIn(Math.max(0, (p - 0.34) / 0.66));            // 0..1 sink
+    if (s <= 0) {
+      // still rolling on the surface — full white ball
+      ctx.beginPath(); ctx.arc(bx, by, baseR, 0, Math.PI * 2);
+      ctx.fillStyle = "#f4f4ef"; ctx.fill();
+      ctx.strokeStyle = "rgba(120,120,110,0.7)"; ctx.lineWidth = 1; ctx.stroke();
+    } else {
+      // sinking: clip to the cup; ball falls toward + past the rim and darkens
+      const mix = (c0, c1) => Math.round(c0 + (c1 - c0) * s);
+      const fall = s * hr * 1.6;                                  // drop below the lip
+      const r = baseR * (1 - 0.25 * s);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(hx, hy, hr * 1.02, 0, Math.PI * 2); ctx.clip();
+      ctx.beginPath(); ctx.arc(bx, by + fall, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgb(${mix(244, 14)},${mix(244, 30)},${mix(237, 18)})`;
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   // vignette — darken edges to draw the eye toward the hole
