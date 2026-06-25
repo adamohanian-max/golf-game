@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -42,10 +42,13 @@
   <div id="course-controls" class="hidden">
     <button id="aim-btn" aria-label="Aim camera at hole" title="Aim at hole">⛳</button>
     <button id="measure-btn" aria-label="Range finder" title="Range finder">📏</button>
+    <button id="slope-btn" aria-label="Show slope" title="Show slope">⛰</button>
   </div>
 
   <div id="club-bar" class="hidden">
+    <button class="club-step" id="club-down" aria-label="Shorter club">−</button>
     <div id="club-current"><b id="club-name">Driver</b><small id="club-yds">282y</small></div>
+    <button class="club-step" id="club-up" aria-label="Longer club">+</button>
   </div>
 
   <div id="hint">Pull back, then swing forward · ← → to aim</div>
@@ -77,6 +80,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=23"></script>
+  <script src="game.js?v=26"></script>
 </body>
 </html>

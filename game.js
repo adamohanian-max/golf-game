@@ -46,6 +46,7 @@ const TUNE = {
   // Slope is ignored below slopeStopSpeed so a ball settles instead of creeping.
   slopeAccel: 0.0006,
   slopeStopSpeed: 0.02,
+  slopeRefGrad: 0.15,    // heatmap: gradient of a "typically steep" green; damps flat surfaces
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
@@ -186,6 +187,7 @@ function resetState() {
 let mode = "menu";
 let holeTransition = null; // active hole-change animation (fade + zoom-in), or null
 let measureMode = false;   // range-finder: drag to measure distance from ball & pin
+let showSlope = false;     // slope heatmap overlay toggle (greens + synthetic fairway)
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let measureDragging = false;
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
@@ -534,7 +536,9 @@ function swingMove(e) {
 function swingFraction(forwardSpeed, backDist) {
   const backFactor = Math.min(backDist / TUNE.backswingFull, 1);
   const tempo = Math.max(TUNE.tempoMin, Math.min(TUNE.tempoMax, forwardSpeed / TUNE.tempoSpeed));
-  return Math.min(backFactor * tempo, 1);
+  // Power curve: spreads out the low end so short partial swings are less twitchy.
+  // 50% pull-back -> ~41% power (not 50%), giving more screen range for chips/pitches.
+  return Math.min(Math.pow(backFactor, 0.7) * tempo, 1);
 }
 
 // Fire the ball: `ang` direction, `frac` 0..1 swing fullness, `spin` (-1..1).
@@ -559,7 +563,11 @@ function launchShot(ang, frac, spin, onGreen) {
     const H = (c.maxH / YARDS_PER_UNIT) * f;     // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * f);           // real ball speed for the HUD
     b.spin = spin;
-    setupFlight(b, ang, C, H, c.land * Math.PI / 180, c.spinN);
+    // Chips/pitches: partial swings with lofted clubs still impart near-full spin rpm.
+    // Scale spinN up toward full as f drops below 0.6 (short shots check hard).
+    const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
+    const effectiveSpinN = Math.min(1, c.spinN * chipBoost);
+    setupFlight(b, ang, C, H, c.land * Math.PI / 180, effectiveSpinN);
     state.airborne = true;
   }
   state.moving = true;
@@ -947,20 +955,59 @@ function buildGreenTopo(polys) {
       x: tmag * dirx / R + 0.5 * Math.cos((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph) / wl,
       y: tmag * diry / R - 0.5 * Math.sin((x - bb.cx) / wl + ph) * Math.sin((y - bb.cy) / wl - ph) / wl,
     });
-    let hmin = Infinity, hmax = -Infinity;
+    let hmin = Infinity, hmax = -Infinity, gmax = 1e-6;
     const N = 22;
     for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
-      const v = h(bb.minx + (bb.maxx - bb.minx) * i / N, bb.miny + (bb.maxy - bb.miny) * j / N);
+      const sx = bb.minx + (bb.maxx - bb.minx) * i / N, sy = bb.miny + (bb.maxy - bb.miny) * j / N;
+      const v = h(sx, sy);
       if (v < hmin) hmin = v; if (v > hmax) hmax = v;
+      const g = grad(sx, sy), gm = Math.hypot(g.x, g.y);  // max steepness, for heatmap alpha
+      if (gm > gmax) gmax = gm;
     }
     const nL = 7, levels = [];
     for (let kk = 1; kk <= nL; kk++) levels.push(hmin + (hmax - hmin) * kk / (nL + 1));
     const contours = contourSegments(h, bb.minx, bb.miny, bb.maxx, bb.maxy, levels, 30, 30);
     out.push({
-      poly, contours, h, grad,
+      poly, contours, h, grad, gmax,
       hi: { x: bb.cx + dirx * R, y: bb.cy + diry * R },  // high side (sunlit)
       lo: { x: bb.cx - dirx * R, y: bb.cy - diry * R },  // low side (shaded)
     });
+  }
+  return out;
+}
+// Per-fairway synthetic height field for the slope heatmap ONLY (no real elevation,
+// no contours, no physics — fabricated, won't match the aerial). Coarser/broader than
+// greens: fairways are large, so a longer wavelength reads as gentle rolls.
+function buildFairwayTopo(polys) {
+  const out = [];
+  if (!polys) return out;
+  for (const poly of polys) {
+    if (poly.length < 3) continue;
+    const bb = polyBBox(poly);
+    const R = Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2 || 1;
+    const r1 = hashSeed(bb.cx - 3.1, bb.cy + 5.7), r2 = hashSeed(bb.cy + 1.3, bb.cx - 4.2), r3 = hashSeed(bb.cx + 11.9, bb.cy - 8.4);
+    const theta = r1 * Math.PI * 2;     // downhill/tilt direction
+    const tmag = 0.5 + 0.5 * r2;        // tilt strength
+    const wl = R * (1.1 + 0.8 * r3);    // broad undulation (longer than greens)
+    const ph = r3 * 6.2831;
+    const dirx = Math.cos(theta), diry = Math.sin(theta);
+    const h = (x, y) => {
+      const along = ((x - bb.cx) * dirx + (y - bb.cy) * diry) / R;
+      const und = Math.sin((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph);
+      return tmag * along + 0.5 * und;
+    };
+    const grad = (x, y) => ({
+      x: tmag * dirx / R + 0.5 * Math.cos((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph) / wl,
+      y: tmag * diry / R - 0.5 * Math.sin((x - bb.cx) / wl + ph) * Math.sin((y - bb.cy) / wl - ph) / wl,
+    });
+    let gmax = 1e-6;
+    const N = 16;
+    for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+      const g = grad(bb.minx + (bb.maxx - bb.minx) * i / N, bb.miny + (bb.maxy - bb.miny) * j / N);
+      const gm = Math.hypot(g.x, g.y);
+      if (gm > gmax) gmax = gm;
+    }
+    out.push({ poly, h, grad, gmax });
   }
   return out;
 }
@@ -1046,6 +1093,79 @@ function drawGreen(photo) {
       ctx.stroke();
     });
   }
+}
+
+// Slope heatmap, green-book convention (StrackaLine/SwingU): COLOR = steepness only
+// (blue flat -> cyan -> green -> yellow -> orange -> red steep), camera-independent;
+// DIRECTION is shown separately by fall-line arrows. Steepness is normalized per
+// surface (each field's own gmax), with a gentle absolute damp so a near-flat surface
+// fades instead of saturating red. Visual aid only — toggled by the slope button.
+function slopeColor(grad, gmax) {
+  const t = Math.min(1, Math.hypot(grad.x, grad.y) / (gmax || 1e-6)); // 0 flat .. 1 steepest
+  if (t < 0.05) return null;                          // ~flat -> no paint
+  const hue = 230 * (1 - t);                          // 230 blue -> 0 red
+  const damp = Math.max(0.25, Math.min(1, (gmax || 0) / TUNE.slopeRefGrad));
+  const alpha = (0.12 + 0.42 * t) * damp;
+  return `hsla(${hue.toFixed(0)}, 85%, 50%, ${alpha.toFixed(3)})`;
+}
+// Downhill fall-line arrow at a world point (rotates with the camera via wx/wy).
+function drawFallArrow(x, y, grad, t) {
+  const gm = Math.hypot(grad.x, grad.y) || 1e-6;
+  const dx = -grad.x / gm, dy = -grad.y / gm;         // unit downhill direction
+  const len = 2.2 + 3.0 * t;                          // world units; steeper = longer
+  const hx = x + dx * len, hy = y + dy * len;         // arrow head (downhill end)
+  const sx = wx(x, y), sy = wy(x, y), ex = wx(hx, hy), ey = wy(hx, hy);
+  const ux = ex - sx, uy = ey - sy, ul = Math.hypot(ux, uy) || 1;
+  const nx = ux / ul, ny = uy / ul, head = Math.min(7, ul * 0.5);
+  ctx.strokeStyle = "rgba(20,20,20,0.6)";
+  ctx.lineWidth = ws(0.5);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);             // shaft
+  ctx.moveTo(ex, ey); ctx.lineTo(ex - head * (nx * 0.87 - ny * 0.5), ey - head * (ny * 0.87 + nx * 0.5));
+  ctx.moveTo(ex, ey); ctx.lineTo(ex - head * (nx * 0.87 + ny * 0.5), ey - head * (ny * 0.87 - nx * 0.5));
+  ctx.stroke();
+}
+// Fill a surface's clipped area with steepness-colored cells + fall-line arrows
+// (world-space, so they rotate with the camera). Greens + synthetic fairway field.
+function drawSlopeHeat(field) {
+  const bb = polyBBox(field.poly);
+  const CELL = 4;                                     // world units (~12 yd) per color cell
+  const nx = Math.max(2, Math.min(60, Math.ceil((bb.maxx - bb.minx) / CELL)));
+  const ny = Math.max(2, Math.min(60, Math.ceil((bb.maxy - bb.miny) / CELL)));
+  const dx = (bb.maxx - bb.minx) / nx, dy = (bb.maxy - bb.miny) / ny;
+  withClip(field.poly, () => {
+    for (let j = 0; j < ny; j++) {
+      for (let i = 0; i < nx; i++) {
+        const x0 = bb.minx + i * dx, y0 = bb.miny + j * dy;
+        const col = slopeColor(field.grad(x0 + dx / 2, y0 + dy / 2), field.gmax);
+        if (!col) continue;
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(wx(x0, y0), wy(x0, y0));
+        ctx.lineTo(wx(x0 + dx, y0), wy(x0 + dx, y0));
+        ctx.lineTo(wx(x0 + dx, y0 + dy), wy(x0 + dx, y0 + dy));
+        ctx.lineTo(wx(x0, y0 + dy), wy(x0, y0 + dy));
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    // fall-line arrows on a coarser grid
+    const AS = 9;                                      // arrow spacing (world units)
+    const ax = Math.max(1, Math.round((bb.maxx - bb.minx) / AS));
+    const ay = Math.max(1, Math.round((bb.maxy - bb.miny) / AS));
+    const adx = (bb.maxx - bb.minx) / ax, ady = (bb.maxy - bb.miny) / ay;
+    for (let j = 0; j <= ay; j++) {
+      for (let i = 0; i <= ax; i++) {
+        const px = bb.minx + i * adx, py = bb.miny + j * ady;
+        if (!pointInPoly(px, py, field.poly)) continue;
+        const g = field.grad(px, py);
+        const t = Math.min(1, Math.hypot(g.x, g.y) / (field.gmax || 1e-6));
+        if (t < 0.08) continue;
+        drawFallArrow(px, py, g, t);
+      }
+    }
+  });
 }
 
 // Stylized vector rendering (used when no aerial, e.g. offline / St Andrews).
@@ -1142,6 +1262,12 @@ function draw() {
     drawPhotoSurfaces();
   } else {
     drawVectorSurfaces();
+  }
+
+  // slope heatmap overlay (toggled): greens (real, drives putting) + synthetic fairway
+  if (showSlope && !HOLE.isRange) {
+    for (const f of HOLE._greens || []) if (polyVisible(f.poly)) drawSlopeHeat(f);
+    for (const f of HOLE._fairways || []) if (polyVisible(f.poly)) drawSlopeHeat(f);
   }
 
   // target rings on the range; the cup + flag on the course
@@ -1405,6 +1531,8 @@ function setHole(rec) {
     // share precomputed topo + the one aerial across every hole (load once)
     if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green);
     HOLE._greens = course._greens;
+    if (!course._fairways) course._fairways = buildFairwayTopo(course.surfaces.fairway);
+    HOLE._fairways = course._fairways;
     if (course._img === undefined) {
       course._img = null; course._imgReady = false;
       if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
@@ -1420,6 +1548,7 @@ function setHole(rec) {
     HOLE._img = course._img; HOLE._imgReady = course._imgReady;
   } else {
     HOLE._greens = buildGreenTopo(HOLE.surfaces.green);
+    HOLE._fairways = buildFairwayTopo(HOLE.surfaces.fairway);
     HOLE._img = null; HOLE._imgReady = false;
     if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
       const target = HOLE;
@@ -1480,7 +1609,7 @@ async function loadCourse(id) {
   if (!res.ok) throw new Error("HTTP " + res.status);
   course = await res.json();
   YARDS_PER_UNIT = course.yardsPerUnit || YARDS_PER_UNIT;
-  course._greens = null; course._img = undefined; course._imgReady = false; // shared caches
+  course._greens = null; course._fairways = null; course._img = undefined; course._imgReady = false; // shared caches
   holeIndex = 0;
   setHole(course.holes[holeIndex]);
 }
@@ -1613,6 +1742,11 @@ document.getElementById("cm-home").addEventListener("click", () => { closeCourse
 const elCourseControls = document.getElementById("course-controls");
 const elAimBtn = document.getElementById("aim-btn");
 const elMeasureBtn = document.getElementById("measure-btn");
+const elSlopeBtn = document.getElementById("slope-btn");
+function setSlopeMode(on) {
+  showSlope = on;
+  elSlopeBtn.classList.toggle("active", on);
+}
 function aimAtHole() {
   // re-aim so "up" points from the BALL straight at the pin — smoothly (updateCamera eases)
   const a = Math.atan2(HOLE.holePos.y - state.ball.y, HOLE.holePos.x - state.ball.x);
@@ -1627,6 +1761,7 @@ function setMeasureMode(on) {
 }
 elAimBtn.addEventListener("click", aimAtHole);
 elMeasureBtn.addEventListener("click", () => setMeasureMode(!measureMode));
+elSlopeBtn.addEventListener("click", () => setSlopeMode(!showSlope));
 
 // Club selector: +/- steps through the bag (putter is automatic on the green).
 const elClubBar = document.getElementById("club-bar");
@@ -1646,6 +1781,8 @@ function stepClub(delta) { // +1 = longer club, -1 = shorter
   selectedClub = CLUB_ORDER[Math.max(0, Math.min(CLUB_ORDER.length - 1, i - delta))];
   updateClubUI();
 }
+document.getElementById("club-up").addEventListener("click", () => stepClub(1));   // longer
+document.getElementById("club-down").addEventListener("click", () => stepClub(-1)); // shorter
 
 // ← / → aim: a single tap is one small eased nudge; holding (OS auto-repeat)
 // switches to a smooth continuous turn (updateCamera). Swipe up fires along it.
@@ -1682,6 +1819,7 @@ function showMenu() {
   elCourseControls.classList.add("hidden");
   elClubBar.classList.add("hidden");
   setMeasureMode(false);
+  setSlopeMode(false);
   closeCourseMenu();
 }
 
@@ -1698,6 +1836,7 @@ function startCourse() {
   elCourseMenuBtn.classList.remove("hidden");
   elCourseControls.classList.remove("hidden");
   elClubBar.classList.remove("hidden");
+  elClubBar.classList.remove("range");
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   if (course) {
@@ -1718,8 +1857,9 @@ async function startRange() {
   elCourseMenuBtn.classList.add("hidden");
   elCourseControls.classList.add("hidden");
   elClubBar.classList.remove("hidden");
+  elClubBar.classList.add("range");          // lift above the range slider
   setMeasureMode(false);
-  elHint.classList.add("hidden");
+  setSlopeMode(false);
   rangeTarget = parseInt(rangeSlider.value, 10);
   if (!rangeRec) {
     try {
@@ -1739,6 +1879,7 @@ async function startRange() {
   HOLE.yards = rangeTarget;
   frameRange();
   snapCamera();
+  elHint.classList.add("hidden");   // setHole re-shows the hint; range uses its own feedback
   shot.carry = shot.total = null; shot.mph = 0;
   rangeFeedback("Aim up the range");
 }

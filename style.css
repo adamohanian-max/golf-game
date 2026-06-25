@@ -44,14 +44,16 @@ html, body {
 
 #hint {
   position: fixed;
-  bottom: 24px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 132px);  /* sits above the club bar */
   left: 50%;
   transform: translateX(-50%);
+  max-width: 92vw;
+  white-space: nowrap;
   color: rgba(255, 255, 255, 0.85);
   background: rgba(0, 0, 0, 0.4);
   padding: 8px 16px;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: 13px;
   pointer-events: none;
   transition: opacity 0.3s;
 }
@@ -315,6 +317,7 @@ html, body {
   z-index: 14;
 }
 #club-bar.hidden { display: none; }
+#club-bar.range { bottom: calc(env(safe-area-inset-bottom, 0px) + 110px); } /* clear the range slider */
 #club-bar.putting .club-step { opacity: 0.3; pointer-events: none; }
 .club-step {
   width: 44px;
