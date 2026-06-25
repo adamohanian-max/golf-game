@@ -44,6 +44,16 @@ Geometry/OSM alone leaves `par` defaulting to **4** when untagged and `yards` as
 - Merge precedence: **manual override → GolfAPI.io (optional `--golfapi-course`, needs `GOLFAPI_KEY`) → OSM tags → par=4**.
 - The baker prints how many holes came from the scorecard and warns when a card yardage diverges from geometry by >60y (mis-keyed hole). Output gains `si` and, where overridden, `geomYards` (the geometric estimate, kept for QA).
 
+## Alternate geometry source: Golfbert (`--source golfbert`)
+For courses OSM hasn't mapped, Golfbert (api.golfbert.com) supplies per-hole polygon greens/fairways/bunkers/water + real tee/flag vectors. The adapter re-shapes Golfbert into Overpass-style elements so the **same** projection/hole-build/aerial/scorecard pipeline runs unchanged.
+```
+GOLFBERT_KEY=… GOLFBERT_AWS_KEY=… GOLFBERT_AWS_SECRET=… \
+  python3 tools/fetch_course.py --source golfbert --golfbert-course <id> --id <slug> --name "<Name>"
+```
+- Auth is AWS SigV4 (`execute-api`) + `x-api-key`, signed with pure stdlib (no extra deps). Get free dev credentials at golfbert.com/api. `GOLFBERT_REGION` defaults `us-east-1`.
+- Key-gated and opt-in; the default `--source osm` path is untouched. Scorecard layer still applies on top.
+- Response field mapping (`surfacetype`→`golf=*`, `long`→`lon`, `flag`/`teebox` vectors→centerline) lives in `tools/sources/golfbert.py:_normalize`/`fetch_as_overpass`; verified offline against a synthetic fixture — tighten field names against a live account if a first real bake comes back thin.
+
 ## What it ingests (Overpass)
 `golf=green|fairway|tee|bunker|hole|cartpath|water_hazard`, `natural=wood|water`, `landuse=grass`. Hole order = leading int of each `golf=hole` way's `ref` (handles `"7"` and `"7 - #2"`), deduped by number. Fairways/bunkers/woods/cartpaths/grass are assigned to the **nearest hole**; greens to the nearest hole pin; a fairway corridor is **synthesized only** when a hole has no mapped fairway.
 

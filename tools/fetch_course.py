@@ -420,6 +420,11 @@ def main():
     ap.add_argument("--golfapi-course",
                     help="optional GolfAPI.io course id for par/yards/si "
                          "(needs GOLFAPI_KEY env); manual --scorecard still wins")
+    ap.add_argument("--source", choices=("osm", "golfbert"), default="osm",
+                    help="geometry source (default osm)")
+    ap.add_argument("--golfbert-course",
+                    help="Golfbert course id (with --source golfbert); needs "
+                         "GOLFBERT_KEY/GOLFBERT_AWS_KEY/GOLFBERT_AWS_SECRET env")
     args = ap.parse_args()
 
     if args.from_index:
@@ -427,10 +432,21 @@ def main():
         args.boundary_way = args.boundary_way or bw
         args.id = args.id or cid          # explicit flags still override the index
         args.name = args.name or name
-    if not (args.boundary_way and args.id and args.name):
-        ap.error("need --from-index SLUG, or all of --boundary-way/--id/--name")
 
-    data = fetch_overpass(args.boundary_way, args.cache)
+    # Geometry source: Golfbert is re-shaped into Overpass-style elements so the
+    # rest of the pipeline (projection / hole-build / aerial / scorecard) is shared.
+    if args.source == "golfbert":
+        from sources import golfbert
+        if not (args.golfbert_course and golfbert.available()):
+            ap.error("--source golfbert needs --golfbert-course and "
+                     "GOLFBERT_KEY/GOLFBERT_AWS_KEY/GOLFBERT_AWS_SECRET")
+        if not (args.id and args.name):
+            ap.error("--source golfbert needs --id and --name")
+        data = golfbert.fetch_as_overpass(args.golfbert_course)
+    else:
+        if not (args.boundary_way and args.id and args.name):
+            ap.error("need --from-index SLUG, or all of --boundary-way/--id/--name")
+        data = fetch_overpass(args.boundary_way, args.cache)
     els = [e for e in data["elements"] if "geometry" in e and e.get("tags")]
     by = lambda g: [e for e in els if e["tags"].get("golf") == g]
     byt = lambda k, v: [e for e in els if e["tags"].get(k) == v]
