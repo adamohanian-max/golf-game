@@ -718,10 +718,16 @@ function launchShot(ang, frac, spin, onGreen) {
     state.airborne = false;
   } else {
     // full shot: follow the selected club's real arc, scaled by how full the swing is
+    // Chip zone: within 90 yards of pin, compress power so green-side shots don't overshoot.
+    let ef = f;
+    if (!HOLE.isRange) {
+      const toPin = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+      if (toPin < 90) ef *= 0.4 + 0.6 * (toPin / 90); // 40% sensitivity at pin → 100% at 90y
+    }
     const c = TUNE.clubs[selectedClub];
-    const C = (c.carry / YARDS_PER_UNIT) * f;   // carry (world units)
-    const H = (c.maxH / YARDS_PER_UNIT) * f;     // apex height (scales with the swing)
-    shot.mph = Math.round(c.ball * f);           // real ball speed for the HUD
+    const C = (c.carry / YARDS_PER_UNIT) * ef;   // carry (world units)
+    const H = (c.maxH / YARDS_PER_UNIT) * ef;     // apex height (scales with the swing)
+    shot.mph = Math.round(c.ball * ef);           // real ball speed for the HUD
     // Slight amplification so deliberate hooks/slices still register.
     b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
     // Chips/pitches: partial swings with lofted clubs still impart near-full spin rpm.
@@ -1224,13 +1230,13 @@ function drawGreen(photo) {
 function drawFallArrow(x, y, grad, t) {
   const gm = Math.hypot(grad.x, grad.y) || 1e-6;
   const dx = -grad.x / gm, dy = -grad.y / gm;         // unit downhill direction
-  const len = 0.7 + 1.1 * t;                          // world units; steeper = longer
+  const len = 0.45 + 0.7 * t;                         // world units; steeper = longer
   const hx = x + dx * len, hy = y + dy * len;         // arrow head (downhill end)
   const sx = wx(x, y), sy = wy(x, y), ex = wx(hx, hy), ey = wy(hx, hy);
   const ux = ex - sx, uy = ey - sy, ul = Math.hypot(ux, uy) || 1;
-  const nx = ux / ul, ny = uy / ul, head = Math.min(4, ul * 0.45);
-  ctx.strokeStyle = "rgba(20,20,20,0.55)";
-  ctx.lineWidth = 0.9;                                // fixed px, zoom-independent
+  const nx = ux / ul, ny = uy / ul, head = Math.min(3, ul * 0.4);
+  ctx.strokeStyle = "rgba(20,20,20,0.6)";
+  ctx.lineWidth = 0.7;                                // fixed px, zoom-independent
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath();
   ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);             // shaft
@@ -1273,7 +1279,7 @@ function buildGreenRelief(g) {
 }
 // Thin fall-line arrows over a green (cell-center sampled so they land inside the oval).
 function drawGreenArrows(g) {
-  const bb = polyBBox(g.poly), AS = 2.6;   // arrow spacing (world units) — denser grid
+  const bb = polyBBox(g.poly), AS = 1.7;   // arrow spacing (world units) — dense, precise grid
   const ax = Math.max(1, Math.round((bb.maxx - bb.minx) / AS));
   const ay = Math.max(1, Math.round((bb.maxy - bb.miny) / AS));
   const adx = (bb.maxx - bb.minx) / ax, ady = (bb.maxy - bb.miny) / ay;
