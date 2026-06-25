@@ -203,6 +203,7 @@ let holeDrop = null;       // active ball-into-cup drop animation, or null
 const HOLE_DROP_MS = 520;  // drop animation length; result modal opens when it ends
 let measureMode = false;   // range-finder: drag to measure distance from ball & pin
 let showSlope = false;     // slope heatmap overlay toggle (greens + synthetic fairway)
+let showOOB = true;        // red OOB overlay toggle
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let measureDragging = false;
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
@@ -1344,7 +1345,7 @@ function drawVectorSurfaces() {
   }
 
   fillPolys(s.woods, "#2f5d34");                  // tree stands
-  drawOOBOverlay(s);                               // red OOB tint on top
+  if (showOOB) drawOOBOverlay(s);                  // red OOB tint on top
   ctx.strokeStyle = "rgba(225,220,205,0.8)";       // cart paths
   ctx.lineWidth = Math.max(ws(0.8), 1);
   for (const poly of s.cartpath || []) strokePolyline(poly);
@@ -2097,6 +2098,11 @@ function setSlopeMode(on) {
   showSlope = on;
   elSlopeBtn.classList.toggle("active", on);
 }
+const elOOBBtn = document.getElementById("hm-oob");
+function setOOBMode(on) {
+  showOOB = on;
+  elOOBBtn.classList.toggle("active", on);
+}
 function aimAtHole() {
   const a = Math.atan2(HOLE.holePos.y - state.ball.y, HOLE.holePos.x - state.ball.x);
   camera.tAngle = -Math.PI / 2 - a;
@@ -2111,6 +2117,7 @@ function setMeasureMode(on) {
 document.getElementById("hm-aim").addEventListener("click", () => { aimAtHole(); closeHud(); });
 elMeasureBtn.addEventListener("click", () => setMeasureMode(!measureMode));
 elSlopeBtn.addEventListener("click", () => setSlopeMode(!showSlope));
+elOOBBtn.addEventListener("click", () => setOOBMode(!showOOB));
 document.getElementById("hm-card").addEventListener("click", () => {
   if (round.holeStats.length > 0) showRoundSummary(true);
   closeHud();
