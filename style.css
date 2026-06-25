@@ -44,16 +44,16 @@ html, body {
 
 #hint {
   position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 132px);  /* sits above the club bar */
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 92vw;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  left: 12px;
+  transform: none;
+  max-width: 52vw;
   white-space: nowrap;
   color: rgba(255, 255, 255, 0.85);
   background: rgba(0, 0, 0, 0.4);
-  padding: 8px 16px;
+  padding: 8px 14px;
   border-radius: 20px;
-  font-size: 13px;
+  font-size: 12px;
   pointer-events: none;
   transition: opacity 0.3s;
 }
@@ -98,53 +98,86 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(rgba(6, 28, 16, 0.55), rgba(4, 18, 10, 0.75));
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  background: radial-gradient(ellipse at 50% 38%, rgba(8, 38, 18, 0.62) 0%, rgba(2, 10, 5, 0.88) 100%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   z-index: 20;
 }
 #menu.hidden { display: none; }
-.menu-box { text-align: center; padding: 24px; }
+
+@keyframes menuIn {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.menu-box {
+  text-align: center;
+  padding: 32px 24px;
+  animation: menuIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.menu-eyebrow {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
 .menu-box h1 {
   color: #f4f6f3;
-  font-size: 64px;
+  font-size: 76px;
   font-weight: 800;
-  letter-spacing: 6px;
-  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+  letter-spacing: 10px;
+  line-height: 1;
+  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.45);
+  margin: 0;
 }
-.menu-sub {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 16px;
-  letter-spacing: 1px;
-  margin: 6px 0 28px;
+
+.menu-divider {
+  width: 36px;
+  height: 2px;
+  background: #2f9e44;
+  margin: 22px auto 30px;
+  border-radius: 2px;
+  opacity: 0.8;
 }
+
 .menu-btn {
   display: block;
-  width: 280px;
-  max-width: 80vw;
-  margin: 12px auto;
-  padding: 16px 24px;
-  border: none;
-  border-radius: 28px;
-  font-size: 18px;
+  width: 260px;
+  max-width: 82vw;
+  margin: 10px auto;
+  padding: 17px 24px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   cursor: pointer;
   background: #2f9e44;
   color: #fff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  transition: transform 0.1s, background 0.15s;
+  box-shadow: 0 4px 24px rgba(47, 158, 68, 0.28);
+  transition: transform 0.12s, box-shadow 0.12s;
 }
-.menu-btn:active { transform: scale(0.97); }
-.menu-btn.secondary { background: rgba(255, 255, 255, 0.14); color: #f4f6f3; }
+.menu-btn:active { transform: scale(0.97); box-shadow: 0 2px 10px rgba(47, 158, 68, 0.18); }
+.menu-btn.secondary {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.8);
+  box-shadow: none;
+}
+.menu-btn.secondary:active { transform: scale(0.97); }
 
 /* ---- Driving-range controls ---- */
 #range-ui {
   position: fixed;
-  left: 50%;
+  right: 12px;
+  left: auto;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
-  transform: translateX(-50%);
-  width: min(560px, 92vw);
+  transform: none;
+  width: min(360px, calc(100vw - 24px));
   padding: 12px 16px;
   background: rgba(8, 22, 14, 0.55);
   -webkit-backdrop-filter: blur(8px);
@@ -217,9 +250,9 @@ html, body {
 /* ---- In-course menu ---- */
 #course-menu-btn {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
-  left: 50%;
-  transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 148px);
+  left: 12px;
+  transform: none;
   width: 44px;
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -278,14 +311,15 @@ html, body {
 .cm-actions { display: flex; gap: 10px; margin-top: 18px; }
 .cm-actions .menu-btn { width: auto; flex: 1; margin: 0; padding: 12px; font-size: 15px; }
 
-/* ---- Bottom-right course controls (aim / range finder) ---- */
+/* ---- Top-right course controls (aim / range finder / slope / scorecard) ---- */
 #course-controls {
   position: fixed;
   right: 12px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  top: calc(env(safe-area-inset-top, 0px) + 148px);
+  bottom: auto;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  gap: 8px;
   z-index: 15;
 }
 #course-controls.hidden { display: none; }
@@ -308,16 +342,17 @@ html, body {
 /* ---- Club selector ---- */
 #club-bar {
   position: fixed;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
-  transform: translateX(-50%);
+  left: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 202px); /* below scorecard + menu button */
+  bottom: auto;
+  transform: none;
   display: flex;
   align-items: stretch;
   gap: 8px;
   z-index: 14;
 }
 #club-bar.hidden { display: none; }
-#club-bar.range { bottom: calc(env(safe-area-inset-bottom, 0px) + 110px); } /* clear the range slider */
+#club-bar.range { top: calc(env(safe-area-inset-top, 0px) + 12px); } /* no scorecard in range mode */
 #club-bar.putting .club-step { opacity: 0.3; pointer-events: none; }
 .club-step {
   width: 44px;
@@ -348,3 +383,114 @@ html, body {
 }
 #club-current b { font-size: 16px; }
 #club-current small { font-size: 11px; color: rgba(255, 255, 255, 0.85); }
+
+/* ---- Round-end summary ---- */
+#round-end {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 10, 5, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  z-index: 30;
+  padding: 16px;
+}
+#round-end.hidden { display: none; }
+
+.re-box {
+  background: rgba(10, 26, 16, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+}
+.re-header {
+  padding: 18px 20px 14px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+.re-header h2 { color: #f4f6f3; font-size: 19px; font-weight: 800; }
+#re-subtitle { color: rgba(255, 255, 255, 0.5); font-size: 13px; margin-top: 3px; }
+
+.re-tabs {
+  display: flex;
+  padding: 10px 14px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+.re-tab {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.re-tab.active { background: #2f9e44; border-color: #2f9e44; color: #fff; }
+
+.re-panel { overflow-y: auto; flex: 1; padding: 12px 14px; min-height: 0; }
+.re-panel.hidden { display: none; }
+
+/* Scorecard grid */
+.re-sc-wrap { overflow-x: auto; }
+.re-sc {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  color: #f4f6f3;
+  margin-bottom: 10px;
+}
+.re-sc th, .re-sc td { text-align: center; padding: 5px 3px; min-width: 22px; }
+.re-label { text-align: left !important; font-weight: 600; color: rgba(255,255,255,0.5); font-size: 11px; padding-left: 2px !important; }
+.re-sep { font-weight: 800; border-left: 1px solid rgba(255,255,255,0.12); padding-left: 6px !important; }
+.re-sc thead th { color: rgba(255,255,255,0.4); font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.re-sc tbody tr + tr { border-top: 1px solid rgba(255,255,255,0.05); }
+
+/* Score cell colors */
+.re-cell-eagle  { background: #ffd700; color: #1a1a1a; border-radius: 4px; font-weight: 800; }
+.re-cell-birdie { background: #2f9e44; color: #fff;    border-radius: 4px; font-weight: 700; }
+.re-cell-par    { color: #f4f6f3; }
+.re-cell-bogey  { color: #ff8c5a; }
+.re-cell-double { color: #ff5252; font-weight: 700; }
+
+/* Stats list */
+.re-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.re-stat-label { color: rgba(255,255,255,0.55); font-size: 13px; }
+.re-stat-val { color: #f4f6f3; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.re-stat-section {
+  margin: 14px 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+}
+
+/* Per-hole table in stats */
+.re-per-hole td, .re-per-hole th { padding: 6px 5px; font-size: 12px; }
+
+.re-actions {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+.re-actions .menu-btn { flex: 1; margin: 0; padding: 13px; font-size: 15px; }

@@ -14,7 +14,7 @@ const TUNE = {
   // --- Two-phase swing: pull back (backswing), then swing forward & release.
   // Backswing LENGTH is the primary, precise power control (distance is linear in
   // pull-back); forward-swing speed is a secondary tempo modifier.
-  backswingFull: 32,     // backswing distance (world units) = full power
+  backswingFull: 64,     // backswing distance (world units) = full power
   tempoSpeed: 500,       // forward-swing speed (world u/s) read as "normal" tempo
   tempoMin: 0.90,        // slow forward swing trims distance to this fraction
   tempoMax: 1.12,        // fast forward swing adds distance up to this fraction
@@ -23,7 +23,7 @@ const TUNE = {
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.011,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
-  spinFactor: 0.020,     // how hard a curved swipe bends flight (draw/fade)
+  spinFactor: 0.040,     // how hard a curved swipe bends flight (draw/fade)
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
@@ -46,7 +46,12 @@ const TUNE = {
   // Slope is ignored below slopeStopSpeed so a ball settles instead of creeping.
   slopeAccel: 0.0006,
   slopeStopSpeed: 0.02,
-  slopeRefGrad: 0.15,    // heatmap: gradient of a "typically steep" green; damps flat surfaces
+  // Shaded-relief topo overlay (greens only). Intensity = drawImage globalAlpha.
+  reliefAmbient: 0.14,   // always-on whisper on the in-play / target green
+  reliefFull: 0.32,      // boosted by the slope button (+ fall-line arrows)
+  reliefExag: 6,         // vertical exaggeration -> hillshade contrast
+  reliefShade: 1.8,      // highlight/shadow alpha scale per unit of relief
+  reliefTint: 0.35,      // max warm-tint alpha on the steepest spots (a hint, not a ramp)
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
@@ -80,6 +85,7 @@ const TUNE = {
     pw:     { name: "PW",     carry: 142, maxH: 32, land: 52, ball: 104, spin: 9316 },
     sw:     { name: "SW",     carry: 115, maxH: 31, land: 53, ball: 95,  spin: 10500 },
     lw:     { name: "LW",     carry: 90,  maxH: 30, land: 55, ball: 82,  spin: 11500 },
+    putter: { name: "Putter", carry: 30,  maxH: 0,  land: 0,  ball: 0,   spin: 0    },
   },
 
   // Backspin grip on landing, by surface (greens grab hardest -> can spin back;
@@ -88,10 +94,11 @@ const TUNE = {
   rolloutK: 7.0,    // base release distance scale (× landing speed) with no spin
   spinCheckK: 1.2,  // how strongly backspin kills/reverses the release (>1 can back up)
 
-  // powerFactor, maxPower, puttMaxPower, launchAngle are derived below.
+  // powerFactor, maxPower, puttMaxPower, puttOffGreenPower, launchAngle are derived below.
   powerFactor: 0,
   maxPower: 0,
   puttMaxPower: 0,
+  puttOffGreenPower: 0,  // putter from off-green (fairway bump-and-run), calibrated to fairway friction
   launchAngle: 0,
 };
 
@@ -136,9 +143,12 @@ let HOLE = null;
 // =====================================================================
 let MAX_CARRY_UNITS = 0;
 function recalcPower() {
-  // Full shots follow a per-club arc (see setupFlight); only the putt cap is
+  // Full shots follow a per-club arc (see setupFlight); only the putt caps are
   // derived here. Putts: roll distance D = v0^2 / (2*decel) -> v = sqrt(2*decel*D).
   TUNE.puttMaxPower = Math.sqrt(2 * TUNE.greenDecel * (YARDS.maxPutt / YARDS_PER_UNIT));
+  // Off-green putter (bump-and-run): fairway friction=0.97 → roll dist ≈ v/(1-friction).
+  // Calibrate so a max swing rolls ~30 yards on fairway.
+  TUNE.puttOffGreenPower = (30 / YARDS_PER_UNIT) * (1 - TUNE.friction.fairway);
   // Normalize each club's spin (rpm) to 0..1 for the landing check/backspin.
   for (const c in TUNE.clubs) {
     TUNE.clubs[c].spinN = Math.max(0, Math.min(1, (TUNE.clubs[c].spin - 2500) / 7500));
@@ -147,13 +157,14 @@ function recalcPower() {
 TUNE.greenDecel = GREEN_DECEL_K / DEFAULT_STIMP;
 recalcPower();
 
-// Bag order, longest carry -> shortest (for the +/- club selector).
+// Bag order, longest carry -> shortest (for the +/- club selector). Putter last.
 const CLUB_ORDER = ["driver", "3w", "5w", "hybrid", "3i", "4i", "5i", "6i",
-                    "7i", "8i", "9i", "pw", "sw", "lw"];
-// Club whose full carry is closest to a distance (yards).
+                    "7i", "8i", "9i", "pw", "sw", "lw", "putter"];
+// Club whose full carry is closest to a distance (yards). Never selects putter (manual only).
 function clubForYards(y) {
   let best = CLUB_ORDER[0], bd = Infinity;
   for (const k of CLUB_ORDER) {
+    if (k === "putter") continue;
     const d = Math.abs(TUNE.clubs[k].carry - y);
     if (d < bd) { bd = d; best = k; }
   }
@@ -171,6 +182,7 @@ function autoClub() {
 // =====================================================================
 let state;
 function resetState() {
+  holeDrop = null;   // clear any in-flight drop animation on a fresh hole
   state = {
     // z = height above ground, vz = vertical velocity, spin = sidespin (curve)
     ball: { x: HOLE.teePos.x, y: HOLE.teePos.y, vx: 0, vy: 0, z: 0, vz: 0, spin: 0 },
@@ -180,12 +192,22 @@ function resetState() {
     airborne: false,
     strokes: 0,
     inHole: false,
+    // per-hole stats
+    putts: 0,            // strokes taken while on the green
+    strokesOffGreen: 0,  // strokes taken from off-green (for GIR calculation)
+    greenReached: false, // has ball been on the green this hole?
+    proximity: null,     // yards to pin when ball first reached green
+    gir: false,          // green in regulation
+    fairwayHit: null,    // null = par 3, true/false = par 4/5
+    _teeShot: false,     // flag: next stop determines fairway hit
   };
 }
 
 // Game mode: "menu" (home) | "course" | "range". Input is off in the menu.
 let mode = "menu";
 let holeTransition = null; // active hole-change animation (fade + zoom-in), or null
+let holeDrop = null;       // active ball-into-cup drop animation, or null
+const HOLE_DROP_MS = 520;  // drop animation length; result modal opens when it ends
 let measureMode = false;   // range-finder: drag to measure distance from ball & pin
 let showSlope = false;     // slope heatmap overlay toggle (greens + synthetic fairway)
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
@@ -325,11 +347,22 @@ function arcFlightStep(b) {
     // and runs; high spin on receptive turf (wedge -> green) checks, and can roll
     // BACKWARD. Rough is a flyer (little grip) so it releases. `Dr` = rollout (units).
     const grip = TUNE.spinGrip[surf] ?? 0.3;
-    const check = Math.min(1.1, fl.spinN * grip);
+    // Sidespin (b.spin = swipe curve) reduces effective backspin: draw runs, fade checks.
+    // At max sidespin, 40% of backspin converts to sidespin → less check.
+    const backspinRetained = Math.max(0, 1 - 0.4 * Math.abs(b.spin));
+    const check = Math.min(1.1, fl.spinN * backspinRetained * grip);
     const Dr = fl.vh * TUNE.rolloutK * (1 - check * TUNE.spinCheckK); // <0 = spins back
     let v;
     if (surf === "green") v = Math.sign(Dr) * Math.sqrt(2 * TUNE.greenDecel * Math.abs(Dr));
-    else { const fr = TUNE.friction[surf] ?? 0.9; v = Dr * (1 - fr); }
+    else {
+      const fr = TUNE.friction[surf] ?? 0.9;
+      // Cap at fl.vh * bounce[surf].h: the ball can't leave the landing point faster
+      // than it arrived (fl.vh) times the surface landing grip (bo.h). Without this,
+      // high-friction surfaces (bunker fr=0.55) produce huge initial v = Dr*(1-fr) that
+      // shoots the ball off when it rolls off the edge onto low-friction fairway.
+      const bo = TUNE.bounce[surf] ?? TUNE.bounce.fairway;
+      v = Math.min(Dr * (1 - fr), fl.vh * bo.h);
+    }
     b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0; state.airborne = false;
   }
 }
@@ -390,6 +423,13 @@ function rollStep(b) {
   clampToWorld(b);
 
   const surf = surfaceAt(b.x, b.y);
+
+  // First time on green this hole: capture proximity + GIR
+  if (!HOLE.isRange && !state.greenReached && surf === "green") {
+    state.greenReached = true;
+    state.proximity = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+    state.gir = state.strokesOffGreen <= HOLE.par - 2;
+  }
   if (surf === "green") {
     // Realistic green roll: subtract a constant deceleration from the speed
     // (not a multiplier), so the ball glides and then stops crisply.
@@ -421,13 +461,13 @@ function rollStep(b) {
     const cd = segPointDist(HOLE.holePos.x, HOLE.holePos.y, px, py, b.x, b.y);
     if (cd <= capR) {
       if (speed < TUNE.captureSpeed) {
-        // slow enough — drop in
-        b.x = HOLE.holePos.x;
-        b.y = HOLE.holePos.y;
-        b.vx = b.vy = 0;
+        // slow enough — drop in. Keep the entry point + heading so the ball can
+        // visibly catch the lip, rattle to centre and sink; result modal waits for
+        // the drop animation to finish (tickHoleDrop).
         state.moving = false;
         state.inHole = true;
-        showResult();
+        beginHoleDrop(b.x, b.y, b.vx, b.vy);
+        b.vx = b.vy = 0;
         return;
       } else {
         // lip-out: ball crossed the cup too fast — reflect off the rim
@@ -449,6 +489,11 @@ function rollStep(b) {
     b.vx = b.vy = 0;
     state.moving = false;
     shot.total = dist(shot.startX, shot.startY, b.x, b.y) * YARDS_PER_UNIT;
+    // Fairway-hit: tee shot on par 4/5 — check where ball came to rest
+    if (state._teeShot && !HOLE.isRange) {
+      state._teeShot = false;
+      state.fairwayHit = surfaceAt(b.x, b.y) === "fairway";
+    }
     if (HOLE.isRange) {
       // range: report the shot, then tee up a fresh ball for the next swing
       const delta = Math.round(shot.total - rangeTarget);
@@ -489,6 +534,64 @@ const canvas = document.getElementById("game");
 
 function canSwing() {
   return mode !== "menu" && !state.moving && !state.inHole && !holeTransition;
+}
+
+// =====================================================================
+//  Hole-out feedback — synthesized sound (Web Audio, no asset files),
+//  light haptic, and the drop-into-cup animation timing.
+// =====================================================================
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  }
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+// Browsers gate audio until a user gesture — unlock the context on first interaction.
+window.addEventListener("pointerdown", ensureAudio);
+window.addEventListener("touchstart", ensureAudio, { passive: true });
+
+// The sound a ball makes finding the cup: two quick rim ticks, then a hollow plunk.
+function playHolePlunk() {
+  const ac = ensureAudio();
+  if (!ac) return;
+  const t = ac.currentTime;
+  const tick = (when, freq, vol) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = "triangle"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(vol, when + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0008, when + 0.05);
+    o.connect(g).connect(ac.destination);
+    o.start(when); o.stop(when + 0.08);
+  };
+  tick(t, 1500, 0.12);             // rim rattle
+  tick(t + 0.055, 1180, 0.10);
+  const o = ac.createOscillator(), g = ac.createGain();  // hollow cup plunk
+  o.type = "sine";
+  o.frequency.setValueAtTime(380, t + 0.06);
+  o.frequency.exponentialRampToValueAtTime(150, t + 0.20);
+  g.gain.setValueAtTime(0, t + 0.06);
+  g.gain.linearRampToValueAtTime(0.34, t + 0.078);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+  o.connect(g).connect(ac.destination);
+  o.start(t + 0.06); o.stop(t + 0.36);
+}
+
+function beginHoleDrop(x, y, vx, vy) {
+  holeDrop = { t0: performance.now(), x, y, vx, vy };
+  playHolePlunk();
+  // light haptic: tick · tick · thud, mirroring the ball settling into the cup
+  if (navigator.vibrate) navigator.vibrate([10, 26, 16]);
+}
+// Open the result modal once the drop animation has played out.
+function tickHoleDrop() {
+  if (holeDrop && performance.now() - holeDrop.t0 >= HOLE_DROP_MS) {
+    holeDrop = null;
+    showResult();
+  }
 }
 
 // Signed curvature of a swipe path in [-1, 1] (0 = straight). Compares the
@@ -536,22 +639,27 @@ function swingMove(e) {
 function swingFraction(forwardSpeed, backDist) {
   const backFactor = Math.min(backDist / TUNE.backswingFull, 1);
   const tempo = Math.max(TUNE.tempoMin, Math.min(TUNE.tempoMax, forwardSpeed / TUNE.tempoSpeed));
-  // Power curve: spreads out the low end so short partial swings are less twitchy.
-  // 50% pull-back -> ~41% power (not 50%), giving more screen range for chips/pitches.
-  return Math.min(Math.pow(backFactor, 0.7) * tempo, 1);
+  // Power curve: concave (exp > 1) compresses the low end → more screen travel per
+  // distance unit on short shots. 50% pull → ~38% power; 25% pull → 14% power.
+  return Math.min(Math.pow(backFactor, 1.7) * tempo, 1);
 }
 
 // Fire the ball: `ang` direction, `frac` 0..1 swing fullness, `spin` (-1..1).
 function launchShot(ang, frac, spin, onGreen) {
-  if (!canSwing() || frac <= 0.02) return;
+  if (!canSwing() || frac <= 0.05) return;
   const b = state.ball;
   shot.startX = b.x; shot.startY = b.y;
   shot.carry = null; shot.total = null; shot.carried = onGreen;
   state.flight = null;
   const f = Math.min(frac, 1);
-  if (onGreen) {
-    // putt: stays on the deck, pure roll (distance ∝ speed²)
-    const power = TUNE.puttMaxPower * Math.sqrt(f);
+  // Putter mode: on the green (normal putt) OR player manually selected putter off-green
+  // (bump-and-run). Both stay on the deck; power scale differs to account for surface friction.
+  const usePutter = onGreen || selectedClub === "putter";
+  if (usePutter) {
+    // on-green: calibrated to green decel (max 50 yards); off-green: calibrated to fairway
+    // friction (~30 yards max). Both use sqrt(f) for a gentle power ramp.
+    const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
+    const power = maxPow * Math.sqrt(f);
     shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
     b.vx = Math.cos(ang) * power; b.vy = Math.sin(ang) * power;
     b.vz = 0; b.z = 0; b.spin = 0;
@@ -562,7 +670,9 @@ function launchShot(ang, frac, spin, onGreen) {
     const C = (c.carry / YARDS_PER_UNIT) * f;   // carry (world units)
     const H = (c.maxH / YARDS_PER_UNIT) * f;     // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * f);           // real ball speed for the HUD
-    b.spin = spin;
+    // Amplify swipe curvature so small deviations produce visible draw/fade.
+    // Convex power curve (exp < 1): 10° off-line (raw ≈ 0.17) → stored 0.37 (2.2×).
+    b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.65);
     // Chips/pitches: partial swings with lofted clubs still impart near-full spin rpm.
     // Scale spinN up toward full as f drops below 0.6 (short shots check hard).
     const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
@@ -571,6 +681,12 @@ function launchShot(ang, frac, spin, onGreen) {
     state.airborne = true;
   }
   state.moving = true;
+  if (onGreen) {
+    state.putts++;
+  } else {
+    if (state.strokes === 0 && HOLE.par > 3) state._teeShot = true; // flag tee shot for FIR
+    state.strokesOffGreen++;
+  }
   state.strokes += 1;
   updateScorecard();
   hideHint();
@@ -975,42 +1091,6 @@ function buildGreenTopo(polys) {
   }
   return out;
 }
-// Per-fairway synthetic height field for the slope heatmap ONLY (no real elevation,
-// no contours, no physics — fabricated, won't match the aerial). Coarser/broader than
-// greens: fairways are large, so a longer wavelength reads as gentle rolls.
-function buildFairwayTopo(polys) {
-  const out = [];
-  if (!polys) return out;
-  for (const poly of polys) {
-    if (poly.length < 3) continue;
-    const bb = polyBBox(poly);
-    const R = Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2 || 1;
-    const r1 = hashSeed(bb.cx - 3.1, bb.cy + 5.7), r2 = hashSeed(bb.cy + 1.3, bb.cx - 4.2), r3 = hashSeed(bb.cx + 11.9, bb.cy - 8.4);
-    const theta = r1 * Math.PI * 2;     // downhill/tilt direction
-    const tmag = 0.5 + 0.5 * r2;        // tilt strength
-    const wl = R * (1.1 + 0.8 * r3);    // broad undulation (longer than greens)
-    const ph = r3 * 6.2831;
-    const dirx = Math.cos(theta), diry = Math.sin(theta);
-    const h = (x, y) => {
-      const along = ((x - bb.cx) * dirx + (y - bb.cy) * diry) / R;
-      const und = Math.sin((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph);
-      return tmag * along + 0.5 * und;
-    };
-    const grad = (x, y) => ({
-      x: tmag * dirx / R + 0.5 * Math.cos((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph) / wl,
-      y: tmag * diry / R - 0.5 * Math.sin((x - bb.cx) / wl + ph) * Math.sin((y - bb.cy) / wl - ph) / wl,
-    });
-    let gmax = 1e-6;
-    const N = 16;
-    for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
-      const g = grad(bb.minx + (bb.maxx - bb.minx) * i / N, bb.miny + (bb.maxy - bb.miny) * j / N);
-      const gm = Math.hypot(g.x, g.y);
-      if (gm > gmax) gmax = gm;
-    }
-    out.push({ poly, h, grad, gmax });
-  }
-  return out;
-}
 
 function strokePolyline(poly) {
   if (!poly || poly.length < 2) return;
@@ -1095,77 +1175,99 @@ function drawGreen(photo) {
   }
 }
 
-// Slope heatmap, green-book convention (StrackaLine/SwingU): COLOR = steepness only
-// (blue flat -> cyan -> green -> yellow -> orange -> red steep), camera-independent;
-// DIRECTION is shown separately by fall-line arrows. Steepness is normalized per
-// surface (each field's own gmax), with a gentle absolute damp so a near-flat surface
-// fades instead of saturating red. Visual aid only — toggled by the slope button.
-function slopeColor(grad, gmax) {
-  const t = Math.min(1, Math.hypot(grad.x, grad.y) / (gmax || 1e-6)); // 0 flat .. 1 steepest
-  if (t < 0.05) return null;                          // ~flat -> no paint
-  const hue = 230 * (1 - t);                          // 230 blue -> 0 red
-  const damp = Math.max(0.25, Math.min(1, (gmax || 0) / TUNE.slopeRefGrad));
-  const alpha = (0.12 + 0.42 * t) * damp;
-  return `hsla(${hue.toFixed(0)}, 85%, 50%, ${alpha.toFixed(3)})`;
-}
+// --- Subtle shaded-relief topo (replaces the loud rainbow heatmap) ---
+// Soft hillshade (light/shadow on the undulations) + a whisper of warm tint on the
+// steepest spots + thin fall-line arrows. Shown only on the green in play and the
+// target green; faint always-on (ambient), boosted to full detail by the slope button.
+
 // Downhill fall-line arrow at a world point (rotates with the camera via wx/wy).
+// Constant screen-space line width so it reads at any zoom.
 function drawFallArrow(x, y, grad, t) {
   const gm = Math.hypot(grad.x, grad.y) || 1e-6;
   const dx = -grad.x / gm, dy = -grad.y / gm;         // unit downhill direction
-  const len = 2.2 + 3.0 * t;                          // world units; steeper = longer
+  const len = 1.4 + 2.0 * t;                          // world units; steeper = longer
   const hx = x + dx * len, hy = y + dy * len;         // arrow head (downhill end)
   const sx = wx(x, y), sy = wy(x, y), ex = wx(hx, hy), ey = wy(hx, hy);
   const ux = ex - sx, uy = ey - sy, ul = Math.hypot(ux, uy) || 1;
-  const nx = ux / ul, ny = uy / ul, head = Math.min(7, ul * 0.5);
-  ctx.strokeStyle = "rgba(20,20,20,0.6)";
-  ctx.lineWidth = ws(0.5);
-  ctx.lineCap = "round";
+  const nx = ux / ul, ny = uy / ul, head = Math.min(6, ul * 0.45);
+  ctx.strokeStyle = "rgba(20,20,20,0.55)";
+  ctx.lineWidth = 1.2;                                // fixed px, zoom-independent
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath();
   ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);             // shaft
   ctx.moveTo(ex, ey); ctx.lineTo(ex - head * (nx * 0.87 - ny * 0.5), ey - head * (ny * 0.87 + nx * 0.5));
   ctx.moveTo(ex, ey); ctx.lineTo(ex - head * (nx * 0.87 + ny * 0.5), ey - head * (ny * 0.87 - nx * 0.5));
   ctx.stroke();
 }
-// Fill a surface's clipped area with steepness-colored cells + fall-line arrows
-// (world-space, so they rotate with the camera). Greens + synthetic fairway field.
-function drawSlopeHeat(field) {
-  const bb = polyBBox(field.poly);
-  const CELL = 4;                                     // world units (~12 yd) per color cell
-  const nx = Math.max(2, Math.min(60, Math.ceil((bb.maxx - bb.minx) / CELL)));
-  const ny = Math.max(2, Math.min(60, Math.ceil((bb.maxy - bb.miny) / CELL)));
-  const dx = (bb.maxx - bb.minx) / nx, dy = (bb.maxy - bb.miny) / ny;
-  withClip(field.poly, () => {
-    for (let j = 0; j < ny; j++) {
-      for (let i = 0; i < nx; i++) {
-        const x0 = bb.minx + i * dx, y0 = bb.miny + j * dy;
-        const col = slopeColor(field.grad(x0 + dx / 2, y0 + dy / 2), field.gmax);
-        if (!col) continue;
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.moveTo(wx(x0, y0), wy(x0, y0));
-        ctx.lineTo(wx(x0 + dx, y0), wy(x0 + dx, y0));
-        ctx.lineTo(wx(x0 + dx, y0 + dy), wy(x0 + dx, y0 + dy));
-        ctx.lineTo(wx(x0, y0 + dy), wy(x0, y0 + dy));
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-    // fall-line arrows on a coarser grid
-    const AS = 9;                                      // arrow spacing (world units)
-    const ax = Math.max(1, Math.round((bb.maxx - bb.minx) / AS));
-    const ay = Math.max(1, Math.round((bb.maxy - bb.miny) / AS));
-    const adx = (bb.maxx - bb.minx) / ax, ady = (bb.maxy - bb.miny) / ay;
-    for (let j = 0; j <= ay; j++) {
-      for (let i = 0; i <= ax; i++) {
-        const px = bb.minx + i * adx, py = bb.miny + j * ady;
-        if (!pointInPoly(px, py, field.poly)) continue;
-        const g = field.grad(px, py);
-        const t = Math.min(1, Math.hypot(g.x, g.y) / (field.gmax || 1e-6));
-        if (t < 0.08) continue;
-        drawFallArrow(px, py, g, t);
-      }
-    }
-  });
+// Build (once, cached) a small hillshade raster for a green. Pixel -> world is the
+// axis-aligned affine g.relief.m; drawn later through the view transform (bilinear)
+// so it's smooth and rotates with the camera. Flat areas are transparent — only
+// undulation/tilt shows as soft light & shadow.
+function buildGreenRelief(g) {
+  const bb = polyBBox(g.poly);
+  const w = bb.maxx - bb.minx, h = bb.maxy - bb.miny, long = Math.max(w, h) || 1;
+  const RMAX = 96, scale = RMAX / long;
+  const W = Math.max(8, Math.round(w * scale)), H = Math.max(8, Math.round(h * scale));
+  const sx = w / W, sy = h / H, gmax = g.gmax || 1e-6, EX = TUNE.reliefExag;
+  let lx = -0.55, ly = -0.55, lz = 0.63;              // light from NW, up
+  const ll = Math.hypot(lx, ly, lz); lx /= ll; ly /= ll; lz /= ll;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const cg = c.getContext("2d"), im = cg.createImageData(W, H), D = im.data;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const X = bb.minx + (i + 0.5) * sx, Y = bb.miny + (j + 0.5) * sy;
+    const gr = g.grad(X, Y), t = Math.min(1, Math.hypot(gr.x, gr.y) / gmax);
+    let nx = -gr.x * EX, ny = -gr.y * EX, nz = 1;
+    const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+    const d = Math.max(-1, Math.min(1, (nx * lx + ny * ly + nz * lz) - lz)); // vs flat
+    const ra = Math.min(0.9, Math.abs(d) * TUNE.reliefShade);  // highlight/shadow alpha
+    const rv = d >= 0 ? 255 : 0;                                // white up-light / black shadow
+    const ta = Math.min(0.8, t * TUNE.reliefTint);             // faint warm tint on steep
+    const oa = ra + ta * (1 - ra), k = oa > 0 ? 1 / oa : 0;    // relief OVER tint
+    const o = (j * W + i) * 4;
+    D[o]     = (rv * ra + 210 * ta * (1 - ra)) * k;
+    D[o + 1] = (rv * ra + 140 * ta * (1 - ra)) * k;
+    D[o + 2] = (rv * ra +  60 * ta * (1 - ra)) * k;
+    D[o + 3] = oa * 255;
+  }
+  cg.putImageData(im, 0, 0);
+  g.relief = { canvas: c, m: [sx, 0, bb.minx, 0, sy, bb.miny] };
+}
+// Thin fall-line arrows over a green (cell-center sampled so they land inside the oval).
+function drawGreenArrows(g) {
+  const bb = polyBBox(g.poly), AS = 5;
+  const ax = Math.max(1, Math.round((bb.maxx - bb.minx) / AS));
+  const ay = Math.max(1, Math.round((bb.maxy - bb.miny) / AS));
+  const adx = (bb.maxx - bb.minx) / ax, ady = (bb.maxy - bb.miny) / ay;
+  for (let j = 0; j < ay; j++) for (let i = 0; i < ax; i++) {
+    const px = bb.minx + (i + 0.5) * adx, py = bb.miny + (j + 0.5) * ady;
+    if (!pointInPoly(px, py, g.poly)) continue;
+    const gr = g.grad(px, py), t = Math.min(1, Math.hypot(gr.x, gr.y) / (g.gmax || 1e-6));
+    if (t < 0.08) continue;
+    drawFallArrow(px, py, gr, t);
+  }
+}
+// Draw a green's shaded relief (clipped, through the view transform) at `intensity`,
+// optionally with fall-line arrows. Mirrors drawAerial's view∘m compose.
+function drawGreenRelief(g, intensity, showArrows) {
+  if (!g.relief) buildGreenRelief(g);
+  const m = g.relief.m, dpr = window.devicePixelRatio || 1;
+  const A = view.a * m[0] + view.b * m[3], C = view.a * m[1] + view.b * m[4], E = view.a * m[2] + view.b * m[5] + view.c;
+  const B = view.d * m[0] + view.e * m[3], Dd = view.d * m[1] + view.e * m[4], F = view.d * m[2] + view.e * m[5] + view.f;
+  ctx.save();
+  tracePoly(g.poly); ctx.clip();                      // clip set in device space, survives setTransform
+  ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * Dd, dpr * E, dpr * F);
+  ctx.imageSmoothingEnabled = true;
+  ctx.globalAlpha = intensity;
+  ctx.drawImage(g.relief.canvas, 0, 0);
+  ctx.restore();
+  if (showArrows) drawGreenArrows(g);
+}
+// The green(s) currently relevant: the one the ball sits on + the one holding the pin.
+function greensInPlay() {
+  const greens = HOLE._greens || [], out = [];
+  const add = (p) => { for (const g of greens) { if (!out.includes(g) && pointInPoly(p.x, p.y, g.poly)) { out.push(g); return; } } };
+  add(state.ball); add(HOLE.holePos);
+  return out;
 }
 
 // Stylized vector rendering (used when no aerial, e.g. offline / St Andrews).
@@ -1264,10 +1366,13 @@ function draw() {
     drawVectorSurfaces();
   }
 
-  // slope heatmap overlay (toggled): greens (real, drives putting) + synthetic fairway
-  if (showSlope && !HOLE.isRange) {
-    for (const f of HOLE._greens || []) if (polyVisible(f.poly)) drawSlopeHeat(f);
-    for (const f of HOLE._fairways || []) if (polyVisible(f.poly)) drawSlopeHeat(f);
+  // shaded-relief topo: ball's green + the pin's green only. Whisper-faint always;
+  // the slope button boosts intensity and adds fall-line arrows.
+  if (!HOLE.isRange) {
+    for (const g of greensInPlay()) {
+      if (!polyVisible(g.poly)) continue;
+      drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope);
+    }
   }
 
   // target rings on the range; the cup + flag on the course
@@ -1385,6 +1490,26 @@ function draw() {
     ctx.strokeStyle = "rgba(120,120,110,0.7)";
     ctx.lineWidth = 1;
     ctx.stroke();
+  } else if (holeDrop) {
+    // ball-into-cup: catch the lip, rattle to centre, then sink (shrink + darken)
+    const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
+    const p = Math.min(1, (performance.now() - holeDrop.t0) / HOLE_DROP_MS);
+    const easeOut = (x) => 1 - Math.pow(1 - x, 3), easeIn = (x) => x * x * x;
+    const a = easeOut(Math.min(1, p / 0.28));          // settle to the cup centre
+    let wxp = holeDrop.x + (HOLE.holePos.x - holeDrop.x) * a;
+    let wyp = holeDrop.y + (HOLE.holePos.y - holeDrop.y) * a;
+    const sp = Math.hypot(holeDrop.vx, holeDrop.vy) || 1; // rim rattle: decaying wobble
+    const wob = (1 - p) * (1 - p) * 0.6 * Math.sin(p * 46);
+    wxp += (-holeDrop.vy / sp) * wob; wyp += (holeDrop.vx / sp) * wob;
+    const s = easeIn(Math.max(0, (p - 0.18) / 0.82));  // sink amount
+    const r = Math.max(baseR * (1 - 0.9 * s), 0.5);
+    const sx = wx(wxp, wyp), sy = wy(wxp, wyp) + s * baseR * 0.8; // slight drop
+    const mix = (c0, c1) => Math.round(c0 + (c1 - c0) * s);
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgb(${mix(245, 16)},${mix(245, 36)},${mix(238, 20)})`;
+    ctx.fill();
+    if (s < 0.6) { ctx.strokeStyle = `rgba(120,120,110,${0.7 * (1 - s)})`; ctx.lineWidth = 1; ctx.stroke(); }
   }
 
   // vignette — darken edges to draw the eye toward the hole
@@ -1455,7 +1580,7 @@ const elPar = document.getElementById("par");
 const elYards = document.getElementById("yards");
 
 // Running total across completed holes. Score shows E until a hole is finished.
-const round = { score: 0, holesPlayed: 0 };
+const round = { score: 0, holesPlayed: 0, holeStats: [] };
 
 function formatToPar(d) {
   if (d === 0) return "E";
@@ -1474,6 +1599,16 @@ function hideHint() { elHint.classList.add("hidden"); }
 
 function showResult() {
   const d = state.strokes - HOLE.par;
+  // Record per-hole stats
+  round.holeStats.push({
+    hole: HOLE.num || round.holesPlayed + 1,
+    par: HOLE.par,
+    strokes: state.strokes,
+    gir: state.gir,
+    putts: state.putts,
+    proximity: state.proximity,
+    fairwayHit: state.fairwayHit,
+  });
   // Hole done: fold this hole's result into the running round total.
   round.score += d;
   round.holesPlayed += 1;
@@ -1489,8 +1624,12 @@ function showResult() {
 
 document.getElementById("play-again").addEventListener("click", () => {
   elResult.classList.add("hidden");
+  // Last hole of the course → show full round summary instead of advancing
+  if (course && holeIndex >= course.holes.length - 1) {
+    showRoundSummary();
+    return;
+  }
   advanceHole(() => {
-    // advance to the next hole (wraps to #1 after the last)
     if (course) {
       holeIndex = (holeIndex + 1) % course.holes.length;
       setHole(course.holes[holeIndex]);
@@ -1499,6 +1638,154 @@ document.getElementById("play-again").addEventListener("click", () => {
     }
     elHint.classList.remove("hidden");
   });
+});
+
+// =====================================================================
+//  Round-end summary
+// =====================================================================
+function scoreClass(strokes, par) {
+  const d = strokes - par;
+  if (d <= -2) return "re-cell-eagle";
+  if (d === -1) return "re-cell-birdie";
+  if (d === 0)  return "re-cell-par";
+  if (d === 1)  return "re-cell-bogey";
+  return "re-cell-double";
+}
+
+function buildScorecardSection(holes, showTot) {
+  const pars   = holes.map(h => h.par);
+  const scores = holes.map(h => h.strokes);
+  const sumPar = pars.reduce((a, b) => a + b, 0);
+  const sumScr = scores.reduce((a, b) => a + b, 0);
+  const totPar = round.holeStats.reduce((a, h) => a + h.par, 0);
+  const totScr = round.holeStats.reduce((a, h) => a + h.strokes, 0);
+  const label  = holes[0].hole > 9 ? "IN" : "OUT";
+  const totCls = scoreClass(totScr, totPar);
+
+  const hRow = `<tr><th class="re-label">HOLE</th>${holes.map(h => `<th>${h.hole}</th>`).join("")}<th class="re-sep">${label}</th>${showTot ? `<th class="re-sep">TOT</th>` : ""}</tr>`;
+  const pRow = `<tr><td class="re-label">PAR</td>${pars.map(p => `<td>${p}</td>`).join("")}<td class="re-sep">${sumPar}</td>${showTot ? `<td class="re-sep">${totPar}</td>` : ""}</tr>`;
+  const sRow = `<tr><td class="re-label">YOU</td>${scores.map((s, i) => `<td class="${scoreClass(s, pars[i])}">${s}</td>`).join("")}<td class="re-sep">${sumScr}</td>${showTot ? `<td class="re-sep ${totCls}">${totScr}</td>` : ""}</tr>`;
+
+  return `<table class="re-sc"><thead>${hRow}</thead><tbody>${pRow}${sRow}</tbody></table>`;
+}
+
+function buildRoundScorecard() {
+  const stats = round.holeStats;
+  const front = stats.slice(0, Math.min(9, stats.length));
+  const back  = stats.slice(9, Math.min(18, stats.length));
+  let html = "";
+  if (front.length) html += buildScorecardSection(front, back.length === 0);
+  if (back.length)  html += buildScorecardSection(back, true);
+  document.getElementById("re-scorecard").innerHTML = html;
+}
+
+function buildRoundStats() {
+  const stats = round.holeStats;
+  const n = stats.length;
+  const girs = stats.filter(h => h.gir).length;
+  const firHoles = stats.filter(h => h.fairwayHit !== null);
+  const firs = firHoles.filter(h => h.fairwayHit).length;
+  const totalPutts = stats.reduce((s, h) => s + (h.putts || 0), 0);
+  const proxHoles = stats.filter(h => h.proximity !== null);
+  const avgProx = proxHoles.length
+    ? proxHoles.reduce((s, h) => s + h.proximity, 0) / proxHoles.length : null;
+
+  function avgByPar(p) {
+    const hs = stats.filter(h => h.par === p);
+    return hs.length ? (hs.reduce((s, h) => s + h.strokes, 0) / hs.length).toFixed(1) : null;
+  }
+  function pct(num, den) { return den > 0 ? `${num}/${den} (${Math.round(num / den * 100)}%)` : "—"; }
+
+  const summaryRows = [
+    { label: "GIR", val: pct(girs, n) },
+    { label: "Fairways Hit", val: firHoles.length ? pct(firs, firHoles.length) : "N/A" },
+    { label: "Total Putts", val: totalPutts },
+    { label: "Proximity (avg)", val: avgProx !== null ? Math.round(avgProx * 3) + " ft" : "—" },
+    { section: "Scoring Average" },
+    { label: "Par 3s", val: avgByPar(3) || "—" },
+    { label: "Par 4s", val: avgByPar(4) || "—" },
+    { label: "Par 5s", val: avgByPar(5) || "—" },
+  ];
+
+  const perHoleRows = stats.map(h => {
+    const prox = h.proximity !== null ? Math.round(h.proximity * 3) + "ft" : "—";
+    return `<tr>
+      <td class="re-label">${h.hole}</td>
+      <td>${h.par}</td>
+      <td class="${scoreClass(h.strokes, h.par)}">${h.strokes}</td>
+      <td>${h.gir ? "✓" : "·"}</td>
+      <td>${h.putts}</td>
+      <td>${prox}</td>
+    </tr>`;
+  }).join("");
+
+  const summaryHtml = summaryRows.map(r =>
+    r.section
+      ? `<div class="re-stat-section">${r.section}</div>`
+      : `<div class="re-stat-row"><span class="re-stat-label">${r.label}</span><span class="re-stat-val">${r.val}</span></div>`
+  ).join("");
+
+  const perHoleHtml = `
+    <div class="re-stat-section" style="margin-top:16px">Per Hole</div>
+    <div class="re-sc-wrap">
+      <table class="re-sc re-per-hole">
+        <thead><tr>
+          <th class="re-label">#</th>
+          <th>Par</th><th>Score</th><th>GIR</th><th>Putts</th><th>Prox</th>
+        </tr></thead>
+        <tbody>${perHoleRows}</tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("re-statslist").innerHTML = summaryHtml + perHoleHtml;
+}
+
+let _roundMidRound = false;
+
+function showRoundSummary(midRound = false) {
+  _roundMidRound = midRound;
+  const totStrk = round.holeStats.reduce((s, h) => s + h.strokes, 0);
+  const n = course ? course.holes.length : 18;
+  const played = round.holeStats.length;
+  document.getElementById("re-header-title").textContent = midRound ? "Scorecard" : "Round Complete";
+  document.getElementById("re-subtitle").textContent = midRound
+    ? `${course ? course.name : "Golf"} · Hole ${played} of ${n} · ${formatToPar(round.score)}`
+    : `${course ? course.name : "Golf"} · ${totStrk} (${formatToPar(round.score)})`;
+  document.getElementById("re-replay").textContent = midRound ? "Resume" : "Play Again";
+  // reset to scorecard tab each open
+  document.querySelectorAll(".re-tab").forEach(t => t.classList.toggle("active", t.dataset.panel === "re-card"));
+  document.querySelectorAll(".re-panel").forEach(p => p.classList.toggle("hidden", p.id !== "re-card"));
+  buildRoundScorecard();
+  buildRoundStats();
+  document.getElementById("round-end").classList.remove("hidden");
+}
+
+// Round-end tab switching + actions
+document.querySelectorAll(".re-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".re-tab").forEach(t => t.classList.remove("active"));
+    btn.classList.add("active");
+    const target = btn.dataset.panel;
+    document.querySelectorAll(".re-panel").forEach(p => p.classList.toggle("hidden", p.id !== target));
+  });
+});
+
+document.getElementById("re-home").addEventListener("click", () => {
+  document.getElementById("round-end").classList.add("hidden");
+  mode = "menu";
+  elMenu.classList.remove("hidden");
+  elCourseMenuBtn.classList.add("hidden");
+  elCourseControls.classList.add("hidden");
+  elClubBar.classList.add("hidden");
+  elScorecard.style.display = "none";
+});
+
+document.getElementById("re-replay").addEventListener("click", () => {
+  if (_roundMidRound) {
+    document.getElementById("round-end").classList.add("hidden");
+  } else {
+    startCourse();
+  }
 });
 
 // =====================================================================
@@ -1531,8 +1818,6 @@ function setHole(rec) {
     // share precomputed topo + the one aerial across every hole (load once)
     if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green);
     HOLE._greens = course._greens;
-    if (!course._fairways) course._fairways = buildFairwayTopo(course.surfaces.fairway);
-    HOLE._fairways = course._fairways;
     if (course._img === undefined) {
       course._img = null; course._imgReady = false;
       if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
@@ -1548,7 +1833,6 @@ function setHole(rec) {
     HOLE._img = course._img; HOLE._imgReady = course._imgReady;
   } else {
     HOLE._greens = buildGreenTopo(HOLE.surfaces.green);
-    HOLE._fairways = buildFairwayTopo(HOLE.surfaces.fairway);
     HOLE._img = null; HOLE._imgReady = false;
     if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
       const target = HOLE;
@@ -1609,7 +1893,7 @@ async function loadCourse(id) {
   if (!res.ok) throw new Error("HTTP " + res.status);
   course = await res.json();
   YARDS_PER_UNIT = course.yardsPerUnit || YARDS_PER_UNIT;
-  course._greens = null; course._fairways = null; course._img = undefined; course._imgReady = false; // shared caches
+  course._greens = null; course._img = undefined; course._imgReady = false; // shared caches
   holeIndex = 0;
   setHole(course.holes[holeIndex]);
 }
@@ -1762,6 +2046,9 @@ function setMeasureMode(on) {
 elAimBtn.addEventListener("click", aimAtHole);
 elMeasureBtn.addEventListener("click", () => setMeasureMode(!measureMode));
 elSlopeBtn.addEventListener("click", () => setSlopeMode(!showSlope));
+document.getElementById("card-btn").addEventListener("click", () => {
+  if (round.holeStats.length > 0) showRoundSummary(true);
+});
 
 // Club selector: +/- steps through the bag (putter is automatic on the green).
 const elClubBar = document.getElementById("club-bar");
@@ -1769,9 +2056,14 @@ const elClubName = document.getElementById("club-name");
 const elClubYds = document.getElementById("club-yds");
 function updateClubUI() {
   const onGreen = HOLE && !HOLE.isRange && surfaceAt(state.ball.x, state.ball.y) === "green";
+  // "putting" CSS class (dims +/- buttons) only when on actual green — not when putter chosen off-green
   elClubBar.classList.toggle("putting", !!onGreen);
-  if (onGreen) { elClubName.textContent = "Putter"; elClubYds.textContent = ""; }
-  else {
+  if (onGreen) {
+    elClubName.textContent = "Putter"; elClubYds.textContent = "";
+  } else if (selectedClub === "putter") {
+    // putter manually selected off-green (bump-and-run): show max roll distance
+    elClubName.textContent = "Putter"; elClubYds.textContent = "~30y";
+  } else {
     const c = TUNE.clubs[selectedClub];
     elClubName.textContent = c.name; elClubYds.textContent = c.carry + "y";
   }
@@ -1832,6 +2124,7 @@ function startCourse() {
   mode = "course";
   elMenu.classList.add("hidden");
   elRangeUI.classList.add("hidden");
+  document.getElementById("round-end").classList.add("hidden");
   elScorecard.style.display = "";
   elCourseMenuBtn.classList.remove("hidden");
   elCourseControls.classList.remove("hidden");
@@ -1839,6 +2132,7 @@ function startCourse() {
   elClubBar.classList.remove("range");
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
+  round.score = 0; round.holesPlayed = 0; round.holeStats = [];
   if (course) {
     setYardsPerUnit(course.yardsPerUnit);   // restore course scale (range may have changed it)
     holeIndex = 0;
@@ -1903,6 +2197,7 @@ rangeSlider.addEventListener("input", () => {
 // =====================================================================
 function loop() {
   update();
+  tickHoleDrop();
   updateCamera();
   updateStats();
   draw();

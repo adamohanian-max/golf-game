@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="style.css?v=32">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -43,6 +43,7 @@
     <button id="aim-btn" aria-label="Aim camera at hole" title="Aim at hole">⛳</button>
     <button id="measure-btn" aria-label="Range finder" title="Range finder">📏</button>
     <button id="slope-btn" aria-label="Show slope" title="Show slope">⛰</button>
+    <button id="card-btn" aria-label="View scorecard" title="Scorecard">📋</button>
   </div>
 
   <div id="club-bar" class="hidden">
@@ -65,8 +66,9 @@
 
   <div id="menu">
     <div class="menu-box">
+      <p class="menu-eyebrow">Pinehurst No. 2 &middot; 18 Holes</p>
       <h1>GOLF</h1>
-      <p class="menu-sub">Pinehurst No. 2</p>
+      <div class="menu-divider"></div>
       <button id="play-course" class="menu-btn">Play Course</button>
       <button id="play-range" class="menu-btn secondary">Driving Range</button>
     </div>
@@ -80,6 +82,29 @@
     </div>
   </div>
 
-  <script src="game.js?v=26"></script>
+  <div id="round-end" class="hidden">
+    <div class="re-box">
+      <div class="re-header">
+        <h2 id="re-header-title">Round Complete</h2>
+        <p id="re-subtitle"></p>
+      </div>
+      <div class="re-tabs">
+        <button class="re-tab active" data-panel="re-card">Scorecard</button>
+        <button class="re-tab" data-panel="re-stats">Stats</button>
+      </div>
+      <div id="re-card" class="re-panel">
+        <div class="re-sc-wrap" id="re-scorecard"></div>
+      </div>
+      <div id="re-stats" class="re-panel hidden">
+        <div id="re-statslist"></div>
+      </div>
+      <div class="re-actions">
+        <button id="re-home" class="menu-btn secondary">Home</button>
+        <button id="re-replay" class="menu-btn">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js?v=32"></script>
 </body>
 </html>
