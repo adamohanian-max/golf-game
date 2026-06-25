@@ -4,7 +4,8 @@
 //  Tunables — tweak these to change game feel
 // =====================================================================
 const TUNE = {
-  fullPowerSwipe: 1400,  // swipe speed (world units/sec) that produces max power
+  fullPowerSwipe: 1400,  // trackpad wheel swipe speed (world u/s) = max power
+  touchPowerSwipe: 500,  // touch/mouse flick speed (world u/s) = max power (calibrated to phone)
   wheelSensitivity: 1.0, // two-finger trackpad swipe -> swing power scaling
   wheelInvert: false,    // true if you use classic (non-natural) scrolling
   stopThreshold: 0.005,  // speed below this = ball stopped
@@ -755,10 +756,24 @@ function swingEnd(e) {
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
   const path = swipePath;
   swipe = null; swipePath = null;
-  const start = path[0], end = path[path.length - 1];
-  const dxs = end.x - start.x, dys = end.y - start.y;
-  const dt = (end.t - start.t) / 1000;
-  launch(dxs, dys, dt, curveFromPath(path));
+
+  // Power = release velocity: look at the last ~80 ms of the path (finger speed at lift-off).
+  // This makes "flick hard = far, flick soft = short" regardless of backswing size.
+  const end = path[path.length - 1];
+  const LOOK_MS = 80;
+  let ri = path.length - 2;
+  while (ri > 0 && end.t - path[ri].t < LOOK_MS) ri--;
+  const ref = path[ri];
+  const dxs = end.x - ref.x, dys = end.y - ref.y;
+  const dt = Math.max((end.t - ref.t) / 1000, 0.001);
+  const fdist = Math.hypot(dxs, dys);
+  if (fdist < 5) return; // too small to register as a shot
+
+  const speed = (fdist / refScale) / dt;
+  const frac = Math.min(speed / TUNE.touchPowerSwipe, 1);
+  const ang = Math.atan2(dys, dxs) - view.angle;
+  const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
+  launchShot(ang, frac, curveFromPath(path), onGreen);
 }
 
 canvas.addEventListener("touchstart", swingStart, { passive: false });
