@@ -9,12 +9,12 @@ const TUNE = {
   wheelInvert: false,    // true if you use classic (non-natural) scrolling
   stopThreshold: 0.005,  // speed below this = ball stopped
   captureSpeed: 0.22,    // ball must be slower than this to drop in cup (low = hard)
-  puttSensitivity: 1.0,    // putt power per unit of swipe (higher = more sensitive)
+  puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
 
   // --- Two-phase swing: pull back (backswing), then swing forward & release.
   // Backswing LENGTH is the primary, precise power control (distance is linear in
   // pull-back); forward-swing speed is a secondary tempo modifier.
-  backswingFull: 64,     // backswing distance (world units) = full power
+  backswingFull: 80,     // backswing distance (world units) = full power
   tempoSpeed: 500,       // forward-swing speed (world u/s) read as "normal" tempo
   tempoMin: 0.90,        // slow forward swing trims distance to this fraction
   tempoMax: 1.12,        // fast forward swing adds distance up to this fraction
@@ -640,7 +640,7 @@ function swingFraction(forwardSpeed, backDist) {
   const backFactor = Math.min(backDist / TUNE.backswingFull, 1);
   const tempo = Math.max(TUNE.tempoMin, Math.min(TUNE.tempoMax, forwardSpeed / TUNE.tempoSpeed));
   // Power curve: concave (exp > 1) compresses the low end → more screen travel per
-  // distance unit on short shots. 50% pull → ~38% power; 25% pull → 14% power.
+  // distance unit on short shots. 50% pull → ~30% power; 25% pull → 9% power.
   return Math.min(Math.pow(backFactor, 1.7) * tempo, 1);
 }
 
@@ -659,7 +659,7 @@ function launchShot(ang, frac, spin, onGreen) {
     // on-green: calibrated to green decel (max 50 yards); off-green: calibrated to fairway
     // friction (~30 yards max). Both use sqrt(f) for a gentle power ramp.
     const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
-    const power = maxPow * Math.sqrt(f);
+    const power = maxPow * TUNE.puttSensitivity * Math.sqrt(f);
     shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
     b.vx = Math.cos(ang) * power; b.vy = Math.sin(ang) * power;
     b.vz = 0; b.z = 0; b.spin = 0;
