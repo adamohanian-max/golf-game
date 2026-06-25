@@ -49,7 +49,9 @@ Geometry is **real-first**: greens, bunkers, water, tees, **fairways**, plus **w
 
 Default course: **Pinehurst No. 2** (`courses/pinehurst-no2.json` + `courses/img/pinehurst-no2/`, 11/18 holes with real fairways). Re-bake:
 `python3 tools/fetch_course.py --boundary-way 1358696570 --id pinehurst-no2 --name "Pinehurst No. 2"`
-St Andrews Old is also baked (`--boundary-way 1019045811 --id st-andrews-old`, fairways synthesized). See the `bake-course` skill (`.claude/skills/bake-course/`) for the full workflow.
+St Andrews Old is also baked (`--boundary-way 1019045811 --id st-andrews-old`, fairways synthesized). **Four Oaks Country Club** (Dracut, MA) is baked from an OSM **relation** boundary: `--boundary-rel 18442673 --id four-oaks-dracut --name "Four Oaks Country Club"` (18 holes, par 70; the 4 par-3s' aerials returned Esri 500s so those holes render in vector mode — re-bake to retry). `fetch_course.py` now accepts `--boundary-rel <id>` (relation→area via `rel(id);map_to_area`) in addition to `--boundary-way`.
+
+**Course picker:** the home menu lists `COURSES` (game.js, near `loadCourse`) as tappable options; `selectedCourseId` drives `startCourse()`, which calls `loadCourse(selectedCourseId)` when switching. Add a course = bake its JSON + push `{id,name,sub}` onto `COURSES`. See the `bake-course` skill (`.claude/skills/bake-course/`) for the full workflow.
 
 ## Key tunables (`TUNE` in game.js)
 

@@ -48,11 +48,13 @@ IMG_PAD = 1.06            # expand aerial footprint past the world rect a touch
 
 
 # --- Overpass --------------------------------------------------------------
-def fetch_overpass(boundary_way, cache):
+def fetch_overpass(boundary_id, cache, kind="way"):
     if cache and os.path.exists(cache):
         with open(cache) as f:
             return json.load(f)
-    q = (f'[out:json][timeout:90];way({boundary_way});map_to_area->.oc;'
+    # `way` or `rel` boundary -> area; relations (multipolygon boundaries) work too.
+    sel = "rel" if kind in ("rel", "relation") else "way"
+    q = (f'[out:json][timeout:90];{sel}({boundary_id});map_to_area->.oc;'
          f'(way(area.oc)["golf"];'
          f'way(area.oc)["natural"~"wood|water"];'
          f'way(area.oc)["landuse"="grass"];);'
@@ -408,6 +410,8 @@ def main():
     ap.add_argument("--from-index", metavar="SLUG",
                     help="resolve boundary-way/id/name from courses/index.json")
     ap.add_argument("--boundary-way", type=int)
+    ap.add_argument("--boundary-rel", type=int,
+                    help="OSM relation id for the course boundary (multipolygon)")
     ap.add_argument("--id")
     ap.add_argument("--name")
     ap.add_argument("--cache")
@@ -444,9 +448,13 @@ def main():
             ap.error("--source golfbert needs --id and --name")
         data = golfbert.fetch_as_overpass(args.golfbert_course)
     else:
-        if not (args.boundary_way and args.id and args.name):
-            ap.error("need --from-index SLUG, or all of --boundary-way/--id/--name")
-        data = fetch_overpass(args.boundary_way, args.cache)
+        if not ((args.boundary_way or args.boundary_rel) and args.id and args.name):
+            ap.error("need --from-index SLUG, or --id/--name + "
+                     "--boundary-way (or --boundary-rel)")
+        if args.boundary_rel:
+            data = fetch_overpass(args.boundary_rel, args.cache, kind="rel")
+        else:
+            data = fetch_overpass(args.boundary_way, args.cache)
     els = [e for e in data["elements"] if "geometry" in e and e.get("tags")]
     by = lambda g: [e for e in els if e["tags"].get("golf") == g]
     byt = lambda k, v: [e for e in els if e["tags"].get(k) == v]
