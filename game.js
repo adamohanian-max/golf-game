@@ -9,14 +9,14 @@ const TUNE = {
   wheelSensitivity: 1.0, // two-finger trackpad swipe -> swing power scaling
   wheelInvert: false,    // true if you use classic (non-natural) scrolling
   stopThreshold: 0.005,  // speed below this = ball stopped
-  captureSpeed: 0.22,    // ball must be slower than this to drop in cup (low = hard)
+  captureSpeed: 0.15,    // ball must be slower than this to drop in cup (low = hard)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
 
   // --- Ball flight ---
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.011,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
-  spinFactor: 0.005,     // how hard a curved swipe bends flight (draw/fade)
+  spinFactor: 0.01,     // how hard a curved swipe bends flight (draw/fade)
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
@@ -37,7 +37,7 @@ const TUNE = {
   // green field's gradient. slopeAccel folds the field's vertical scale + gravity
   // into one knob (world-units/frame^2 per unit gradient); calibrate by feel.
   // Slope is ignored below slopeStopSpeed so a ball settles instead of creeping.
-  slopeAccel: 0.0006,
+  slopeAccel: 0.001,
   slopeStopSpeed: 0.02,
   // Shaded-relief topo overlay (greens only). Intensity = drawImage globalAlpha.
   reliefAmbient: 0.14,   // always-on whisper on the in-play / target green
@@ -261,6 +261,18 @@ function surfaceAt(x, y) {
 function greenSlopeAt(x, y) {
   for (const g of HOLE._greens || []) {
     if (g.grad && pointInPoly(x, y, g.poly)) return g.grad(x, y);
+  }
+  return null;
+}
+// Elevation at a world point in feet, relative to the green's own midpoint.
+// Scaled so the full green spans ±3 ft (consistent with the drawn contours).
+// Returns null if the point is not on any green.
+function elevationAt(x, y) {
+  for (const g of HOLE._greens || []) {
+    if (!pointInPoly(x, y, g.poly)) continue;
+    const hMid = (g.hmin + g.hmax) / 2;
+    const hHalf = (g.hmax - g.hmin) / 2 || 1;
+    return (g.h(x, y) - hMid) / hHalf * 3.0;
   }
   return null;
 }
@@ -1111,7 +1123,7 @@ function buildGreenTopo(polys) {
     for (let kk = 1; kk <= nL; kk++) levels.push(hmin + (hmax - hmin) * kk / (nL + 1));
     const contours = contourSegments(h, bb.minx, bb.miny, bb.maxx, bb.maxy, levels, 30, 30);
     out.push({
-      poly, contours, h, grad, gmax,
+      poly, contours, h, grad, gmax, hmin, hmax,
       hi: { x: bb.cx + dirx * R, y: bb.cy + diry * R },  // high side (sunlit)
       lo: { x: bb.cx - dirx * R, y: bb.cy - diry * R },  // low side (shaded)
     });
@@ -1212,13 +1224,13 @@ function drawGreen(photo) {
 function drawFallArrow(x, y, grad, t) {
   const gm = Math.hypot(grad.x, grad.y) || 1e-6;
   const dx = -grad.x / gm, dy = -grad.y / gm;         // unit downhill direction
-  const len = 1.4 + 2.0 * t;                          // world units; steeper = longer
+  const len = 0.7 + 1.1 * t;                          // world units; steeper = longer
   const hx = x + dx * len, hy = y + dy * len;         // arrow head (downhill end)
   const sx = wx(x, y), sy = wy(x, y), ex = wx(hx, hy), ey = wy(hx, hy);
   const ux = ex - sx, uy = ey - sy, ul = Math.hypot(ux, uy) || 1;
-  const nx = ux / ul, ny = uy / ul, head = Math.min(6, ul * 0.45);
+  const nx = ux / ul, ny = uy / ul, head = Math.min(4, ul * 0.45);
   ctx.strokeStyle = "rgba(20,20,20,0.55)";
-  ctx.lineWidth = 1.2;                                // fixed px, zoom-independent
+  ctx.lineWidth = 0.9;                                // fixed px, zoom-independent
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath();
   ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);             // shaft
@@ -1261,7 +1273,7 @@ function buildGreenRelief(g) {
 }
 // Thin fall-line arrows over a green (cell-center sampled so they land inside the oval).
 function drawGreenArrows(g) {
-  const bb = polyBBox(g.poly), AS = 5;
+  const bb = polyBBox(g.poly), AS = 2.6;   // arrow spacing (world units) — denser grid
   const ax = Math.max(1, Math.round((bb.maxx - bb.minx) / AS));
   const ay = Math.max(1, Math.round((bb.maxy - bb.miny) / AS));
   const adx = (bb.maxx - bb.minx) / ax, ady = (bb.maxy - bb.miny) / ay;
@@ -1599,8 +1611,17 @@ function draw() {
     ctx.beginPath(); ctx.arc(mx, my, 2.5, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
     const yBall = Math.round(dist(b.x, b.y, measurePoint.x, measurePoint.y) * YARDS_PER_UNIT);
     const yPin = Math.round(dist(measurePoint.x, measurePoint.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
-    drawLabel((bx + mx) / 2, (by + my) / 2, yBall + " yds", "#fff");
-    drawLabel((mx + px) / 2, (my + py) / 2, yPin + " yds", "#ffd65a");
+    // Elevation change in feet (green topo only; null if off-green)
+    function elevLabel(fromX, fromY, toX, toY) {
+      const e0 = elevationAt(fromX, fromY) ?? 0;
+      const e1 = elevationAt(toX, toY) ?? 0;
+      if (elevationAt(fromX, fromY) === null && elevationAt(toX, toY) === null) return "";
+      const df = Math.round((e1 - e0) * 10) / 10;
+      if (Math.abs(df) < 0.2) return "";
+      return " " + (df > 0 ? "↑" : "↓") + Math.abs(df) + "ft";
+    }
+    drawLabel((bx + mx) / 2, (by + my) / 2, yBall + " yds" + elevLabel(b.x, b.y, measurePoint.x, measurePoint.y), "#fff");
+    drawLabel((mx + px) / 2, (my + py) / 2, yPin + " yds" + elevLabel(measurePoint.x, measurePoint.y, HOLE.holePos.x, HOLE.holePos.y), "#ffd65a");
   }
 
   // hole-change transition: fade out to course-green, swap the hole at the
@@ -1934,7 +1955,7 @@ function circlePoly(cx, cy, r, n) {
 }
 const FALLBACK_HOLE = {
   num: 1, par: 4, yards: 450, world: { w: 100, h: 180 },
-  tee: { x: 50, y: 165 }, pin: { x: 52, y: 22 }, greenSpeed: 12,
+  tee: { x: 50, y: 165 }, pin: { x: 52, y: 22 }, greenSpeed: 20,
   surfaces: {
     green: [circlePoly(52, 22, 16, 28)],
     fairway: [[
