@@ -1,0 +1,4262 @@
+{
+ "acushnet-river-valley-golf-course": {
+  "boundaryWay": 29688221,
+  "center": [
+   41.712756,
+   -70.885681
+  ],
+  "name": "Acushnet River Valley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "adam-s-rib-ranch": {
+  "boundaryWay": -2727364,
+  "center": [
+   39.582085,
+   -106.768536
+  ],
+  "name": "Adam's Rib Ranch",
+  "source": "cc0",
+  "type": "way"
+ },
+ "airport-golf-course": {
+  "boundaryWay": 30595296,
+  "center": [
+   39.992798,
+   -82.863437
+  ],
+  "name": "Airport Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "airways-golf-course": {
+  "boundaryWay": 43440682,
+  "center": [
+   41.960545,
+   -72.705206
+  ],
+  "name": "Airways Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ajo-country-club-and-golf-course": {
+  "boundaryWay": 263828486,
+  "center": [
+   32.449663,
+   -112.849952
+  ],
+  "name": "Ajo Country Club and Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "allenmore-golf-course": {
+  "boundaryWay": 23143257,
+  "center": [
+   47.23948,
+   -122.473748
+  ],
+  "name": "Allenmore Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "alling-memorial-golf-course": {
+  "boundaryWay": 43436802,
+  "center": [
+   41.309058,
+   -72.867361
+  ],
+  "name": "Alling Memorial Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "alpine-golf-country-club": {
+  "boundaryWay": 263829849,
+  "center": [
+   33.812753,
+   -109.10748
+  ],
+  "name": "Alpine Golf & Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "amherst-college-golf-course": {
+  "boundaryWay": 29906730,
+  "center": [
+   42.363172,
+   -72.526909
+  ],
+  "name": "Amherst College Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "andrews-east-course": {
+  "boundaryWay": -1285319,
+  "center": [
+   38.787395,
+   -76.880794
+  ],
+  "name": "Andrews East Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "andrews-south-course": {
+  "boundaryWay": -1285320,
+  "center": [
+   38.78748,
+   -76.875818
+  ],
+  "name": "Andrews South Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "antler-creek-golf-course": {
+  "boundaryWay": -3232693,
+  "center": [
+   38.973391,
+   -104.601086
+  ],
+  "name": "Antler Creek Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "apache-stronghold-golf-club": {
+  "boundaryWay": 263830019,
+  "center": [
+   33.365022,
+   -110.674475
+  ],
+  "name": "Apache Stronghold Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ashfield-community-golf-course": {
+  "boundaryWay": 29747748,
+  "center": [
+   42.523485,
+   -72.796111
+  ],
+  "name": "Ashfield Community Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "avalon-golf-club": {
+  "boundaryWay": -230074,
+  "center": [
+   39.119125,
+   -74.788463
+  ],
+  "name": "Avalon Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "azalea": {
+  "boundaryWay": 429077347,
+  "center": [
+   35.198481,
+   -79.504309
+  ],
+  "name": "Azalea",
+  "source": "osm",
+  "type": "way"
+ },
+ "baiting-hallow-golf-club": {
+  "boundaryWay": 29270704,
+  "center": [
+   40.963294,
+   -72.745067
+  ],
+  "name": "Baiting Hallow Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "balboa-park-golf-course": {
+  "boundaryWay": -3573430,
+  "center": [
+   32.727586,
+   -117.138342
+  ],
+  "name": "Balboa Park Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "bass-river-golf-course": {
+  "boundaryWay": 29800143,
+  "center": [
+   41.674931,
+   -70.175418
+  ],
+  "name": "Bass River Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "bass-rocks-golf-course": {
+  "boundaryWay": -64453,
+  "center": [
+   42.606127,
+   -70.636636
+  ],
+  "name": "Bass Rocks Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "baypath-golf-course": {
+  "boundaryWay": 29757863,
+  "center": [
+   42.226595,
+   -72.065464
+  ],
+  "name": "Baypath Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "baytree-national": {
+  "boundaryWay": -1236059,
+  "center": [
+   28.21788,
+   -80.708453
+  ],
+  "name": "Baytree National",
+  "source": "cc0",
+  "type": "way"
+ },
+ "bayview-golf-and-country-club": {
+  "boundaryWay": -313361,
+  "center": [
+   43.811978,
+   -79.380372
+  ],
+  "name": "Bayview Golf and Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "bear-hill-country-club": {
+  "boundaryWay": 29835381,
+  "center": [
+   42.499708,
+   -71.096195
+  ],
+  "name": "Bear Hill Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "beaver-dam-lodge-golf-course-hamilton-ranch": {
+  "boundaryWay": 263785952,
+  "center": [
+   36.898455,
+   -113.931937
+  ],
+  "name": "Beaver Dam Lodge Golf Course (Hamilton Ranch)",
+  "source": "cc0",
+  "type": "way"
+ },
+ "beckett-country-club": {
+  "boundaryWay": -53887,
+  "center": [
+   39.713782,
+   -75.327629
+  ],
+  "name": "Beckett Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "bellevue-golf-course": {
+  "boundaryWay": 29868514,
+  "center": [
+   42.4681,
+   -71.043868
+  ],
+  "name": "Bellevue Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "beverly-golf-and-tennis-club": {
+  "boundaryWay": 29690080,
+  "center": [
+   42.560846,
+   -70.898122
+  ],
+  "name": "Beverly Golf and Tennis Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "big-canyon-country-club": {
+  "boundaryWay": -1506345,
+  "center": [
+   33.624461,
+   -117.868964
+  ],
+  "name": "Big Canyon Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "black-hall-golf-club": {
+  "boundaryWay": 43439378,
+  "center": [
+   41.292095,
+   -72.297229
+  ],
+  "name": "Black Hall Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "blissful-meadows-golf-course": {
+  "boundaryWay": 29783161,
+  "center": [
+   42.033418,
+   -71.679835
+  ],
+  "name": "Blissful Meadows Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "blue-fox-run-golf-course": {
+  "boundaryWay": 43439356,
+  "center": [
+   41.811715,
+   -72.818465
+  ],
+  "name": "Blue Fox Run Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "blue-hills-golf-course": {
+  "boundaryWay": 29830285,
+  "center": [
+   42.185236,
+   -71.138351
+  ],
+  "name": "Blue Hills Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "blue-rock-golf-course": {
+  "boundaryWay": 29800635,
+  "center": [
+   41.685937,
+   -70.170741
+  ],
+  "name": "Blue Rock Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "bob-o-connor-golf-course": {
+  "boundaryWay": 27592237,
+  "center": [
+   40.437166,
+   -79.939392
+  ],
+  "name": "Bob O'Connor Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "bonnie-brae-golf-course": {
+  "boundaryWay": -198514,
+  "center": [
+   34.748318,
+   -82.35143
+  ],
+  "name": "Bonnie Brae Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "boone-links-golf-course": {
+  "boundaryWay": -3132230,
+  "center": [
+   39.008817,
+   -84.680119
+  ],
+  "name": "Boone Links Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "brae-burn-country-club": {
+  "boundaryWay": 29871734,
+  "center": [
+   42.333321,
+   -71.234879
+  ],
+  "name": "Brae Burn Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "briar-leaf-golf-club": {
+  "boundaryWay": -2726759,
+  "center": [
+   41.653175,
+   -86.732421
+  ],
+  "name": "Briar Leaf Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "briarwood-club-of-ankeny": {
+  "boundaryWay": -181359,
+  "center": [
+   41.756878,
+   -93.59031
+  ],
+  "name": "Briarwood Club of Ankeny",
+  "source": "cc0",
+  "type": "way"
+ },
+ "brickyard-crossing-golf-course": {
+  "boundaryWay": -569616,
+  "center": [
+   39.794264,
+   -86.229066
+  ],
+  "name": "Brickyard Crossing Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "brockton-golf-club": {
+  "boundaryWay": 29859242,
+  "center": [
+   42.048764,
+   -71.02503
+  ],
+  "name": "Brockton Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "brook-meadow-country-club": {
+  "boundaryWay": 131791529,
+  "center": [
+   42.159209,
+   -71.17469
+  ],
+  "name": "Brook Meadow Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "brooklyn-golf-course-rifle-range": {
+  "boundaryWay": 43438783,
+  "center": [
+   41.78609,
+   -71.90209
+  ],
+  "name": "Brooklyn Golf Course & Rifle Range",
+  "source": "cc0",
+  "type": "way"
+ },
+ "bunker-hill-golf-course": {
+  "boundaryWay": -227820,
+  "center": [
+   40.438015,
+   -74.575944
+  ],
+  "name": "Bunker Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "butterfield-golf-course": {
+  "boundaryWay": 263221648,
+  "center": [
+   32.67677,
+   -114.132682
+  ],
+  "name": "Butterfield Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "butternut-golf-course": {
+  "boundaryWay": 29777904,
+  "center": [
+   42.426207,
+   -71.517464
+  ],
+  "name": "Butternut Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "candlewood-public-golf-course": {
+  "boundaryWay": 29695251,
+  "center": [
+   42.656215,
+   -70.822534
+  ],
+  "name": "Candlewood Public Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "canoe-club-golf-course": {
+  "boundaryWay": -1769052,
+  "center": [
+   49.850404,
+   -97.122385
+  ],
+  "name": "Canoe Club Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "canyon-springs-golf-club": {
+  "boundaryWay": -1199950,
+  "center": [
+   29.673384,
+   -98.476592
+  ],
+  "name": "Canyon Springs Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cape-ann-golf-course": {
+  "boundaryWay": 29691477,
+  "center": [
+   42.649094,
+   -70.777027
+  ],
+  "name": "Cape Ann Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "capital-city-golf-club": {
+  "boundaryWay": -3092204,
+  "center": [
+   46.992425,
+   -122.816961
+  ],
+  "name": "Capital City Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "captains-golf-course": {
+  "boundaryWay": 29844404,
+  "center": [
+   41.728922,
+   -70.022406
+  ],
+  "name": "Captains Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cardinal-creek-golf-course": {
+  "boundaryWay": -3382796,
+  "center": [
+   41.345834,
+   -87.608661
+  ],
+  "name": "Cardinal Creek Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "carriage-greens-golf-club": {
+  "boundaryWay": -2981936,
+  "center": [
+   41.73088,
+   -87.985306
+  ],
+  "name": "Carriage Greens Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "catawba-island-club": {
+  "boundaryWay": -4007611,
+  "center": [
+   41.566514,
+   -82.845388
+  ],
+  "name": "Catawba Island Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cedar-glenn-golf-course": {
+  "boundaryWay": -64866,
+  "center": [
+   42.495939,
+   -71.029692
+  ],
+  "name": "Cedar Glenn Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cedar-hill-golf-course": {
+  "boundaryWay": 29818379,
+  "center": [
+   42.10569,
+   -71.073838
+  ],
+  "name": "Cedar Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cedar-ridge-golf-course": {
+  "boundaryWay": 43439748,
+  "center": [
+   41.37899,
+   -72.219449
+  ],
+  "name": "Cedar Ridge Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "center-golf-course": {
+  "boundaryWay": 29819420,
+  "center": [
+   42.533408,
+   -71.048787
+  ],
+  "name": "Center Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cherry-hill-golf-course": {
+  "boundaryWay": 29908456,
+  "center": [
+   42.420253,
+   -72.525058
+  ],
+  "name": "Cherry Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "chestnut-hill-golf-course": {
+  "boundaryWay": 29868806,
+  "center": [
+   42.341948,
+   -71.168946
+  ],
+  "name": "Chestnut Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "chicago-golf-club": {
+  "boundaryWay": 281979769,
+  "center": [
+   41.848801,
+   -88.11432
+  ],
+  "name": "Chicago Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "chicopee-municpal-golf-course": {
+  "boundaryWay": 29908403,
+  "center": [
+   42.186689,
+   -72.514582
+  ],
+  "name": "Chicopee Municpal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "chikaming-country-club": {
+  "boundaryWay": 289765450,
+  "center": [
+   41.843008,
+   -86.663305
+  ],
+  "name": "Chikaming Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "chippanee-golf-club-inc": {
+  "boundaryWay": 43440355,
+  "center": [
+   41.704015,
+   -72.979869
+  ],
+  "name": "Chippanee Golf Club,Inc.",
+  "source": "cc0",
+  "type": "way"
+ },
+ "christmas-valley": {
+  "boundaryWay": -2673050,
+  "center": [
+   43.243738,
+   -120.686578
+  ],
+  "name": "Christmas Valley",
+  "source": "cc0",
+  "type": "way"
+ },
+ "city-of-douglas-municipal-golf-course": {
+  "boundaryWay": 263249375,
+  "center": [
+   31.371861,
+   -109.539218
+  ],
+  "name": "City of Douglas Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "club-de-golf-brossard": {
+  "boundaryWay": -338728,
+  "center": [
+   45.454021,
+   -73.430357
+  ],
+  "name": "Club de golf Brossard",
+  "source": "cc0",
+  "type": "way"
+ },
+ "club-de-golf-hautes-plaines": {
+  "boundaryWay": -1619973,
+  "center": [
+   45.477241,
+   -75.761051
+  ],
+  "name": "Club de Golf Hautes Plaines",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cobre-valley-country-club": {
+  "boundaryWay": 264300287,
+  "center": [
+   33.421965,
+   -110.828376
+  ],
+  "name": "Cobre Valley Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cohasset-golf-club": {
+  "boundaryWay": -64295,
+  "center": [
+   42.249616,
+   -70.839374
+  ],
+  "name": "Cohasset Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "colonial-golf-course": {
+  "boundaryWay": -64867,
+  "center": [
+   42.521286,
+   -71.037216
+  ],
+  "name": "Colonial Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "colwood-national-golf-course": {
+  "boundaryWay": -1936843,
+  "center": [
+   45.571728,
+   -122.586662
+  ],
+  "name": "Colwood National Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "concho-valley-country-club": {
+  "boundaryWay": 264304785,
+  "center": [
+   34.426646,
+   -109.629498
+  ],
+  "name": "Concho Valley Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "copper-hill-golf-course": {
+  "boundaryWay": 43439672,
+  "center": [
+   41.977738,
+   -72.750471
+  ],
+  "name": "Copper Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "costa-greens-golf-course": {
+  "boundaryWay": -1581041,
+  "center": [
+   25.809114,
+   -80.360137
+  ],
+  "name": "Costa Greens Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "costa-mesa-country-club": {
+  "boundaryWay": 69693303,
+  "center": [
+   33.662605,
+   -117.928637
+  ],
+  "name": "Costa Mesa Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "country-club-of-north-carolina-cardinal": {
+  "boundaryWay": 6388538,
+  "center": [
+   35.167994,
+   -79.450805
+  ],
+  "name": "Country Club of North Carolina - Cardinal",
+  "source": "osm",
+  "type": "relation"
+ },
+ "country-club-of-north-carolina-dogwood": {
+  "boundaryWay": 6388539,
+  "center": [
+   35.164796,
+   -79.437407
+  ],
+  "name": "Country Club of North Carolina - Dogwood",
+  "source": "osm",
+  "type": "relation"
+ },
+ "country-lakes-golf-club": {
+  "boundaryWay": -2563760,
+  "center": [
+   41.794525,
+   -88.215716
+  ],
+  "name": "Country Lakes Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "cranberry-valley-golf-club": {
+  "boundaryWay": 29800968,
+  "center": [
+   41.697664,
+   -70.062621
+  ],
+  "name": "Cranberry Valley Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "creek-at-qualchan-golf-course": {
+  "boundaryWay": -2994548,
+  "center": [
+   47.608593,
+   -117.411584
+  ],
+  "name": "Creek at Qualchan Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "crowfield-golf-club": {
+  "boundaryWay": -3973157,
+  "center": [
+   33.005802,
+   -80.078692
+  ],
+  "name": "Crowfield Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "crown-isle-golf-club": {
+  "boundaryWay": -3379714,
+  "center": [
+   49.705883,
+   -124.952253
+  ],
+  "name": "Crown Isle Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "crumpin-fox-club-golf-course": {
+  "boundaryWay": 29906008,
+  "center": [
+   42.677208,
+   -72.524446
+  ],
+  "name": "Crumpin-Fox Club Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "crystal-springs-golf-course": {
+  "boundaryWay": 29859278,
+  "center": [
+   42.802923,
+   -71.140542
+  ],
+  "name": "Crystal Springs Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "d-w-field-golf-course": {
+  "boundaryWay": 29859036,
+  "center": [
+   42.10613,
+   -71.038676
+  ],
+  "name": "D W Field Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "deerwood-country-club": {
+  "boundaryWay": -233743,
+  "center": [
+   40.017013,
+   -74.794214
+  ],
+  "name": "Deerwood Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "dennis-highlands-golf-course": {
+  "boundaryWay": 29845121,
+  "center": [
+   41.723233,
+   -70.178302
+  ],
+  "name": "Dennis Highlands Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "dennis-pines-golf-course": {
+  "boundaryWay": 29800296,
+  "center": [
+   41.73202,
+   -70.154106
+  ],
+  "name": "Dennis Pines Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "dreamland-villa-golf-course": {
+  "boundaryWay": 263344757,
+  "center": [
+   33.41969,
+   -111.709378
+  ],
+  "name": "Dreamland Villa Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "duran-golf-club": {
+  "boundaryWay": -1158610,
+  "center": [
+   28.239538,
+   -80.737683
+  ],
+  "name": "Duran Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "duxbury-yacht-club-golf-course": {
+  "boundaryWay": 29692829,
+  "center": [
+   42.042138,
+   -70.679228
+  ],
+  "name": "Duxbury Yacht Club Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "e-gaynor-brennan-golf-course": {
+  "boundaryWay": 43398698,
+  "center": [
+   41.059301,
+   -73.557717
+  ],
+  "name": "E. Gaynor Brennan Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "eagle-mountain-golf-course": {
+  "boundaryWay": -1355966,
+  "center": [
+   41.491214,
+   -112.005587
+  ],
+  "name": "Eagle Mountain Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "east-hartford-golf-course": {
+  "boundaryWay": 43441142,
+  "center": [
+   41.79177,
+   -72.589148
+  ],
+  "name": "East Hartford Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "east-mountain-municipal-golf-course": {
+  "boundaryWay": 43440764,
+  "center": [
+   41.525459,
+   -73.012986
+  ],
+  "name": "East Mountain Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "eastern-hills-golf-club": {
+  "boundaryWay": 290830133,
+  "center": [
+   42.336393,
+   -85.510678
+  ],
+  "name": "Eastern Hills Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ed-oliver-golf-club": {
+  "boundaryWay": -1242620,
+  "center": [
+   39.76028,
+   -75.583244
+  ],
+  "name": "Ed Oliver Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "edge-hill-golf-course": {
+  "boundaryWay": 29908917,
+  "center": [
+   42.553065,
+   -72.780013
+  ],
+  "name": "Edge Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "edgewood-golf-course": {
+  "boundaryWay": 29763967,
+  "center": [
+   42.076151,
+   -71.693974
+  ],
+  "name": "Edgewood Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "elm-ridge-golf-course": {
+  "boundaryWay": 43440031,
+  "center": [
+   41.396632,
+   -71.861635
+  ],
+  "name": "Elm Ridge Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "evergreen-valley-golf-course": {
+  "boundaryWay": 29688737,
+  "center": [
+   42.824242,
+   -70.913013
+  ],
+  "name": "Evergreen Valley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "fairgrounds-golf-course": {
+  "boundaryWay": 29903615,
+  "center": [
+   41.68782,
+   -70.39538
+  ],
+  "name": "Fairgrounds Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "falmouth-country-club-golf-course": {
+  "boundaryWay": 29843313,
+  "center": [
+   41.593156,
+   -70.548897
+  ],
+  "name": "Falmouth Country Club Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "far-corners-golf-course": {
+  "boundaryWay": 29870433,
+  "center": [
+   42.73367,
+   -71.086161
+  ],
+  "name": "Far Corners Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "finley-golf-course": {
+  "boundaryWay": 33139720,
+  "center": [
+   35.901287,
+   -79.020144
+  ],
+  "name": "Finley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "firefly-golf-course": {
+  "boundaryWay": 29830086,
+  "center": [
+   41.821385,
+   -71.33762
+  ],
+  "name": "Firefly Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "flanders-valley-golf-course": {
+  "boundaryWay": -227741,
+  "center": [
+   40.830314,
+   -74.686375
+  ],
+  "name": "Flanders Valley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "forest-hill-golf-club": {
+  "boundaryWay": -74584,
+  "center": [
+   30.513291,
+   -97.605225
+  ],
+  "name": "Forest Hill Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "forest-park": {
+  "boundaryWay": -127991,
+  "center": [
+   40.69915,
+   -73.864061
+  ],
+  "name": "Forest Park",
+  "source": "cc0",
+  "type": "way"
+ },
+ "forest-park-golf-course": {
+  "boundaryWay": -951304,
+  "center": [
+   40.69915,
+   -73.864061
+  ],
+  "name": "Forest Park Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "framingham-country-club": {
+  "boundaryWay": 145289736,
+  "center": [
+   42.289427,
+   -71.471296
+  ],
+  "name": "Framingham Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "franconia-golf-course": {
+  "boundaryWay": 29907098,
+  "center": [
+   42.064831,
+   -72.533817
+  ],
+  "name": "Franconia Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "fred-enke-golf-course": {
+  "boundaryWay": 263348234,
+  "center": [
+   32.169592,
+   -110.813747
+  ],
+  "name": "Fred Enke Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "fresh-pond-golf-course": {
+  "boundaryWay": 27394774,
+  "center": [
+   42.385959,
+   -71.155197
+  ],
+  "name": "Fresh Pond Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "furnace-brook-golf-course": {
+  "boundaryWay": 29862402,
+  "center": [
+   42.257047,
+   -71.023081
+  ],
+  "name": "Furnace Brook Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "galloping-hill-golf-course": {
+  "boundaryWay": -227731,
+  "center": [
+   40.685115,
+   -74.28191
+  ],
+  "name": "Galloping Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "gannon-municipal-golf-course": {
+  "boundaryWay": 29688233,
+  "center": [
+   42.484363,
+   -70.977163
+  ],
+  "name": "Gannon Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "gardner-municipal-golf-course": {
+  "boundaryWay": 29700971,
+  "center": [
+   42.593806,
+   -71.9938
+  ],
+  "name": "Gardner Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ge-athletic-association-golf-course": {
+  "boundaryWay": 29687467,
+  "center": [
+   42.475711,
+   -73.233814
+  ],
+  "name": "GE Athletic Association Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "glen-lakes-golf-and-learning-center": {
+  "boundaryWay": -3568073,
+  "center": [
+   33.556255,
+   -112.174543
+  ],
+  "name": "Glen Lakes Golf and Learning Center",
+  "source": "cc0",
+  "type": "way"
+ },
+ "gold-course": {
+  "boundaryWay": -1564163,
+  "center": [
+   25.817023,
+   -80.349103
+  ],
+  "name": "Gold Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "golf-club-of-avon": {
+  "boundaryWay": 43441038,
+  "center": [
+   41.792419,
+   -72.856337
+  ],
+  "name": "Golf Club of Avon",
+  "source": "cc0",
+  "type": "way"
+ },
+ "golf-club-of-estrella": {
+  "boundaryWay": 263142358,
+  "center": [
+   33.330771,
+   -112.438974
+  ],
+  "name": "Golf Club of Estrella",
+  "source": "cc0",
+  "type": "way"
+ },
+ "golf-st-c-saire": {
+  "boundaryWay": -1594602,
+  "center": [
+   45.392277,
+   -73.039707
+  ],
+  "name": "Golf St-C\u00e9saire",
+  "source": "cc0",
+  "type": "way"
+ },
+ "goodwin-park-golf-course": {
+  "boundaryWay": 43441533,
+  "center": [
+   41.726099,
+   -72.685337
+  ],
+  "name": "Goodwin Park Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "grand-club-cypress-course": {
+  "boundaryWay": -1936917,
+  "center": [
+   29.487561,
+   -81.234885
+  ],
+  "name": "Grand Club Cypress Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "grassmere-golf-course": {
+  "boundaryWay": 43442525,
+  "center": [
+   41.955788,
+   -72.53185
+  ],
+  "name": "Grassmere Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "great-gorge": {
+  "boundaryWay": -240569,
+  "center": [
+   41.189896,
+   -74.525623
+  ],
+  "name": "Great Gorge",
+  "source": "cc0",
+  "type": "way"
+ },
+ "great-white-course": {
+  "boundaryWay": 109209142,
+  "center": [
+   25.813683,
+   -80.335474
+  ],
+  "name": "Great White Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "greenfield-park": {
+  "boundaryWay": -1385081,
+  "center": [
+   43.014298,
+   -88.062877
+  ],
+  "name": "Greenfield Park",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hale-s-location-golf-course": {
+  "boundaryWay": -3519860,
+  "center": [
+   44.04919,
+   -71.164347
+  ],
+  "name": "Hale\u2019s Location Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "harbor-city-municipal": {
+  "boundaryWay": -1244146,
+  "center": [
+   28.150173,
+   -80.664239
+  ],
+  "name": "Harbor City Municipal",
+  "source": "cc0",
+  "type": "way"
+ },
+ "harrisville-golf-club": {
+  "boundaryWay": 43439810,
+  "center": [
+   41.921831,
+   -71.938835
+  ],
+  "name": "Harrisville Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hartford-golf-club": {
+  "boundaryWay": 43439662,
+  "center": [
+   41.793744,
+   -72.724667
+  ],
+  "name": "Hartford Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "harwich-port-golf-club": {
+  "boundaryWay": 29800219,
+  "center": [
+   41.672146,
+   -70.079229
+  ],
+  "name": "Harwich Port Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hatherly-country-club": {
+  "boundaryWay": -64239,
+  "center": [
+   42.229844,
+   -70.769238
+  ],
+  "name": "Hatherly Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "heather-hill-golf-course": {
+  "boundaryWay": 29861548,
+  "center": [
+   41.991885,
+   -71.348094
+  ],
+  "name": "Heather Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hemlock-ridge-golf-course": {
+  "boundaryWay": 29676404,
+  "center": [
+   42.094964,
+   -72.128696
+  ],
+  "name": "Hemlock Ridge Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "heritage-village-golf-club": {
+  "boundaryWay": -307293,
+  "center": [
+   41.484733,
+   -73.227915
+  ],
+  "name": "Heritage Village Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hickory-hill-golf-course": {
+  "boundaryWay": 29745459,
+  "center": [
+   42.693343,
+   -71.234474
+  ],
+  "name": "Hickory Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hickory-ridge-golf-course": {
+  "boundaryWay": 29908857,
+  "center": [
+   42.343146,
+   -72.529646
+  ],
+  "name": "Hickory Ridge Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "highland-country-club": {
+  "boundaryWay": 32880249,
+  "center": [
+   35.043883,
+   -78.91079
+  ],
+  "name": "Highland Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "highland-golf-course": {
+  "boundaryWay": 43437126,
+  "center": [
+   41.314869,
+   -73.103381
+  ],
+  "name": "Highland Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "highlands-golf-course": {
+  "boundaryWay": -3227105,
+  "center": [
+   47.262141,
+   -122.524087
+  ],
+  "name": "Highlands Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hillandale-golf-club": {
+  "boundaryWay": 24487227,
+  "center": [
+   36.022322,
+   -78.939007
+  ],
+  "name": "Hillandale Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hillcrest-golf-club": {
+  "boundaryWay": 235916947,
+  "center": [
+   45.663067,
+   -68.700965
+  ],
+  "name": "Hillcrest Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "holden-hills-country-club": {
+  "boundaryWay": 29758179,
+  "center": [
+   42.368365,
+   -71.88818
+  ],
+  "name": "Holden Hills Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "holiday-hills-country-club": {
+  "boundaryWay": 31769274,
+  "center": [
+   32.815236,
+   -98.062437
+  ],
+  "name": "Holiday Hills Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hollis-memorial-golf-course": {
+  "boundaryWay": -64819,
+  "center": [
+   42.192248,
+   -71.01133
+  ],
+  "name": "Hollis Memorial Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "holly": {
+  "boundaryWay": 6384806,
+  "center": [
+   35.196285,
+   -79.517497
+  ],
+  "name": "Holly",
+  "source": "osm",
+  "type": "relation"
+ },
+ "hopmeadow-country-club": {
+  "boundaryWay": 43436703,
+  "center": [
+   41.874491,
+   -72.819083
+  ],
+  "name": "Hopmeadow Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "hunter-memorial-golf-course": {
+  "boundaryWay": 43440626,
+  "center": [
+   41.556861,
+   -72.768951
+  ],
+  "name": "Hunter Memorial Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "huntley-golf-course": {
+  "boundaryWay": -1182986,
+  "center": [
+   45.874735,
+   -108.308435
+  ],
+  "name": "Huntley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "indian-meadow-golf-course": {
+  "boundaryWay": 29769681,
+  "center": [
+   42.28832,
+   -71.648931
+  ],
+  "name": "Indian Meadow Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "indian-meadows-golf-course": {
+  "boundaryWay": 29814420,
+  "center": [
+   42.285664,
+   -71.646279
+  ],
+  "name": "Indian Meadows Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "indian-river-colony-club": {
+  "boundaryWay": -1132090,
+  "center": [
+   28.250495,
+   -80.710366
+  ],
+  "name": "Indian River Colony Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "indian-springs-golf-club": {
+  "boundaryWay": 43399747,
+  "center": [
+   41.513145,
+   -72.718783
+  ],
+  "name": "Indian Springs Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "indian-wells-country-club": {
+  "boundaryWay": -1505850,
+  "center": [
+   33.71225,
+   -116.313592
+  ],
+  "name": "Indian Wells Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "indian-wells-golf-resort": {
+  "boundaryWay": -1503725,
+  "center": [
+   33.724779,
+   -116.330578
+  ],
+  "name": "Indian Wells Golf Resort",
+  "source": "cc0",
+  "type": "way"
+ },
+ "innis-arden-golf-club": {
+  "boundaryWay": 43398451,
+  "center": [
+   41.031241,
+   -73.559229
+  ],
+  "name": "Innis Arden Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ironwood-golf-course-yuma": {
+  "boundaryWay": 263473988,
+  "center": [
+   32.711437,
+   -114.657813
+  ],
+  "name": "Ironwood Golf Course (Yuma)",
+  "source": "cc0",
+  "type": "way"
+ },
+ "jacksboro-country-club": {
+  "boundaryWay": 257073891,
+  "center": [
+   33.247036,
+   -98.161636
+  ],
+  "name": "Jacksboro Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "jefferson-park-golf-course": {
+  "boundaryWay": -537387,
+  "center": [
+   47.565434,
+   -122.303769
+  ],
+  "name": "Jefferson Park Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "juniper-hill-golf-course": {
+  "boundaryWay": 29783115,
+  "center": [
+   42.307116,
+   -71.621201
+  ],
+  "name": "Juniper Hill Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "kelly-greens-golf-course": {
+  "boundaryWay": 29690174,
+  "center": [
+   42.423434,
+   -70.929241
+  ],
+  "name": "Kelly Greens Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "kernwood-cc-and-golf-course": {
+  "boundaryWay": -64293,
+  "center": [
+   42.539982,
+   -70.905396
+  ],
+  "name": "Kernwood Cc And Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "keystone-river-course": {
+  "boundaryWay": -1769855,
+  "center": [
+   39.601919,
+   -105.988369
+  ],
+  "name": "Keystone River Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "kissing-camels-at-garden-of-the-gods-club": {
+  "boundaryWay": -3117773,
+  "center": [
+   38.886856,
+   -104.863992
+  ],
+  "name": "Kissing Camels at Garden of the Gods Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "kittanset-golf-club": {
+  "boundaryWay": 29697009,
+  "center": [
+   41.683885,
+   -70.719096
+  ],
+  "name": "Kittanset Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "kulima-golf-course": {
+  "boundaryWay": -1999222,
+  "center": [
+   21.701192,
+   -157.990238
+  ],
+  "name": "Kulima Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "lakeview-golf-course": {
+  "boundaryWay": 29692918,
+  "center": [
+   42.595493,
+   -70.883202
+  ],
+  "name": "Lakeview Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "lakeville-country-club": {
+  "boundaryWay": 29695533,
+  "center": [
+   41.86741,
+   -70.944649
+  ],
+  "name": "Lakeville Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "langara-golf-course": {
+  "boundaryWay": 26596220,
+  "center": [
+   49.221436,
+   -123.112573
+  ],
+  "name": "Langara Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "las-barrancas-golf-course": {
+  "boundaryWay": 263363599,
+  "center": [
+   32.646879,
+   -114.380303
+  ],
+  "name": "Las Barrancas Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "laurel-creek-golf-course": {
+  "boundaryWay": -144754,
+  "center": [
+   39.992415,
+   -74.896583
+  ],
+  "name": "Laurel Creek Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "lawton-golf-club": {
+  "boundaryWay": 292976652,
+  "center": [
+   42.177059,
+   -85.847876
+  ],
+  "name": "Lawton Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "lehigh-county-golf-course": {
+  "boundaryWay": 63521178,
+  "center": [
+   40.491456,
+   -75.494389
+  ],
+  "name": "Lehigh County Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "leo-j-martin-memorial-golf-course": {
+  "boundaryWay": 123170496,
+  "center": [
+   42.329897,
+   -71.2667
+  ],
+  "name": "Leo J. Martin Memorial Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "lexington-golf-club": {
+  "boundaryWay": 29871037,
+  "center": [
+   42.456382,
+   -71.242887
+  ],
+  "name": "Lexington Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "lions-golf-course": {
+  "boundaryWay": 30764972,
+  "center": [
+   30.290439,
+   -97.777152
+  ],
+  "name": "Lions Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "little-harbor-golf-course": {
+  "boundaryWay": -2004276,
+  "center": [
+   41.728803,
+   -70.665772
+  ],
+  "name": "Little Harbor Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "longleaf-golf-family-club": {
+  "boundaryWay": 6387132,
+  "center": [
+   35.206715,
+   -79.419913
+  ],
+  "name": "Longleaf Golf & Family Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "longmeadow-golf-club": {
+  "boundaryWay": 29830723,
+  "center": [
+   42.643818,
+   -71.270071
+  ],
+  "name": "Longmeadow Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "lost-brook-country-club": {
+  "boundaryWay": 29818705,
+  "center": [
+   42.197913,
+   -71.173678
+  ],
+  "name": "Lost Brook Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "lyman-meadow-golf-club": {
+  "boundaryWay": 43441061,
+  "center": [
+   41.489456,
+   -72.707529
+  ],
+  "name": "Lyman Meadow Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "macdonald-park": {
+  "boundaryWay": 84983243,
+  "center": [
+   37.700153,
+   -97.29017
+  ],
+  "name": "MacDonald Park",
+  "source": "cc0",
+  "type": "way"
+ },
+ "madison-country-club-2-parcels": {
+  "boundaryWay": 43398202,
+  "center": [
+   41.273906,
+   -72.605937
+  ],
+  "name": "Madison Country Club (2 Parcels)",
+  "source": "cc0",
+  "type": "way"
+ },
+ "magnolia": {
+  "boundaryWay": 6384807,
+  "center": [
+   35.202008,
+   -79.510888
+  ],
+  "name": "Magnolia",
+  "source": "osm",
+  "type": "relation"
+ },
+ "manchester-golf-and-country-club": {
+  "boundaryWay": -3419289,
+  "center": [
+   42.467383,
+   -91.436512
+  ],
+  "name": "Manchester Golf and Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "maple-meadows-golf-club": {
+  "boundaryWay": -2950446,
+  "center": [
+   41.950511,
+   -87.994334
+  ],
+  "name": "Maple Meadows Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "maplewood-golf-course": {
+  "boundaryWay": 29683377,
+  "center": [
+   42.616568,
+   -71.762457
+  ],
+  "name": "Maplewood Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "marina-golf-course": {
+  "boundaryWay": 43985634,
+  "center": [
+   37.696362,
+   -122.185764
+  ],
+  "name": "Marina Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "marine-corps-air-station-miramar": {
+  "boundaryWay": -253814,
+  "center": [
+   32.885009,
+   -117.143731
+  ],
+  "name": "Marine Corps Air Station Miramar",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mariner-sands-golf-country-club": {
+  "boundaryWay": -1589172,
+  "center": [
+   27.125764,
+   -80.178307
+  ],
+  "name": "Mariner Sands Golf & Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "marquette-trails-country-club": {
+  "boundaryWay": 284666057,
+  "center": [
+   43.846672,
+   -85.924079
+  ],
+  "name": "Marquette Trails Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "martin-downs-country-club": {
+  "boundaryWay": -1587673,
+  "center": [
+   27.186761,
+   -80.310606
+  ],
+  "name": "Martin Downs Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mccullough-s-emerald-golf-links": {
+  "boundaryWay": -229863,
+  "center": [
+   39.359333,
+   -74.610475
+  ],
+  "name": "McCullough's Emerald Golf Links",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mclean-course": {
+  "boundaryWay": -1570069,
+  "center": [
+   25.817528,
+   -80.362633
+  ],
+  "name": "McLean Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "meadow-at-peabody-golf-course": {
+  "boundaryWay": 129032882,
+  "center": [
+   42.51612,
+   -70.936114
+  ],
+  "name": "Meadow at Peabody Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "merrimack-valley-golf-club": {
+  "boundaryWay": 251877604,
+  "center": [
+   42.753399,
+   -71.181021
+  ],
+  "name": "Merrimack Valley Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mid-south-club": {
+  "boundaryWay": 6388052,
+  "center": [
+   35.188321,
+   -79.421365
+  ],
+  "name": "Mid South Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "midland-country-club": {
+  "boundaryWay": 6387133,
+  "center": [
+   35.204966,
+   -79.430552
+  ],
+  "name": "Midland Country Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "milbrook-golf-club": {
+  "boundaryWay": 43440542,
+  "center": [
+   41.858675,
+   -72.657648
+  ],
+  "name": "Milbrook Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "milbrook-golf-country-club": {
+  "boundaryWay": 43398108,
+  "center": [
+   41.031515,
+   -73.609431
+  ],
+  "name": "Milbrook Golf Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mill-valley-golf-course": {
+  "boundaryWay": 29913793,
+  "center": [
+   42.256289,
+   -72.372928
+  ],
+  "name": "Mill Valley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "millwood-farms-golf-club": {
+  "boundaryWay": 29795711,
+  "center": [
+   42.321653,
+   -71.458977
+  ],
+  "name": "Millwood Farms Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "milton-hoosic-golf-course": {
+  "boundaryWay": 29838738,
+  "center": [
+   42.199441,
+   -71.129921
+  ],
+  "name": "Milton-Hoosic Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mink-meadows-golf-course": {
+  "boundaryWay": -64376,
+  "center": [
+   41.470427,
+   -70.614179
+  ],
+  "name": "Mink Meadows Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "montgomery-village-golf-club": {
+  "boundaryWay": -2664336,
+  "center": [
+   39.179701,
+   -77.200243
+  ],
+  "name": "Montgomery Village Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mooresville-municipal-golf-course": {
+  "boundaryWay": 33138742,
+  "center": [
+   35.570749,
+   -80.830232
+  ],
+  "name": "Mooresville Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mount-graham-golf-course": {
+  "boundaryWay": 263615875,
+  "center": [
+   32.80648,
+   -109.771063
+  ],
+  "name": "Mount Graham Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mount-pleasant-golf-club": {
+  "boundaryWay": 29868153,
+  "center": [
+   42.62488,
+   -71.346907
+  ],
+  "name": "Mount Pleasant Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "mullenhurst-golf-course": {
+  "boundaryWay": 281565274,
+  "center": [
+   42.56874,
+   -85.483384
+  ],
+  "name": "Mullenhurst Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "municipal-golf-course": {
+  "boundaryWay": 29693537,
+  "center": [
+   41.65818,
+   -70.958287
+  ],
+  "name": "Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "needham-golf-course": {
+  "boundaryWay": 29869484,
+  "center": [
+   42.273829,
+   -71.216899
+  ],
+  "name": "Needham Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "nehoiden-golf-course": {
+  "boundaryWay": -64825,
+  "center": [
+   42.286745,
+   -71.29915
+  ],
+  "name": "Nehoiden Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "new-meadows-golf-course": {
+  "boundaryWay": 29695087,
+  "center": [
+   42.662406,
+   -70.92705
+  ],
+  "name": "New Meadows Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "new-seabury-country-club": {
+  "boundaryWay": 29703601,
+  "center": [
+   41.562785,
+   -70.481643
+  ],
+  "name": "New Seabury Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "nichols-college-golf-course": {
+  "boundaryWay": 29683899,
+  "center": [
+   42.04328,
+   -71.924516
+  ],
+  "name": "Nichols College Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "norfolk-golf-club": {
+  "boundaryWay": 29837767,
+  "center": [
+   42.220511,
+   -71.173538
+  ],
+  "name": "Norfolk Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "north-jersey-country-club": {
+  "boundaryWay": -223657,
+  "center": [
+   40.961648,
+   -74.214126
+  ],
+  "name": "North Jersey Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "northport-point-golf-club": {
+  "boundaryWay": 264831087,
+  "center": [
+   45.151554,
+   -85.563008
+  ],
+  "name": "Northport Point Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "norwood-country-club": {
+  "boundaryWay": 29838761,
+  "center": [
+   42.199335,
+   -71.180722
+  ],
+  "name": "Norwood Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "oak-hills-park-golf-course": {
+  "boundaryWay": 43398908,
+  "center": [
+   41.113734,
+   -73.442331
+  ],
+  "name": "Oak HIlls Park Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "oak-quarry-golf-club": {
+  "boundaryWay": 30885000,
+  "center": [
+   34.024959,
+   -117.432825
+  ],
+  "name": "Oak Quarry Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "oak-ridge-golf-course": {
+  "boundaryWay": 29906394,
+  "center": [
+   42.640219,
+   -72.527652
+  ],
+  "name": "Oak Ridge Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "oakbrook-golf-country-club": {
+  "boundaryWay": -417687,
+  "center": [
+   47.19073,
+   -122.546808
+  ],
+  "name": "Oakbrook Golf & Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "oakley-country-club": {
+  "boundaryWay": 29830943,
+  "center": [
+   42.377068,
+   -71.17022
+  ],
+  "name": "Oakley Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ocean-acres-country-club": {
+  "boundaryWay": -62878,
+  "center": [
+   39.738184,
+   -74.264294
+  ],
+  "name": "Ocean Acres Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ocean-edge-conference-center": {
+  "boundaryWay": 29800972,
+  "center": [
+   41.758375,
+   -70.053067
+  ],
+  "name": "Ocean Edge Conference Center",
+  "source": "cc0",
+  "type": "way"
+ },
+ "odyssey-country-club": {
+  "boundaryWay": -2637318,
+  "center": [
+   41.534628,
+   -87.777314
+  ],
+  "name": "Odyssey Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "old-newbury-golf-club": {
+  "boundaryWay": 29690912,
+  "center": [
+   42.751913,
+   -70.891867
+  ],
+  "name": "Old Newbury Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "olde-salem-green-municipal-golf-course": {
+  "boundaryWay": 29691682,
+  "center": [
+   42.503232,
+   -70.905261
+  ],
+  "name": "Olde Salem Green Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "olympia-country-golf-club": {
+  "boundaryWay": -420300,
+  "center": [
+   47.082441,
+   -122.941384
+  ],
+  "name": "Olympia Country & Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "orchards-golf-course": {
+  "boundaryWay": 121045846,
+  "center": [
+   42.264648,
+   -72.564986
+  ],
+  "name": "Orchards Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "paddock-chevrolet-golf-dome": {
+  "boundaryWay": -1438825,
+  "center": [
+   43.002179,
+   -78.841476
+  ],
+  "name": "Paddock Chevrolet Golf Dome",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pakachoag-golf-course": {
+  "boundaryWay": 29682986,
+  "center": [
+   42.218907,
+   -71.811486
+  ],
+  "name": "Pakachoag Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "palm-harbour-golf-club": {
+  "boundaryWay": -2000522,
+  "center": [
+   29.566682,
+   -81.200625
+  ],
+  "name": "Palm Harbour Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "palms-golf-course": {
+  "boundaryWay": 262479305,
+  "center": [
+   36.813408,
+   -114.040038
+  ],
+  "name": "Palms Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "parcours-du-cerf": {
+  "boundaryWay": -275632,
+  "center": [
+   45.555781,
+   -73.45564
+  ],
+  "name": "Parcours Du Cerf",
+  "source": "cc0",
+  "type": "way"
+ },
+ "paul-harney-golf-course": {
+  "boundaryWay": 29703789,
+  "center": [
+   41.62755,
+   -70.544125
+  ],
+  "name": "Paul Harney Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pautipaug-golf-course-and-country-club": {
+  "boundaryWay": 43436800,
+  "center": [
+   41.638434,
+   -72.114312
+  ],
+  "name": "Pautipaug Golf Course and Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pelham-golf-course": {
+  "boundaryWay": -1278702,
+  "center": [
+   40.893925,
+   -73.795808
+  ],
+  "name": "Pelham Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pequabuck-golf-course": {
+  "boundaryWay": 43441123,
+  "center": [
+   41.673965,
+   -72.987142
+  ],
+  "name": "Pequabuck Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pequot-golf-course": {
+  "boundaryWay": 43440327,
+  "center": [
+   41.381666,
+   -71.912013
+  ],
+  "name": "Pequot Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pheasant-ridge-golf": {
+  "boundaryWay": -2515190,
+  "center": [
+   40.677472,
+   -79.881419
+  ],
+  "name": "Pheasant Ridge Golf",
+  "source": "cc0",
+  "type": "way"
+ },
+ "phoenix": {
+  "boundaryWay": -111257,
+  "center": [
+   33.483468,
+   -112.061159
+  ],
+  "name": "Phoenix",
+  "source": "cc0",
+  "type": "way"
+ },
+ "phoenix-golf-links": {
+  "boundaryWay": 30265770,
+  "center": [
+   39.893283,
+   -83.031428
+  ],
+  "name": "Phoenix Golf Links",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pine-brook-country-club": {
+  "boundaryWay": 147777851,
+  "center": [
+   42.344319,
+   -71.281382
+  ],
+  "name": "Pine Brook Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pine-creek-par-3-golf-course": {
+  "boundaryWay": 43399734,
+  "center": [
+   41.122726,
+   -73.26544
+  ],
+  "name": "Pine Creek Par 3 Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pine-hill-golf-club": {
+  "boundaryWay": -233568,
+  "center": [
+   39.786231,
+   -75.005413
+  ],
+  "name": "Pine Hill Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pine-meadows-golf-course": {
+  "boundaryWay": 29830288,
+  "center": [
+   42.458395,
+   -71.255154
+  ],
+  "name": "Pine Meadows Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pine-oaks-golf-course": {
+  "boundaryWay": 29831293,
+  "center": [
+   42.016549,
+   -71.089537
+  ],
+  "name": "Pine Oaks Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pinehurst": {
+  "boundaryWay": 13969631,
+  "center": [
+   35.183221,
+   -79.475596
+  ],
+  "name": "Pinehurst",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pinehurst-course-no-1": {
+  "boundaryWay": 286113630,
+  "center": [
+   35.180782,
+   -79.460262
+  ],
+  "name": "Pinehurst Course No.1",
+  "source": "osm",
+  "type": "way"
+ },
+ "pinehurst-course-no-3": {
+  "boundaryWay": 286194747,
+  "center": [
+   35.185237,
+   -79.477097
+  ],
+  "name": "Pinehurst Course No.3",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pinehurst-course-no-6": {
+  "boundaryWay": 6383258,
+  "center": [
+   35.218937,
+   -79.440641
+  ],
+  "name": "Pinehurst Course No. 6",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pinehurst-course-no-7": {
+  "boundaryWay": 286194275,
+  "center": [
+   35.190739,
+   -79.450798
+  ],
+  "name": "Pinehurst Course No.7",
+  "source": "osm",
+  "type": "way"
+ },
+ "pinehurst-course-no-8": {
+  "boundaryWay": 428977993,
+  "center": [
+   35.215692,
+   -79.468976
+  ],
+  "name": "Pinehurst Course No. 8",
+  "source": "osm",
+  "type": "way"
+ },
+ "pinehurst-course-no-9": {
+  "boundaryWay": 6388053,
+  "center": [
+   35.191725,
+   -79.438304
+  ],
+  "name": "Pinehurst Course No. 9",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pinehurst-no-2": {
+  "boundaryWay": 1358696570,
+  "center": [
+   35.191707,
+   -79.460731
+  ],
+  "name": "Pinehurst No. 2",
+  "source": "osm",
+  "type": "way"
+ },
+ "pinehurst-no-4": {
+  "boundaryWay": 845405482,
+  "center": [
+   35.187335,
+   -79.458581
+  ],
+  "name": "Pinehurst No. 4",
+  "source": "osm",
+  "type": "way"
+ },
+ "pipers-landing": {
+  "boundaryWay": -1587675,
+  "center": [
+   27.150189,
+   -80.267097
+  ],
+  "name": "Pipers Landing",
+  "source": "cc0",
+  "type": "way"
+ },
+ "plainfield-country-club": {
+  "boundaryWay": -223829,
+  "center": [
+   40.592697,
+   -74.38482
+  ],
+  "name": "Plainfield Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "plymouth-country-club": {
+  "boundaryWay": 29703204,
+  "center": [
+   41.934223,
+   -70.610073
+  ],
+  "name": "Plymouth Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "pocasset-golf-club": {
+  "boundaryWay": 29899728,
+  "center": [
+   41.689505,
+   -70.607712
+  ],
+  "name": "Pocasset Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "possible-golf-course": {
+  "boundaryWay": 29786162,
+  "center": [
+   42.293416,
+   -73.2677
+  ],
+  "name": "Possible Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "prairie-highlands-golf-course": {
+  "boundaryWay": -2053563,
+  "center": [
+   38.862312,
+   -94.885937
+  ],
+  "name": "Prairie Highlands Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "presidents-golf-course": {
+  "boundaryWay": 29830331,
+  "center": [
+   42.270268,
+   -71.044806
+  ],
+  "name": "Presidents Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "presidio-golf-course": {
+  "boundaryWay": 16650363,
+  "center": [
+   37.792092,
+   -122.467658
+  ],
+  "name": "Presidio Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "prospector-golf-course": {
+  "boundaryWay": -3666278,
+  "center": [
+   47.210505,
+   -120.995285
+  ],
+  "name": "Prospector Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "purple-sage-golf-course": {
+  "boundaryWay": 247938492,
+  "center": [
+   43.737814,
+   -116.696911
+  ],
+  "name": "Purple Sage Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "putterham-meadow-golf-course": {
+  "boundaryWay": 29838628,
+  "center": [
+   42.310264,
+   -71.159643
+  ],
+  "name": "Putterham Meadow Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "quaboag-valley-golf-course": {
+  "boundaryWay": 29915310,
+  "center": [
+   42.121654,
+   -72.312133
+  ],
+  "name": "Quaboag Valley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "quail-canyon-golf-course": {
+  "boundaryWay": 263254191,
+  "center": [
+   32.312383,
+   -110.975666
+  ],
+  "name": "Quail Canyon Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "quanah-country-club": {
+  "boundaryWay": 256156163,
+  "center": [
+   34.33024,
+   -99.716959
+  ],
+  "name": "Quanah Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "quarry-pines-golf-club": {
+  "boundaryWay": 263063105,
+  "center": [
+   32.363021,
+   -111.100522
+  ],
+  "name": "Quarry Pines Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "randolph-golf-complex": {
+  "boundaryWay": -3535718,
+  "center": [
+   32.213719,
+   -110.911857
+  ],
+  "name": "Randolph Golf Complex",
+  "source": "cc0",
+  "type": "way"
+ },
+ "raven-golf-course-at-three-peaks": {
+  "boundaryWay": -1793958,
+  "center": [
+   39.661313,
+   -106.09211
+  ],
+  "name": "Raven Golf Course at Three Peaks",
+  "source": "cc0",
+  "type": "way"
+ },
+ "red-hawk-ridge-golf-course": {
+  "boundaryWay": -1766748,
+  "center": [
+   39.388831,
+   -104.882824
+  ],
+  "name": "Red Hawk Ridge Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "rehoboth-golf-club": {
+  "boundaryWay": 29871054,
+  "center": [
+   41.86907,
+   -71.25547
+  ],
+  "name": "Rehoboth Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "renaissance-country-club": {
+  "boundaryWay": -86055,
+  "center": [
+   40.041574,
+   -74.267206
+  ],
+  "name": "Renaissance Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "renaissance-golf-club": {
+  "boundaryWay": 251858105,
+  "center": [
+   42.777458,
+   -71.036078
+  ],
+  "name": "Renaissance Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "rhinelander": {
+  "boundaryWay": -251816,
+  "center": [
+   45.612119,
+   -89.490742
+  ],
+  "name": "Rhinelander",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ridders-golf-course": {
+  "boundaryWay": 29695181,
+  "center": [
+   42.058475,
+   -70.911058
+  ],
+  "name": "Ridders Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ridgefield-golf-course": {
+  "boundaryWay": 43434790,
+  "center": [
+   41.35811,
+   -73.534893
+  ],
+  "name": "Ridgefield Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "ridgeview-golf-course": {
+  "boundaryWay": 265723972,
+  "center": [
+   42.298347,
+   -85.753531
+  ],
+  "name": "Ridgeview Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "river-ridge-golf-club": {
+  "boundaryWay": -174348,
+  "center": [
+   34.226164,
+   -119.208626
+  ],
+  "name": "River Ridge Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "rivi-re-saint-maurice": {
+  "boundaryWay": -3064799,
+  "center": [
+   46.361643,
+   -72.536251
+  ],
+  "name": "Rivi\u00e8re Saint-Maurice",
+  "source": "cc0",
+  "type": "way"
+ },
+ "rochester-golf-course": {
+  "boundaryWay": 29691384,
+  "center": [
+   41.743994,
+   -70.837313
+  ],
+  "name": "Rochester Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "rockland-golf-course": {
+  "boundaryWay": 29697185,
+  "center": [
+   42.123201,
+   -70.92756
+  ],
+  "name": "Rockland Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "rockledge-driving-range": {
+  "boundaryWay": 156494207,
+  "center": [
+   41.740452,
+   -72.746042
+  ],
+  "name": "Rockledge Driving Range",
+  "source": "cc0",
+  "type": "way"
+ },
+ "rockleigh-golf-course": {
+  "boundaryWay": -223651,
+  "center": [
+   40.998124,
+   -73.939125
+  ],
+  "name": "Rockleigh Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "rolling-greens-golf-course": {
+  "boundaryWay": 29695056,
+  "center": [
+   42.086916,
+   -70.693108
+  ],
+  "name": "Rolling Greens Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "roy-kizer-jimmy-clay-golf-course": {
+  "boundaryWay": -73352,
+  "center": [
+   30.184609,
+   -97.73202
+  ],
+  "name": "Roy Kizer/Jimmy Clay Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "royal-fox-golf-club": {
+  "boundaryWay": -1948076,
+  "center": [
+   41.941296,
+   -88.272323
+  ],
+  "name": "Royal Fox Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "royal-hawk-country-club": {
+  "boundaryWay": -2649936,
+  "center": [
+   41.949256,
+   -88.367432
+  ],
+  "name": "Royal Hawk Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "royal-york-golf-club": {
+  "boundaryWay": 193808203,
+  "center": [
+   50.436923,
+   -119.187023
+  ],
+  "name": "Royal York Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "saddle-rock-golf-course": {
+  "boundaryWay": -1765849,
+  "center": [
+   39.589594,
+   -104.735509
+  ],
+  "name": "Saddle Rock Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "sagamore-springs-golf-course": {
+  "boundaryWay": 29742562,
+  "center": [
+   42.559551,
+   -71.044526
+  ],
+  "name": "Sagamore Springs Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "saginaw-country-club": {
+  "boundaryWay": 173679255,
+  "center": [
+   43.416489,
+   -84.001117
+  ],
+  "name": "Saginaw Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "saginaw-golf-club": {
+  "boundaryWay": -1298681,
+  "center": [
+   43.392819,
+   -80.293237
+  ],
+  "name": "Saginaw Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "salt-creek-golf-club": {
+  "boundaryWay": 118687970,
+  "center": [
+   32.675227,
+   -116.955796
+  ],
+  "name": "Salt Creek Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "san-marcos-golf-course": {
+  "boundaryWay": -109514,
+  "center": [
+   33.303146,
+   -111.851222
+  ],
+  "name": "San Marcos Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "san-pedro-golf-course": {
+  "boundaryWay": 263285381,
+  "center": [
+   31.981012,
+   -110.289021
+  ],
+  "name": "San Pedro Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "sandy-burr-country-club": {
+  "boundaryWay": 29776422,
+  "center": [
+   42.357025,
+   -71.36003
+  ],
+  "name": "Sandy Burr Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "seattle-golf-club": {
+  "boundaryWay": 35451517,
+  "center": [
+   47.737116,
+   -122.362021
+  ],
+  "name": "Seattle Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "shaganappi-point-golf-course-valley-9": {
+  "boundaryWay": 163836030,
+  "center": [
+   51.044209,
+   -114.128032
+  ],
+  "name": "Shaganappi Point Golf Course - Valley 9",
+  "source": "cc0",
+  "type": "way"
+ },
+ "shaker-hills-golf-course": {
+  "boundaryWay": 29770303,
+  "center": [
+   42.542678,
+   -71.552109
+  ],
+  "name": "Shaker Hills Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "shamrock-hills-golf-club": {
+  "boundaryWay": 289755793,
+  "center": [
+   42.40186,
+   -85.854283
+  ],
+  "name": "Shamrock Hills Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "sharon-country-club": {
+  "boundaryWay": 29871905,
+  "center": [
+   42.110933,
+   -71.160047
+  ],
+  "name": "Sharon Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "sharpstown-country-club": {
+  "boundaryWay": -1705949,
+  "center": [
+   29.708989,
+   -95.530042
+  ],
+  "name": "Sharpstown Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "shinnecock-hills-golf-course": {
+  "boundaryWay": 28989007,
+  "center": [
+   40.896371,
+   -72.44113
+  ],
+  "name": "Shinnecock Hills Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "short-beach-golf-course": {
+  "boundaryWay": 43398968,
+  "center": [
+   41.159708,
+   -73.110135
+  ],
+  "name": "Short Beach Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "shovehaven-golf-course": {
+  "boundaryWay": 43399270,
+  "center": [
+   41.096653,
+   -73.389079
+  ],
+  "name": "Shovehaven Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "shuttle-meadow-golf-club": {
+  "boundaryWay": 43438519,
+  "center": [
+   41.642817,
+   -72.799918
+  ],
+  "name": "Shuttle Meadow Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "siena-golf-club": {
+  "boundaryWay": -1839971,
+  "center": [
+   36.10307,
+   -115.320551
+  ],
+  "name": "Siena Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "silverbell-golf-course": {
+  "boundaryWay": 263136208,
+  "center": [
+   32.272078,
+   -111.021332
+  ],
+  "name": "Silverbell Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "silvermine-golf-club": {
+  "boundaryWay": 43398690,
+  "center": [
+   41.157747,
+   -73.439565
+  ],
+  "name": "Silvermine Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "simsbury-farms-recreation-complex-and-public-golf-course": {
+  "boundaryWay": 43436859,
+  "center": [
+   41.88094,
+   -72.841485
+  ],
+  "name": "Simsbury Farms Recreation Complex and Public Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "sky-meadow-country-club": {
+  "boundaryWay": -3562967,
+  "center": [
+   42.705339,
+   -71.471499
+  ],
+  "name": "Sky Meadow Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "somersett-golf-and-country-club": {
+  "boundaryWay": -1083793,
+  "center": [
+   39.534102,
+   -119.935123
+  ],
+  "name": "Somersett Golf and Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "south-shore-country-club": {
+  "boundaryWay": 29688128,
+  "center": [
+   42.232011,
+   -70.898934
+  ],
+  "name": "South Shore Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "southwick-golf-course": {
+  "boundaryWay": 29906135,
+  "center": [
+   42.081054,
+   -72.76176
+  ],
+  "name": "Southwick Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "spring-brook-country-club": {
+  "boundaryWay": -222685,
+  "center": [
+   40.782126,
+   -74.489407
+  ],
+  "name": "Spring Brook Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "spring-valley-country-club": {
+  "boundaryWay": 29819016,
+  "center": [
+   42.151372,
+   -71.182444
+  ],
+  "name": "Spring Valley Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "st-anne-golf-course": {
+  "boundaryWay": 29908918,
+  "center": [
+   42.053692,
+   -72.668158
+  ],
+  "name": "St. Anne Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "st-marks-golf-course": {
+  "boundaryWay": 29782741,
+  "center": [
+   42.301263,
+   -71.525265
+  ],
+  "name": "St. Marks Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stanley-lasker-richter-municipal-golf-course": {
+  "boundaryWay": 43434973,
+  "center": [
+   41.414026,
+   -73.519552
+  ],
+  "name": "Stanley Lasker Richter Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stanley-municipal-golf-course": {
+  "boundaryWay": 43436666,
+  "center": [
+   41.703671,
+   -72.767997
+  ],
+  "name": "Stanley Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "sterling-farms-golf-club": {
+  "boundaryWay": 43398212,
+  "center": [
+   41.105667,
+   -73.525159
+  ],
+  "name": "Sterling Farms Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stockbridge-golf-course": {
+  "boundaryWay": 29784900,
+  "center": [
+   42.282781,
+   -73.322423
+  ],
+  "name": "Stockbridge Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stone-creek-golf-course": {
+  "boundaryWay": -1941143,
+  "center": [
+   40.091289,
+   -88.173708
+  ],
+  "name": "Stone Creek Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stone-lea-golf-course": {
+  "boundaryWay": 29742746,
+  "center": [
+   41.91553,
+   -71.329493
+  ],
+  "name": "Stone Lea Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stone-ridge-golf-club": {
+  "boundaryWay": -2431104,
+  "center": [
+   41.364365,
+   -83.68297
+  ],
+  "name": "Stone Ridge Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stonebridge-country-club": {
+  "boundaryWay": -3575380,
+  "center": [
+   45.255518,
+   -75.722603
+  ],
+  "name": "Stonebridge Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stony-brook-golf-course": {
+  "boundaryWay": 29783364,
+  "center": [
+   42.306509,
+   -71.504909
+  ],
+  "name": "Stony Brook Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stow-acres-country-club": {
+  "boundaryWay": -64711,
+  "center": [
+   42.421002,
+   -71.527082
+  ],
+  "name": "Stow Acres Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "stowaway-golf-course": {
+  "boundaryWay": 29763834,
+  "center": [
+   42.420706,
+   -71.482418
+  ],
+  "name": "Stowaway Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "strawberry-valley-golf-course": {
+  "boundaryWay": 29691675,
+  "center": [
+   42.093741,
+   -70.954629
+  ],
+  "name": "Strawberry Valley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "suntree-country-club": {
+  "boundaryWay": -1230389,
+  "center": [
+   28.217659,
+   -80.688735
+  ],
+  "name": "Suntree Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "superstition-springs-golf-course": {
+  "boundaryWay": -67161,
+  "center": [
+   33.382768,
+   -111.696462
+  ],
+  "name": "Superstition Springs Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "swansea-country-club": {
+  "boundaryWay": 29831283,
+  "center": [
+   41.764224,
+   -71.281042
+  ],
+  "name": "Swansea Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "sykes-lady-overland-park-golf-complex": {
+  "boundaryWay": -1698957,
+  "center": [
+   38.898263,
+   -94.726476
+  ],
+  "name": "Sykes/Lady Overland Park Golf Complex",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tamarack-golf-course": {
+  "boundaryWay": -232946,
+  "center": [
+   40.420397,
+   -74.451254
+  ],
+  "name": "Tamarack Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tashua-knolls-and-glen-golf-courses": {
+  "boundaryWay": 43435440,
+  "center": [
+   41.285435,
+   -73.250037
+  ],
+  "name": "Tashua Knolls and Glen Golf Courses",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-bandit-golf-club": {
+  "boundaryWay": -2587667,
+  "center": [
+   29.636069,
+   -98.050477
+  ],
+  "name": "The Bandit Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-broadmoor-mountain-golf-course": {
+  "boundaryWay": -3132279,
+  "center": [
+   38.769987,
+   -104.843607
+  ],
+  "name": "The Broadmoor Mountain Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-club-at-sonterra": {
+  "boundaryWay": -1198348,
+  "center": [
+   29.617709,
+   -98.503733
+  ],
+  "name": "The Club at Sonterra",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-cradle": {
+  "boundaryWay": 844710542,
+  "center": [
+   35.187065,
+   -79.468306
+  ],
+  "name": "The Cradle",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-evergreen-club": {
+  "boundaryWay": -1587674,
+  "center": [
+   27.200625,
+   -80.308866
+  ],
+  "name": "The Evergreen Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-golf-club-at-hawks-prairie-the-links": {
+  "boundaryWay": -420288,
+  "center": [
+   47.095499,
+   -122.766447
+  ],
+  "name": "The Golf Club at Hawks Prairie - The Links",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-golf-club-at-hawks-prairie-the-woodlands": {
+  "boundaryWay": -420287,
+  "center": [
+   47.093302,
+   -122.754819
+  ],
+  "name": "The Golf Club at Hawks Prairie - The Woodlands",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-golf-club-of-virginia-at-beacon-hill": {
+  "boundaryWay": -3308747,
+  "center": [
+   39.146499,
+   -77.592887
+  ],
+  "name": "The Golf Club of Virginia at Beacon Hill",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-links-at-brigantine": {
+  "boundaryWay": -53408,
+  "center": [
+   39.41701,
+   -74.370168
+  ],
+  "name": "The Links at Brigantine",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-majors-golf-club": {
+  "boundaryWay": -1432517,
+  "center": [
+   27.942474,
+   -80.653311
+  ],
+  "name": "The Majors Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-marshes-golf": {
+  "boundaryWay": -1973201,
+  "center": [
+   45.348125,
+   -75.909026
+  ],
+  "name": "The Marshes Golf",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-oasis": {
+  "boundaryWay": -49218,
+  "center": [
+   39.240281,
+   -84.242782
+  ],
+  "name": "The Oasis",
+  "source": "cc0",
+  "type": "way"
+ },
+ "the-woodlands": {
+  "boundaryWay": -3105472,
+  "center": [
+   47.093302,
+   -122.754819
+  ],
+  "name": "The Woodlands",
+  "source": "cc0",
+  "type": "way"
+ },
+ "thornapple-creek-golf-club": {
+  "boundaryWay": 265959726,
+  "center": [
+   42.344054,
+   -85.675934
+  ],
+  "name": "Thornapple Creek Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "thorny-lea-golf-course": {
+  "boundaryWay": 29858966,
+  "center": [
+   42.077477,
+   -71.048731
+  ],
+  "name": "Thorny Lea Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tilden-golf-course": {
+  "boundaryWay": 45146686,
+  "center": [
+   37.88903,
+   -122.242454
+  ],
+  "name": "Tilden Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "timberline-golf-course": {
+  "boundaryWay": 43439374,
+  "center": [
+   41.605432,
+   -72.811092
+  ],
+  "name": "Timberline Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tournament-players-club-of-connecticut": {
+  "boundaryWay": 43439935,
+  "center": [
+   41.627693,
+   -72.640676
+  ],
+  "name": "Tournament Players Club Of Connecticut",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tower-ridge-country-club": {
+  "boundaryWay": 43442367,
+  "center": [
+   41.827753,
+   -72.807453
+  ],
+  "name": "Tower Ridge Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "town-golf-course": {
+  "boundaryWay": 29769933,
+  "center": [
+   42.202985,
+   -71.44736
+  ],
+  "name": "Town Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tpc-at-avenel": {
+  "boundaryWay": -357652,
+  "center": [
+   38.99337,
+   -77.200683
+  ],
+  "name": "TPC at Avenel",
+  "source": "cc0",
+  "type": "way"
+ },
+ "trull-brook-golf-course": {
+  "boundaryWay": 29859779,
+  "center": [
+   42.653552,
+   -71.259471
+  ],
+  "name": "Trull Brook Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tucson-estates-golf-course": {
+  "boundaryWay": 262948500,
+  "center": [
+   32.192652,
+   -111.08731
+  ],
+  "name": "Tucson Estates Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tumble-brook-country-club": {
+  "boundaryWay": 43439653,
+  "center": [
+   41.815111,
+   -72.755087
+  ],
+  "name": "Tumble Brook Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "tunxis-plantation-country-club": {
+  "boundaryWay": 43436530,
+  "center": [
+   41.740243,
+   -72.829305
+  ],
+  "name": "Tunxis Plantation Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "turquoise-hills-family-golf-center": {
+  "boundaryWay": 262944596,
+  "center": [
+   31.950391,
+   -110.277417
+  ],
+  "name": "Turquoise Hills Family Golf Center",
+  "source": "cc0",
+  "type": "way"
+ },
+ "turquoise-valley-golf-course": {
+  "boundaryWay": 263212246,
+  "center": [
+   31.343269,
+   -109.943944
+  ],
+  "name": "Turquoise Valley Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "twin-brooks-golf-course": {
+  "boundaryWay": 29900383,
+  "center": [
+   41.642971,
+   -70.296589
+  ],
+  "name": "Twin Brooks Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "twin-lakes-country-club": {
+  "boundaryWay": -2179779,
+  "center": [
+   47.315609,
+   -122.378012
+  ],
+  "name": "Twin Lakes Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "twin-lakes-golf-course": {
+  "boundaryWay": 43438018,
+  "center": [
+   41.316286,
+   -72.781555
+  ],
+  "name": "Twin Lakes Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "twin-lakes-municipal-golf-course": {
+  "boundaryWay": 262943519,
+  "center": [
+   32.235326,
+   -109.827444
+  ],
+  "name": "Twin Lakes Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "twin-springs-golf-course": {
+  "boundaryWay": 29775754,
+  "center": [
+   42.439168,
+   -71.644142
+  ],
+  "name": "Twin Springs Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "unicorn-golf-and-country-club": {
+  "boundaryWay": 29830185,
+  "center": [
+   42.487136,
+   -71.112849
+  ],
+  "name": "Unicorn Golf and Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "urbandale-golf-country-club": {
+  "boundaryWay": -2561372,
+  "center": [
+   41.634537,
+   -93.742279
+  ],
+  "name": "Urbandale Golf & Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "v-a-golf-course": {
+  "boundaryWay": 29743379,
+  "center": [
+   42.503428,
+   -71.270332
+  ],
+  "name": "V.A. Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "valley-golf-club": {
+  "boundaryWay": 215251563,
+  "center": [
+   43.566305,
+   -119.076068
+  ],
+  "name": "Valley Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "vesper-country-club": {
+  "boundaryWay": -3537891,
+  "center": [
+   42.654573,
+   -71.393903
+  ],
+  "name": "Vesper Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "veterans-golf-course": {
+  "boundaryWay": 29858393,
+  "center": [
+   42.102091,
+   -72.508018
+  ],
+  "name": "Veterans Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wading-river-golf-course": {
+  "boundaryWay": 29835070,
+  "center": [
+   41.949492,
+   -71.222309
+  ],
+  "name": "Wading River Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "walpole-country-club": {
+  "boundaryWay": 132974397,
+  "center": [
+   42.133905,
+   -71.23294
+  ],
+  "name": "Walpole Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "washington-golf-course": {
+  "boundaryWay": 43439875,
+  "center": [
+   41.644746,
+   -73.298239
+  ],
+  "name": "Washington Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "waubeeka-golf-links": {
+  "boundaryWay": 29198470,
+  "center": [
+   42.654686,
+   -73.245155
+  ],
+  "name": "Waubeeka Golf Links",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wayland-country-club-golf": {
+  "boundaryWay": 29769423,
+  "center": [
+   42.378263,
+   -71.379702
+  ],
+  "name": "Wayland Country Club/Golf",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wayne-golf-course": {
+  "boundaryWay": -554487,
+  "center": [
+   47.748627,
+   -122.215599
+  ],
+  "name": "Wayne Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "we-ko-pa-golf-club": {
+  "boundaryWay": 262825784,
+  "center": [
+   33.588724,
+   -111.69252
+  ],
+  "name": "We-Ko-Pa Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wedgewood-golf-club": {
+  "boundaryWay": 29819091,
+  "center": [
+   42.043255,
+   -71.021897
+  ],
+  "name": "Wedgewood Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wedgewood-golf-course": {
+  "boundaryWay": 29782897,
+  "center": [
+   42.445556,
+   -71.533765
+  ],
+  "name": "Wedgewood Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wee-burn-country-club": {
+  "boundaryWay": 43398547,
+  "center": [
+   41.09217,
+   -73.494119
+  ],
+  "name": "Wee Burn Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wellesley-country-club": {
+  "boundaryWay": 120462086,
+  "center": [
+   42.302528,
+   -71.25737
+  ],
+  "name": "Wellesley Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wenham-golf-course": {
+  "boundaryWay": 29695004,
+  "center": [
+   42.598094,
+   -70.883314
+  ],
+  "name": "Wenham Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "west-end-golf": {
+  "boundaryWay": 267711657,
+  "center": [
+   29.660197,
+   -82.479535
+  ],
+  "name": "West End Golf",
+  "source": "cc0",
+  "type": "way"
+ },
+ "west-nantmeal-township": {
+  "boundaryWay": -3049374,
+  "center": [
+   40.155725,
+   -75.807407
+  ],
+  "name": "West Nantmeal Township",
+  "source": "cc0",
+  "type": "way"
+ },
+ "western-hills-municipal-golf-course": {
+  "boundaryWay": 43440717,
+  "center": [
+   41.558276,
+   -73.085385
+  ],
+  "name": "Western Hills Municipal Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "westminster-golf-course": {
+  "boundaryWay": 29756394,
+  "center": [
+   42.543701,
+   -71.929612
+  ],
+  "name": "Westminster Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "weston-golf-club": {
+  "boundaryWay": -65049,
+  "center": [
+   42.357784,
+   -71.284197
+  ],
+  "name": "Weston Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "westover-golf-course": {
+  "boundaryWay": 29905856,
+  "center": [
+   42.215058,
+   -72.518042
+  ],
+  "name": "Westover Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "white-eagle-golf-club": {
+  "boundaryWay": -2684474,
+  "center": [
+   41.724705,
+   -88.217585
+  ],
+  "name": "White Eagle Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "whitney-farms-golf-club": {
+  "boundaryWay": -307285,
+  "center": [
+   41.341219,
+   -73.193399
+  ],
+  "name": "Whitney Farms Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wianno-golf-course": {
+  "boundaryWay": 29905195,
+  "center": [
+   41.617699,
+   -70.380774
+  ],
+  "name": "Wianno Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "williams-college-taconic-golf-course": {
+  "boundaryWay": 29198549,
+  "center": [
+   42.704171,
+   -73.206831
+  ],
+  "name": "Williams College Taconic Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "williamsburg-golf-club": {
+  "boundaryWay": 29905771,
+  "center": [
+   42.374369,
+   -72.694784
+  ],
+  "name": "Williamsburg Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "willoughby-golf-club": {
+  "boundaryWay": -1588386,
+  "center": [
+   27.155598,
+   -80.230608
+  ],
+  "name": "Willoughby Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wilson-rd-golf-course": {
+  "boundaryWay": 29906809,
+  "center": [
+   42.296446,
+   -72.665648
+  ],
+  "name": "Wilson Rd Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "winchester-country-club": {
+  "boundaryWay": 29818882,
+  "center": [
+   42.437497,
+   -71.161681
+  ],
+  "name": "Winchester Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wippernon-golf-course": {
+  "boundaryWay": 29747193,
+  "center": [
+   42.168233,
+   -72.837255
+  ],
+  "name": "Wippernon Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "woburn-country-club": {
+  "boundaryWay": 66508945,
+  "center": [
+   42.465751,
+   -71.163468
+  ],
+  "name": "Woburn Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wollaston-golf-course": {
+  "boundaryWay": 29870477,
+  "center": [
+   42.27083,
+   -71.040012
+  ],
+  "name": "Wollaston Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wompatuck-golf-course": {
+  "boundaryWay": 29861066,
+  "center": [
+   42.164965,
+   -71.119144
+  ],
+  "name": "Wompatuck Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "woodland-country-club": {
+  "boundaryWay": 29868312,
+  "center": [
+   42.336892,
+   -71.245837
+  ],
+  "name": "Woodland Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "woods-hole-golf-club": {
+  "boundaryWay": 29689715,
+  "center": [
+   41.530593,
+   -70.662005
+  ],
+  "name": "Woods Hole Golf Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "woodway-country-club": {
+  "boundaryWay": -306829,
+  "center": [
+   41.108233,
+   -73.507775
+  ],
+  "name": "Woodway Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "worthington-golf-course": {
+  "boundaryWay": 29748480,
+  "center": [
+   42.408467,
+   -72.943436
+  ],
+  "name": "Worthington Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "worthington-hills-country-club": {
+  "boundaryWay": -193427,
+  "center": [
+   40.126909,
+   -83.052563
+  ],
+  "name": "Worthington Hills Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wright-golf-course": {
+  "boundaryWay": 29830747,
+  "center": [
+   42.267184,
+   -71.134702
+  ],
+  "name": "Wright Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "wynn-golf-course": {
+  "boundaryWay": 27910587,
+  "center": [
+   36.126437,
+   -115.161101
+  ],
+  "name": "Wynn Golf Course",
+  "source": "cc0",
+  "type": "way"
+ },
+ "yacht-and-country-club": {
+  "boundaryWay": -1588912,
+  "center": [
+   27.158919,
+   -80.204457
+  ],
+  "name": "Yacht and Country Club",
+  "source": "cc0",
+  "type": "way"
+ },
+ "yuma-golf-desert-hills-par-3-arroyo-dunes": {
+  "boundaryWay": 262523252,
+  "center": [
+   32.667389,
+   -114.634731
+  ],
+  "name": "Yuma Golf Desert Hills Par 3 (Arroyo Dunes)",
+  "source": "cc0",
+  "type": "way"
+ }
+}

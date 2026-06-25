@@ -8,19 +8,31 @@ description: Bake a real golf course (geometry + aerial imagery) into courses/<i
 Turns a real course into a playable `courses/<id>.json` (+ per-hole aerial photos) that the game loads. All work is done by the dev tool `tools/fetch_course.py`; the game itself stays build-stepless and just fetches the static files.
 
 ## 1. Find the course boundary way
-Courses are isolated by their OSM **boundary way id**. Find it via Overpass (bbox around the course):
+
+**Easiest — the discovery index.** `tools/build_index.py` maintains `courses/index.json` (slug → boundary-way/name/center) so you can bake by name instead of hand-finding ids:
+```
+python3 tools/build_index.py --overpass --around 35.195,-79.47,4500   # live OSM near a point
+python3 tools/build_index.py --overpass --bbox S,W,N,E                 # or a bbox
+python3 tools/build_index.py --seed-cc0                                # bulk-seed ~461 NA courses (CC0)
+python3 tools/build_index.py --search pinehurst                        # find what's indexed
+```
+OSM (`source=osm`) entries are authoritative and override CC0 hints; CC0 ids can be stale/relations and cover North America only. Then in step 2 pass `--from-index <slug>` and skip `--boundary-way`.
+
+**Manual fallback** — find the boundary way directly via Overpass (bbox around the course):
 ```
 [out:json][timeout:60];
 ( way["leisure"="golf_course"](LAT0,LON0,LAT1,LON1);
   relation["leisure"="golf_course"](LAT0,LON0,LAT1,LON1); );
 out tags;
 ```
-Pick the way whose `name` matches the course (e.g. Pinehurst No. 2 = way `1358696570`, St Andrews Old = way `1019045811`). A single **way** boundary is easiest; relations work via `map_to_area` too. Inspect data visually at https://overpass-turbo.eu.
+Pick the way whose `name` matches (e.g. Pinehurst No. 2 = way `1358696570`, St Andrews Old = way `1019045811`). A single **way** boundary is easiest; relations work via `map_to_area` too. Inspect visually at https://overpass-turbo.eu.
 
 ## 2. Bake
 ```
+python3 tools/fetch_course.py --from-index <slug> [--id <slug>]        # by name, via the index
 python3 tools/fetch_course.py --boundary-way <WAY_ID> --id <slug> --name "<Display Name>"
 ```
+`--from-index` fills boundary-way/id/name from `courses/index.json`; explicit flags still override (e.g. `--id pinehurst-no2` to match an existing course file + its scorecard).
 - Writes `courses/<slug>.json` and `courses/img/<slug>/hole<N>.jpg` (one north-up aerial per hole, Esri World Imagery, keyless).
 - `--no-imagery` skips the photos (fast, vector-only).
 - `--cache <path>` caches the raw Overpass JSON so re-bakes don't re-query.

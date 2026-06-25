@@ -385,11 +385,31 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
     return (hole_rec, synth_fw, aerial_meta)
 
 
+# Resolve --boundary-way/--id/--name from courses/index.json by slug, so a course
+# can be baked by name once build_index.py has indexed it.
+def resolve_from_index(slug):
+    path = os.path.join(os.path.dirname(__file__), "..", "courses", "index.json")
+    if not os.path.exists(path):
+        sys.exit(f"no course index ({path}); run tools/build_index.py first")
+    with open(path) as f:
+        idx = json.load(f)
+    key = slug if slug in idx else re.sub(r"[^a-z0-9]+", "-", slug.lower()).strip("-")
+    rec = idx.get(key)
+    if not rec:
+        sys.exit(f"'{slug}' not in index; try: build_index.py --search {slug}")
+    if rec.get("type") == "relation":
+        print(f"  ! '{key}' is an OSM relation; the baker expects a way "
+              f"boundary — bake may fail.", file=sys.stderr)
+    return rec["boundaryWay"], key, rec["name"]
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--boundary-way", type=int, required=True)
-    ap.add_argument("--id", required=True)
-    ap.add_argument("--name", required=True)
+    ap.add_argument("--from-index", metavar="SLUG",
+                    help="resolve boundary-way/id/name from courses/index.json")
+    ap.add_argument("--boundary-way", type=int)
+    ap.add_argument("--id")
+    ap.add_argument("--name")
     ap.add_argument("--cache")
     ap.add_argument("--out")
     ap.add_argument("--no-imagery", action="store_true",
@@ -401,6 +421,14 @@ def main():
                     help="optional GolfAPI.io course id for par/yards/si "
                          "(needs GOLFAPI_KEY env); manual --scorecard still wins")
     args = ap.parse_args()
+
+    if args.from_index:
+        bw, cid, name = resolve_from_index(args.from_index)
+        args.boundary_way = args.boundary_way or bw
+        args.id = args.id or cid          # explicit flags still override the index
+        args.name = args.name or name
+    if not (args.boundary_way and args.id and args.name):
+        ap.error("need --from-index SLUG, or all of --boundary-way/--id/--name")
 
     data = fetch_overpass(args.boundary_way, args.cache)
     els = [e for e in data["elements"] if "geometry" in e and e.get("tags")]
