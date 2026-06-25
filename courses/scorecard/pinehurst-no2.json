@@ -1,0 +1,15 @@
+{
+  "name": "Pinehurst No. 2",
+  "tee": "championship",
+  "_note": "Partial: only holes verified from public sources. Missing holes fall back to OSM/geometry. Complete from the official scorecard.",
+  "holes": {
+    "1":  { "par": 4, "yards": 402 },
+    "3":  { "par": 4, "yards": 387 },
+    "5":  { "par": 5, "yards": 576 },
+    "6":  { "par": 3, "yards": 219 },
+    "7":  { "par": 4, "yards": 424 },
+    "8":  { "par": 4, "yards": 528 },
+    "17": { "par": 3, "yards": 205 },
+    "18": { "par": 4, "yards": 451 }
+  }
+}

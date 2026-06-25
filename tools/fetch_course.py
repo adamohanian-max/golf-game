@@ -200,12 +200,49 @@ def hole_num(el):
     return int(m.group(1)) if m else None
 
 
+# --- Scorecard layer -------------------------------------------------------
+# Free, deterministic per-hole {par, yards, si} overrides typed from a course's
+# published scorecard. Merge precedence (highest first): manual override ->
+# GolfAPI.io (optional, key-gated) -> OSM tags -> par=4 fallback. This fixes the
+# par=4 default and gives real yardage without any paid dependency.
+def load_scorecard(path, cid):
+    """Read courses/scorecard/<id>.json (or an explicit path). Accepts either
+    {"holes": {"1": {...}}} or a flat {"1": {...}}. Returns {str(hole): rec}."""
+    if not path:
+        path = os.path.join(os.path.dirname(__file__), "..", "courses",
+                            "scorecard", cid + ".json")
+    if not os.path.exists(path):
+        return {}
+    with open(path) as f:
+        doc = json.load(f)
+    holes = doc.get("holes", doc) if isinstance(doc, dict) else {}
+    return {str(k): v for k, v in holes.items()}
+
+
+def to_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+# Resolve a hole's par/si/yards from the merge chain. `osm_tags` is the OSM
+# hole-line tag dict; `card` is the manual override for this hole (may be {}).
+def resolve_card(osm_tags, card):
+    par = to_int(card.get("par")) or to_int(osm_tags.get("par")) or 4
+    si = to_int(card.get("si")) or to_int(osm_tags.get("handicap"))
+    yards = to_int(card.get("yards"))   # only the scorecard gives real yardage
+    src = "scorecard" if card else ("osm" if osm_tags.get("par") else "default")
+    return par, si, yards, src
+
+
 # --- Build one hole --------------------------------------------------------
 # `line_m` is the projected (meters) centerline; `fairway_els`/`bunker_els` are
 # the real OSM polygons already assigned to THIS hole (fairway may be empty,
 # in which case we fall back to a synthesized corridor).
 def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
-               tees, woods_els, cartpath_els, grass_els, lat0, lon0):
+               tees, woods_els, cartpath_els, grass_els, lat0, lon0,
+               si=None, yards_override=None):
     line_m = list(line_m)
 
     # Orient: pin = endpoint nearest a green centroid; tee = the other end.
@@ -222,7 +259,9 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
     (green_c, green_el), green_d = nearest_green(pin_m)
 
     length_m = sum(dist(line_m[i], line_m[i + 1]) for i in range(len(line_m) - 1))
-    yards = round(length_m / M_PER_YARD)
+    geom_yards = round(length_m / M_PER_YARD)
+    # Real scorecard yardage (if provided) is authoritative; geometry is a fallback.
+    yards = yards_override if yards_override else geom_yards
 
     # Per-hole frame: u = tee->pin direction. Map u -> screen-up (-y).
     u = unit(sub(pin_m, tee_m))
@@ -336,9 +375,14 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
     aerial = {"file": rel, "w": pxw, "h": pxh, "toWorld": [round(v, 6) for v in to_world]}
     aerial_meta = {"merc": (Xmin, Ymin, Xmax, Ymax), "w": pxw, "h": pxh, "rel": rel}
 
-    return ({"num": num, "par": par, "yards": yards, "world": world,
-             "tee": tee_pt, "pin": pin_pt, "aerial": aerial,
-             "surfaces": out_surfaces}, synth_fw, aerial_meta)
+    hole_rec = {"num": num, "par": par, "yards": yards, "world": world,
+                "tee": tee_pt, "pin": pin_pt, "aerial": aerial,
+                "surfaces": out_surfaces}
+    if si is not None:
+        hole_rec["si"] = si                       # stroke index (handicap rank)
+    if yards_override:
+        hole_rec["geomYards"] = geom_yards        # keep the geometric estimate for QA
+    return (hole_rec, synth_fw, aerial_meta)
 
 
 def main():
@@ -350,6 +394,12 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--no-imagery", action="store_true",
                     help="skip baking aerial photos (vector-only)")
+    ap.add_argument("--scorecard",
+                    help="scorecard override JSON (par/yards/si per hole); "
+                         "defaults to courses/scorecard/<id>.json if present")
+    ap.add_argument("--golfapi-course",
+                    help="optional GolfAPI.io course id for par/yards/si "
+                         "(needs GOLFAPI_KEY env); manual --scorecard still wins")
     args = ap.parse_args()
 
     data = fetch_overpass(args.boundary_way, args.cache)
@@ -411,13 +461,30 @@ def main():
     if not args.no_imagery:
         os.makedirs(img_dir, exist_ok=True)
 
-    out_holes, synth_count, img_count = [], 0, 0
+    scorecard = load_scorecard(args.scorecard, args.id)
+    # Optional, key-gated GolfAPI.io layer: fills holes the manual card omits.
+    if args.golfapi_course:
+        from sources import golfapi_io
+        for n, rec in golfapi_io.fetch_scorecard(args.golfapi_course).items():
+            merged = dict(rec); merged.update(scorecard.get(n, {}))  # manual wins
+            scorecard[n] = merged
+    if scorecard:
+        print(f"  (scorecard override: {len(scorecard)} hole(s))")
+
+    out_holes, synth_count, img_count, card_count = [], 0, 0, 0
     for n, h, lm in hole_lines:
-        par = int(h["tags"].get("par", 4))
+        par, si, yov, src = resolve_card(h["tags"], scorecard.get(str(n), {}))
+        if src == "scorecard":
+            card_count += 1
         try:
             hole, synth, am = build_hole(
                 args.id, n, par, lm, greens, fw_by_hole[n], bk_by_hole[n],
-                waters, tees, wd_by_hole[n], cp_by_hole[n], gr_by_hole[n], lat0, lon0)
+                waters, tees, wd_by_hole[n], cp_by_hole[n], gr_by_hole[n], lat0, lon0,
+                si=si, yards_override=yov)
+            # QA: flag big scorecard-vs-geometry yardage gaps (mis-keyed hole, etc.)
+            if yov and abs(yov - hole.get("geomYards", yov)) > 60:
+                print(f"  ! hole {n}: scorecard {yov}y vs geometry "
+                      f"{hole['geomYards']}y — check hole numbering", file=sys.stderr)
             if args.no_imagery:
                 hole.pop("aerial", None)
             else:
@@ -445,10 +512,13 @@ def main():
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         json.dump(course, f, separators=(",", ":"))
-    print(f"Wrote {out}: {len(out_holes)} holes")
+    par_total = sum(h["par"] for h in out_holes)
+    print(f"Wrote {out}: {len(out_holes)} holes, par {par_total}"
+          f" ({card_count} hole(s) from scorecard)")
     for h in out_holes:
         s = h["surfaces"]
-        print(f"  #{h['num']:>2} par {h['par']} {h['yards']:>3}y  "
+        si = f" si{h['si']:>2}" if "si" in h else ""
+        print(f"  #{h['num']:>2} par {h['par']} {h['yards']:>3}y{si}  "
               f"world {h['world']['w']}x{h['world']['h']}  "
               f"green={len(s['green'])} fw={len(s['fairway'])} "
               f"bunker={len(s['bunker'])} water={len(s['water'])} tee={len(s['tee'])}")

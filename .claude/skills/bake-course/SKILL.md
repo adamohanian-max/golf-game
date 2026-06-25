@@ -26,11 +26,17 @@ python3 tools/fetch_course.py --boundary-way <WAY_ID> --id <slug> --name "<Displ
 - `--cache <path>` caches the raw Overpass JSON so re-bakes don't re-query.
 - Console prints per-hole surface counts, how many holes fell back to a **synthesized** fairway (links courses lack mapped fairways), and how many aerials were baked.
 
+## Scorecard accuracy (par / yards / stroke index)
+Geometry/OSM alone leaves `par` defaulting to **4** when untagged and `yards` as a rough geometric estimate. Layer real numbers on top with a free, deterministic override:
+- Create `courses/scorecard/<id>.json` (auto-loaded by id; or pass `--scorecard <path>`). Schema + example in `courses/scorecard/README.md`: `{"holes": {"1": {"par":4,"yards":402,"si":5}, ...}}`. Every hole/field optional — gaps fall through.
+- Merge precedence: **manual override → GolfAPI.io (optional `--golfapi-course`, needs `GOLFAPI_KEY`) → OSM tags → par=4**.
+- The baker prints how many holes came from the scorecard and warns when a card yardage diverges from geometry by >60y (mis-keyed hole). Output gains `si` and, where overridden, `geomYards` (the geometric estimate, kept for QA).
+
 ## What it ingests (Overpass)
 `golf=green|fairway|tee|bunker|hole|cartpath|water_hazard`, `natural=wood|water`, `landuse=grass`. Hole order = leading int of each `golf=hole` way's `ref` (handles `"7"` and `"7 - #2"`), deduped by number. Fairways/bunkers/woods/cartpaths/grass are assigned to the **nearest hole**; greens to the nearest hole pin; a fairway corridor is **synthesized only** when a hole has no mapped fairway.
 
 ## Output schema (`courses/<id>.json`)
-`{ id, name, yardsPerUnit, holes:[ { num, par, yards, world:{w,h}, tee:{x,y}, pin:{x,y}, aerial:{file,w,h,toWorld:[a,b,c,d,e,f]}, surfaces:{ green,fairway,bunker,water,tee,woods,cartpath,grass: [[{x,y}...]] } } ] }`. Scale is FIXED (`yardsPerUnit`≈3) so swing feel is constant across holes; `world` bounds are per-hole. `toWorld` maps aerial pixel→world: `world.x=a*px+b*py+c`, `world.y=d*px+e*py+f`.
+`{ id, name, yardsPerUnit, holes:[ { num, par, yards, world:{w,h}, tee:{x,y}, pin:{x,y}, aerial:{file,w,h,toWorld:[a,b,c,d,e,f]}, surfaces:{ green,fairway,bunker,water,tee,woods,cartpath,grass: [[{x,y}...]] } } ] }`. Optional per-hole `si` (stroke index) and `geomYards` (geometric estimate when `yards` came from a scorecard override) are added when available. Scale is FIXED (`yardsPerUnit`≈3) so swing feel is constant across holes; `world` bounds are per-hole. `toWorld` maps aerial pixel→world: `world.x=a*px+b*py+c`, `world.y=d*px+e*py+f`.
 
 ## Point the game at a course
 In `game.js` near the bottom: `loadCourse("<slug>")`. Course name shows automatically.
@@ -42,6 +48,6 @@ In `game.js` near the bottom: `loadCourse("<slug>")`. Course name shows automati
 
 ## Gotchas
 - Overpass needs a `User-Agent` (406 without). It rate-limits — cache raw responses.
-- OSM pars can differ from the official scorecard (we trust OSM tags).
+- OSM pars/yards can differ from the official scorecard — supply `courses/scorecard/<id>.json` to override (see Scorecard accuracy above).
 - OSM vector vs Esri imagery can be offset a few meters (registration); overlays may not perfectly hug the photo.
 - Pillow is NOT required — images stay north-up; rotation is handled at runtime by the affine.
