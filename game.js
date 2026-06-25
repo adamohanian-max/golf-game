@@ -9,7 +9,7 @@ const TUNE = {
   wheelSensitivity: 1.0, // two-finger trackpad swipe -> swing power scaling
   wheelInvert: false,    // true if you use classic (non-natural) scrolling
   stopThreshold: 0.005,  // speed below this = ball stopped
-  captureSpeed: 0.15,    // ball must be slower than this to drop in cup (low = hard)
+  captureSpeed: 0.05,    // ball must be slower than this to drop in cup (low = hard)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
 
   // --- Ball flight ---
@@ -17,6 +17,7 @@ const TUNE = {
   gravity: 0.011,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
   spinFactor: 0.01,     // how hard a curved swipe bends flight (draw/fade)
+  windEffect: 0.0002,   // world-units/frame² per mph — how hard wind pushes the ball
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
@@ -37,7 +38,8 @@ const TUNE = {
   // green field's gradient. slopeAccel folds the field's vertical scale + gravity
   // into one knob (world-units/frame^2 per unit gradient); calibrate by feel.
   // Slope is ignored below slopeStopSpeed so a ball settles instead of creeping.
-  slopeAccel: 0.001,
+  slopeAccel: 0.005,
+  fairwaySlopeAccel: 0.0003, // terrain slope accel on fairway/rough (gentler than green break)
   slopeStopSpeed: 0.02,
   // Shaded-relief topo overlay (greens only). Intensity = drawImage globalAlpha.
   reliefAmbient: 0.14,   // always-on whisper on the in-play / target green
@@ -164,6 +166,7 @@ function clubForYards(y) {
   return best;
 }
 let autoClubEnabled = true;
+let windEnabled = true;
 // Auto-select the club for the current shot (course only; putter is auto on green).
 function autoClub() {
   if (!autoClubEnabled || mode === "range" || !HOLE) return;
@@ -209,6 +212,7 @@ let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let measureDragging = false;
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
 let rangeTarget = 150; // driving-range target distance (yards)
+let wind = { dir: 0, speed: 0 }; // dir = compass bearing wind comes FROM (radians, 0=N), speed in mph
 // Last-shot stats for the HUD (carry / ball speed / total / dist-to-pin).
 const shot = { startX: 0, startY: 0, mph: 0, carry: null, total: null, carried: false };
 
@@ -255,19 +259,20 @@ function surfaceAt(x, y) {
   if (inAnyPoly(x, y, s.woods)) return "woods"; // trees = out of bounds (penalty)
   return "rough";
 }
-// Downhill slope (gradient of the synthetic height field) at a point, or null if
-// not on a green. Same field that draws the contours (buildGreenTopo), so break
-// follows what's drawn. Swap point for real LiDAR: set g.grad from baked elevation.
+// Downhill slope (gradient of the height field) at a point on a green, or null.
+// Same field that draws the contours → what you see is what breaks.
 function greenSlopeAt(x, y) {
   for (const g of HOLE._greens || []) {
     if (g.grad && pointInPoly(x, y, g.poly)) return g.grad(x, y);
   }
   return null;
 }
-// Elevation at a world point in feet, relative to the green's own midpoint.
-// Scaled so the full green spans ±3 ft (consistent with the drawn contours).
-// Returns null if the point is not on any green.
-function elevationAt(x, y) {
+// Elevation at a world point in feet.
+// With a baked DEM: available everywhere on the course (fairway, rough, etc.).
+// Without a DEM: green-only, ±3ft relative to that green's midpoint.
+// Returns null if no elevation data is available for this point.
+function terrainElevAt(x, y) {
+  if (HOLE._dem) return HOLE._dem.elevAt(x, y) * 3.28084;  // metres → feet
   for (const g of HOLE._greens || []) {
     if (!pointInPoly(x, y, g.poly)) continue;
     const hMid = (g.hmin + g.hmax) / 2;
@@ -327,6 +332,11 @@ function arcFlightStep(b) {
     const px = -b.vy / sp, py = b.vx / sp;
     const a = b.spin * TUNE.spinFactor * sp;
     b.vx += px * a; b.vy += py * a;
+  }
+  // wind: horizontal push (world space). dir = compass FROM bearing.
+  if (wind.speed > 0) {
+    b.vx -= Math.sin(wind.dir) * wind.speed * TUNE.windEffect;
+    b.vy += Math.cos(wind.dir) * wind.speed * TUNE.windEffect;
   }
   // height from the two-parabola arc
   const d = fl.d, C = fl.C, H = fl.H, xa = fl.xa;
@@ -391,6 +401,10 @@ function ballisticFlightStep(b) {
   }
   b.vx *= TUNE.airDrag;
   b.vy *= TUNE.airDrag;
+  if (wind.speed > 0) {
+    b.vx -= Math.sin(wind.dir) * wind.speed * TUNE.windEffect;
+    b.vy += Math.cos(wind.dir) * wind.speed * TUNE.windEffect;
+  }
 
   clampToWorld(b);
 
@@ -453,9 +467,16 @@ function rollStep(b) {
       if (g) { b.vx -= TUNE.slopeAccel * g.x; b.vy -= TUNE.slopeAccel * g.y; }
     }
   } else {
+    const sp = Math.hypot(b.vx, b.vy);
     const f = TUNE.friction[surf];
     b.vx *= f;
     b.vy *= f;
+    // Terrain slope on fairway/rough: roll downhill when DEM is available
+    if (HOLE._dem && sp > TUNE.slopeStopSpeed) {
+      const gv = HOLE._dem.gradAt(b.x, b.y);
+      b.vx -= TUNE.fairwaySlopeAccel * gv.x;
+      b.vy -= TUNE.fairwaySlopeAccel * gv.y;
+    }
   }
 
   const speed = Math.hypot(b.vx, b.vy);
@@ -722,7 +743,9 @@ function launchShot(ang, frac, spin, onGreen) {
     let ef = f;
     if (!HOLE.isRange) {
       const toPin = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-      if (toPin < 90) ef *= 0.4 + 0.6 * (toPin / 90); // 40% sensitivity at pin → 100% at 90y
+      // Greenside touch: compress power hard close to the pin so lofted clubs don't
+      // overshoot. Curved (quadratic) so the very-short range softens the most.
+      if (toPin < 90) ef *= 0.22 + 0.78 * Math.pow(toPin / 90, 1.5);
     }
     const c = TUNE.clubs[selectedClub];
     const C = (c.carry / YARDS_PER_UNIT) * ef;   // carry (world units)
@@ -1045,12 +1068,39 @@ function stripes(c1, c2, bandW, axis) {
   }
 }
 
+// Build a bilinear DEM sampler from a baked elevation grid.
+// dem.data[j*nx+i] = elevation in metres above baseElevM, at world (x,y):
+//   x = x0 + i*(x1-x0)/(nx-1),  y = y0 + j*(y1-y0)/(ny-1)
+function buildDEM(d) {
+  const { nx, ny, data } = d;
+  const x0 = d.x0, y0 = d.y0, x1 = d.x1, y1 = d.y1;
+  const dx = (x1 - x0) / (nx - 1), dy = (y1 - y0) / (ny - 1);
+  function sample(x, y) {
+    const xi = (x - x0) / dx, yi = (y - y0) / dy;
+    const x0i = Math.max(0, Math.min(nx - 2, Math.floor(xi)));
+    const y0i = Math.max(0, Math.min(ny - 2, Math.floor(yi)));
+    const fx = xi - x0i, fy = yi - y0i;
+    const i00 = y0i * nx + x0i;
+    return (data[i00]       * (1-fx) * (1-fy) +
+            data[i00+1]     *    fx  * (1-fy) +
+            data[i00+nx]    * (1-fx) *    fy  +
+            data[i00+nx+1]  *    fx  *    fy);
+  }
+  const EPS = dx * 0.5;
+  function gradAt(x, y) {
+    return {
+      x: (sample(x + EPS, y) - sample(x - EPS, y)) / (2 * EPS),
+      y: (sample(x, y + EPS) - sample(x, y - EPS)) / (2 * EPS),
+    };
+  }
+  return { elevAt: sample, gradAt };
+}
+
 // --- Topographical green: synthesize a smooth height field + contour lines.
 // OSM has no elevation, so we fabricate a gentle, DETERMINISTIC surface per
-// green (stable across frames). This SAME field drives both the drawn contours
-// and putting break (see greenSlopeAt / rollStep), so what you see is what
-// breaks. Each green exposes h(x,y) and grad(x,y); a real LiDAR DEM can later
-// replace those without touching anything downstream.
+// green (stable across frames). When a DEM is available, use real elevation
+// instead. The SAME field drives both drawn contours and putting break
+// (greenSlopeAt / rollStep), so what you see is what breaks.
 function hashSeed(x, y) {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return s - Math.floor(s);
@@ -1092,47 +1142,56 @@ function contourSegments(h, x0, y0, x1, y1, levels, nx, ny) {
   }
   return segs;
 }
-// Precompute per-green topo (height tilt + contour segments in world coords).
-function buildGreenTopo(polys) {
+// Precompute per-green topo (height field + contour segments in world coords).
+// Pass `dem` (from buildDEM) to use real elevation; omit for synthetic fallback.
+function buildGreenTopo(polys, dem) {
   const out = [];
   if (!polys) return out;
   for (const poly of polys) {
     if (poly.length < 3) continue;
     const bb = polyBBox(poly);
     const R = Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2 || 1;
-    const r1 = hashSeed(bb.cx, bb.cy), r2 = hashSeed(bb.cy, bb.cx), r3 = hashSeed(bb.cx + 7.3, bb.cy - 2.1);
-    const theta = r1 * Math.PI * 2;     // downhill/tilt direction
-    const tmag = 0.6 + 0.5 * r2;        // tilt strength
-    const wl = R * (0.7 + 0.6 * r3);    // undulation wavelength
-    const ph = r3 * 6.2831;
-    const dirx = Math.cos(theta), diry = Math.sin(theta);
-    const h = (x, y) => {
-      const along = ((x - bb.cx) * dirx + (y - bb.cy) * diry) / R;
-      const und = Math.sin((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph);
-      return tmag * along + 0.5 * und;
-    };
-    // Analytic gradient of h (height-units per world-unit) — drives putting break.
-    const grad = (x, y) => ({
-      x: tmag * dirx / R + 0.5 * Math.cos((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph) / wl,
-      y: tmag * diry / R - 0.5 * Math.sin((x - bb.cx) / wl + ph) * Math.sin((y - bb.cy) / wl - ph) / wl,
-    });
+    let h, grad, hi, lo;
+    if (dem) {
+      // Real elevation: shift so the green centroid is zero, then use DEM.
+      const base = dem.elevAt(bb.cx, bb.cy);
+      h = (x, y) => dem.elevAt(x, y) - base;
+      grad = (x, y) => dem.gradAt(x, y);
+      // hi/lo: approximate dominant slope direction from centroid gradient
+      const cg = dem.gradAt(bb.cx, bb.cy), cgm = Math.hypot(cg.x, cg.y) || 1;
+      hi = { x: bb.cx - cg.x / cgm * R, y: bb.cy - cg.y / cgm * R };
+      lo = { x: bb.cx + cg.x / cgm * R, y: bb.cy + cg.y / cgm * R };
+    } else {
+      const r1 = hashSeed(bb.cx, bb.cy), r2 = hashSeed(bb.cy, bb.cx), r3 = hashSeed(bb.cx + 7.3, bb.cy - 2.1);
+      const theta = r1 * Math.PI * 2;
+      const tmag = 0.6 + 0.5 * r2;
+      const wl = R * (0.7 + 0.6 * r3), ph = r3 * 6.2831;
+      const dirx = Math.cos(theta), diry = Math.sin(theta);
+      h = (x, y) => {
+        const along = ((x - bb.cx) * dirx + (y - bb.cy) * diry) / R;
+        const und = Math.sin((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph);
+        return tmag * along + 0.5 * und;
+      };
+      grad = (x, y) => ({
+        x: tmag * dirx / R + 0.5 * Math.cos((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph) / wl,
+        y: tmag * diry / R - 0.5 * Math.sin((x - bb.cx) / wl + ph) * Math.sin((y - bb.cy) / wl - ph) / wl,
+      });
+      hi = { x: bb.cx + dirx * R, y: bb.cy + diry * R };
+      lo = { x: bb.cx - dirx * R, y: bb.cy - diry * R };
+    }
     let hmin = Infinity, hmax = -Infinity, gmax = 1e-6;
     const N = 22;
     for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
       const sx = bb.minx + (bb.maxx - bb.minx) * i / N, sy = bb.miny + (bb.maxy - bb.miny) * j / N;
       const v = h(sx, sy);
       if (v < hmin) hmin = v; if (v > hmax) hmax = v;
-      const g = grad(sx, sy), gm = Math.hypot(g.x, g.y);  // max steepness, for heatmap alpha
+      const gv = grad(sx, sy), gm = Math.hypot(gv.x, gv.y);
       if (gm > gmax) gmax = gm;
     }
     const nL = 7, levels = [];
     for (let kk = 1; kk <= nL; kk++) levels.push(hmin + (hmax - hmin) * kk / (nL + 1));
     const contours = contourSegments(h, bb.minx, bb.miny, bb.maxx, bb.maxy, levels, 30, 30);
-    out.push({
-      poly, contours, h, grad, gmax, hmin, hmax,
-      hi: { x: bb.cx + dirx * R, y: bb.cy + diry * R },  // high side (sunlit)
-      lo: { x: bb.cx - dirx * R, y: bb.cy - diry * R },  // low side (shaded)
-    });
+    out.push({ poly, contours, h, grad, gmax, hmin, hmax, hi, lo });
   }
   return out;
 }
@@ -1403,6 +1462,59 @@ function drawPhotoSurfaces() {
 
 let ballTrail = [];   // recent airborne ball positions (screen px) for motion trail
 let _vignette = null; // cached edge-darkening gradient, keyed to viewport size
+
+function drawWindIndicator() {
+  if (!HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) return;
+  const cssW = window.innerWidth;
+
+  // Wind push vector in world space (FROM dir → pushes opposite)
+  const pwx = -Math.sin(wind.dir), pwy = Math.cos(wind.dir);
+  // Project to screen via view rotation (a,b,d,e)
+  const svx = view.a * pwx + view.b * pwy;
+  const svy = view.d * pwx + view.e * pwy;
+  const screenAngle = Math.atan2(svy, svx);
+
+  const cx = cssW / 2, cy = 36;
+  const spd = Math.round(wind.speed);
+  const label = spd + " mph";
+
+  ctx.save();
+  ctx.font = "bold 13px system-ui, sans-serif";
+  const tw = ctx.measureText(label).width;
+  const arrowGap = 26, pillW = arrowGap + 6 + tw + 10, pillH = 26, r = 7;
+  const px = cx - pillW / 2, py = cy - pillH / 2;
+
+  // pill background
+  ctx.fillStyle = "rgba(0,0,0,0.48)";
+  ctx.beginPath();
+  ctx.roundRect(px, py, pillW, pillH, r);
+  ctx.fill();
+
+  // arrow — points toward where wind blows on screen
+  const arrowCx = px + 16, arrowCy = cy;
+  const AL = 9, AH = 6; // shaft half-length, head size
+  const cos = Math.cos(screenAngle), sin = Math.sin(screenAngle);
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(arrowCx - cos * AL, arrowCy - sin * AL);
+  ctx.lineTo(arrowCx + cos * AL, arrowCy + sin * AL);
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(arrowCx + cos * AL, arrowCy + sin * AL);
+  ctx.lineTo(arrowCx + cos * AL - cos * AH + sin * AH * 0.55,
+             arrowCy + sin * AL - sin * AH - cos * AH * 0.55);
+  ctx.lineTo(arrowCx + cos * AL - cos * AH - sin * AH * 0.55,
+             arrowCy + sin * AL - sin * AH + cos * AH * 0.55);
+  ctx.closePath();
+  ctx.fill();
+
+  // speed label
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.fillText(label, px + arrowGap + 4, cy);
+  ctx.restore();
+}
 let _surround = null; // cached course-green surround gradient, keyed to viewport size
 const FLAG_FAR = 70, FLAG_NEAR = 12; // world-unit range over which the flag shrinks
 
@@ -1599,6 +1711,8 @@ function draw() {
   ctx.fillStyle = _vignette.grad;
   ctx.fillRect(0, 0, cssW, cssH);
 
+  drawWindIndicator();
+
   // range finder: dashed lines ball->marker and marker->pin with yard labels
   if (measureMode && measurePoint) {
     const b = state.ball;
@@ -1617,13 +1731,12 @@ function draw() {
     ctx.beginPath(); ctx.arc(mx, my, 2.5, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
     const yBall = Math.round(dist(b.x, b.y, measurePoint.x, measurePoint.y) * YARDS_PER_UNIT);
     const yPin = Math.round(dist(measurePoint.x, measurePoint.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
-    // Elevation change in feet (green topo only; null if off-green)
+    // Elevation change in feet (DEM = everywhere; fallback = greens only)
     function elevLabel(fromX, fromY, toX, toY) {
-      const e0 = elevationAt(fromX, fromY) ?? 0;
-      const e1 = elevationAt(toX, toY) ?? 0;
-      if (elevationAt(fromX, fromY) === null && elevationAt(toX, toY) === null) return "";
-      const df = Math.round((e1 - e0) * 10) / 10;
-      if (Math.abs(df) < 0.2) return "";
+      const raw0 = terrainElevAt(fromX, fromY), raw1 = terrainElevAt(toX, toY);
+      if (raw0 === null && raw1 === null) return "";
+      const df = Math.round(((raw1 ?? raw0) - (raw0 ?? raw1)) * 10) / 10;
+      if (Math.abs(df) < 0.5) return "";
       return " " + (df > 0 ? "↑" : "↓") + Math.abs(df) + "ft";
     }
     drawLabel((bx + mx) / 2, (by + my) / 2, yBall + " yds" + elevLabel(b.x, b.y, measurePoint.x, measurePoint.y), "#fff");
@@ -1900,9 +2013,11 @@ function setHole(rec) {
     isGlobal: glob,
   };
   if (glob) {
-    // share precomputed topo + the one aerial across every hole (load once)
-    if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green);
+    // share precomputed DEM + topo + aerial across every hole (load once)
+    if (!course._dem && course.dem) course._dem = buildDEM(course.dem);
+    if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green, course._dem || null);
     HOLE._greens = course._greens;
+    HOLE._dem = course._dem || null;
     if (course._img === undefined) {
       course._img = null; course._imgReady = false;
       if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
@@ -1917,7 +2032,8 @@ function setHole(rec) {
     }
     HOLE._img = course._img; HOLE._imgReady = course._imgReady;
   } else {
-    HOLE._greens = buildGreenTopo(HOLE.surfaces.green);
+    HOLE._dem = rec.dem ? buildDEM(rec.dem) : null;
+    HOLE._greens = buildGreenTopo(HOLE.surfaces.green, HOLE._dem);
     HOLE._img = null; HOLE._imgReady = false;
     if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
       const target = HOLE;
@@ -1933,6 +2049,14 @@ function setHole(rec) {
   recalcPower();
 
   resetState();
+  // New wind each hole (no wind on driving range)
+  if (!HOLE.isRange && windEnabled) {
+    wind.dir   = Math.random() * Math.PI * 2;
+    wind.speed = Math.random() < 0.1 ? Math.floor(Math.random() * 3)  // 10% calm (0-2 mph)
+                                     : Math.round(Math.random() * 16) + 4; // 4-20 mph
+  } else {
+    wind.speed = 0;
+  }
   autoClubEnabled = true; // reset to auto on each new hole
   autoClub(); // tee club for the hole length (range lets the player choose)
   // rotate the camera so this hole's tee->pin points up the screen (plays "up"
@@ -2177,6 +2301,11 @@ document.getElementById("hm-card").addEventListener("click", () => {
 });
 document.getElementById("hm-holes").addEventListener("click", () => { closeHud(); openCourseMenu(); });
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
+document.getElementById("hm-wind").addEventListener("click", () => {
+  windEnabled = !windEnabled;
+  document.getElementById("hm-wind").classList.toggle("active", windEnabled);
+  if (!windEnabled) wind.speed = 0; // kill current wind immediately when toggled off
+});
 
 // Club selector: +/- steps through the bag (putter is automatic on the green).
 function updateClubUI() {
