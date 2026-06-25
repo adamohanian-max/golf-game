@@ -163,9 +163,10 @@ function clubForYards(y) {
   }
   return best;
 }
+let autoClubEnabled = true;
 // Auto-select the club for the current shot (course only; putter is auto on green).
 function autoClub() {
-  if (mode === "range" || !HOLE) return;
+  if (!autoClubEnabled || mode === "range" || !HOLE) return;
   selectedClub = clubForYards(dist(state.ball.x, state.ball.y,
                                    HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
 }
@@ -1905,6 +1906,7 @@ function setHole(rec) {
   recalcPower();
 
   resetState();
+  autoClubEnabled = true; // reset to auto on each new hole
   autoClub(); // tee club for the hole length (range lets the player choose)
   // rotate the camera so this hole's tee->pin points up the screen (plays "up"
   // even though the global map is north-up and holes face different ways).
@@ -1953,6 +1955,30 @@ async function loadCourse(id) {
   course._greens = null; course._img = undefined; course._imgReady = false; // shared caches
   holeIndex = 0;
   setHole(course.holes[holeIndex]);
+}
+
+// Selectable courses (baked under courses/<id>.json). First is the default.
+const COURSES = [
+  { id: "pinehurst-no2", name: "Pinehurst No. 2", sub: "Pinehurst, NC · Par 70" },
+  { id: "four-oaks-dracut", name: "Four Oaks Country Club", sub: "Dracut, MA · Par 70" },
+  { id: "st-andrews-old", name: "St Andrews — Old Course", sub: "St Andrews, Scotland · Par 72" },
+];
+let selectedCourseId = COURSES[0].id;
+function buildCourseList() {
+  const host = document.getElementById("course-list");
+  if (!host) return;
+  host.innerHTML = "";
+  for (const c of COURSES) {
+    const b = document.createElement("button");
+    b.className = "course-opt" + (c.id === selectedCourseId ? " selected" : "");
+    b.dataset.id = c.id;
+    b.innerHTML = `<span class="course-opt-name">${c.name}</span><span class="course-opt-sub">${c.sub}</span>`;
+    b.addEventListener("click", () => {
+      selectedCourseId = c.id;
+      host.querySelectorAll(".course-opt").forEach((el) => el.classList.toggle("selected", el.dataset.id === c.id));
+    });
+    host.appendChild(b);
+  }
 }
 
 // =====================================================================
@@ -2123,6 +2149,7 @@ document.getElementById("hm-card").addEventListener("click", () => {
   closeHud();
 });
 document.getElementById("hm-holes").addEventListener("click", () => { closeHud(); openCourseMenu(); });
+document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
 
 // Club selector: +/- steps through the bag (putter is automatic on the green).
 function updateClubUI() {
@@ -2137,7 +2164,16 @@ function updateClubUI() {
     elClubName.textContent = c.name; elClubYds.textContent = c.carry + "y";
   }
 }
+function setAutoClub(on) {
+  autoClubEnabled = on;
+  const btn = document.getElementById("hm-autoclb");
+  if (btn) btn.classList.toggle("active", on);
+  if (on) autoClub(); // immediately pick the right club when re-enabling
+}
 function stepClub(delta) { // +1 = longer club, -1 = shorter
+  autoClubEnabled = false; // manual selection disables auto
+  const btn = document.getElementById("hm-autoclb");
+  if (btn) btn.classList.remove("active");
   const i = CLUB_ORDER.indexOf(selectedClub);
   selectedClub = CLUB_ORDER[Math.max(0, Math.min(CLUB_ORDER.length - 1, i - delta))];
   updateClubUI();
@@ -2201,12 +2237,13 @@ function startCourse() {
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = [];
-  if (course) {
-    setYardsPerUnit(course.yardsPerUnit);   // restore course scale (range may have changed it)
+  if (course && course.id === selectedCourseId) {
+    setYardsPerUnit(course.yardsPerUnit);   // already loaded: restore scale (range may have changed it)
     holeIndex = 0;
     setHole(course.holes[0]);
   } else {
-    loadCourse("pinehurst-no2").catch((e) => { console.warn(e); setHole(FALLBACK_HOLE); });
+    // load (or switch to) the chosen course; loadCourse sets the first hole
+    loadCourse(selectedCourseId).catch((e) => { console.warn(e); if (!course) setHole(FALLBACK_HOLE); });
   }
 }
 
@@ -2274,8 +2311,9 @@ function loop() {
 // Boot to the home menu over a course backdrop. Pinehurst loads in the
 // background so "Play Course" starts instantly (keeps the fallback on error).
 setHole(FALLBACK_HOLE);
+buildCourseList();
 loop();
 showMenu();
-loadCourse("pinehurst-no2").catch((e) => {
+loadCourse(selectedCourseId).catch((e) => {
   console.warn("Course load failed, using fallback hole:", e);
 });
