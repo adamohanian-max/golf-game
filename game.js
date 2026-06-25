@@ -16,7 +16,7 @@ const TUNE = {
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.011,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
-  spinFactor: 0.003,     // how hard a curved swipe bends flight (draw/fade)
+  spinFactor: 0.005,     // how hard a curved swipe bends flight (draw/fade)
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
