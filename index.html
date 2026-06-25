@@ -42,14 +42,13 @@
   </div>
 
   <button id="hud-btn" class="hidden" aria-label="Controls">···</button>
+  <div id="hm-club-row" class="hidden">
+    <button class="hm-step" id="hm-club-down" aria-label="Shorter club">−</button>
+    <div id="hm-club-cur"><b id="hm-club-name">Driver</b><small id="hm-club-yds">282y</small></div>
+    <button class="hm-step" id="hm-club-up" aria-label="Longer club">+</button>
+  </div>
   <div id="hud-menu" class="hidden">
-    <div id="hm-club-row">
-      <button class="hm-step" id="hm-club-down" aria-label="Shorter club">−</button>
-      <div id="hm-club-cur"><b id="hm-club-name">Driver</b><small id="hm-club-yds">282y</small></div>
-      <button class="hm-step" id="hm-club-up" aria-label="Longer club">+</button>
-    </div>
     <div id="hm-course-items">
-      <div class="hm-sep"></div>
       <button class="hm-item" id="hm-aim">⛳ Aim</button>
       <button class="hm-item" id="hm-measure">📏 Range finder</button>
       <button class="hm-item" id="hm-slope">⛰ Slope</button>
@@ -113,6 +112,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=41"></script>
+  <script src="game.js?v=42"></script>
 </body>
 </html>
