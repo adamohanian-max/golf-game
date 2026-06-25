@@ -258,12 +258,11 @@ html, body {
 }
 #stats .snote:empty { display: none; }
 
-/* ---- In-course menu ---- */
-#course-menu-btn {
+/* ---- HUD: single dropdown ---- */
+#hud-btn {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 148px);
-  left: 12px;
-  transform: none;
+  right: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
   width: 44px;
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -272,12 +271,79 @@ html, body {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   color: #f4f6f3;
-  font-size: 20px;
+  font-size: 18px;
+  letter-spacing: -1px;
   cursor: pointer;
   z-index: 15;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
-#course-menu-btn.hidden { display: none; }
+#hud-btn.hidden { display: none; }
+#hud-btn.open { background: rgba(47, 158, 68, 0.35); border-color: rgba(74, 222, 128, 0.5); }
+#hud-menu {
+  position: fixed;
+  right: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  background: rgba(8, 22, 14, 0.94);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 8px;
+  z-index: 20;
+  min-width: 196px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+#hud-menu.hidden { display: none; }
+#hm-club-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+}
+#hm-club-row.putting .hm-step { opacity: 0.3; pointer-events: none; }
+.hm-step {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #f4f6f3;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.hm-step:active { transform: scale(0.92); }
+#hm-club-cur {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #2f9e44;
+  border-radius: 10px;
+  padding: 5px 8px;
+}
+#hm-club-cur b { font-size: 15px; color: #fff; }
+#hm-club-cur small { font-size: 11px; color: rgba(255, 255, 255, 0.8); }
+.hm-sep { height: 1px; background: rgba(255, 255, 255, 0.1); margin: 6px 0; }
+.hm-item {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #f4f6f3;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.hm-item:active { background: rgba(255, 255, 255, 0.08); }
+.hm-item.active { color: #4ade80; }
+#hm-course-items.hidden { display: none; }
+
+/* ---- In-course hole-select modal ---- */
 #course-menu {
   position: fixed;
   inset: 0;
@@ -321,79 +387,6 @@ html, body {
 .hole-cell:active { transform: scale(0.96); }
 .cm-actions { display: flex; gap: 10px; margin-top: 18px; }
 .cm-actions .menu-btn { width: auto; flex: 1; margin: 0; padding: 12px; font-size: 15px; }
-
-/* ---- Top-right course controls (aim / range finder / slope / scorecard) ---- */
-#course-controls {
-  position: fixed;
-  right: 12px;
-  top: calc(env(safe-area-inset-top, 0px) + 148px);
-  bottom: auto;
-  display: flex;
-  flex-direction: row;
-  gap: 8px;
-  z-index: 15;
-}
-#course-controls.hidden { display: none; }
-#course-controls button {
-  width: 48px;
-  height: 48px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  background: rgba(8, 22, 14, 0.5);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  color: #f4f6f3;
-  font-size: 20px;
-  cursor: pointer;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-}
-#course-controls button:active { transform: scale(0.94); }
-#course-controls button.active { background: #2f9e44; border-color: #2f9e44; }
-
-/* ---- Club selector ---- */
-#club-bar {
-  position: fixed;
-  left: 12px;
-  top: calc(env(safe-area-inset-top, 0px) + 202px); /* below scorecard + menu button */
-  bottom: auto;
-  transform: none;
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  z-index: 14;
-}
-#club-bar.hidden { display: none; }
-#club-bar.range { top: calc(env(safe-area-inset-top, 0px) + 12px); } /* no scorecard in range mode */
-#club-bar.putting .club-step { opacity: 0.3; pointer-events: none; }
-.club-step {
-  width: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  background: rgba(8, 22, 14, 0.55);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  color: #f4f6f3;
-  font-size: 22px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
-}
-.club-step:active { transform: scale(0.94); }
-#club-current {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 96px;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  background: #2f9e44;
-  color: #fff;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
-}
-#club-current b { font-size: 16px; }
-#club-current small { font-size: 11px; color: rgba(255, 255, 255, 0.85); }
 
 /* ---- Round-end summary ---- */
 #round-end {

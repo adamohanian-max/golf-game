@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="style.css?v=35">
+  <link rel="stylesheet" href="style.css?v=36">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -30,8 +30,6 @@
     <div class="srow"><span class="slabel">To pin</span><span class="sval" id="st-pin">—</span></div>
   </div>
 
-  <button id="course-menu-btn" class="hidden" aria-label="Menu">☰</button>
-
   <div id="course-menu" class="hidden">
     <div class="cm-box">
       <h2>Select Hole</h2>
@@ -43,17 +41,22 @@
     </div>
   </div>
 
-  <div id="course-controls" class="hidden">
-    <button id="aim-btn" aria-label="Aim camera at hole" title="Aim at hole">⛳</button>
-    <button id="measure-btn" aria-label="Range finder" title="Range finder">📏</button>
-    <button id="slope-btn" aria-label="Show slope" title="Show slope">⛰</button>
-    <button id="card-btn" aria-label="View scorecard" title="Scorecard">📋</button>
-  </div>
-
-  <div id="club-bar" class="hidden">
-    <button class="club-step" id="club-down" aria-label="Shorter club">−</button>
-    <div id="club-current"><b id="club-name">Driver</b><small id="club-yds">282y</small></div>
-    <button class="club-step" id="club-up" aria-label="Longer club">+</button>
+  <button id="hud-btn" class="hidden" aria-label="Controls">···</button>
+  <div id="hud-menu" class="hidden">
+    <div id="hm-club-row">
+      <button class="hm-step" id="hm-club-down" aria-label="Shorter club">−</button>
+      <div id="hm-club-cur"><b id="hm-club-name">Driver</b><small id="hm-club-yds">282y</small></div>
+      <button class="hm-step" id="hm-club-up" aria-label="Longer club">+</button>
+    </div>
+    <div id="hm-course-items">
+      <div class="hm-sep"></div>
+      <button class="hm-item" id="hm-aim">⛳ Aim</button>
+      <button class="hm-item" id="hm-measure">📏 Range finder</button>
+      <button class="hm-item" id="hm-slope">⛰ Slope</button>
+      <button class="hm-item" id="hm-card">📋 Scorecard</button>
+      <div class="hm-sep"></div>
+      <button class="hm-item" id="hm-holes">☰ Select hole</button>
+    </div>
   </div>
 
   <div id="hint">Swipe to swing · ← → to aim</div>
@@ -109,6 +112,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=37"></script>
+  <script src="game.js?v=38"></script>
 </body>
 </html>

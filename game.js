@@ -1817,9 +1817,8 @@ document.getElementById("re-home").addEventListener("click", () => {
   document.getElementById("round-end").classList.add("hidden");
   mode = "menu";
   elMenu.classList.remove("hidden");
-  elCourseMenuBtn.classList.add("hidden");
-  elCourseControls.classList.add("hidden");
-  elClubBar.classList.add("hidden");
+  elHudBtn.classList.add("hidden");
+  closeHud();
   elScorecard.style.display = "none";
 });
 
@@ -2042,8 +2041,24 @@ function frameRange() {
 }
 
 const elCourseMenu = document.getElementById("course-menu");
-const elCourseMenuBtn = document.getElementById("course-menu-btn");
 const elHoleGrid = document.getElementById("hole-grid");
+const elHudBtn = document.getElementById("hud-btn");
+const elHudMenu = document.getElementById("hud-menu");
+const elHmCourseItems = document.getElementById("hm-course-items");
+const elHmClubRow = document.getElementById("hm-club-row");
+const elClubName = document.getElementById("hm-club-name");
+const elClubYds = document.getElementById("hm-club-yds");
+const elMeasureBtn = document.getElementById("hm-measure");
+const elSlopeBtn = document.getElementById("hm-slope");
+
+function openHud() { elHudMenu.classList.remove("hidden"); elHudBtn.classList.add("open"); }
+function closeHud() { elHudMenu.classList.add("hidden"); elHudBtn.classList.remove("open"); }
+elHudBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  elHudMenu.classList.contains("hidden") ? openHud() : closeHud();
+});
+elHudMenu.addEventListener("click", (e) => e.stopPropagation()); // don't let clicks fall through
+document.addEventListener("click", closeHud);
 
 function buildHoleGrid() {
   if (!course) return;
@@ -2061,24 +2076,17 @@ function buildHoleGrid() {
 }
 function openCourseMenu() { if (mode !== "course") return; buildHoleGrid(); elCourseMenu.classList.remove("hidden"); }
 function closeCourseMenu() { elCourseMenu.classList.add("hidden"); }
-elCourseMenuBtn.addEventListener("click", openCourseMenu);
 document.getElementById("cm-resume").addEventListener("click", closeCourseMenu);
 document.getElementById("cm-home").addEventListener("click", () => { closeCourseMenu(); showMenu(); });
 
-// Bottom-right course controls: aim camera at hole, range finder.
-const elCourseControls = document.getElementById("course-controls");
-const elAimBtn = document.getElementById("aim-btn");
-const elMeasureBtn = document.getElementById("measure-btn");
-const elSlopeBtn = document.getElementById("slope-btn");
 function setSlopeMode(on) {
   showSlope = on;
   elSlopeBtn.classList.toggle("active", on);
 }
 function aimAtHole() {
-  // re-aim so "up" points from the BALL straight at the pin — smoothly (updateCamera eases)
   const a = Math.atan2(HOLE.holePos.y - state.ball.y, HOLE.holePos.x - state.ball.x);
   camera.tAngle = -Math.PI / 2 - a;
-  frameTarget();          // recompute focus/scale for the new aim (stable during ease)
+  frameTarget();
   cameraAiming = true;
 }
 function setMeasureMode(on) {
@@ -2086,25 +2094,22 @@ function setMeasureMode(on) {
   if (!on) { measurePoint = null; measureDragging = false; }
   elMeasureBtn.classList.toggle("active", on);
 }
-elAimBtn.addEventListener("click", aimAtHole);
+document.getElementById("hm-aim").addEventListener("click", () => { aimAtHole(); closeHud(); });
 elMeasureBtn.addEventListener("click", () => setMeasureMode(!measureMode));
 elSlopeBtn.addEventListener("click", () => setSlopeMode(!showSlope));
-document.getElementById("card-btn").addEventListener("click", () => {
+document.getElementById("hm-card").addEventListener("click", () => {
   if (round.holeStats.length > 0) showRoundSummary(true);
+  closeHud();
 });
+document.getElementById("hm-holes").addEventListener("click", () => { closeHud(); openCourseMenu(); });
 
 // Club selector: +/- steps through the bag (putter is automatic on the green).
-const elClubBar = document.getElementById("club-bar");
-const elClubName = document.getElementById("club-name");
-const elClubYds = document.getElementById("club-yds");
 function updateClubUI() {
   const onGreen = HOLE && !HOLE.isRange && surfaceAt(state.ball.x, state.ball.y) === "green";
-  // "putting" CSS class (dims +/- buttons) only when on actual green — not when putter chosen off-green
-  elClubBar.classList.toggle("putting", !!onGreen);
+  elHmClubRow.classList.toggle("putting", !!onGreen);
   if (onGreen) {
     elClubName.textContent = "Putter"; elClubYds.textContent = "";
   } else if (selectedClub === "putter") {
-    // putter manually selected off-green (bump-and-run): show max roll distance
     elClubName.textContent = "Putter"; elClubYds.textContent = "~30y";
   } else {
     const c = TUNE.clubs[selectedClub];
@@ -2116,8 +2121,8 @@ function stepClub(delta) { // +1 = longer club, -1 = shorter
   selectedClub = CLUB_ORDER[Math.max(0, Math.min(CLUB_ORDER.length - 1, i - delta))];
   updateClubUI();
 }
-document.getElementById("club-up").addEventListener("click", () => stepClub(1));   // longer
-document.getElementById("club-down").addEventListener("click", () => stepClub(-1)); // shorter
+document.getElementById("hm-club-up").addEventListener("click", () => stepClub(1));
+document.getElementById("hm-club-down").addEventListener("click", () => stepClub(-1));
 
 // ← / → aim: a single tap is one small eased nudge; holding (OS auto-repeat)
 // switches to a smooth continuous turn (updateCamera). Swipe up fires along it.
@@ -2150,9 +2155,8 @@ function showMenu() {
   elMenu.classList.remove("hidden");
   elRangeUI.classList.add("hidden");
   elStats.classList.add("hidden");
-  elCourseMenuBtn.classList.add("hidden");
-  elCourseControls.classList.add("hidden");
-  elClubBar.classList.add("hidden");
+  elHudBtn.classList.add("hidden");
+  closeHud();
   setMeasureMode(false);
   setSlopeMode(false);
   closeCourseMenu();
@@ -2169,10 +2173,8 @@ function startCourse() {
   elRangeUI.classList.add("hidden");
   document.getElementById("round-end").classList.add("hidden");
   elScorecard.style.display = "";
-  elCourseMenuBtn.classList.remove("hidden");
-  elCourseControls.classList.remove("hidden");
-  elClubBar.classList.remove("hidden");
-  elClubBar.classList.remove("range");
+  elHudBtn.classList.remove("hidden");
+  elHmCourseItems.classList.remove("hidden");
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = [];
@@ -2191,10 +2193,8 @@ async function startRange() {
   elMenu.classList.add("hidden");
   elScorecard.style.display = "none";
   elRangeUI.classList.remove("hidden");
-  elCourseMenuBtn.classList.add("hidden");
-  elCourseControls.classList.add("hidden");
-  elClubBar.classList.remove("hidden");
-  elClubBar.classList.add("range");          // lift above the range slider
+  elHudBtn.classList.remove("hidden");
+  elHmCourseItems.classList.add("hidden");   // no course tools in range mode
   setMeasureMode(false);
   setSlopeMode(false);
   rangeTarget = parseInt(rangeSlider.value, 10);
