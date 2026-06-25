@@ -1832,6 +1832,7 @@ document.getElementById("re-home").addEventListener("click", () => {
   mode = "menu";
   elMenu.classList.remove("hidden");
   elHudBtn.classList.add("hidden");
+  elHmClubRow.classList.add("hidden");
   closeHud();
   elScorecard.style.display = "none";
 });
@@ -2176,6 +2177,7 @@ function showMenu() {
   elRangeUI.classList.add("hidden");
   elStats.classList.add("hidden");
   elHudBtn.classList.add("hidden");
+  elHmClubRow.classList.add("hidden");
   closeHud();
   setMeasureMode(false);
   setSlopeMode(false);
@@ -2194,6 +2196,7 @@ function startCourse() {
   document.getElementById("round-end").classList.add("hidden");
   elScorecard.style.display = "";
   elHudBtn.classList.remove("hidden");
+  elHmClubRow.classList.remove("hidden");
   elHmCourseItems.classList.remove("hidden");
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
@@ -2214,6 +2217,7 @@ async function startRange() {
   elScorecard.style.display = "none";
   elRangeUI.classList.remove("hidden");
   elHudBtn.classList.remove("hidden");
+  elHmClubRow.classList.remove("hidden");
   elHmCourseItems.classList.add("hidden");   // no course tools in range mode
   setMeasureMode(false);
   setSlopeMode(false);
