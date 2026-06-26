@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="style.css?v=44">
+  <link rel="stylesheet" href="style.css?v=45">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -85,6 +85,7 @@
       <button id="play-range" class="menu-btn secondary">Driving Range</button>
       <button id="open-leaderboard" class="menu-btn secondary">🏆 Leaderboard</button>
       <button id="open-tournaments" class="menu-btn secondary">🏌️ Tournaments</button>
+      <button id="menu-add-course" class="menu-btn secondary hidden">➕ Add course</button>
       <button id="menu-admin" class="menu-btn secondary hidden">⚙️ Admin settings</button>
       <button id="menu-player" class="menu-player">Player: <b id="menu-player-name">Set name</b> ✎</button>
       <div id="menu-auth" class="menu-auth">
@@ -152,6 +153,19 @@
       <div class="ne-actions">
         <button id="ne-cancel" class="menu-btn secondary">Cancel</button>
         <button id="ne-save" class="menu-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="add-course" class="hidden">
+    <div class="ne-box ac-box">
+      <h2>Add a course</h2>
+      <p class="ne-sub">Search any golf course — it bakes locally and joins your list.</p>
+      <input id="ac-search" type="text" placeholder="e.g. Pebble Beach" autocomplete="off" autocapitalize="off" autocorrect="off">
+      <div id="ac-results"></div>
+      <pre id="ac-progress"></pre>
+      <div class="ne-actions">
+        <button id="ac-cancel" class="menu-btn secondary">Close</button>
       </div>
     </div>
   </div>
@@ -237,6 +251,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=43"></script>
+  <script src="game.js?v=46"></script>
 </body>
 </html>
