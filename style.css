@@ -644,13 +644,35 @@ html, body {
 .lb-box h2 { color: #f4f6f3; text-align: center; margin-bottom: 14px; font-size: 22px; }
 .lb-course {
   width: 100%;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  margin-bottom: 14px;
+  padding: 13px 40px 13px 16px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  background-color: rgba(255, 255, 255, 0.05);
+  /* custom green caret (native arrow removed) */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%234ade80' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
   color: #f4f6f3;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+.lb-course:hover { background-color: rgba(255, 255, 255, 0.08); }
+.lb-course:focus {
+  outline: none;
+  border-color: #2f9e44;
+  background-color: rgba(47, 158, 68, 0.14);
+}
+/* theme the native option list where the browser allows it */
+.lb-course option {
+  background: #11271a;
+  color: #f4f6f3;
   font-weight: 600;
 }
 .lb-table-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 80px; }
