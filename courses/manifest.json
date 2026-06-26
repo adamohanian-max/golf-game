@@ -33,5 +33,10 @@
     "id": "butter-brook-golf-club",
     "name": "Butter Brook Golf Club",
     "sub": "Par 72 · 18 holes · 42.53, -71.41"
+  },
+  {
+    "id": "pebble-beach-golf-course",
+    "name": "Pebble Beach Golf Course",
+    "sub": "Pebble Beach, CA · Par 72"
   }
 ]

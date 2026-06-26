@@ -265,7 +265,8 @@ html, body {
 /* ---- Shot stats panel ---- */
 #stats {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  /* below the club row (+12) and the ··· HUD button (+80) so they don't overlap */
+  top: calc(env(safe-area-inset-top, 0px) + 136px);
   right: 12px;
   padding: 10px 14px;
   background: rgba(8, 22, 14, 0.5);
