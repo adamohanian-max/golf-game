@@ -680,7 +680,7 @@ html, body {
 .menu-auth-account.hidden { display: none; }
 #menu-signin.hidden { display: none; }
 
-#auth-modal {
+#auth-modal, #admin-settings {
   position: fixed;
   inset: 0;
   display: flex;
@@ -691,7 +691,7 @@ html, body {
   backdrop-filter: blur(6px);
   z-index: 40;
 }
-#auth-modal.hidden { display: none; }
+#auth-modal.hidden, #admin-settings.hidden { display: none; }
 #auth-email {
   width: 100%;
   padding: 13px 14px;
