@@ -2829,8 +2829,8 @@ function closeAuthModal() {
   async function doVerify() {
     const c = (code.value || "").trim();
     codeErr.classList.add("hidden");
-    if (!/^\d{6}$/.test(c)) {
-      codeErr.textContent = "Enter the 6-digit code."; codeErr.classList.remove("hidden"); return;
+    if (!/^\d{6,10}$/.test(c)) {
+      codeErr.textContent = "Enter the code from your email."; codeErr.classList.remove("hidden"); return;
     }
     verify.disabled = true; verify.textContent = "Verifying…";
     const ok = await verifyOtp(_otpEmail, c);
