@@ -265,8 +265,8 @@ html, body {
 /* ---- Shot stats panel ---- */
 #stats {
   position: fixed;
-  /* below the club row (+12) and the ··· HUD button (+80) so they don't overlap */
-  top: calc(env(safe-area-inset-top, 0px) + 136px);
+  /* below the ··· HUD button (+12); the club selector now lives at the bottom-right */
+  top: calc(env(safe-area-inset-top, 0px) + 68px);
   right: 12px;
   padding: 10px 14px;
   background: rgba(8, 22, 14, 0.5);
@@ -302,7 +302,7 @@ html, body {
 #hud-btn {
   position: fixed;
   right: 12px;
-  top: calc(env(safe-area-inset-top, 0px) + 80px);
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
   width: 44px;
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -322,22 +322,38 @@ html, body {
 #hm-club-row {
   position: fixed;
   right: 12px;
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);   /* bottom of the right-side stack */
   display: flex;
-  padding: 6px 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px;
   background: rgba(8, 22, 14, 0.5);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
+  border-radius: 14px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
   z-index: 15;
 }
 #hm-club-row.hidden { display: none; }
+.hm-club-arrow {
+  width: 100%;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4f6f3;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.hm-club-arrow:active { transform: scale(0.94); background: rgba(74, 222, 128, 0.25); }
 #hud-menu {
   position: fixed;
   right: 12px;
-  top: calc(env(safe-area-inset-top, 0px) + 132px);
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
   background: rgba(8, 22, 14, 0.94);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
@@ -367,12 +383,14 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   background: #2f9e44;
   border-radius: 10px;
-  padding: 5px 8px;
+  padding: 10px 20px;
+  min-width: 96px;
 }
-#hm-club-cur b { font-size: 15px; color: #fff; }
-#hm-club-cur small { font-size: 11px; color: rgba(255, 255, 255, 0.8); }
+#hm-club-cur b { font-size: 22px; color: #fff; line-height: 1.1; }
+#hm-club-cur small { font-size: 14px; color: rgba(255, 255, 255, 0.85); }
 .hm-sep { height: 1px; background: rgba(255, 255, 255, 0.1); margin: 6px 0; }
 .hm-item {
   display: block;

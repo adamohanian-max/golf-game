@@ -10,7 +10,9 @@ const TUNE = {
   wheelInvert: false,    // true if you use classic (non-natural) scrolling
   stopThreshold: 0.005,  // speed below this = ball stopped
   captureSpeed: 0.05,    // ball must be slower than this to drop in cup (low = hard)
+  lipOutMaxSpeed: 0.18,  // putt at/under this that misses the cup is grabbed by the lip and dies 1–2 ft past; faster rams roll on
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
+  mousePuttScale: 0.75,    // extra putt scalar when swinging with a mouse (−25%; mouse flicks read faster)
 
   // --- Ball flight ---
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
@@ -528,16 +530,30 @@ function rollStep(b) {
         b.vx = b.vy = 0;
         return;
       } else {
-        // lip-out: too fast — ball hops over the rim and continues rolling.
+        // lip-out: too fast to drop — the ball catches the rim and rolls past.
         const spd = Math.hypot(b.vx, b.vy) || 0.01;
         const dx = b.vx / spd, dy = b.vy / spd;
         // place ball just past the far lip so it exits the capture zone this frame
         b.x = HOLE.holePos.x + dx * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
         b.y = HOLE.holePos.y + dy * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
-        // upward kick proportional to excess speed; capped so fast putts don't sky it
-        const excess = spd - TUNE.captureSpeed;
-        b.vz = Math.min(0.07, excess * 1.5);
-        if (b.vz > 0.004) state.airborne = true;
+        if (spd <= TUNE.lipOutMaxSpeed) {
+          // catchable pace: the lip grabs it. Re-pace so it comes to rest 1–2 ft
+          // FROM THE CUP (green constant-decel model: dist = v²/(2·greenDecel)).
+          // The ball already sits ~1 ft out at the far lip, so subtract that and
+          // roll the remainder. Stays grounded so the distance is exact (no skying).
+          const ftU = 1 / (YARDS_PER_UNIT * 3);           // 1 foot in world units
+          const lipOut = HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05;  // current dist past center
+          const targetFromCup = (1 + Math.random()) * ftU; // 1–2 ft final resting dist
+          const roll = Math.max(0.15 * ftU, targetFromCup - lipOut);  // remaining roll
+          const v = Math.sqrt(2 * TUNE.greenDecel * roll);
+          b.vx = dx * v; b.vy = dy * v; b.vz = 0;
+          state.airborne = false;
+        } else {
+          // rammed too hard — skips the cup and keeps rolling, with a small hop.
+          const excess = spd - TUNE.captureSpeed;
+          b.vz = Math.min(0.07, excess * 1.5);
+          if (b.vz > 0.004) state.airborne = true;
+        }
       }
     }
   }
@@ -584,6 +600,7 @@ function rollStep(b) {
 // =====================================================================
 let swipe = null;     // { x, y, t }
 let swipePath = null; // sampled screen points of the in-progress swipe
+let swingIsMouse = false; // true when the active swing came from mouse drag (not touch/trackpad)
 // Fixed swipe->power scale (full-hole fit, set in resize). Using this instead of
 // the live camera zoom keeps swing sensitivity identical at every stroke, so a
 // full swing doesn't auto-scale to always reach the green.
@@ -704,6 +721,7 @@ function swingStart(e) {
   }
   if (!canSwing()) return;
   camTouch = null;
+  swingIsMouse = !!(e && typeof e.type === "string" && e.type.indexOf("mouse") === 0);
   const p = pointerPos(e);
   const now = performance.now();
   swipe = { x: p.x, y: p.y, t: now };
@@ -781,20 +799,25 @@ function launchShot(ang, frac, spin, onGreen) {
     // on-green: calibrated to green decel (max 50 yards); off-green: calibrated to fairway
     // friction (~30 yards max). Both use sqrt(f) for a gentle power ramp.
     const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
-    const power = maxPow * TUNE.puttSensitivity * Math.sqrt(f);
+    const mouseScale = swingIsMouse ? TUNE.mousePuttScale : 1;   // mouse putts −25%
+    const power = maxPow * TUNE.puttSensitivity * mouseScale * Math.sqrt(f);
     shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
     b.vx = Math.cos(ang) * power; b.vy = Math.sin(ang) * power;
     b.vz = 0; b.z = 0; b.spin = 0;
     state.airborne = false;
   } else {
     // full shot: follow the selected club's real arc, scaled by how full the swing is
-    // Chip zone: within 90 yards of pin, compress power so green-side shots don't overshoot.
     let ef = f;
     if (!HOLE.isRange) {
       const toPin = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-      // Greenside touch: compress power hard close to the pin so lofted clubs don't
-      // overshoot. Curved (quadratic) so the very-short range softens the most.
-      if (toPin < 90) ef *= 0.22 + 0.78 * Math.pow(toPin / 90, 1.5);
+      // Greenside touch: near the pin, SOFT swings get compressed so lofted clubs don't
+      // overshoot — but a FULL swing always delivers the club's rated carry (so e.g. the
+      // lob wedge really flies 90). Blend by swing fullness: at f=1 no compression, at
+      // f→0 the full touch-softening applies.
+      if (toPin < 90) {
+        const comp = 0.22 + 0.78 * Math.pow(toPin / 90, 1.5);
+        ef *= comp + (1 - comp) * f;
+      }
     }
     const c = TUNE.clubs[selectedClub];
     const C = (c.carry / YARDS_PER_UNIT) * ef;   // carry (world units)
@@ -826,6 +849,7 @@ function launchShot(ang, frac, spin, onGreen) {
 // trackpad path: no backswing, so swipe speed maps straight to power.
 function launch(dxs, dys, dt, spin = 0) {
   if (!canSwing()) return;
+  swingIsMouse = false;   // trackpad/wheel path — not a mouse drag
   // Convert via the fixed reference scale (NOT view.scale) so sensitivity is the
   // same regardless of how far the camera is zoomed in.
   const swipeSpeed = (Math.hypot(dxs, dys) / refScale) / Math.max(dt, 0.001);
@@ -2519,6 +2543,9 @@ function stepClub(delta) { // +1 = longer club, -1 = shorter
 }
 // tap club display to cycle forward; arrow keys still work for full step control
 document.getElementById("hm-club-cur").addEventListener("click", () => stepClub(1));
+// up/down arrow buttons: up = longer club, down = shorter (matches ↑/↓ keys)
+document.getElementById("hm-club-up").addEventListener("click", () => stepClub(1));
+document.getElementById("hm-club-down").addEventListener("click", () => stepClub(-1));
 
 // ← / → aim: a single tap is one small eased nudge; holding (OS auto-repeat)
 // switches to a smooth continuous turn (updateCamera). Swipe up fires along it.
