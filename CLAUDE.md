@@ -16,6 +16,8 @@ python3 -m http.server 8080
 Desktop: `http://localhost:8080`  
 Phone (same WiFi): `http://<your-mac-ip>:8080`
 
+**Admin server (optional):** `python3 tools/bake_server.py` is a drop-in replacement for `http.server` that ALSO exposes `/api/search` + `/api/bake`, powering the in-game admin **➕ Add course** button (search any course → bakes via `fetch_course_global.py` → appends `courses/manifest.json` → git commits). Flags: `--port 8080 --no-git --push`. The button is admin-gated AND hidden unless `/api/ping` answers, so a plain static deploy never shows it. The course list is driven by `courses/manifest.json` (fallback: hardcoded `FALLBACK_COURSES` in game.js).
+
 ## Concurrent Claude Code agents
 
 Multiple agents can work this repo at once. Two independent isolations — **neither needs a commit or push**:

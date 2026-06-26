@@ -381,6 +381,7 @@ html, body {
 .hm-item:active { background: rgba(255, 255, 255, 0.08); }
 .hm-item.active { color: #4ade80; }
 #hm-course-items.hidden { display: none; }
+#hm-slotted { display: none; }   /* hidden from players; admin-only via Admin settings */
 
 /* Admin settings panel */
 .admin-toggles { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
@@ -666,6 +667,50 @@ html, body {
   letter-spacing: 0.5px;
 }
 #ne-input:focus { outline: none; border-color: #2f9e44; }
+
+/* ---- Admin "Add course" modal ---- */
+#add-course {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 30;
+}
+#add-course.hidden { display: none; }
+.ac-box { width: min(420px, 92vw); }
+#ac-search {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-size: 16px;
+  text-align: center;
+  margin-top: 4px;
+}
+#ac-search:focus { outline: none; border-color: #2f9e44; }
+#ac-results { max-height: 38vh; overflow-y: auto; margin: 12px 0 0; }
+#ac-results .course-opt { margin: 6px 0; }
+.ac-note { color: rgba(255, 255, 255, 0.78); font-size: 13px; padding: 10px 4px; line-height: 1.5; }
+#ac-progress {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 26vh;
+  overflow-y: auto;
+  margin: 10px 0 0;
+  padding: 0;
+}
+#ac-progress:not(:empty) { padding: 10px 12px; }
 .ne-actions { display: flex; gap: 10px; margin-top: 16px; }
 .ne-actions .menu-btn { flex: 1; margin: 0; padding: 13px; font-size: 15px; }
 
