@@ -212,6 +212,7 @@ let measureMode = false;   // range-finder: drag to measure distance from ball &
 let showSlope = true;      // slope relief overlay — ON by default (toggle in HUD menu)
 let showOOB = true;        // red OOB overlay toggle
 let slottedMode = false;   // cheat: ball steers to hole automatically
+let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let measureDragging = false;
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
@@ -572,7 +573,7 @@ function rollStep(b) {
     // reframe to fit the remaining shot and re-aim the camera up the line to the
     // pin (smoothly) so the next shot is already oriented toward the hole.
     frameRemaining();
-    aimAtHole();
+    if (autoAimEnabled) aimAtHole();
     autoClub(); // pick the club for the next shot's distance to the pin
     updateScorecard();
   }
@@ -2131,12 +2132,12 @@ function setHole(rec) {
   // New wind each hole (no wind on driving range)
   if (!HOLE.isRange && windEnabled) {
     wind.dir   = Math.random() * Math.PI * 2;
-    wind.speed = Math.random() < 0.1 ? Math.floor(Math.random() * 3)  // 10% calm (0-2 mph)
-                                     : Math.round(Math.random() * 16) + 4; // 4-20 mph
+    wind.speed = Math.random() < 0.1 ? Math.floor(Math.random() * 2)  // 10% calm (0-1 mph)
+                                     : Math.round(Math.random() * 8) + 2; // 2-10 mph
   } else {
     wind.speed = 0;
   }
-  autoClubEnabled = true; // reset to auto on each new hole
+  autoClubEnabled = !!activeSettings.autoClub; // honor the round's default each new hole
   autoClub(); // tee club for the hole length (range lets the player choose)
   // rotate the camera so this hole's tee->pin points up the screen (plays "up"
   // even though the global map is north-up and holes face different ways).
@@ -2381,16 +2382,99 @@ document.getElementById("hm-card").addEventListener("click", () => {
   closeHud();
 });
 document.getElementById("hm-holes").addEventListener("click", () => { closeHud(); openCourseMenu(); });
+document.getElementById("hm-home").addEventListener("click", () => { closeHud(); showMenu(); });
+function setWind(on) {
+  windEnabled = on;
+  document.getElementById("hm-wind").classList.toggle("active", on);
+  if (!on) wind.speed = 0; // kill current wind immediately when toggled off
+}
+function setSlotted(on) {
+  slottedMode = on;
+  document.getElementById("hm-slotted").classList.toggle("active", on);
+}
+function setAutoAim(on) {
+  autoAimEnabled = on;
+  const btn = document.getElementById("hm-autoaim");
+  if (btn) btn.classList.toggle("active", on);
+}
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
-document.getElementById("hm-wind").addEventListener("click", () => {
-  windEnabled = !windEnabled;
-  document.getElementById("hm-wind").classList.toggle("active", windEnabled);
-  if (!windEnabled) wind.speed = 0; // kill current wind immediately when toggled off
-});
-document.getElementById("hm-slotted").addEventListener("click", () => {
-  slottedMode = !slottedMode;
-  document.getElementById("hm-slotted").classList.toggle("active", slottedMode);
-});
+document.getElementById("hm-wind").addEventListener("click", () => setWind(!windEnabled));
+document.getElementById("hm-slotted").addEventListener("click", () => setSlotted(!slottedMode));
+const elAutoAimBtn = document.getElementById("hm-autoaim");
+if (elAutoAimBtn) elAutoAimBtn.addEventListener("click", () => setAutoAim(!autoAimEnabled));
+
+// =====================================================================
+//  Game settings — toggleable aids. Defaults are GLOBAL (admin-set via
+//  Supabase, read by everyone) and snapshotted per tournament so every
+//  player faces the same conditions. Each def maps a key <-> live state.
+// =====================================================================
+const SETTING_DEFS = [
+  { key: "autoClub",    label: "🏌️ Auto club",      get: () => autoClubEnabled, set: (v) => setAutoClub(v) },
+  { key: "autoAim",     label: "⛳ Auto-aim at pin", get: () => autoAimEnabled,  set: (v) => setAutoAim(v) },
+  { key: "wind",        label: "💨 Wind",            get: () => windEnabled,     set: (v) => setWind(v) },
+  { key: "slope",       label: "⛰ Slope lines",     get: () => showSlope,       set: (v) => setSlopeMode(v) },
+  { key: "oob",         label: "🔴 OB areas",        get: () => showOOB,         set: (v) => setOOBMode(v) },
+  { key: "rangefinder", label: "📏 Range finder",    get: () => measureMode,     set: (v) => setMeasureMode(v) },
+  { key: "slotted",     label: "🎯 Slotted mode",    get: () => slottedMode,     set: (v) => setSlotted(v) },
+];
+// Effective defaults: hardcoded fallback until the global row loads.
+let gameDefaults = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false };
+let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
+
+function applySettings(s) {
+  if (!s) return;
+  for (const d of SETTING_DEFS) if (typeof s[d.key] === "boolean") d.set(s[d.key]);
+}
+function normalizeSettings(s) {
+  const out = {};
+  for (const d of SETTING_DEFS) out[d.key] = !!(s && s[d.key]);
+  return out;
+}
+
+// --- Admin panel: edit GLOBAL defaults (admin only); tournaments snapshot these ---
+let _adminDraft = null;
+function renderAdminToggles() {
+  const host = document.getElementById("admin-toggles");
+  if (!host) return;
+  host.innerHTML = "";
+  for (const d of SETTING_DEFS) {
+    const row = document.createElement("button");
+    row.className = "admin-toggle" + (_adminDraft[d.key] ? " active" : "");
+    row.textContent = (_adminDraft[d.key] ? "ON  " : "OFF  ") + d.label;
+    row.onclick = () => { _adminDraft[d.key] = !_adminDraft[d.key]; renderAdminToggles(); };
+    host.appendChild(row);
+  }
+}
+function openAdminPanel() {
+  if (!isTournamentAdmin()) return;
+  _adminDraft = normalizeSettings(gameDefaults);
+  renderAdminToggles();
+  const s = document.getElementById("admin-status"); if (s) s.textContent = "";
+  document.getElementById("admin-settings").classList.remove("hidden");
+}
+function closeAdminPanel() {
+  const m = document.getElementById("admin-settings"); if (m) m.classList.add("hidden");
+}
+(function wireAdmin() {
+  const open = document.getElementById("menu-admin");
+  if (open) open.addEventListener("click", openAdminPanel);
+  const close = document.getElementById("admin-close");
+  if (close) close.addEventListener("click", closeAdminPanel);
+  const save = document.getElementById("admin-save");
+  if (save) save.addEventListener("click", async () => {
+    const status = document.getElementById("admin-status");
+    save.disabled = true; save.textContent = "Saving…";
+    const ok = await saveGameSettings(_adminDraft);
+    save.disabled = false; save.textContent = "Save global defaults";
+    if (ok) {
+      gameDefaults = normalizeSettings(_adminDraft);
+      activeSettings = Object.assign({}, gameDefaults);
+      if (status) status.textContent = "Saved ✓ — applies to all players.";
+    } else if (status) {
+      status.textContent = "Save failed (admin only).";
+    }
+  });
+})();
 
 // Club selector: +/- steps through the bag (putter is automatic on the green).
 function updateClubUI() {
@@ -2468,6 +2552,12 @@ function setYardsPerUnit(ypu) {
 
 function startCourse() {
   mode = "course";
+  // Tournament rounds use the tournament's frozen conditions; otherwise the
+  // global defaults. Apply before setHole so wind/auto-club pick them up.
+  activeSettings = (activeTournamentRound !== null && activeTournament && activeTournament.settings)
+    ? normalizeSettings(activeTournament.settings)
+    : normalizeSettings(gameDefaults);
+  applySettings(activeSettings);
   elMenu.classList.add("hidden");
   elRangeUI.classList.add("hidden");
   document.getElementById("round-end").classList.add("hidden");
@@ -2767,6 +2857,8 @@ function updateAuthUI() {
   const on = isLoggedIn();
   signin.classList.toggle("hidden", on);
   account.classList.toggle("hidden", !on);
+  const adminBtn = document.getElementById("menu-admin");
+  if (adminBtn) adminBtn.classList.toggle("hidden", !isTournamentAdmin());
 }
 
 function openAuthModal() {
@@ -3159,7 +3251,7 @@ async function fetchTournamentRounds(tournamentId) {
   } catch(e) { return []; }
 }
 
-async function createTournament(name, courseId) {
+async function createTournament(name, courseId, settings) {
   if (!LB_ON()) return null;
   const now = new Date();
   const deadline = new Date(now.getTime() + 60 * 60 * 1000);
@@ -3168,6 +3260,7 @@ async function createTournament(name, courseId) {
     r1r2_opens: now.toISOString(),
     r1r2_deadline: deadline.toISOString(),
     created_by: getPlayerName() || "Anonymous",
+    settings: settings ? normalizeSettings(settings) : normalizeSettings(gameDefaults),
   };
   try {
     const res = await fetch(LB_URL + "/rest/v1/tournaments", {
@@ -3179,6 +3272,27 @@ async function createTournament(name, courseId) {
     const rows = await res.json();
     return rows[0] || null;
   } catch(e) { return null; }
+}
+
+// --- Global game settings (singleton row id=1; admin writes, everyone reads) ---
+async function fetchGameSettings() {
+  if (!LB_ON()) return null;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/game_settings?id=eq.1&select=settings", { headers: lbHeaders() });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return (rows[0] && rows[0].settings) || null;
+  } catch(e) { return null; }
+}
+async function saveGameSettings(s) {
+  if (!LB_ON() || !isTournamentAdmin()) return false;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/game_settings?id=eq.1", {
+      method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ settings: normalizeSettings(s), updated_at: new Date().toISOString() }),
+    });
+    return res.ok;
+  } catch(e) { console.warn("Save settings failed:", e); return false; }
 }
 
 // --- HUD countdown timer (shown during active tournament round) ---
@@ -3604,6 +3718,9 @@ loadCourse(selectedCourseId).catch((e) => {
       await ensureProfile();
       await flushPendingRounds();
     }
+    // global defaults set by the admin — applies to every player
+    const gs = await fetchGameSettings();
+    if (gs) { gameDefaults = normalizeSettings(gs); activeSettings = Object.assign({}, gameDefaults); }
   } catch (e) { console.warn("Auth boot failed:", e); }
   updateMenuPlayerLine();
 })();

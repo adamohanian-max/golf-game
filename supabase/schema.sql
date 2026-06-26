@@ -99,3 +99,27 @@ create policy "trounds write" on tournament_rounds for insert
 --    update profiles set is_admin = true
 --      where id = (select id from auth.users where email = 'you@example.com');
 -- =====================================================================
+
+-- ---------- GAME_SETTINGS: single global-defaults row, admin-editable ----------
+-- One row (id=1) holding the default aid toggles every player loads with.
+-- Admins edit it from the in-game Admin panel; tournaments snapshot it.
+create table if not exists game_settings (
+  id          int primary key default 1,
+  settings    jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz default now(),
+  constraint game_settings_singleton check (id = 1)
+);
+
+alter table game_settings enable row level security;
+
+create policy "settings read"   on game_settings for select using (true);
+create policy "settings insert" on game_settings for insert with check (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
+create policy "settings update" on game_settings for update using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
+
+insert into game_settings (id, settings) values (1, '{}'::jsonb)
+  on conflict (id) do nothing;
+
+-- per-tournament frozen conditions (snapshot of the toggle defaults at creation)
+alter table tournaments add column if not exists settings jsonb;
