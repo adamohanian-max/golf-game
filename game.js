@@ -789,6 +789,7 @@ function slottedLaunch() {
 
 function launchShot(ang, frac, spin, onGreen) {
   if (!canSwing() || frac <= 0.05) return;
+  measurePoint = null; // shot fired — clear the rangefinder marker
   if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
   const b = state.ball;
   shot.startX = b.x; shot.startY = b.y;
@@ -882,7 +883,11 @@ function swingEnd(e) {
   const dxs = end.x - ref.x, dys = end.y - ref.y;
   const dt = Math.max((end.t - ref.t) / 1000, 0.001);
   const fdist = Math.hypot(dxs, dys);
-  if (fdist < 5) return; // too small to register as a shot
+  if (fdist < 5) {
+    // not a swing — treat as a tap: drop the rangefinder marker at the tap point
+    measurePoint = screenToWorld(end.x, end.y);
+    return;
+  }
 
   const speed = (fdist / refScale) / dt;
   const frac = Math.min(speed / TUNE.touchPowerSwipe, 1);
@@ -1811,7 +1816,7 @@ function draw() {
   drawWindIndicator();
 
   // range finder: dashed lines ball->marker and marker->pin with yard labels
-  if (measureMode && measurePoint) {
+  if (measurePoint) {
     const b = state.ball;
     const bx = wx(b.x, b.y), by = wy(b.x, b.y);
     const mx = wx(measurePoint.x, measurePoint.y), my = wy(measurePoint.x, measurePoint.y);
