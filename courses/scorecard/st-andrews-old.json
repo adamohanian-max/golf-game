@@ -1,0 +1,24 @@
+{
+  "name": "St Andrews — Old Course",
+  "tee": "championship",
+  "holes": {
+    "1":  { "par": 4, "yards": 376, "si": 18 },
+    "2":  { "par": 4, "yards": 453, "si": 12 },
+    "3":  { "par": 4, "yards": 398, "si": 16 },
+    "4":  { "par": 4, "yards": 480, "si": 10 },
+    "5":  { "par": 5, "yards": 570, "si": 2 },
+    "6":  { "par": 4, "yards": 412, "si": 8 },
+    "7":  { "par": 4, "yards": 390, "si": 4 },
+    "8":  { "par": 3, "yards": 175, "si": 14 },
+    "9":  { "par": 4, "yards": 352, "si": 6 },
+    "10": { "par": 4, "yards": 386, "si": 7 },
+    "11": { "par": 3, "yards": 174, "si": 17 },
+    "12": { "par": 4, "yards": 348, "si": 9 },
+    "13": { "par": 4, "yards": 465, "si": 5 },
+    "14": { "par": 5, "yards": 618, "si": 1 },
+    "15": { "par": 4, "yards": 455, "si": 13 },
+    "16": { "par": 4, "yards": 423, "si": 3 },
+    "17": { "par": 4, "yards": 495, "si": 11 },
+    "18": { "par": 4, "yards": 357, "si": 15 }
+  }
+}

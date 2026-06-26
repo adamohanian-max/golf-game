@@ -1,0 +1,24 @@
+{
+  "name": "Four Oaks Country Club",
+  "tee": "Black",
+  "holes": {
+    "1":  { "par": 4, "yards": 370 },
+    "2":  { "par": 5, "yards": 496 },
+    "3":  { "par": 4, "yards": 367 },
+    "4":  { "par": 3, "yards": 140 },
+    "5":  { "par": 5, "yards": 505 },
+    "6":  { "par": 4, "yards": 367 },
+    "7":  { "par": 4, "yards": 403 },
+    "8":  { "par": 4, "yards": 392 },
+    "9":  { "par": 3, "yards": 186 },
+    "10": { "par": 4, "yards": 453 },
+    "11": { "par": 4, "yards": 384 },
+    "12": { "par": 3, "yards": 197 },
+    "13": { "par": 4, "yards": 328 },
+    "14": { "par": 4, "yards": 398 },
+    "15": { "par": 3, "yards": 141 },
+    "16": { "par": 4, "yards": 340 },
+    "17": { "par": 4, "yards": 365 },
+    "18": { "par": 4, "yards": 436 }
+  }
+}

@@ -16,6 +16,13 @@ python3 -m http.server 8080
 Desktop: `http://localhost:8080`  
 Phone (same WiFi): `http://<your-mac-ip>:8080`
 
+## Concurrent Claude Code agents
+
+Multiple agents can work this repo at once. Two independent isolations — **neither needs a commit or push**:
+
+- **Browser (Playwright):** `.mcp.json` runs the Playwright MCP with `--isolated`, so each Claude session gets its own ephemeral Chrome profile instead of fighting over one shared profile dir (`mcp-chrome-*`). Without it a second agent hits `Browser is already in use ... use --isolated`. Isolated mode keeps no persistent browser state — fine here (localhost, no logins). The dev server (`python3 -m http.server 8080`) is shared; one instance serves all agents.
+- **Files (git):** to stop agents clobbering each other's edits, give each its own **git worktree** (`git worktree add ../golf-game-<name>`, or the Agent tool's `isolation: "worktree"`). Each worktree is a separate working copy on its own branch; merge when done. Committing/pushing is only for sharing results, never a prerequisite for running agents in parallel.
+
 ## File structure
 
 - `index.html` — canvas element, scorecard overlay (HTML, updated by JS), result modal
@@ -43,9 +50,11 @@ Per-hole world bounds (`WORLD.w/h`, set by `setHole`); origin top-left, tee at b
 
 Real geometry comes from OpenStreetMap via the Overpass API (`golf=green|fairway|tee|bunker|water_hazard|hole`). Strategy is **pre-bake, not live-fetch**: `tools/fetch_course.py` queries one course (by its boundary way id), projects lat/lon → per-hole world units (tee→pin oriented "up", fixed yards/unit), and writes a normalized `courses/<id>.json` the game fetches statically.
 
-Geometry is **real-first**: greens, bunkers, water, tees, **fairways**, plus **woods/cartpaths/grass** come from real OSM polygons (`golf=*`, `natural=wood|water`, `landuse=grass`). Hole lines are ordered by the leading int in their `ref` (handles `"7"` and `"7 - #2"`), deduped by number. Fairways/bunkers/woods/cartpaths/grass are assigned to the **nearest hole** (centroid→centerline). A fairway corridor is **synthesized only as a fallback** for holes with no mapped fairway (links courses like St Andrews) — the tool prints how many holes fell back.
+Geometry is **real-first**: greens, bunkers, water, tees, **fairways**, **rough** (`golf=rough`), plus **woods/cartpaths/grass** come from real OSM polygons (`golf=*`, `natural=wood|water`, `landuse=grass`). Hole lines are ordered by the leading int in their `ref` (handles `"7"` and `"7 - #2"`), deduped by number. Fairways/bunkers/rough/woods/cartpaths/grass are assigned to the **nearest hole** (centroid→centerline). A fairway corridor is **synthesized only as a fallback** for holes with no mapped fairway (links courses like St Andrews) — the tool prints how many holes fell back.
 
-**Aerial imagery:** the tool also bakes one north-up **Esri World Imagery** JPG per hole into `courses/img/<id>/hole<N>.jpg` (keyless), plus a pixel→world affine `aerial.toWorld=[a,b,c,d,e,f]` (`world.x=a*px+b*py+c`, `world.y=d*px+e*py+f`). The game draws the photo as the hole base, rotated to play "up" via that affine — no image processing needed (Pillow not required). `--no-imagery` skips it.
+**Rough vs fairway inference:** `surfaceAt()` returns `"rough"` as the implicit default (any point not in a water/bunker/green/fairway/tee/woods polygon); mapped `golf=rough` is now also baked as an explicit `rough` surface (mostly aids rendering — physics already defaults to rough). The real accuracy fix is **aerial-carved fairways**: for holes with no OSM fairway, the bake replaces the crude fixed-width corridor with a **variable-width ribbon measured from the Esri aerial** (`measure_fairway_ribbon`/`carve_synth_fairway` in `fetch_course.py`; `carve_synth_fairways` in the global tool). It classifies mown fairway grass by HSV (`is_fairway_px`, `FW_*` constants — may need per-course tuning), marches perpendiculars off the tee→pin centerline to find each edge, and **clamps width ≤ the fixed corridor** so world bounds stay valid. Needs **Pillow** (optional — `try: from PIL import Image`); without it, or on classification failure, it falls back to the fixed corridor (e.g. Pinehurst's sandy no-rough holes don't carve and keep the rectangle).
+
+**Aerial imagery:** the tool also bakes one north-up **Esri World Imagery** JPG per hole into `courses/img/<id>/hole<N>.jpg` (keyless), plus a pixel→world affine `aerial.toWorld=[a,b,c,d,e,f]` (`world.x=a*px+b*py+c`, `world.y=d*px+e*py+f`). The game draws the photo as the hole base, rotated to play "up" via that affine — no image processing needed for *rendering* (Pillow not required there). `--no-imagery` skips it. Pillow **is** used (optionally) to carve synth fairways from the baked aerial — see "Rough vs fairway inference" above.
 
 Default course: **Pinehurst No. 2** (`courses/pinehurst-no2.json` + `courses/img/pinehurst-no2/`, 11/18 holes with real fairways). Re-bake:
 `python3 tools/fetch_course.py --boundary-way 1358696570 --id pinehurst-no2 --name "Pinehurst No. 2"`

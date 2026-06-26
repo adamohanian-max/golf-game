@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="style.css?v=37">
+  <link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -19,6 +19,7 @@
     <span class="line">Par <span id="par">4</span> · <span id="yards">450</span> yds</span>
     <span class="line">Strokes: <span id="strokes">0</span></span>
     <span class="line">Score: <span id="score">E</span></span>
+    <span id="trn-timer" class="line trn-timer hidden"></span>
   </div>
 
   <div id="stats" class="hidden">
@@ -50,9 +51,10 @@
       <button class="hm-item active" id="hm-autoclb">🏌️ Auto club</button>
       <button class="hm-item" id="hm-aim">⛳ Aim</button>
       <button class="hm-item" id="hm-measure">📏 Range finder</button>
-      <button class="hm-item" id="hm-slope">⛰ Slope</button>
+      <button class="hm-item active" id="hm-slope">⛰ Slope</button>
       <button class="hm-item active" id="hm-oob">🔴 OB areas</button>
       <button class="hm-item" id="hm-wind">💨 Wind</button>
+      <button class="hm-item" id="hm-slotted">🎯 Slotted mode</button>
       <button class="hm-item" id="hm-card">📋 Scorecard</button>
       <div class="hm-sep"></div>
       <button class="hm-item" id="hm-holes">☰ Select hole</button>
@@ -79,6 +81,13 @@
       <div id="course-list"></div>
       <button id="play-course" class="menu-btn">Play Course</button>
       <button id="play-range" class="menu-btn secondary">Driving Range</button>
+      <button id="open-leaderboard" class="menu-btn secondary">🏆 Leaderboard</button>
+      <button id="open-tournaments" class="menu-btn secondary">🏌️ Tournaments</button>
+      <button id="menu-player" class="menu-player">Player: <b id="menu-player-name">Set name</b> ✎</button>
+      <div id="menu-auth" class="menu-auth">
+        <button id="menu-signin" class="menu-auth-link">Sign in / Create account</button>
+        <span id="menu-account" class="menu-auth-account hidden">Signed in · <button id="menu-signout" class="menu-auth-link">Sign out</button></span>
+      </div>
     </div>
   </div>
 
@@ -106,13 +115,107 @@
       <div id="re-stats" class="re-panel hidden">
         <div id="re-statslist"></div>
       </div>
+      <div id="re-tournament-row" class="re-trn-row hidden">
+        <button id="re-tournament" class="menu-btn">🏆 Tournament</button>
+      </div>
       <div class="re-actions">
         <button id="re-home" class="menu-btn secondary">Home</button>
+        <button id="re-leaderboard" class="menu-btn secondary">🏆 View leaderboard</button>
         <button id="re-replay" class="menu-btn">Play Again</button>
       </div>
     </div>
   </div>
 
-  <script src="game.js?v=42"></script>
+  <div id="leaderboard" class="hidden">
+    <div class="lb-box">
+      <h2>🏆 Leaderboard</h2>
+      <select id="lb-course" class="lb-course"></select>
+      <div class="lb-table-wrap">
+        <table class="lb-table">
+          <thead><tr><th>#</th><th>Player</th><th>Score</th><th>Strokes</th></tr></thead>
+          <tbody id="lb-list"></tbody>
+        </table>
+        <div id="lb-empty" class="lb-empty hidden"></div>
+      </div>
+      <button id="lb-close" class="menu-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="name-entry" class="hidden">
+    <div class="ne-box">
+      <h2 id="ne-title">Enter your name</h2>
+      <p class="ne-sub">Shown on the leaderboard</p>
+      <input id="ne-input" type="text" maxlength="16" placeholder="Name or initials" autocomplete="off">
+      <div class="ne-actions">
+        <button id="ne-cancel" class="menu-btn secondary">Cancel</button>
+        <button id="ne-save" class="menu-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="auth-modal" class="hidden">
+    <div class="ne-box">
+      <div id="auth-form">
+        <h2>Sign in</h2>
+        <p class="ne-sub">Enter your email — we'll send a magic login link. No password.</p>
+        <input id="auth-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" autocapitalize="off" autocorrect="off">
+        <div id="auth-error" class="auth-error hidden"></div>
+        <div class="ne-actions">
+          <button id="auth-cancel" class="menu-btn secondary">Cancel</button>
+          <button id="auth-send" class="menu-btn">Send link</button>
+        </div>
+      </div>
+      <div id="auth-sent" class="hidden">
+        <h2>Check your email 📬</h2>
+        <p class="ne-sub">We sent a login link to <b id="auth-sent-email"></b>. Open it on this device to finish signing in.</p>
+        <button id="auth-sent-close" class="menu-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tournament-lobby" class="hidden">
+    <div class="lb-box">
+      <h2>🏌️ Tournaments</h2>
+      <div id="tl-name" class="tl-name"></div>
+      <div id="tl-status" class="tl-status"></div>
+      <div id="tl-timer" class="tl-timer"></div>
+      <div id="tl-field" class="tl-field"></div>
+      <div id="tl-rounds" class="tl-rounds"></div>
+      <button id="tl-start" class="menu-btn secondary hidden">+ Start Tournament</button>
+      <button id="tl-close" class="menu-btn secondary" style="margin-top:8px">Close</button>
+    </div>
+  </div>
+
+  <div id="tournament-cut" class="hidden">
+    <div class="lb-box">
+      <h2>✂️ The Cut</h2>
+      <div id="tc-field-count" class="tl-status"></div>
+      <div id="tc-status" class="tc-status"></div>
+      <div class="lb-table-wrap">
+        <table class="lb-table">
+          <thead><tr><th>#</th><th>Player</th><th>Score</th><th></th></tr></thead>
+          <tbody id="tc-list"></tbody>
+        </table>
+        <div id="tc-empty" class="lb-empty hidden"></div>
+      </div>
+      <button id="tc-continue" class="menu-btn" style="margin-top:12px">Continue</button>
+    </div>
+  </div>
+
+  <div id="tournament-final" class="hidden">
+    <div class="lb-box">
+      <h2 id="tf-title">🏆 Tournament Final</h2>
+      <div class="lb-table-wrap">
+        <table class="lb-table">
+          <thead><tr><th></th><th>Player</th><th>Score</th></tr></thead>
+          <tbody id="tf-list"></tbody>
+        </table>
+        <div id="tf-empty" class="lb-empty hidden"></div>
+      </div>
+      <button id="tf-close" class="menu-btn" style="margin-top:12px">Back to Menu</button>
+    </div>
+  </div>
+
+  <script src="game.js?v=43"></script>
 </body>
 </html>

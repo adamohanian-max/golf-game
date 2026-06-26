@@ -38,9 +38,9 @@ const TUNE = {
   // green field's gradient. slopeAccel folds the field's vertical scale + gravity
   // into one knob (world-units/frame^2 per unit gradient); calibrate by feel.
   // Slope is ignored below slopeStopSpeed so a ball settles instead of creeping.
-  slopeAccel: 0.006,
-  fairwaySlopeAccel: 0.0003, // terrain slope accel on fairway/rough (gentler than green break)
-  slopeStopSpeed: 0.04,
+  slopeAccel: 0.00225,        // break strength; capped at 75% of greenDecel so ball can always stop
+  fairwaySlopeAccel: 0.0003,  // terrain slope accel on fairway/rough (gentler than green break)
+  slopeStopSpeed: 0.028,
   // Shaded-relief topo overlay (greens only). Intensity = drawImage globalAlpha.
   reliefAmbient: 0.14,   // always-on whisper on the in-play / target green
   reliefFull: 0.32,      // boosted by the slope button (+ fall-line arrows)
@@ -202,12 +202,16 @@ function resetState() {
 
 // Game mode: "menu" (home) | "course" | "range". Input is off in the menu.
 let mode = "menu";
+// Tournament state — set when player enters a tournament round via the lobby.
+let activeTournament = null;     // full tournament row from Supabase
+let activeTournamentRound = null; // 1-4, which round the player is currently playing
 let holeTransition = null; // active hole-change animation (fade + zoom-in), or null
 let holeDrop = null;       // active ball-into-cup drop animation, or null
 const HOLE_DROP_MS = 520;  // drop animation length; result modal opens when it ends
 let measureMode = false;   // range-finder: drag to measure distance from ball & pin
-let showSlope = false;     // slope heatmap overlay toggle (greens + synthetic fairway)
+let showSlope = true;      // slope relief overlay — ON by default (toggle in HUD menu)
 let showOOB = true;        // red OOB overlay toggle
+let slottedMode = false;   // cheat: ball steers to hole automatically
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let measureDragging = false;
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
@@ -257,6 +261,7 @@ function surfaceAt(x, y) {
   // tee boxes play like fairway (short grass)
   if (inAnyPoly(x, y, s.fairway) || inAnyPoly(x, y, s.tee)) return "fairway";
   if (inAnyPoly(x, y, s.woods)) return "woods"; // trees = out of bounds (penalty)
+  if (s.rough && inAnyPoly(x, y, s.rough)) return "rough"; // mapped rough (else default)
   return "rough";
 }
 // Downhill slope (gradient of the height field) at a point on a green, or null.
@@ -352,6 +357,15 @@ function arcFlightStep(b) {
     if (!shot.carried) {
       shot.carry = dist(shot.startX, shot.startY, b.x, b.y) * YARDS_PER_UNIT;
       shot.carried = true;
+    }
+    // slotted club lands exactly at the hole — sink it
+    if (slottedMode && !HOLE.isRange) {
+      state.flight = null; state.airborne = false;
+      b.x = HOLE.holePos.x; b.y = HOLE.holePos.y;
+      b.vx = 0; b.vy = 0; b.vz = 0;
+      state.moving = false; state.inHole = true;
+      beginHoleDrop(HOLE.holePos.x, HOLE.holePos.y, 0, -0.03);
+      return;
     }
     const surf = surfaceAt(b.x, b.y);
     const sp = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp, dy = b.vy / sp; // travel dir
@@ -464,7 +478,13 @@ function rollStep(b) {
     // rest on a slope stays put (the synthetic tilt can exceed greenDecel).
     if (sp > TUNE.slopeStopSpeed) {
       const g = greenSlopeAt(b.x, b.y);
-      if (g) { b.vx -= TUNE.slopeAccel * g.x; b.vy -= TUNE.slopeAccel * g.y; }
+      if (g) {
+        const gm = Math.hypot(g.x, g.y);
+        // Cap slope force to 75% of greenDecel — guarantees 25% net decel on any slope,
+        // so the ball can always stop even on the steepest green.
+        const force = gm > 0 ? Math.min(TUNE.slopeAccel * gm, TUNE.greenDecel * 0.75) / gm : 0;
+        b.vx -= force * g.x; b.vy -= force * g.y;
+      }
     }
   } else {
     const sp = Math.hypot(b.vx, b.vy);
@@ -477,6 +497,14 @@ function rollStep(b) {
       b.vx -= TUNE.fairwaySlopeAccel * gv.x;
       b.vy -= TUNE.fairwaySlopeAccel * gv.y;
     }
+  }
+
+  // slotted mode: steer rolling ball toward the hole
+  if (slottedMode && !HOLE.isRange) {
+    const thx = HOLE.holePos.x - b.x, thy = HOLE.holePos.y - b.y;
+    const td = Math.hypot(thx, thy) || 0.01;
+    b.vx = (thx / td) * TUNE.captureSpeed * 0.7;
+    b.vy = (thy / td) * TUNE.captureSpeed * 0.7;
   }
 
   const speed = Math.hypot(b.vx, b.vy);
@@ -499,16 +527,16 @@ function rollStep(b) {
         b.vx = b.vy = 0;
         return;
       } else {
-        // lip-out: ball crossed the cup too fast — reflect off the rim
-        const hd = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) || 0.01;
-        const nx = (b.x - HOLE.holePos.x) / hd, ny = (b.y - HOLE.holePos.y) / hd;
-        const dot = b.vx * nx + b.vy * ny;
-        if (dot < 0) { // only deflect if ball is still moving inward
-          b.vx = (b.vx - 2 * dot * nx) * 0.5; // reflect + lose energy on the lip
-          b.vy = (b.vy - 2 * dot * ny) * 0.5;
-          b.x = HOLE.holePos.x + nx * (HOLE.holeRadius + 0.3);
-          b.y = HOLE.holePos.y + ny * (HOLE.holeRadius + 0.3);
-        }
+        // lip-out: too fast — ball hops over the rim and continues rolling.
+        const spd = Math.hypot(b.vx, b.vy) || 0.01;
+        const dx = b.vx / spd, dy = b.vy / spd;
+        // place ball just past the far lip so it exits the capture zone this frame
+        b.x = HOLE.holePos.x + dx * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
+        b.y = HOLE.holePos.y + dy * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
+        // upward kick proportional to excess speed; capped so fast putts don't sky it
+        const excess = spd - TUNE.captureSpeed;
+        b.vz = Math.min(0.07, excess * 1.5);
+        if (b.vz > 0.004) state.airborne = true;
       }
     }
   }
@@ -718,8 +746,28 @@ function swingMove(e) {
 }
 
 // Fire the ball: `ang` direction, `frac` 0..1 swing fullness, `spin` (-1..1).
+function slottedLaunch() {
+  const b = state.ball;
+  shot.startX = b.x; shot.startY = b.y;
+  shot.carry = null; shot.total = null; shot.carried = false;
+  state.flight = null;
+  const ang = Math.atan2(HOLE.holePos.y - b.y, HOLE.holePos.x - b.x);
+  const C = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y);
+  const H = Math.max(C * 0.12, 0.3); // low clean arc toward hole
+  setupFlight(b, ang, C, H, Math.PI / 4, 0);
+  b.spin = 0;
+  state.airborne = true;
+  state.moving = true;
+  haptic(9);
+  state.strokesOffGreen++;
+  state.strokes += 1;
+  updateScorecard();
+  hideHint();
+}
+
 function launchShot(ang, frac, spin, onGreen) {
   if (!canSwing() || frac <= 0.05) return;
+  if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
   const b = state.ball;
   shot.startX = b.x; shot.startY = b.y;
   shot.carry = null; shot.total = null; shot.carried = onGreen;
@@ -1238,7 +1286,30 @@ function drawAerial() {
   const F = view.d * m[2] + view.e * m[5] + view.f;
   ctx.save();
   ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
-  ctx.drawImage(img, 0, 0); // already graded + washed by processAerial
+  // Draw only the visible pixel sub-rect, not the whole (often 2000²+) global
+  // aerial. The camera is zoomed into one hole, so most of the image is off
+  // screen; sampling all of it every frame is the main render cost. Invert the
+  // pixel→css affine [[A,C],[B,D]] to map the 4 screen corners back to image
+  // pixels, take their bounding box, clamp to the image, and crop to that.
+  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const det = A * D - C * B;
+  if (Math.abs(det) > 1e-9) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [scx, scy] of [[0, 0], [cssW, 0], [0, cssH], [cssW, cssH]]) {
+      const dx = scx - E, dy = scy - F;
+      const px = (D * dx - C * dy) / det;
+      const py = (-B * dx + A * dy) / det;
+      if (px < minX) minX = px; if (px > maxX) maxX = px;
+      if (py < minY) minY = py; if (py > maxY) maxY = py;
+    }
+    const sx = Math.max(0, Math.floor(minX) - 1);
+    const sy = Math.max(0, Math.floor(minY) - 1);
+    const sw = Math.min(a.w, Math.ceil(maxX) + 1) - sx;
+    const sh = Math.min(a.h, Math.ceil(maxY) + 1) - sy;
+    if (sw > 0 && sh > 0) ctx.drawImage(img, sx, sy, sw, sh, sx, sy, sw, sh);
+  } else {
+    ctx.drawImage(img, 0, 0); // degenerate transform: fall back to full draw
+  }
   ctx.restore();
 }
 
@@ -1399,6 +1470,7 @@ function drawVectorSurfaces() {
   ctx.globalAlpha = 1;
 
   fillPolys(s.grass, "#3a9440");                 // mown turf between holes
+  fillPolys(s.rough, "#2c6e30");                 // mapped rough — a touch darker than base
 
   for (const poly of s.fairway || []) withClip(poly, () => stripes("#4eb053", "#46a44b", 7, "y"));
   ctx.strokeStyle = "rgba(28,66,30,0.45)"; ctx.lineWidth = 1.5;
@@ -1955,7 +2027,12 @@ function showRoundSummary(midRound = false) {
   document.querySelectorAll(".re-panel").forEach(p => p.classList.toggle("hidden", p.id !== "re-card"));
   buildRoundScorecard();
   buildRoundStats();
+  document.getElementById("re-tournament-row").classList.add("hidden");
   document.getElementById("round-end").classList.remove("hidden");
+  if (!midRound) {
+    submitFinishedRound();                // post to regular leaderboard
+    handleTournamentRoundComplete();      // post to tournament (no-op if not in tournament)
+  }
 }
 
 // Round-end tab switching + actions
@@ -1970,6 +2047,8 @@ document.querySelectorAll(".re-tab").forEach(btn => {
 
 document.getElementById("re-home").addEventListener("click", () => {
   document.getElementById("round-end").classList.add("hidden");
+  activeTournamentRound = null;
+  stopTournamentTimer();
   mode = "menu";
   elMenu.classList.remove("hidden");
   elHudBtn.classList.add("hidden");
@@ -2015,7 +2094,7 @@ function setHole(rec) {
   if (glob) {
     // share precomputed DEM + topo + aerial across every hole (load once)
     if (!course._dem && course.dem) course._dem = buildDEM(course.dem);
-    if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green, course._dem || null);
+    if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green);  // always synthetic — DEM too coarse for green topo
     HOLE._greens = course._greens;
     HOLE._dem = course._dem || null;
     if (course._img === undefined) {
@@ -2033,7 +2112,7 @@ function setHole(rec) {
     HOLE._img = course._img; HOLE._imgReady = course._imgReady;
   } else {
     HOLE._dem = rec.dem ? buildDEM(rec.dem) : null;
-    HOLE._greens = buildGreenTopo(HOLE.surfaces.green, HOLE._dem);
+    HOLE._greens = buildGreenTopo(HOLE.surfaces.green);  // always synthetic
     HOLE._img = null; HOLE._imgReady = false;
     if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
       const target = HOLE;
@@ -2112,6 +2191,7 @@ async function loadCourse(id) {
 const COURSES = [
   { id: "pinehurst-no2", name: "Pinehurst No. 2", sub: "Pinehurst, NC · Par 70" },
   { id: "four-oaks-dracut", name: "Four Oaks Country Club", sub: "Dracut, MA · Par 70" },
+  { id: "tpc-river-highlands", name: "TPC River Highlands", sub: "Cromwell, CT · Par 70" },
   { id: "st-andrews-old", name: "St Andrews — Old Course", sub: "St Andrews, Scotland · Par 72" },
 ];
 let selectedCourseId = COURSES[0].id;
@@ -2306,6 +2386,10 @@ document.getElementById("hm-wind").addEventListener("click", () => {
   document.getElementById("hm-wind").classList.toggle("active", windEnabled);
   if (!windEnabled) wind.speed = 0; // kill current wind immediately when toggled off
 });
+document.getElementById("hm-slotted").addEventListener("click", () => {
+  slottedMode = !slottedMode;
+  document.getElementById("hm-slotted").classList.toggle("active", slottedMode);
+});
 
 // Club selector: +/- steps through the bag (putter is automatic on the green).
 function updateClubUI() {
@@ -2372,7 +2456,7 @@ function showMenu() {
   elHmClubRow.classList.add("hidden");
   closeHud();
   setMeasureMode(false);
-  setSlopeMode(false);
+  setSlopeMode(true);   // slope relief on by default
   closeCourseMenu();
 }
 
@@ -2392,7 +2476,7 @@ function startCourse() {
   elHmCourseItems.classList.remove("hidden");
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
-  round.score = 0; round.holesPlayed = 0; round.holeStats = [];
+  round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
   if (course && course.id === selectedCourseId) {
     setYardsPerUnit(course.yardsPerUnit);   // already loaded: restore scale (range may have changed it)
     holeIndex = 0;
@@ -2413,7 +2497,7 @@ async function startRange() {
   elHmClubRow.classList.remove("hidden");
   elHmCourseItems.classList.add("hidden");   // no course tools in range mode
   setMeasureMode(false);
-  setSlopeMode(false);
+  setSlopeMode(true);   // keep slope on for when the player returns to a course
   rangeTarget = parseInt(rangeSlider.value, 10);
   if (!rangeRec) {
     try {
@@ -2453,6 +2537,992 @@ rangeSlider.addEventListener("input", () => {
 });
 
 // =====================================================================
+//  Leaderboard + Accounts — shared scores via Supabase REST (plain fetch).
+//  Identity: real accounts via Supabase Auth (GoTrue) email magic link.
+//  Guests can still play; login is required only to post scores / play
+//  tournaments. Logged-in writes carry the user's access token so RLS
+//  enforces user_id = auth.uid() (kills score-spoofing for accounts).
+// =====================================================================
+const LB_URL = "https://phexiylwltbyjvyujtql.supabase.co";   // Supabase Project URL
+const LB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoZXhpeWx3bHRieWp2eXVqdHFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MzA2NzUsImV4cCI6MjA5ODAwNjY3NX0.Rf0ihIMxMjpCwKiNFHFGtyU9ZiSmkPinSRol2gRpofY";   // anon public key (safe to ship)
+const LB_ON = () => /^https:\/\//.test(LB_URL) && LB_KEY.length > 20;
+// Public/anon headers — used for reads and guest writes.
+function lbHeaders(extra) {
+  return Object.assign({ apikey: LB_KEY, Authorization: "Bearer " + LB_KEY,
+                         "Content-Type": "application/json" }, extra || {});
+}
+// Authed headers — Bearer = user access token when logged in, else anon key.
+function authHeaders(extra) {
+  const s = getSession();
+  const token = (s && s.access_token) ? s.access_token : LB_KEY;
+  return Object.assign({ apikey: LB_KEY, Authorization: "Bearer " + token,
+                         "Content-Type": "application/json" }, extra || {});
+}
+
+// =====================================================================
+//  Auth (Supabase GoTrue REST) — magic link, session in localStorage.
+// =====================================================================
+function getSession() {
+  try { return JSON.parse(localStorage.getItem("golf.session") || "null"); } catch (e) { return null; }
+}
+function setSession(s) {
+  try { localStorage.setItem("golf.session", s ? JSON.stringify(s) : "null"); } catch (e) {}
+}
+function clearSession() { try { localStorage.removeItem("golf.session"); } catch (e) {} _profile = null; }
+function isLoggedIn() { const s = getSession(); return !!(s && s.access_token && s.user); }
+function currentUser() { const s = getSession(); return (s && s.user) ? s.user : null; }
+
+// Persist tokens + user into the session store (expires_at in ms epoch).
+function storeTokens(tok, user) {
+  const expSec = tok.expires_at || (tok.expires_in ? Math.floor(Date.now() / 1000) + tok.expires_in : 0);
+  setSession({
+    access_token: tok.access_token,
+    refresh_token: tok.refresh_token,
+    expires_at: expSec * 1000,
+    user: user || (getSession() || {}).user || null,
+  });
+}
+
+// Send a magic link to the email. Returns true on success.
+async function sendMagicLink(email) {
+  if (!LB_ON()) return false;
+  try {
+    const res = await fetch(LB_URL + "/auth/v1/otp", {
+      method: "POST",
+      headers: { apikey: LB_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: (email || "").trim(), create_user: true,
+                             options: { email_redirect_to: location.origin + location.pathname } }),
+    });
+    return res.ok;
+  } catch (e) { console.warn("Magic link failed:", e); return false; }
+}
+
+// On boot: if returning from a magic link, the tokens are in the URL hash.
+function parseAuthRedirect() {
+  if (!location.hash || location.hash.indexOf("access_token") === -1) return false;
+  const p = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const access_token = p.get("access_token");
+  if (!access_token) return false;
+  storeTokens({
+    access_token,
+    refresh_token: p.get("refresh_token"),
+    expires_at: parseInt(p.get("expires_at") || "0", 10),
+    expires_in: parseInt(p.get("expires_in") || "0", 10),
+  }, null);
+  // strip the hash so a refresh doesn't re-process stale tokens
+  history.replaceState(null, "", location.pathname + location.search);
+  return true;
+}
+
+async function fetchUser() {
+  const s = getSession();
+  if (!s || !s.access_token) return null;
+  try {
+    const res = await fetch(LB_URL + "/auth/v1/user", {
+      headers: { apikey: LB_KEY, Authorization: "Bearer " + s.access_token },
+    });
+    if (!res.ok) return null;
+    return res.json();   // { id, email, ... }
+  } catch (e) { return null; }
+}
+
+async function refreshSession() {
+  const s = getSession();
+  if (!s || !s.refresh_token) return false;
+  try {
+    const res = await fetch(LB_URL + "/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      headers: { apikey: LB_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: s.refresh_token }),
+    });
+    if (!res.ok) { clearSession(); return false; }
+    const tok = await res.json();
+    storeTokens(tok, tok.user || s.user);
+    return true;
+  } catch (e) { clearSession(); return false; }
+}
+
+// Validate/restore the stored session; refresh if expired; confirm the user.
+async function restoreSession() {
+  let s = getSession();
+  if (!s || !s.access_token) return false;
+  if (s.expires_at && Date.now() > s.expires_at - 60000) {
+    if (!(await refreshSession())) return false;
+    s = getSession();
+  }
+  const user = await fetchUser();
+  if (!user) { if (!(await refreshSession())) { clearSession(); return false; }
+               const u2 = await fetchUser(); if (!u2) { clearSession(); return false; }
+               s = getSession(); s.user = u2; setSession(s); return true; }
+  s.user = user; setSession(s);
+  return true;
+}
+
+async function signOut() {
+  const s = getSession();
+  if (s && s.access_token && LB_ON()) {
+    try { await fetch(LB_URL + "/auth/v1/logout", { method: "POST",
+            headers: { apikey: LB_KEY, Authorization: "Bearer " + s.access_token } }); } catch (e) {}
+  }
+  clearSession();
+  updateAuthUI();
+}
+
+// =====================================================================
+//  Profiles — display name + admin flag per account.
+// =====================================================================
+let _profile = null;   // cached { id, display_name, is_admin }
+
+async function fetchProfile(uid) {
+  if (!LB_ON() || !uid) return null;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/profiles?id=eq." + encodeURIComponent(uid) + "&select=*",
+                            { headers: lbHeaders() });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  } catch (e) { return null; }
+}
+
+// After login: load the profile, create it if missing, prompt for a name if blank.
+async function ensureProfile() {
+  const u = currentUser();
+  if (!u) { _profile = null; return; }
+  let prof = await fetchProfile(u.id);
+  if (!prof) {
+    // create a row (RLS: auth.uid() = id). display_name from any cached guest name.
+    const guessName = localStorage.getItem("golf.playerName") || "";
+    try {
+      const res = await fetch(LB_URL + "/rest/v1/profiles", {
+        method: "POST", headers: authHeaders({ Prefer: "return=representation" }),
+        body: JSON.stringify({ id: u.id, display_name: guessName || null }),
+      });
+      if (res.ok) { const rows = await res.json(); prof = rows[0] || { id: u.id, display_name: guessName }; }
+    } catch (e) {}
+    if (!prof) prof = { id: u.id, display_name: guessName, is_admin: false };
+  }
+  _profile = prof;
+  if (prof.display_name) { try { localStorage.setItem("golf.playerName", prof.display_name); } catch (e) {} }
+  updateMenuPlayerLine();
+  // first run with no name → prompt (reuses the name-entry overlay)
+  if (!prof.display_name) openNameEntry(null);
+}
+
+async function saveDisplayName(name) {
+  const u = currentUser();
+  if (!u || !LB_ON()) return;
+  try {
+    await fetch(LB_URL + "/rest/v1/profiles?id=eq." + encodeURIComponent(u.id), {
+      method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ display_name: name }),
+    });
+    if (_profile) _profile.display_name = name;
+  } catch (e) { console.warn("Save name failed:", e); }
+}
+
+function isTournamentAdmin() { return !!(_profile && _profile.is_admin); }
+
+// --- player name: profile display_name when logged in, else local guest name ---
+function getPlayerName() {
+  if (_profile && _profile.display_name) return _profile.display_name;
+  try { return localStorage.getItem("golf.playerName") || ""; } catch (e) { return ""; }
+}
+function setPlayerName(n) {
+  const clean = (n || "").trim().slice(0, 16);
+  try { localStorage.setItem("golf.playerName", clean); } catch (e) { /* ignore */ }
+  if (isLoggedIn()) saveDisplayName(clean);   // persist to the account
+  updateMenuPlayerLine();
+  return clean;
+}
+function updateMenuPlayerLine() {
+  const el = document.getElementById("menu-player-name");
+  if (el) el.textContent = getPlayerName() || "Set name";
+  updateAuthUI();
+}
+
+// --- auth UI (menu control + magic-link modal) ---
+function updateAuthUI() {
+  const signin = document.getElementById("menu-signin");
+  const account = document.getElementById("menu-account");
+  if (!signin || !account) return;
+  const on = isLoggedIn();
+  signin.classList.toggle("hidden", on);
+  account.classList.toggle("hidden", !on);
+}
+
+function openAuthModal() {
+  const m = document.getElementById("auth-modal");
+  if (!m) return;
+  document.getElementById("auth-form").classList.remove("hidden");
+  document.getElementById("auth-sent").classList.add("hidden");
+  document.getElementById("auth-error").classList.add("hidden");
+  m.classList.remove("hidden");
+  const inp = document.getElementById("auth-email");
+  if (inp) setTimeout(() => inp.focus(), 30);
+}
+function closeAuthModal() {
+  const m = document.getElementById("auth-modal");
+  if (m) m.classList.add("hidden");
+}
+
+(function wireAuth() {
+  const signin = document.getElementById("menu-signin");
+  if (signin) signin.addEventListener("click", openAuthModal);
+  const signout = document.getElementById("menu-signout");
+  if (signout) signout.addEventListener("click", async () => { await signOut(); updateMenuPlayerLine(); });
+
+  const cancel = document.getElementById("auth-cancel");
+  if (cancel) cancel.addEventListener("click", closeAuthModal);
+  const sentClose = document.getElementById("auth-sent-close");
+  if (sentClose) sentClose.addEventListener("click", closeAuthModal);
+
+  const send = document.getElementById("auth-send");
+  const email = document.getElementById("auth-email");
+  const err = document.getElementById("auth-error");
+  async function doSend() {
+    const v = (email.value || "").trim();
+    err.classList.add("hidden");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) {
+      err.textContent = "Enter a valid email."; err.classList.remove("hidden"); return;
+    }
+    if (!LB_ON()) {
+      err.textContent = "Auth not configured (set LB_URL / LB_KEY)."; err.classList.remove("hidden"); return;
+    }
+    send.disabled = true; send.textContent = "Sending…";
+    const ok = await sendMagicLink(v);
+    send.disabled = false; send.textContent = "Send link";
+    if (ok) {
+      document.getElementById("auth-sent-email").textContent = v;
+      document.getElementById("auth-form").classList.add("hidden");
+      document.getElementById("auth-sent").classList.remove("hidden");
+    } else {
+      err.textContent = "Could not send link. Try again."; err.classList.remove("hidden");
+    }
+  }
+  if (send) send.addEventListener("click", doSend);
+  if (email) email.addEventListener("keydown", (e) => { if (e.key === "Enter") doSend(); });
+})();
+
+// --- name-entry overlay (also used to gate submit) ---
+let _namePending = null;   // callback to run once a name is saved
+function openNameEntry(onSaved) {
+  _namePending = onSaved || null;
+  const ov = document.getElementById("name-entry");
+  const inp = document.getElementById("ne-input");
+  if (!ov || !inp) return;
+  inp.value = getPlayerName();
+  ov.classList.remove("hidden");
+  setTimeout(() => inp.focus(), 30);
+}
+function closeNameEntry() {
+  const ov = document.getElementById("name-entry");
+  if (ov) ov.classList.add("hidden");
+  _namePending = null;
+}
+
+// --- build a leaderboard row from the finished round ---
+function buildRoundPayload() {
+  const stats = round.holeStats, n = stats.length;
+  if (!n || !course) return null;
+  const girs = stats.filter(h => h.gir).length;
+  const firHoles = stats.filter(h => h.fairwayHit !== null);
+  const firs = firHoles.filter(h => h.fairwayHit).length;
+  const putts = stats.reduce((s, h) => s + (h.putts || 0), 0);
+  const proxHoles = stats.filter(h => h.proximity !== null);
+  const avgProx = proxHoles.length ? proxHoles.reduce((s, h) => s + h.proximity, 0) / proxHoles.length : null;
+  const strokes = stats.reduce((s, h) => s + h.strokes, 0);
+  return {
+    name: getPlayerName(), user_id: (currentUser() || {}).id || null,
+    course_id: selectedCourseId, hole_count: course.holes.length,
+    strokes, to_par: round.score, putts, gir: girs,
+    fir: firs, fir_holes: firHoles.length,
+    prox_ft: avgProx !== null ? Math.round(avgProx * 3) : null,
+  };
+}
+
+async function submitRound(payload) {
+  if (!LB_ON() || !payload || !payload.name) return false;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/rounds", {
+      method: "POST", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify(payload),
+    });
+    return res.ok;
+  } catch (e) { console.warn("Leaderboard submit failed:", e); return false; }
+}
+
+// --- Pending-submission queue (handles the magic-link redirect gap) ---
+// A round finished while logged out is stashed here; logging in reloads the
+// page, and flushPendingRounds() posts the queue once a session is restored.
+function getPendingRounds() {
+  try { return JSON.parse(localStorage.getItem("golf.pendingRounds") || "[]"); } catch (e) { return []; }
+}
+function setPendingRounds(arr) {
+  try { localStorage.setItem("golf.pendingRounds", JSON.stringify(arr || [])); } catch (e) {}
+}
+function queuePendingRound(payload) {
+  const q = getPendingRounds();
+  q.push(payload);
+  setPendingRounds(q);
+}
+async function flushPendingRounds() {
+  if (!LB_ON() || !isLoggedIn()) return;
+  const q = getPendingRounds();
+  if (!q.length) return;
+  const uid = (currentUser() || {}).id || null;
+  const remaining = [];
+  for (const p of q) {
+    p.user_id = uid;                 // attach the now-known account
+    p.name = getPlayerName() || p.name;
+    const ok = await submitRound(p);
+    if (!ok) remaining.push(p);
+  }
+  setPendingRounds(remaining);
+}
+
+// Called when a round completes. Logged in → post now; guest → queue + invite login.
+function submitFinishedRound() {
+  if (!LB_ON() || round._submitted) return;
+  round._submitted = true;
+  const payload = buildRoundPayload();
+  if (!payload) return;
+  const btn = document.getElementById("re-leaderboard");
+  if (isLoggedIn()) {
+    submitRound(payload).then(ok => { if (btn && ok) btn.textContent = "View leaderboard ✓"; });
+  } else {
+    queuePendingRound(payload);      // don't lose the score across the login redirect
+    if (btn) btn.textContent = "🔑 Sign in to post score";   // CTA; tapping still opens the board
+  }
+}
+
+async function fetchLeaderboard(courseId) {
+  if (!LB_ON()) return null;
+  const q = "/rest/v1/rounds?course_id=eq." + encodeURIComponent(courseId) +
+            "&order=to_par.asc,strokes.asc&limit=200";
+  const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const rows = await res.json();
+  // best round per account (already sorted best-first); key by user_id when
+  // present (real account), else fall back to name (legacy/guest rows).
+  const seen = new Set(), best = [];
+  for (const r of rows) {
+    const key = r.user_id ? ("u:" + r.user_id) : ("n:" + (r.name || "").toLowerCase());
+    if (seen.has(key)) continue;
+    seen.add(key); best.push(r);
+  }
+  return best.slice(0, 50);
+}
+
+let _lbCourseId = null;
+async function renderLeaderboard(courseId) {
+  _lbCourseId = courseId;
+  const list = document.getElementById("lb-list");
+  const empty = document.getElementById("lb-empty");
+  if (!list) return;
+  // course selector reflects choice
+  const sel = document.getElementById("lb-course");
+  if (sel) sel.value = courseId;
+  list.innerHTML = "";
+  empty.textContent = "Loading…"; empty.classList.remove("hidden");
+  if (!LB_ON()) { empty.textContent = "Leaderboard not configured."; return; }
+  try {
+    const rows = await fetchLeaderboard(courseId);
+    if (!rows || !rows.length) { empty.textContent = "No scores yet — be the first!"; return; }
+    const me = getPlayerName().toLowerCase();
+    list.innerHTML = rows.map((r, i) => {
+      const cls = r.to_par < 0 ? "under" : r.to_par > 0 ? "over" : "even";
+      const mine = (r.name || "").toLowerCase() === me ? " lb-me" : "";
+      return `<tr class="${mine}">
+        <td class="lb-rank">${i + 1}</td>
+        <td class="lb-name">${escapeHTML(r.name)}</td>
+        <td class="lb-topar ${cls}">${formatToPar(r.to_par)}</td>
+        <td class="lb-strk">${r.strokes}</td></tr>`;
+    }).join("");
+    empty.classList.add("hidden");
+  } catch (e) {
+    console.warn(e); empty.textContent = "Leaderboard unavailable.";
+  }
+}
+function escapeHTML(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+let _lbReturn = "menu";  // where Close goes back to
+function openLeaderboard(from) {
+  _lbReturn = from || "menu";
+  document.getElementById("leaderboard").classList.remove("hidden");
+  renderLeaderboard(_lbCourseId || selectedCourseId);
+}
+function closeLeaderboard() {
+  document.getElementById("leaderboard").classList.add("hidden");
+  if (_lbReturn === "round-end") document.getElementById("round-end").classList.remove("hidden");
+}
+
+// --- wiring ---
+(function wireLeaderboard() {
+  const ne = document.getElementById("name-entry");
+  if (ne) {
+    document.getElementById("ne-save").addEventListener("click", () => {
+      const v = setPlayerName(document.getElementById("ne-input").value);
+      closeNameEntry();
+      const cb = _namePending; _namePending = null;
+      if (v && cb) cb();
+    });
+    document.getElementById("ne-cancel").addEventListener("click", closeNameEntry);
+    document.getElementById("ne-input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") document.getElementById("ne-save").click();
+    });
+  }
+  const lb = document.getElementById("leaderboard");
+  if (lb) {
+    document.getElementById("lb-close").addEventListener("click", closeLeaderboard);
+    const sel = document.getElementById("lb-course");
+    if (sel) {
+      sel.innerHTML = COURSES.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+      sel.addEventListener("change", () => renderLeaderboard(sel.value));
+    }
+  }
+  const ol = document.getElementById("open-leaderboard");
+  if (ol) ol.addEventListener("click", () => openLeaderboard("menu"));
+  const rl = document.getElementById("re-leaderboard");
+  if (rl) rl.addEventListener("click", () => {
+    document.getElementById("round-end").classList.add("hidden");
+    openLeaderboard("round-end");
+  });
+  const pl = document.getElementById("menu-player");
+  if (pl) pl.addEventListener("click", () => openNameEntry(null));
+})();
+
+// =====================================================================
+//  Tournament Mode — async multi-player timed tournaments via Supabase.
+//
+//  Tables (run in Supabase SQL editor):
+//
+//  create table tournaments (
+//    id            uuid primary key default gen_random_uuid(),
+//    name          text not null,
+//    course_id     text not null,
+//    r1r2_opens    timestamptz not null,
+//    r1r2_deadline timestamptz not null,
+//    r3r4_opens    timestamptz,
+//    r3r4_deadline timestamptz,
+//    created_by    text
+//  );
+//  create table tournament_rounds (
+//    id            uuid primary key default gen_random_uuid(),
+//    tournament_id uuid references tournaments(id),
+//    player_name   text not null,
+//    round_num     int  not null check (round_num between 1 and 4),
+//    strokes       int, to_par int, putts int, gir int, fir int,
+//    fir_holes     int, prox_ft float,
+//    submitted_at  timestamptz default now(),
+//    unique (tournament_id, player_name, round_num)
+//  );
+//  Grant anon SELECT + INSERT on both tables.
+//
+//  ADMIN: tournament creation is gated by profiles.is_admin (see isTournamentAdmin
+//  in the Accounts section). RLS enforces it server-side too.
+// =====================================================================
+
+// --- localStorage helpers ---
+function getTournamentState() {
+  try { return JSON.parse(localStorage.getItem("golf.tournament") || "null"); } catch(e) { return null; }
+}
+function setTournamentState(s) {
+  try { localStorage.setItem("golf.tournament", s ? JSON.stringify(s) : "null"); } catch(e) {}
+}
+
+// --- Phase detection (pure, wall-clock based) ---
+function tournamentPhase(t) {
+  const now = Date.now();
+  const d1 = new Date(t.r1r2_deadline).getTime();
+  const d2 = t.r3r4_deadline ? new Date(t.r3r4_deadline).getTime() : null;
+  if (now < d1)        return "r1r2";
+  if (!d2 || now < d2) return "r3r4";
+  return "complete";
+}
+
+// --- Cut math ---
+function computeCut(rows) {
+  const byPlayer = {};
+  for (const r of rows) {
+    // key by account when present, else by name (legacy/guest rows)
+    const key = r.user_id ? ("u:" + r.user_id) : ("n:" + (r.player_name || "").toLowerCase());
+    if (!byPlayer[key]) byPlayer[key] = { name: r.player_name, user_id: r.user_id || null, rounds: {} };
+    byPlayer[key].rounds[r.round_num] = r;
+  }
+  const combined = [];
+  for (const d of Object.values(byPlayer)) {
+    if (!d.rounds[1] || !d.rounds[2]) continue;
+    combined.push({ name: d.name, user_id: d.user_id, totalToPar: d.rounds[1].to_par + d.rounds[2].to_par });
+  }
+  if (!combined.length) return { cutLine: null, survivors: [], combined: [] };
+  combined.sort((a, b) => a.totalToPar - b.totalToPar);
+  const cutPos = Math.ceil(combined.length / 2); // ceil → odd middle survives
+  const cutLine = combined[cutPos - 1].totalToPar;
+  return { cutLine, survivors: combined.filter(p => p.totalToPar <= cutLine), combined };
+}
+
+// Identity key for a standings entry (account when present, else name).
+function entryKey(e) {
+  return e.user_id ? ("u:" + e.user_id) : ("n:" + (e.name || e.player_name || "").toLowerCase());
+}
+// Is this standings entry the current player?
+function isMeEntry(e) {
+  const u = currentUser();
+  if (u && e.user_id) return e.user_id === u.id;
+  const myName = (getPlayerName() || "").toLowerCase();
+  return !!myName && (e.name || e.player_name || "").toLowerCase() === myName;
+}
+
+// --- Supabase helpers ---
+async function fetchActiveTournament(courseId) {
+  if (!LB_ON()) return null;
+  try {
+    const q = "/rest/v1/tournaments?course_id=eq." + encodeURIComponent(courseId) +
+              "&order=r1r2_opens.desc&limit=1";
+    const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  } catch(e) { return null; }
+}
+
+async function submitTournamentRound(payload) {
+  if (!LB_ON() || !payload.player_name) return false;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/tournament_rounds", {
+      method: "POST",
+      headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify(payload),
+    });
+    return res.ok;
+  } catch(e) { console.warn("Tournament round submit failed:", e); return false; }
+}
+
+async function fetchTournamentRounds(tournamentId) {
+  if (!LB_ON()) return [];
+  try {
+    const q = "/rest/v1/tournament_rounds?tournament_id=eq." + encodeURIComponent(tournamentId) +
+              "&order=round_num.asc,submitted_at.asc";
+    const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+    if (!res.ok) return [];
+    return res.json();
+  } catch(e) { return []; }
+}
+
+async function createTournament(name, courseId) {
+  if (!LB_ON()) return null;
+  const now = new Date();
+  const deadline = new Date(now.getTime() + 60 * 60 * 1000);
+  const payload = {
+    name, course_id: courseId,
+    r1r2_opens: now.toISOString(),
+    r1r2_deadline: deadline.toISOString(),
+    created_by: getPlayerName() || "Anonymous",
+  };
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/tournaments", {
+      method: "POST",
+      headers: authHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  } catch(e) { return null; }
+}
+
+// --- HUD countdown timer (shown during active tournament round) ---
+let _trnTimerInterval = null;
+
+function startTournamentTimer(deadline, elId) {
+  stopTournamentTimer();
+  const el = document.getElementById(elId || "trn-timer");
+  if (!el) return;
+  el.classList.remove("hidden");
+  const deadlineMs = new Date(deadline).getTime();
+  function tick() {
+    const rem = deadlineMs - Date.now();
+    if (rem <= 0) {
+      el.textContent = "⏱ Time's up";
+      el.classList.add("trn-timer-urgent");
+      clearInterval(_trnTimerInterval); _trnTimerInterval = null;
+      return;
+    }
+    const m = Math.floor(rem / 60000);
+    const s = Math.floor((rem % 60000) / 1000);
+    el.textContent = "⏱ " + m + ":" + s.toString().padStart(2, "0");
+    el.classList.toggle("trn-timer-urgent", rem < 10 * 60 * 1000);
+  }
+  tick();
+  _trnTimerInterval = setInterval(tick, 1000);
+}
+
+function stopTournamentTimer() {
+  if (_trnTimerInterval) { clearInterval(_trnTimerInterval); _trnTimerInterval = null; }
+  const el = document.getElementById("trn-timer");
+  if (el) { el.classList.add("hidden"); el.classList.remove("trn-timer-urgent"); el.textContent = ""; }
+}
+
+// --- Hook into round completion ---
+function handleTournamentRoundComplete() {
+  const roundNum = activeTournamentRound;
+  if (roundNum === null || !activeTournament) return;
+  activeTournamentRound = null;
+  stopTournamentTimer();
+
+  const go = async () => {
+    const base = buildRoundPayload();
+    if (!base) return;
+    const payload = {
+      tournament_id: activeTournament.id,
+      player_name: getPlayerName(),
+      user_id: (currentUser() || {}).id || null,
+      round_num: roundNum,
+      strokes: base.strokes, to_par: base.to_par, putts: base.putts,
+      gir: base.gir, fir: base.fir, fir_holes: base.fir_holes, prox_ft: base.prox_ft,
+    };
+    const ok = await submitTournamentRound(payload);
+    if (ok) {
+      const s = getTournamentState() || { id: activeTournament.id, roundsSubmitted: [] };
+      s.id = activeTournament.id;
+      if (!s.roundsSubmitted.includes(roundNum)) s.roundsSubmitted.push(roundNum);
+      setTournamentState(s);
+    }
+
+    const row = document.getElementById("re-tournament-row");
+    const btn = document.getElementById("re-tournament");
+    if (row && btn) {
+      if (roundNum === 2) {
+        btn.textContent = "✂️ View Cut Results";
+        row.classList.remove("hidden");
+        btn.onclick = () => {
+          document.getElementById("round-end").classList.add("hidden");
+          showCutModal();
+        };
+      } else if (roundNum === 4) {
+        btn.textContent = "🏆 Final Results";
+        row.classList.remove("hidden");
+        btn.onclick = () => {
+          document.getElementById("round-end").classList.add("hidden");
+          showTournamentFinal();
+        };
+      }
+    }
+  };
+
+  if (!LB_ON()) return;
+  if (!getPlayerName()) openNameEntry(go);
+  else go();
+}
+
+// --- Cut results modal ---
+async function showCutModal() {
+  if (!activeTournament) return;
+  const rows = await fetchTournamentRounds(activeTournament.id);
+  const { cutLine, survivors, combined } = computeCut(rows);
+
+  const empty = document.getElementById("tc-empty");
+  if (!combined.length) {
+    if (empty) { empty.textContent = "No complete R1+R2 entries yet."; empty.classList.remove("hidden"); }
+    document.getElementById("tournament-cut").classList.remove("hidden");
+    document.getElementById("tc-field-count").textContent = "";
+    document.getElementById("tc-status").textContent = "";
+    document.getElementById("tc-status").className = "tc-status";
+    document.getElementById("tc-list").innerHTML = "";
+    document.getElementById("tc-continue").textContent = "Back to Menu";
+    document.getElementById("tc-continue").onclick = closeTournamentCutToMenu;
+    return;
+  }
+  if (empty) empty.classList.add("hidden");
+
+  const survivorKeys = new Set(survivors.map(entryKey));
+  const myEntry = combined.find(isMeEntry);
+  const madeCut = !!myEntry && survivorKeys.has(entryKey(myEntry));
+
+  document.getElementById("tc-field-count").textContent =
+    combined.length + " player" + (combined.length !== 1 ? "s" : "") +
+    " · cut " + (cutLine !== null ? formatToPar(cutLine) : "—") +
+    " · " + survivors.length + " advance";
+
+  const statusEl = document.getElementById("tc-status");
+  if (!myEntry) {
+    statusEl.textContent = "Your score not found — did you submit R1 & R2?";
+    statusEl.className = "tc-status";
+  } else if (madeCut) {
+    statusEl.textContent = "You made the cut! (" + formatToPar(myEntry.totalToPar) + ")";
+    statusEl.className = "tc-status tc-made";
+  } else {
+    statusEl.textContent = "Missed the cut (" + formatToPar(myEntry.totalToPar) + ")";
+    statusEl.className = "tc-status tc-missed";
+  }
+
+  const list = document.getElementById("tc-list");
+  list.innerHTML = combined.map((p, i) => {
+    const survived = survivorKeys.has(entryKey(p));
+    const isMe = isMeEntry(p);
+    const rowCls = (survived ? "tc-row-made" : "tc-row-missed") + (isMe ? " tc-me" : "");
+    return "<tr class=\"" + rowCls + "\">" +
+      "<td class=\"lb-rank\">" + (i + 1) + "</td>" +
+      "<td class=\"lb-name\">" + escapeHTML(p.name) + "</td>" +
+      "<td class=\"lb-topar\">" + formatToPar(p.totalToPar) + "</td>" +
+      "<td class=\"tc-badge\">" + (survived ? "✓" : "✗") + "</td></tr>";
+  }).join("");
+
+  const cont = document.getElementById("tc-continue");
+  if (madeCut) {
+    cont.textContent = "Play Round 3";
+    cont.onclick = () => {
+      document.getElementById("tournament-cut").classList.add("hidden");
+      startTournamentRound(3);
+    };
+  } else {
+    cont.textContent = "Back to Menu";
+    cont.onclick = closeTournamentCutToMenu;
+  }
+
+  document.getElementById("tournament-cut").classList.remove("hidden");
+}
+
+function closeTournamentCutToMenu() {
+  document.getElementById("tournament-cut").classList.add("hidden");
+  mode = "menu";
+  elMenu.classList.remove("hidden");
+  elHudBtn.classList.add("hidden");
+  elHmClubRow.classList.add("hidden");
+  closeHud();
+  elScorecard.style.display = "none";
+}
+
+// --- Tournament final results modal ---
+async function showTournamentFinal() {
+  if (!activeTournament) return;
+  const rows = await fetchTournamentRounds(activeTournament.id);
+
+  const byPlayer = {};
+  for (const r of rows) {
+    const key = r.user_id ? ("u:" + r.user_id) : ("n:" + (r.player_name || "").toLowerCase());
+    if (!byPlayer[key]) byPlayer[key] = { name: r.player_name, user_id: r.user_id || null, total: 0, count: 0 };
+    byPlayer[key].total += r.to_par;
+    byPlayer[key].count += 1;
+  }
+  const standings = Object.values(byPlayer)
+    .filter(p => p.count >= 3)  // R3/R4 players (survivors)
+    .sort((a, b) => a.total - b.total);
+
+  document.getElementById("tf-title").textContent = activeTournament.name + " — Final";
+  const tfEmpty = document.getElementById("tf-empty");
+  const list = document.getElementById("tf-list");
+
+  if (!standings.length) {
+    list.innerHTML = "";
+    if (tfEmpty) { tfEmpty.textContent = "No finishers yet."; tfEmpty.classList.remove("hidden"); }
+  } else {
+    if (tfEmpty) tfEmpty.classList.add("hidden");
+    const medals = ["🥇", "🥈", "🥉"];
+    list.innerHTML = standings.map((p, i) => {
+      const isMe = isMeEntry(p);
+      return "<tr" + (isMe ? " class=\"tc-me\"" : "") + ">" +
+        "<td class=\"lb-rank\">" + (medals[i] || (i + 1)) + "</td>" +
+        "<td class=\"lb-name\">" + escapeHTML(p.name) + "</td>" +
+        "<td class=\"lb-topar\">" + formatToPar(p.total) + "</td></tr>";
+    }).join("");
+  }
+
+  document.getElementById("tournament-final").classList.remove("hidden");
+}
+
+// --- Lobby ---
+let _lobbyTimer = null;
+
+function startLobbyTimer(deadline) {
+  stopLobbyTimer();
+  const el = document.getElementById("tl-timer");
+  if (!el) return;
+  const deadlineMs = new Date(deadline).getTime();
+  function tick() {
+    const rem = deadlineMs - Date.now();
+    if (rem <= 0) { el.textContent = "Time's up"; stopLobbyTimer(); return; }
+    const h = Math.floor(rem / 3600000);
+    const m = Math.floor((rem % 3600000) / 60000);
+    const s = Math.floor((rem % 60000) / 1000);
+    el.textContent = h > 0
+      ? h + ":" + m.toString().padStart(2, "0") + ":" + s.toString().padStart(2, "0") + " remaining"
+      : m + ":" + s.toString().padStart(2, "0") + " remaining";
+  }
+  tick();
+  _lobbyTimer = setInterval(tick, 1000);
+}
+
+function stopLobbyTimer() {
+  if (_lobbyTimer) { clearInterval(_lobbyTimer); _lobbyTimer = null; }
+}
+
+async function openTournamentLobby() {
+  const modal = document.getElementById("tournament-lobby");
+  modal.classList.remove("hidden");
+  document.getElementById("tl-name").textContent = "Loading…";
+  document.getElementById("tl-status").textContent = "";
+  document.getElementById("tl-timer").textContent = "";
+  document.getElementById("tl-field").textContent = "";
+  document.getElementById("tl-rounds").innerHTML = "";
+  document.getElementById("tl-start").classList.add("hidden");
+  stopLobbyTimer();
+
+  if (!LB_ON()) {
+    document.getElementById("tl-name").textContent = "Leaderboard not configured";
+    document.getElementById("tl-status").textContent = "Set LB_URL and LB_KEY in game.js";
+    return;
+  }
+
+  const t = await fetchActiveTournament(selectedCourseId);
+  activeTournament = t || null;
+
+  if (!t) {
+    document.getElementById("tl-name").textContent = "No active tournament";
+    document.getElementById("tl-status").textContent =
+      "for " + ((COURSES.find(c => c.id === selectedCourseId) || {}).name || selectedCourseId);
+    if (isTournamentAdmin()) {
+      document.getElementById("tl-start").classList.remove("hidden");
+    } else {
+      document.getElementById("tl-field").textContent = "Check back when one is scheduled.";
+    }
+    return;
+  }
+
+  document.getElementById("tl-name").textContent = t.name;
+  const phase = tournamentPhase(t);
+  const trnState = getTournamentState();
+  const submitted = (trnState && trnState.id === t.id) ? trnState.roundsSubmitted : [];
+
+  const allRows = await fetchTournamentRounds(t.id);
+  const players = new Set(allRows.map(r => entryKey(r)));
+  document.getElementById("tl-field").textContent =
+    players.size + " player" + (players.size !== 1 ? "s" : "") + " entered";
+
+  // Tournaments require an account (scores must tie to a real user).
+  if (!isLoggedIn()) {
+    document.getElementById("tl-status").textContent =
+      phase === "r1r2" ? "Rounds 1 & 2 open" : phase === "r3r4" ? "Rounds 3 & 4 open" : "Complete";
+    document.getElementById("tl-rounds").innerHTML =
+      "<p class=\"tl-missed\">Sign in to compete.</p>" +
+      "<button class=\"menu-btn\" id=\"tl-signin\">Sign in</button>";
+    document.getElementById("tl-signin").onclick = () => { closeTournamentLobby(); openAuthModal(); };
+    return;
+  }
+
+  if (phase === "r1r2") {
+    document.getElementById("tl-status").textContent = "Rounds 1 & 2 open";
+    startLobbyTimer(t.r1r2_deadline);
+
+    const r1done = submitted.includes(1);
+    const r2done = submitted.includes(2);
+    const rounds = document.getElementById("tl-rounds");
+    rounds.innerHTML =
+      "<button class=\"menu-btn" + (r1done ? " secondary" : "") + "\" id=\"tl-play-r1\">" +
+        (r1done ? "✓ Round 1 complete" : "Play Round 1") + "</button>" +
+      "<button class=\"menu-btn" + (r1done && !r2done ? "" : " secondary") + "\" id=\"tl-play-r2\"" +
+        (r2done || r1done ? "" : " disabled") + ">" +
+        (r2done ? "✓ Round 2 complete" : "Play Round 2") + "</button>";
+
+    if (!r1done) {
+      document.getElementById("tl-play-r1").onclick = () => {
+        closeTournamentLobby(); startTournamentRound(1);
+      };
+    }
+    if (r1done && !r2done) {
+      document.getElementById("tl-play-r2").onclick = () => {
+        closeTournamentLobby(); startTournamentRound(2);
+      };
+    }
+
+  } else if (phase === "r3r4") {
+    document.getElementById("tl-status").textContent = "Cut complete — Rounds 3 & 4 open";
+    if (t.r3r4_deadline) startLobbyTimer(t.r3r4_deadline);
+
+    const { survivors } = computeCut(allRows);
+    const madeCut = survivors.some(isMeEntry);
+    const r3done = submitted.includes(3);
+    const r4done = submitted.includes(4);
+    const rounds = document.getElementById("tl-rounds");
+
+    if (madeCut) {
+      rounds.innerHTML =
+        "<button class=\"menu-btn" + (r3done ? " secondary" : "") + "\" id=\"tl-play-r3\">" +
+          (r3done ? "✓ Round 3 complete" : "Play Round 3") + "</button>" +
+        "<button class=\"menu-btn" + (r3done && !r4done ? "" : " secondary") + "\" id=\"tl-play-r4\"" +
+          (r4done || r3done ? "" : " disabled") + ">" +
+          (r4done ? "✓ Round 4 complete" : "Play Round 4") + "</button>";
+      if (!r3done) document.getElementById("tl-play-r3").onclick = () => { closeTournamentLobby(); startTournamentRound(3); };
+      if (r3done && !r4done) document.getElementById("tl-play-r4").onclick = () => { closeTournamentLobby(); startTournamentRound(4); };
+    } else {
+      rounds.innerHTML = "<p class=\"tl-missed\">You missed the cut.</p>" +
+        "<button class=\"menu-btn secondary\" id=\"tl-view-cut\">View Cut Results</button>";
+      document.getElementById("tl-view-cut").onclick = () => { closeTournamentLobby(); showCutModal(); };
+    }
+
+  } else {
+    document.getElementById("tl-status").textContent = "Tournament complete";
+    document.getElementById("tl-rounds").innerHTML =
+      "<button class=\"menu-btn secondary\" id=\"tl-view-final\">View Final Results</button>";
+    document.getElementById("tl-view-final").onclick = () => { closeTournamentLobby(); showTournamentFinal(); };
+  }
+}
+
+function closeTournamentLobby() {
+  stopLobbyTimer();
+  document.getElementById("tournament-lobby").classList.add("hidden");
+}
+
+function startTournamentRound(roundNum) {
+  if (!activeTournament) return;
+  if (!isLoggedIn()) { openAuthModal(); return; }   // account required to compete
+  activeTournamentRound = roundNum;
+  const deadline = roundNum <= 2 ? activeTournament.r1r2_deadline : activeTournament.r3r4_deadline;
+  if (deadline) startTournamentTimer(deadline, "trn-timer");
+  startCourse();
+}
+
+// --- Wire-up ---
+(function wireTournament() {
+  const ot = document.getElementById("open-tournaments");
+  if (ot) ot.addEventListener("click", openTournamentLobby);
+
+  const tlClose = document.getElementById("tl-close");
+  if (tlClose) tlClose.addEventListener("click", closeTournamentLobby);
+
+  const tlStart = document.getElementById("tl-start");
+  if (tlStart) tlStart.addEventListener("click", async () => {
+    if (!isTournamentAdmin()) return;   // gate: admins only
+    const courseName = (COURSES.find(c => c.id === selectedCourseId) || {}).name || selectedCourseId;
+    const dateStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const name = courseName + " — " + dateStr;
+    document.getElementById("tl-name").textContent = "Creating…";
+    document.getElementById("tl-start").classList.add("hidden");
+    const t = await createTournament(name, selectedCourseId);
+    if (t) {
+      activeTournament = t;
+      openTournamentLobby();
+    } else {
+      document.getElementById("tl-name").textContent = "Failed to create tournament";
+      document.getElementById("tl-status").textContent = "Check Supabase permissions";
+    }
+  });
+
+  const tfClose = document.getElementById("tf-close");
+  if (tfClose) tfClose.addEventListener("click", () => {
+    document.getElementById("tournament-final").classList.add("hidden");
+    mode = "menu";
+    elMenu.classList.remove("hidden");
+    elHudBtn.classList.add("hidden");
+    elHmClubRow.classList.add("hidden");
+    closeHud();
+    elScorecard.style.display = "none";
+  });
+})();
+
+// =====================================================================
 //  Main loop
 // =====================================================================
 function loop() {
@@ -2468,8 +3538,24 @@ function loop() {
 // background so "Play Course" starts instantly (keeps the fallback on error).
 setHole(FALLBACK_HOLE);
 buildCourseList();
+updateMenuPlayerLine();   // reflect saved player name (leaderboard identity)
 loop();
 showMenu();
 loadCourse(selectedCourseId).catch((e) => {
   console.warn("Course load failed, using fallback hole:", e);
 });
+
+// Auth boot: capture magic-link tokens, restore/validate the session, load the
+// profile, and flush any rounds queued while logged out. All best-effort.
+(async function bootAuth() {
+  if (!LB_ON()) { updateAuthUI(); return; }
+  try {
+    parseAuthRedirect();
+    await restoreSession();
+    if (isLoggedIn()) {
+      await ensureProfile();
+      await flushPendingRounds();
+    }
+  } catch (e) { console.warn("Auth boot failed:", e); }
+  updateMenuPlayerLine();
+})();

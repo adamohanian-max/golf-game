@@ -21,7 +21,12 @@ We ALSO bake one north-up aerial photo per hole (Esri World Imagery, keyless)
 plus a pixel->world affine, so the game can draw a real satellite base under the
 play surfaces. Disable with --no-imagery.
 """
-import argparse, json, math, os, re, sys, urllib.parse, urllib.request
+import argparse, colorsys, json, math, os, re, sys, urllib.parse, urllib.request
+
+try:
+    from PIL import Image            # optional — only used to carve fairway from the aerial
+except ImportError:
+    Image = None
 
 OVERPASS = "https://overpass-api.de/api/interpreter"
 ESRI = ("https://services.arcgisonline.com/ArcGIS/rest/services/"
@@ -45,6 +50,151 @@ CARTPATH_NEAR_YDS = 45
 MARGIN_UNITS = 12         # padding around hole geometry -> world bounds
 IMG_MAX_PX = 1536         # long side of each baked aerial image
 IMG_PAD = 1.06            # expand aerial footprint past the world rect a touch
+
+# --- Aerial fairway carving (Pillow). Classify "mown fairway grass" vs the rest
+# (rough/trees/sand) from the baked Esri imagery. HSV thresholds; may need tuning
+# under different imagery/lighting. All heuristic + guarded -> safe to fail.
+FW_HUE_LO   = 60          # green-ish hue band, degrees (0..360). grass ~ 70-150
+FW_HUE_HI   = 160
+FW_VAL_MIN  = 0.30        # brightness floor — drops dark rough/tree shadow
+FW_VAL_MAX  = 0.92        # ceiling — drops bright sand/cartpath/glare
+FW_SAT_MIN  = 0.12        # some color — drops grey paths/bunkers
+FW_STATIONS = 48          # centerline sample stations along the hole
+FW_STEP_UNITS = 0.5       # outward march step (world units) when finding the edge
+FW_EDGE_RUN = 4           # this many consecutive non-fairway px == the edge
+FW_MIN_HALF_UNITS = 2.0   # ignore absurdly thin measurements (keep >= this)
+FW_MIN_HIT_FRAC = 0.4     # need this frac of stations to classify, else fall back
+
+
+def _rgb_to_hsv(r, g, b):
+    return colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)  # h,s,v in 0..1
+
+
+def is_fairway_px(r, g, b):
+    """True if an aerial pixel looks like mown fairway grass."""
+    h, s, v = _rgb_to_hsv(r, g, b)
+    hue_deg = h * 360.0
+    return (FW_HUE_LO <= hue_deg <= FW_HUE_HI
+            and FW_VAL_MIN <= v <= FW_VAL_MAX
+            and s >= FW_SAT_MIN)
+
+
+def invert_affine(a, b, c, d, e, f):
+    """Invert pixel->world affine [a b c; d e f] -> world->pixel. Returns 6-tuple."""
+    det = a * e - b * d
+    if abs(det) < 1e-12:
+        return None
+    ia, ib = e / det, -b / det
+    id_, ie = -d / det, a / det
+    ic = -(ia * c + ib * f)
+    if_ = -(id_ * c + ie * f)
+    return (ia, ib, ic, id_, ie, if_)
+
+
+def measure_fairway_ribbon(img, w2p, centerline, half_w_units,
+                           stations=FW_STATIONS):
+    """Carve a real-shaped fairway from the aerial.
+    img: PIL image; w2p: world->pixel affine 6-tuple; centerline: [(x,y),...] in
+    WORLD units (tee->pin); half_w_units: clamp (the fixed-corridor half width).
+    Returns a ribbon polygon [(x,y),...] (world units) or None to fall back."""
+    if img is None or w2p is None or len(centerline) < 2:
+        return None
+    px = img.load()
+    W, H = img.size
+    ia, ib, ic, id_, ie, if_ = w2p
+
+    def sample(wx, wy):
+        sx = int(round(ia * wx + ib * wy + ic))
+        sy = int(round(id_ * wx + ie * wy + if_))
+        if 0 <= sx < W and 0 <= sy < H:
+            p = px[sx, sy]
+            return is_fairway_px(p[0], p[1], p[2])
+        return False
+
+    # resample the centerline to `stations` evenly spaced points
+    pts = _resample_polyline(centerline, stations)
+    max_w = half_w_units
+    left, right, hits = [], [], 0
+    for i, p in enumerate(pts):
+        # local direction -> perpendicular
+        a = pts[max(0, i - 1)]
+        b = pts[min(len(pts) - 1, i + 1)]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        dl = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / dl, dx / dl
+        if not sample(p[0], p[1]):        # centerline itself not on fairway -> skip
+            left.append((p[0] + nx * FW_MIN_HALF_UNITS, p[1] + ny * FW_MIN_HALF_UNITS))
+            right.append((p[0] - nx * FW_MIN_HALF_UNITS, p[1] - ny * FW_MIN_HALF_UNITS))
+            continue
+        hits += 1
+        wl = _edge_distance(sample, p, (nx, ny), max_w)
+        wr = _edge_distance(sample, p, (-nx, -ny), max_w)
+        wl = max(wl, FW_MIN_HALF_UNITS)
+        wr = max(wr, FW_MIN_HALF_UNITS)
+        left.append((p[0] + nx * wl, p[1] + ny * wl))
+        right.append((p[0] - nx * wr, p[1] - ny * wr))
+    if hits < FW_MIN_HIT_FRAC * len(pts):
+        return None
+    return left + right[::-1]
+
+
+def _edge_distance(sample, origin, direction, max_w):
+    """March outward until FW_EDGE_RUN consecutive non-fairway px; return distance."""
+    nx, ny = direction
+    dist_w, run, last_good = 0.0, 0, FW_MIN_HALF_UNITS
+    while dist_w <= max_w:
+        dist_w += FW_STEP_UNITS
+        if sample(origin[0] + nx * dist_w, origin[1] + ny * dist_w):
+            run = 0
+            last_good = dist_w
+        else:
+            run += 1
+            if run >= FW_EDGE_RUN:
+                break
+    return min(last_good, max_w)
+
+
+def _resample_polyline(line, n):
+    """Return n points evenly spaced along the polyline."""
+    if len(line) < 2:
+        return line
+    segs = [dist(line[i], line[i + 1]) for i in range(len(line) - 1)]
+    total = sum(segs) or 1.0
+    out, target, acc, si = [], 0.0, 0.0, 0
+    for k in range(n):
+        target = total * k / (n - 1)
+        while si < len(segs) - 1 and acc + segs[si] < target:
+            acc += segs[si]; si += 1
+        seg = segs[si] or 1.0
+        t = (target - acc) / seg
+        out.append((line[si][0] + (line[si + 1][0] - line[si][0]) * t,
+                    line[si][1] + (line[si + 1][1] - line[si][1]) * t))
+    return out
+
+
+def carve_synth_fairway(hole, img_path):
+    """For a synth-fairway hole with a baked aerial, replace the fixed-rectangle
+    fairway with a ribbon measured from the imagery. Returns True if carved.
+    No-op (returns False) if Pillow is missing, the hole isn't synth, or the
+    classifier finds too little fairway -> the existing corridor is kept."""
+    if Image is None or "_fwCenter" not in hole or "aerial" not in hole:
+        return False
+    try:
+        w2p = invert_affine(*hole["aerial"]["toWorld"])
+        if w2p is None:
+            return False
+        with Image.open(img_path) as im:
+            im = im.convert("RGB")
+            ribbon = measure_fairway_ribbon(
+                im, w2p, hole["_fwCenter"], hole["_fwHalf"])
+        if not ribbon:
+            return False
+        hole["surfaces"]["fairway"] = [[{"x": round(x, 2), "y": round(y, 2)}
+                                        for (x, y) in ribbon]]
+        return True
+    except Exception as e:
+        print(f"  ! fairway carve failed hole {hole.get('num')}: {e}", file=sys.stderr)
+        return False
 
 
 # --- Overpass --------------------------------------------------------------
@@ -244,7 +394,7 @@ def resolve_card(osm_tags, card):
 # in which case we fall back to a synthesized corridor).
 def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
                tees, woods_els, cartpath_els, grass_els, lat0, lon0,
-               si=None, yards_override=None):
+               si=None, yards_override=None, rough_els=()):
     line_m = list(line_m)
 
     # Orient: pin = endpoint nearest a green centroid; tee = the other end.
@@ -280,7 +430,7 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
         return [to_frame(project(p["lat"], p["lon"], lat0, lon0)) for p in geom]
 
     surfaces = {"green": [], "fairway": [], "bunker": [], "water": [], "tee": [],
-                "woods": [], "cartpath": [], "grass": []}
+                "woods": [], "cartpath": [], "grass": [], "rough": []}
 
     # green for this hole
     if green_d <= GREEN_NEAR_M:
@@ -306,6 +456,8 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
         surfaces["cartpath"].append(poly_units(el["geometry"]))  # polyline
     for el in grass_els:
         surfaces["grass"].append(poly_units(el["geometry"]))
+    for el in rough_els:                              # mapped golf=rough
+        surfaces["rough"].append(poly_units(el["geometry"]))
 
     # water near the hole line; tee box nearest the tee point
     for el in waters:
@@ -384,6 +536,11 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
         hole_rec["si"] = si                       # stroke index (handicap rank)
     if yards_override:
         hole_rec["geomYards"] = geom_yards        # keep the geometric estimate for QA
+    if synth_fw:
+        # stash centerline (world units) + clamp half-width so the post-aerial
+        # carve can replace the fixed-rectangle fairway with a real-shaped ribbon.
+        hole_rec["_fwCenter"] = [(p["x"], p["y"]) for p in (fix(to_frame(q)) for q in line_m)]
+        hole_rec["_fwHalf"] = FAIRWAY_HALF_W_YDS * M_PER_YARD * SCALE
     return (hole_rec, synth_fw, aerial_meta)
 
 
@@ -460,6 +617,7 @@ def main():
     byt = lambda k, v: [e for e in els if e["tags"].get(k) == v]
     greens, bunkers, waters, tees = by("green"), by("bunker"), by("water_hazard"), by("tee")
     fairways, cartpaths = by("fairway"), by("cartpath")
+    roughs = by("rough")
     woods = byt("natural", "wood")
     grass = byt("landuse", "grass")
     # OSM water lives under golf=water_hazard and/or natural=water
@@ -506,6 +664,7 @@ def main():
     wd_by_hole = assign(woods, WOODS_NEAR_YDS)
     cp_by_hole = assign(cartpaths, CARTPATH_NEAR_YDS)
     gr_by_hole = assign(grass, GRASS_NEAR_YDS)
+    rg_by_hole = assign(roughs, WOODS_NEAR_YDS)   # rough sprawls like woods -> wide catch
 
     out_dir = os.path.dirname(args.out or os.path.join(
         os.path.dirname(__file__), "..", "courses", args.id + ".json"))
@@ -523,7 +682,7 @@ def main():
     if scorecard:
         print(f"  (scorecard override: {len(scorecard)} hole(s))")
 
-    out_holes, synth_count, img_count, card_count = [], 0, 0, 0
+    out_holes, synth_count, img_count, card_count, carve_count = [], 0, 0, 0, 0
     for n, h, lm in hole_lines:
         par, si, yov, src = resolve_card(h["tags"], scorecard.get(str(n), {}))
         if src == "scorecard":
@@ -532,7 +691,7 @@ def main():
             hole, synth, am = build_hole(
                 args.id, n, par, lm, greens, fw_by_hole[n], bk_by_hole[n],
                 waters, tees, wd_by_hole[n], cp_by_hole[n], gr_by_hole[n], lat0, lon0,
-                si=si, yards_override=yov)
+                si=si, yards_override=yov, rough_els=rg_by_hole[n])
             # QA: flag big scorecard-vs-geometry yardage gaps (mis-keyed hole, etc.)
             if yov and abs(yov - hole.get("geomYards", yov)) > 60:
                 print(f"  ! hole {n}: scorecard {yov}y vs geometry "
@@ -544,9 +703,12 @@ def main():
                     fetch_aerial(am["merc"], am["w"], am["h"],
                                  os.path.join(out_dir, am["rel"]))
                     img_count += 1
+                    if carve_synth_fairway(hole, os.path.join(out_dir, am["rel"])):
+                        carve_count += 1
                 except Exception as e:
                     print(f"  ! aerial fetch failed hole {n}: {e}", file=sys.stderr)
                     hole.pop("aerial", None)
+            hole.pop("_fwCenter", None); hole.pop("_fwHalf", None)   # drop temp fields
             out_holes.append(hole)
             if synth:
                 synth_count += 1
@@ -554,6 +716,8 @@ def main():
             print(f"  ! skipped hole {n}: {e}", file=sys.stderr)
     if synth_count:
         print(f"  ({synth_count} hole(s) had no mapped fairway -> synthesized corridor)")
+    if carve_count:
+        print(f"  ({carve_count} synth fairway(s) carved from the aerial)")
     if not args.no_imagery:
         print(f"  ({img_count} aerial image(s) baked into {img_dir})")
 

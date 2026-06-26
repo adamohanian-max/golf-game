@@ -5,7 +5,15 @@ description: Bake a real golf course (geometry + aerial imagery) into courses/<i
 
 # Bake a golf course
 
-Turns a real course into a playable `courses/<id>.json` (+ per-hole aerial photos) that the game loads. All work is done by the dev tool `tools/fetch_course.py`; the game itself stays build-stepless and just fetches the static files.
+Turns a real course into a playable `courses/<id>.json` (+ aerial photos) that the game loads. The game stays build-stepless and just fetches the static files.
+
+## The standard: global + DEM (use `fetch_course_global.py`)
+
+**`tools/fetch_course_global.py` is THE bake path.** It produces the "Pinehurst standard" format: ONE connected north-up aerial (`img/<id>/course.jpg`) covering the whole course in a shared global world frame (`global:true`, neighbouring holes show at the screen edges), **plus a real elevation DEM** (AWS Terrain Tiles, z=14 Terrarium PNG, **no API key**) that drives slope/break instead of a synthetic field. It supports the scorecard layer (par/yards/si override) and `--boundary-rel`.
+
+`tools/fetch_course.py` (per-hole rotated frames, no DEM) is **legacy** — only reach for it if you specifically need the old per-hole format. Everything below (boundary discovery, scorecard, Golfbert source) feeds **both** tools; `fetch_course_global.py` reuses `fetch_course.py`'s helpers.
+
+**A course is not done until `python3 tools/verify_course.py <id>` exits 0** (see "Definition of done" below).
 
 ## 1. Find the course boundary way
 
@@ -27,16 +35,20 @@ out tags;
 ```
 Pick the way whose `name` matches (e.g. Pinehurst No. 2 = way `1358696570`, St Andrews Old = way `1019045811`). A single **way** boundary is easiest; relations work via `map_to_area` too. Inspect visually at https://overpass-turbo.eu.
 
-## 2. Bake
+## 2. Bake (global + DEM — the standard)
 ```
-python3 tools/fetch_course.py --from-index <slug> [--id <slug>]        # by name, via the index
-python3 tools/fetch_course.py --boundary-way <WAY_ID> --id <slug> --name "<Display Name>"
+PYTHONPATH=tools python3 tools/fetch_course_global.py --boundary-way <WAY_ID> --id <slug> --name "<Display Name>"
+PYTHONPATH=tools python3 tools/fetch_course_global.py --boundary-rel <REL_ID> --id <slug> --name "<Display Name>"
 ```
-`--from-index` fills boundary-way/id/name from `courses/index.json`; explicit flags still override (e.g. `--id pinehurst-no2` to match an existing course file + its scorecard).
-- Writes `courses/<slug>.json` and `courses/img/<slug>/hole<N>.jpg` (one north-up aerial per hole, Esri World Imagery, keyless).
-- `--no-imagery` skips the photos (fast, vector-only).
-- `--cache <path>` caches the raw Overpass JSON so re-bakes don't re-query.
-- Console prints per-hole surface counts, how many holes fell back to a **synthesized** fairway (links courses lack mapped fairways), and how many aerials were baked.
+- Writes `courses/<slug>.json` (`global:true`, top-level `world`/`aerial`/`surfaces`/`dem`, holes carry only `num/par/yards/tee/pin`) and **one** `courses/img/<slug>/course.jpg`.
+- Auto-loads `courses/scorecard/<slug>.json` (or `--scorecard <path>`) for par/yards/si — same merge as the per-hole tool.
+- `--no-imagery` skips the photo; `--no-dem` skips elevation; `--cache <path>` caches the raw Overpass JSON so re-bakes don't re-query.
+- Prints a `quality:` line — par, real-fairway ratio, scorecard coverage, DEM grid, aerial y/n — plus the >60y scorecard-vs-geometry divergence warning. `synthFairways` (count of holes with no mapped OSM fairway, corridor-synthesized) is stored in the JSON for the gate.
+- If the single global aerial times out, the JSON is still written; `curl` the printed `AERIAL_URL` into `courses/img/<slug>/course.jpg` and re-run `verify_course.py`.
+
+`PYTHONPATH=tools` is required (the global tool imports `fetch_course` as a module). `--from-index <slug>` discovery (step 1) works the same; pass it instead of `--boundary-*`.
+
+*Legacy per-hole path (only if you need the old format):* `python3 tools/fetch_course.py --boundary-way <id> --id <slug> --name "..."` → per-hole `hole<N>.jpg`, no DEM.
 
 ## Scorecard accuracy (par / yards / stroke index)
 Geometry/OSM alone leaves `par` defaulting to **4** when untagged and `yards` as a rough geometric estimate. Layer real numbers on top with a free, deterministic override:
@@ -63,10 +75,15 @@ GOLFBERT_KEY=… GOLFBERT_AWS_KEY=… GOLFBERT_AWS_SECRET=… \
 ## Point the game at a course
 In `game.js` near the bottom: `loadCourse("<slug>")`. Course name shows automatically.
 
-## Verify (no browser needed)
-- **Data:** load the JSON in Python — 18 holes, fairways with many points (real) vs 6 (synth capsule), all aerials exist + valid JPEG, every hole has `aerial`, key points (tee/pin/green) map inside the image via the inverse affine.
-- **Engine:** the JavaScriptCore harness (`osascript -l JavaScript`) with DOM/canvas/Image stubs — concatenate stubs + `game.js` + a test script; assert `draw()` runs on all 18 holes in BOTH vector and photoreal modes and that a swing + putt resolve.
-- **Visual:** `python3 -m http.server 8080`; if a browser MCP is available, screenshot holes and compare to the real aerial / Overpass Turbo for registration; else have the user playtest.
+## Definition of done — `verify_course.py` (the gate)
+A course is up to standard only when **`python3 tools/verify_course.py <id>` exits 0**. The gate (calibrated so Pinehurst scores grade A) runs automatically:
+- **HARD (any failure → exit 1):** `global:true` + `world`/`aerial`/`surfaces` present; expected hole count (`--holes N`, default 18) each with par/yards/tee/pin; `course.jpg` exists + valid JPEG + **every tee/pin registers inside it** via the inverse `toWorld` affine; DEM grid `nx*ny == len(data)` covering the world rect (waive with `--allow-no-dem`); and the **engine smoke test** — `tools/engine_smoke.js` via `osascript -l JavaScript` stubs DOM/canvas/Image and runs `draw()` on every hole in BOTH vector + photoreal modes plus a swing + putt (no throw = pass). `--no-engine` skips it.
+- **SOFT (lower the A/B/C grade, still pass):** scorecard coverage (≥40% of holes — free real data, so every course should ship one), bunkers present, and **every pin sits on a real green** (double-green aware: St Andrews' 7 greens serving 14 holes pass, because it checks pin→green coverage, not a raw count).
+- **INFORMATIONAL (printed, does NOT affect grade):** real-vs-synth fairway ratio. In the global+photoreal format the real aerial shows the actual fairway and a synth corridor still classifies the ball's lie, so OSM's fairway-mapping gaps (links/unmapped courses) are surfaced but don't block grade A.
+
+**Grade A = the standard.** A bake gets there with: valid global format + registration + DEM + engine-pass (all HARD) and a scorecard (the one SOFT lever you control). `fetch_course_global.py` **auto-runs this gate** at the end of every bake (skip with `--no-verify`) and prints PASS/FAIL + grade, so a new course can't silently ship below standard.
+
+Then visual-check: `python3 -m http.server 8080`; with a browser MCP, screenshot a few holes and compare registration to the real aerial / Overpass Turbo; else have the user playtest.
 
 ## Gotchas
 - Overpass needs a `User-Agent` (406 without). It rate-limits — cache raw responses.

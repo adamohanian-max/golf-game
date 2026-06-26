@@ -1,0 +1,24 @@
+{
+  "name": "TPC River Highlands",
+  "tee": "championship (Black)",
+  "holes": {
+    "1":  { "par": 4, "yards": 434 },
+    "2":  { "par": 4, "yards": 341 },
+    "3":  { "par": 4, "yards": 431 },
+    "4":  { "par": 4, "yards": 481 },
+    "5":  { "par": 3, "yards": 223 },
+    "6":  { "par": 5, "yards": 574 },
+    "7":  { "par": 4, "yards": 443 },
+    "8":  { "par": 3, "yards": 202 },
+    "9":  { "par": 4, "yards": 406 },
+    "10": { "par": 4, "yards": 462 },
+    "11": { "par": 3, "yards": 158 },
+    "12": { "par": 4, "yards": 411 },
+    "13": { "par": 5, "yards": 523 },
+    "14": { "par": 4, "yards": 421 },
+    "15": { "par": 4, "yards": 296 },
+    "16": { "par": 3, "yards": 171 },
+    "17": { "par": 4, "yards": 420 },
+    "18": { "par": 4, "yards": 444 }
+  }
+}
