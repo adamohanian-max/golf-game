@@ -3,5 +3,6 @@
   { "id": "four-oaks-dracut", "name": "Four Oaks Country Club", "sub": "Dracut, MA · Par 70" },
   { "id": "tpc-river-highlands", "name": "TPC River Highlands", "sub": "Cromwell, CT · Par 70" },
   { "id": "st-andrews-old", "name": "St Andrews — Old Course", "sub": "St Andrews, Scotland · Par 72" },
-  { "id": "bethpage-black", "name": "Bethpage Black", "sub": "Farmingdale, NY · Par 71" }
+  { "id": "bethpage-black", "name": "Bethpage Black", "sub": "Farmingdale, NY · Par 71" },
+  { "id": "overlook-golf-club", "name": "Overlook Golf Club", "sub": "Hollis, NH · Par 71" }
 ]

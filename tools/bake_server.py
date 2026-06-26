@@ -25,6 +25,7 @@ ROOT = os.path.dirname(TOOLS)                       # repo root
 COURSES = os.path.join(ROOT, "courses")
 MANIFEST = os.path.join(COURSES, "manifest.json")
 OVERPASS = "https://overpass-api.de/api/interpreter"
+NOMINATIM = "https://nominatim.openstreetmap.org/search"
 UA = "golf-game-dev/1.0 (bake server)"
 
 sys.path.insert(0, TOOLS)
@@ -34,7 +35,114 @@ GIT = True
 PUSH = False
 
 
-# --- Overpass name search --------------------------------------------------
+# --- Course search: geocode the query, then list golf courses near it -------
+# Nominatim is great at "where is <name>" but not golf-aware; Overpass is golf-aware
+# but a *global* name regex is brutally slow. So: geocode q -> anchor lat/lon, then an
+# AREA-bounded (fast) Overpass query for leisure=golf_course around it. Type a course
+# OR a town and you get the courses there, ranked by name match then distance.
+def _sub_from_address(addr):
+    """Readable 'City, State, CC' from a Nominatim address dict."""
+    if not addr:
+        return ""
+    city = (addr.get("city") or addr.get("town") or addr.get("village")
+            or addr.get("hamlet") or addr.get("municipality") or addr.get("county"))
+    bits = [b for b in (city, addr.get("state"), addr.get("country_code", "").upper()) if b]
+    return ", ".join(bits)
+
+
+def nominatim_geocode(q, limit=8):
+    params = {"q": q, "format": "jsonv2", "limit": limit,
+              "addressdetails": 1, "namedetails": 1, "accept-language": "en"}
+    req = urllib.request.Request(NOMINATIM + "?" + urllib.parse.urlencode(params),
+                                 headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r)
+
+
+def search_courses(q):
+    """Geocode q, then return bakeable golf courses near the top few candidate places.
+
+    A bare name like "pinehurst" geocodes to several towns; we probe the top ~3
+    distinct locations (golf_course hits first) so the right one is covered, then
+    rank merged results by name match, then distance to their anchor.
+    """
+    # Pass 1 (raw q): geocodes towns AND well-known courses — used for town anchors.
+    # Pass 2 ("<q> golf"): makes Nominatim surface the actual golf_course way for a
+    # course-name query ("torrey pines"); we keep ONLY its golf_course hits so its
+    # town/road noise never steals an anchor slot.
+    raw = nominatim_geocode(q, limit=10)
+    golf_hits = [h for h in raw if h.get("type") == "golf_course"]
+    if "golf" not in q.lower():
+        try:
+            seen_osm = {(h.get("osm_type"), h.get("osm_id")) for h in raw}
+            for h in nominatim_geocode(q + " golf", limit=6):
+                if h.get("type") == "golf_course" \
+                        and (h.get("osm_type"), h.get("osm_id")) not in seen_osm:
+                    golf_hits.append(h)
+        except Exception:
+            pass
+    if not raw and not golf_hits:
+        return []
+    tokens = [t for t in re.split(r"\s+", q.lower()) if t]
+
+    # Anchors, best first: precise golf_course hits, then raw hits in importance order.
+    anchors, seen_pts = [], set()
+    for h in golf_hits + raw:
+        try:
+            la, lo = float(h["lat"]), float(h["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        key = (round(la, 2), round(lo, 2))                  # ~1 km bucket
+        if key in seen_pts:
+            continue
+        seen_pts.add(key)
+        anchors.append((la, lo, _sub_from_address(h.get("address")), h))
+        if len(anchors) >= 4:
+            break
+
+    out, seen = [], set()
+
+    def consider(name, kind, bid, center, sub, ai, alat, alon):
+        if not name or kind not in ("way", "relation") or not bid:
+            return
+        score = sum(1 for t in tokens if t in name.lower())
+        # Keep everything near the best anchor; from secondary anchors keep only
+        # name-matches, so far-away same-name noise doesn't clutter the list.
+        if ai > 0 and score == 0:
+            return
+        slug = bi.slugify(name)
+        if slug in seen:
+            return
+        seen.add(slug)
+        out.append({"id": slug, "name": name, "boundaryId": bid, "kind": kind,
+                    "center": center, "sub": sub or f"{center[0]:.3f}, {center[1]:.3f}",
+                    "_score": score,
+                    "_ai": ai,   # anchor priority (0 = best) breaks cross-anchor ties
+                    "_d2": (center[0] - alat) ** 2 + (center[1] - alon) ** 2})
+
+    for ai, (alat, alon, sub, h) in enumerate(anchors):
+        # the geocoder's own golf_course match (way/relation) — baked directly
+        if h.get("type") == "golf_course" and h.get("osm_type") in ("way", "relation"):
+            nd = h.get("namedetails") or {}
+            nm = nd.get("name") or h.get("display_name", "").split(",")[0].strip()
+            consider(nm, h["osm_type"], h["osm_id"], [round(alat, 6), round(alon, 6)],
+                     sub, ai, alat, alon)
+        # golf courses within ~8 km (area-bounded => fast)
+        try:
+            for c in bi.overpass_courses(f"(around:8000,{alat},{alon})"):
+                consider(c.get("name"), c.get("type"), c.get("boundaryWay"),
+                         c.get("center"), sub, ai, alat, alon)
+        except Exception:
+            pass
+
+    # name match first, then anchor priority, then distance to that anchor
+    out.sort(key=lambda r: (-r["_score"], r["_ai"], r["_d2"]))
+    for r in out:
+        r.pop("_score", None); r.pop("_ai", None); r.pop("_d2", None)
+    return out[:25]
+
+
+# --- Overpass name search (fallback) ---------------------------------------
 def overpass_search_name(q):
     """Global golf-course search by name regex. Returns candidate records."""
     safe = re.sub(r'["\\\n]', " ", q).strip()       # keep the regex well-formed
@@ -153,6 +261,13 @@ class Handler(SimpleHTTPRequestHandler):
             q = (urllib.parse.parse_qs(u.query).get("q") or [""])[0].strip()
             if len(q) < 2:
                 return self._json(200, [])
+            # Geocode-then-area search (fast). Only fall back to the slow global
+            # Overpass name-regex if the geocode path actually errors — an empty
+            # result returns [] immediately (no 60s scan).
+            try:
+                return self._json(200, search_courses(q))
+            except Exception as e:
+                sys.stderr.write(f"[api] geocode search failed: {e}\n")
             try:
                 return self._json(200, overpass_search_name(q))
             except Exception as e:

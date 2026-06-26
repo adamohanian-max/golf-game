@@ -3013,7 +3013,7 @@ function acOnInput() {
   const q = document.getElementById("ac-search").value.trim();
   const host = document.getElementById("ac-results");
   if (q.length < 2) { host.innerHTML = ""; return; }
-  _acTimer = setTimeout(() => acSearch(q), 350);
+  _acTimer = setTimeout(() => acSearch(q), 600);   // gentle on Nominatim (~1 req/s fair-use)
 }
 async function acSearch(q) {
   const host = document.getElementById("ac-results");
