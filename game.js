@@ -2193,6 +2193,7 @@ const COURSES = [
   { id: "four-oaks-dracut", name: "Four Oaks Country Club", sub: "Dracut, MA · Par 70" },
   { id: "tpc-river-highlands", name: "TPC River Highlands", sub: "Cromwell, CT · Par 70" },
   { id: "st-andrews-old", name: "St Andrews — Old Course", sub: "St Andrews, Scotland · Par 72" },
+  { id: "bethpage-black", name: "Bethpage Black", sub: "Farmingdale, NY · Par 71" },
 ];
 let selectedCourseId = COURSES[0].id;
 function buildCourseList() {
@@ -2597,6 +2598,24 @@ async function sendMagicLink(email) {
   } catch (e) { console.warn("Magic link failed:", e); return false; }
 }
 
+// Verify a 6-digit email OTP → returns a session with no redirect needed.
+// Sidesteps magic-link redirect entirely. Returns true on success.
+async function verifyOtp(email, code) {
+  if (!LB_ON()) return false;
+  try {
+    const res = await fetch(LB_URL + "/auth/v1/verify", {
+      method: "POST",
+      headers: { apikey: LB_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "email", email: (email || "").trim(), token: (code || "").trim() }),
+    });
+    if (!res.ok) return false;
+    const tok = await res.json();   // { access_token, refresh_token, user, ... }
+    if (!tok.access_token) return false;
+    storeTokens(tok, tok.user || null);
+    return true;
+  } catch (e) { console.warn("OTP verify failed:", e); return false; }
+}
+
 // On boot: if returning from a magic link, the tokens are in the URL hash.
 function parseAuthRedirect() {
   if (!location.hash || location.hash.indexOf("access_token") === -1) return false;
@@ -2779,6 +2798,11 @@ function closeAuthModal() {
   const send = document.getElementById("auth-send");
   const email = document.getElementById("auth-email");
   const err = document.getElementById("auth-error");
+  const code = document.getElementById("auth-code");
+  const codeErr = document.getElementById("auth-code-error");
+  const verify = document.getElementById("auth-verify");
+  let _otpEmail = "";   // email the code was sent to (for verify)
+
   async function doSend() {
     const v = (email.value || "").trim();
     err.classList.add("hidden");
@@ -2790,17 +2814,40 @@ function closeAuthModal() {
     }
     send.disabled = true; send.textContent = "Sending…";
     const ok = await sendMagicLink(v);
-    send.disabled = false; send.textContent = "Send link";
+    send.disabled = false; send.textContent = "Send code";
     if (ok) {
+      _otpEmail = v;
       document.getElementById("auth-sent-email").textContent = v;
       document.getElementById("auth-form").classList.add("hidden");
       document.getElementById("auth-sent").classList.remove("hidden");
+      if (code) { code.value = ""; setTimeout(() => code.focus(), 30); }
     } else {
-      err.textContent = "Could not send link. Try again."; err.classList.remove("hidden");
+      err.textContent = "Could not send code. Try again."; err.classList.remove("hidden");
     }
   }
+
+  async function doVerify() {
+    const c = (code.value || "").trim();
+    codeErr.classList.add("hidden");
+    if (!/^\d{6}$/.test(c)) {
+      codeErr.textContent = "Enter the 6-digit code."; codeErr.classList.remove("hidden"); return;
+    }
+    verify.disabled = true; verify.textContent = "Verifying…";
+    const ok = await verifyOtp(_otpEmail, c);
+    verify.disabled = false; verify.textContent = "Verify";
+    if (ok) {
+      closeAuthModal();
+      if (isLoggedIn()) { await ensureProfile(); await flushPendingRounds(); }
+      updateMenuPlayerLine();
+    } else {
+      codeErr.textContent = "Invalid or expired code."; codeErr.classList.remove("hidden");
+    }
+  }
+
   if (send) send.addEventListener("click", doSend);
   if (email) email.addEventListener("keydown", (e) => { if (e.key === "Enter") doSend(); });
+  if (verify) verify.addEventListener("click", doVerify);
+  if (code) code.addEventListener("keydown", (e) => { if (e.key === "Enter") doVerify(); });
 })();
 
 // --- name-entry overlay (also used to gate submit) ---

@@ -157,18 +157,23 @@
     <div class="ne-box">
       <div id="auth-form">
         <h2>Sign in</h2>
-        <p class="ne-sub">Enter your email — we'll send a magic login link. No password.</p>
+        <p class="ne-sub">Enter your email — we'll send a 6-digit login code. No password.</p>
         <input id="auth-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" autocapitalize="off" autocorrect="off">
         <div id="auth-error" class="auth-error hidden"></div>
         <div class="ne-actions">
           <button id="auth-cancel" class="menu-btn secondary">Cancel</button>
-          <button id="auth-send" class="menu-btn">Send link</button>
+          <button id="auth-send" class="menu-btn">Send code</button>
         </div>
       </div>
       <div id="auth-sent" class="hidden">
         <h2>Check your email 📬</h2>
-        <p class="ne-sub">We sent a login link to <b id="auth-sent-email"></b>. Open it on this device to finish signing in.</p>
-        <button id="auth-sent-close" class="menu-btn">Done</button>
+        <p class="ne-sub">We sent a 6-digit code to <b id="auth-sent-email"></b>. Enter it below.</p>
+        <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" autocapitalize="off" autocorrect="off">
+        <div id="auth-code-error" class="auth-error hidden"></div>
+        <div class="ne-actions">
+          <button id="auth-sent-close" class="menu-btn secondary">Cancel</button>
+          <button id="auth-verify" class="menu-btn">Verify</button>
+        </div>
       </div>
     </div>
   </div>
