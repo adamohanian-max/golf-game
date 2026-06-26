@@ -70,6 +70,23 @@ html, body {
 }
 #hint.hidden { opacity: 0; }
 
+/* greenside chip-mode cue — pill above the hint */
+#chip-ind {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 52px);
+  left: 12px;
+  white-space: nowrap;
+  color: #ffe9a8;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 210, 120, 0.35);
+  padding: 7px 13px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+#chip-ind.hidden { display: none; }
+
 #result {
   position: fixed;
   inset: 0;

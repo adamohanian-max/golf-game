@@ -11,6 +11,7 @@ const TUNE = {
   stopThreshold: 0.005,  // speed below this = ball stopped
   captureSpeed: 0.05,    // ball must be slower than this to drop in cup (low = hard)
   lipOutMaxSpeed: 0.18,  // putt at/under this that misses the cup is grabbed by the lip and dies 1–2 ft past; faster rams roll on
+  chipRangeYds: 45,      // greenside chip mode auto-engages within this distance to the pin (full swipe lands at the flag)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
   mousePuttScale: 0.75,    // extra putt scalar when swinging with a mouse (−25%; mouse flicks read faster)
 
@@ -215,6 +216,7 @@ let showSlope = true;      // slope relief overlay — ON by default (toggle in 
 let showOOB = true;        // red OOB overlay toggle
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
+let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let measureDragging = false;
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
@@ -807,19 +809,15 @@ function launchShot(ang, frac, spin, onGreen) {
     state.airborne = false;
   } else {
     // full shot: follow the selected club's real arc, scaled by how full the swing is
-    let ef = f;
-    if (!HOLE.isRange) {
-      const toPin = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-      // Greenside touch: near the pin, SOFT swings get compressed so lofted clubs don't
-      // overshoot — but a FULL swing always delivers the club's rated carry (so e.g. the
-      // lob wedge really flies 90). Blend by swing fullness: at f=1 no compression, at
-      // f→0 the full touch-softening applies.
-      if (toPin < 90) {
-        const comp = 0.22 + 0.78 * Math.pow(toPin / 90, 1.5);
-        ef *= comp + (1 - comp) * f;
-      }
-    }
     const c = TUNE.clubs[selectedClub];
+    // Greenside chip mode: when enabled and within range of the pin, map swing power to
+    // the PIN distance so a full swipe lands at the flag (can't blow it way past); softer
+    // swipes fall short. Outside chip mode every club just flies its rated carry at full
+    // swing. The club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
+    const toPin = HOLE.isRange ? Infinity
+                : dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+    const chipActive = chipEnabled && !HOLE.isRange && toPin < TUNE.chipRangeYds;
+    const ef = chipActive ? Math.min(1, (toPin * f) / c.carry) : f;
     const C = (c.carry / YARDS_PER_UNIT) * ef;   // carry (world units)
     const H = (c.maxH / YARDS_PER_UNIT) * ef;     // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * ef);           // real ball speed for the HUD
@@ -2435,11 +2433,18 @@ function setAutoAim(on) {
   const btn = document.getElementById("hm-autoaim");
   if (btn) btn.classList.toggle("active", on);
 }
+function setChip(on) {
+  chipEnabled = on;
+  const btn = document.getElementById("hm-chip");
+  if (btn) btn.classList.toggle("active", on);
+}
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
 document.getElementById("hm-wind").addEventListener("click", () => setWind(!windEnabled));
 document.getElementById("hm-slotted").addEventListener("click", () => setSlotted(!slottedMode));
 const elAutoAimBtn = document.getElementById("hm-autoaim");
 if (elAutoAimBtn) elAutoAimBtn.addEventListener("click", () => setAutoAim(!autoAimEnabled));
+const elChipBtn = document.getElementById("hm-chip");
+if (elChipBtn) elChipBtn.addEventListener("click", () => setChip(!chipEnabled));
 
 // =====================================================================
 //  Game settings — toggleable aids. Defaults are GLOBAL (admin-set via
@@ -2454,9 +2459,14 @@ const SETTING_DEFS = [
   { key: "oob",         label: "🔴 OB areas",        get: () => showOOB,         set: (v) => setOOBMode(v) },
   { key: "rangefinder", label: "📏 Range finder",    get: () => measureMode,     set: (v) => setMeasureMode(v) },
   { key: "slotted",     label: "🎯 Slotted mode",    get: () => slottedMode,     set: (v) => setSlotted(v) },
+  { key: "chip",        label: "🪁 Chip mode",       get: () => chipEnabled,     set: (v) => setChip(v) },
 ];
 // Effective defaults: hardcoded fallback until the global row loads.
-let gameDefaults = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false };
+// Immutable fallback for each setting — used when a saved/loaded settings row
+// predates a key (e.g. a global Supabase row baked before "chip" existed). A
+// MISSING key falls back to this default, NOT to false.
+const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true };
+let gameDefaults = Object.assign({}, SETTING_DEFAULTS);
 let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
 
 function applySettings(s) {
@@ -2465,7 +2475,9 @@ function applySettings(s) {
 }
 function normalizeSettings(s) {
   const out = {};
-  for (const d of SETTING_DEFS) out[d.key] = !!(s && s[d.key]);
+  // present boolean wins; otherwise fall back to the key's default (not false)
+  for (const d of SETTING_DEFS)
+    out[d.key] = (s && typeof s[d.key] === "boolean") ? s[d.key] : !!SETTING_DEFAULTS[d.key];
   return out;
 }
 
@@ -3239,9 +3251,18 @@ function escapeHTML(s) {
   return String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// (Re)fill the leaderboard course dropdown from the CURRENT COURSES list. Must
+// run at open time, not parse time — the manifest (Butterbrook etc.) loads async
+// after the page, so a parse-time build only ever shows the fallback courses.
+function populateLbCourses() {
+  const sel = document.getElementById("lb-course");
+  if (sel) sel.innerHTML = COURSES.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+}
+
 let _lbReturn = "menu";  // where Close goes back to
 function openLeaderboard(from) {
   _lbReturn = from || "menu";
+  populateLbCourses();
   document.getElementById("leaderboard").classList.remove("hidden");
   renderLeaderboard(_lbCourseId || selectedCourseId);
 }
@@ -4121,11 +4142,27 @@ async function openManageDetail(t) {
 // =====================================================================
 //  Main loop
 // =====================================================================
+// Show the chip-mode cue when a chip would apply to the next shot (auto-engage
+// is otherwise silent): enabled, on a course, settled, near the pin, off the green.
+function updateChipIndicator() {
+  const el = document.getElementById("chip-ind");
+  if (!el) return;
+  let show = false;
+  if (mode === "course" && chipEnabled && HOLE && !HOLE.isRange &&
+      !state.moving && !state.inHole && !holeTransition) {
+    const b = state.ball;
+    const toPin = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+    show = toPin < TUNE.chipRangeYds && surfaceAt(b.x, b.y) !== "green";
+  }
+  el.classList.toggle("hidden", !show);
+}
+
 function loop() {
   update();
   tickHoleDrop();
   updateCamera();
   updateStats();
+  updateChipIndicator();
   draw();
   requestAnimationFrame(loop);
 }
