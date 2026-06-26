@@ -2188,15 +2188,29 @@ async function loadCourse(id) {
   setHole(course.holes[holeIndex]);
 }
 
-// Selectable courses (baked under courses/<id>.json). First is the default.
-const COURSES = [
+// Selectable courses (baked under courses/<id>.json). The live list comes from
+// courses/manifest.json (loadManifest); this hardcoded set is the fallback if the
+// manifest is missing. First is the default.
+const FALLBACK_COURSES = [
   { id: "pinehurst-no2", name: "Pinehurst No. 2", sub: "Pinehurst, NC · Par 70" },
   { id: "four-oaks-dracut", name: "Four Oaks Country Club", sub: "Dracut, MA · Par 70" },
   { id: "tpc-river-highlands", name: "TPC River Highlands", sub: "Cromwell, CT · Par 70" },
   { id: "st-andrews-old", name: "St Andrews — Old Course", sub: "St Andrews, Scotland · Par 72" },
   { id: "bethpage-black", name: "Bethpage Black", sub: "Farmingdale, NY · Par 71" },
 ];
+let COURSES = FALLBACK_COURSES.slice();
 let selectedCourseId = COURSES[0].id;
+// Replace COURSES from courses/manifest.json (admin bakes append to it). Falls
+// back silently to FALLBACK_COURSES on any error so the menu always works.
+async function loadManifest() {
+  try {
+    const res = await fetch("courses/manifest.json", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const arr = await res.json();
+    if (Array.isArray(arr) && arr.length) COURSES = arr;
+  } catch (e) { console.warn("manifest load failed, using fallback courses:", e); }
+  if (!COURSES.some((c) => c.id === selectedCourseId)) selectedCourseId = COURSES[0].id;
+}
 function buildCourseList() {
   const host = document.getElementById("course-list");
   if (!host) return;
@@ -2859,6 +2873,19 @@ function updateAuthUI() {
   account.classList.toggle("hidden", !on);
   const adminBtn = document.getElementById("menu-admin");
   if (adminBtn) adminBtn.classList.toggle("hidden", !isTournamentAdmin());
+  const addBtn = document.getElementById("menu-add-course");
+  // "Add course" needs the local bake server (no /api on a static deploy) AND admin.
+  if (addBtn) addBtn.classList.toggle("hidden", !(isTournamentAdmin() && _bakeApi));
+}
+
+// True once GET /api/ping succeeds (i.e. bake_server.py is serving). Probed at boot.
+let _bakeApi = false;
+async function probeBakeApi() {
+  try {
+    const res = await fetch("/api/ping", { cache: "no-store" });
+    _bakeApi = res.ok && (await res.json()).ok === true;
+  } catch (e) { _bakeApi = false; }
+  updateAuthUI();
 }
 
 function openAuthModal() {
@@ -2957,6 +2984,102 @@ function closeNameEntry() {
   const ov = document.getElementById("name-entry");
   if (ov) ov.classList.add("hidden");
   _namePending = null;
+}
+
+// --- admin "Add course": search any course -> local bake server bakes it -----
+let _acTimer = null, _acBaking = false;
+function openAddCourse() {
+  if (!(isTournamentAdmin() && _bakeApi)) return;
+  const ov = document.getElementById("add-course");
+  const inp = document.getElementById("ac-search");
+  if (!ov || !inp) return;
+  inp.value = "";
+  document.getElementById("ac-results").innerHTML = "";
+  document.getElementById("ac-progress").textContent = "";
+  _acBaking = false;
+  ov.classList.remove("hidden");
+  setTimeout(() => inp.focus(), 30);
+}
+function closeAddCourse() {
+  if (_acBaking) return;            // don't bail mid-bake
+  const ov = document.getElementById("add-course");
+  if (ov) ov.classList.add("hidden");
+  clearTimeout(_acTimer);
+}
+function acOnInput() {
+  clearTimeout(_acTimer);
+  const q = document.getElementById("ac-search").value.trim();
+  const host = document.getElementById("ac-results");
+  if (q.length < 2) { host.innerHTML = ""; return; }
+  _acTimer = setTimeout(() => acSearch(q), 350);
+}
+async function acSearch(q) {
+  const host = document.getElementById("ac-results");
+  host.innerHTML = `<div class="ac-note">Searching…</div>`;
+  try {
+    const res = await fetch("/api/search?q=" + encodeURIComponent(q), { cache: "no-store" });
+    const list = res.ok ? await res.json() : [];
+    if (!Array.isArray(list) || !list.length) {
+      host.innerHTML = `<div class="ac-note">No golf courses found for “${q}”.</div>`;
+      return;
+    }
+    host.innerHTML = "";
+    for (const rec of list) {
+      const b = document.createElement("button");
+      b.className = "course-opt";
+      b.innerHTML = `<span class="course-opt-name">${rec.name}</span><span class="course-opt-sub">${rec.sub}</span>`;
+      b.addEventListener("click", () => acBake(rec));
+      host.appendChild(b);
+    }
+  } catch (e) {
+    host.innerHTML = `<div class="ac-note">Search failed: ${e.message}</div>`;
+  }
+}
+async function acBake(rec) {
+  if (_acBaking) return;
+  _acBaking = true;
+  const host = document.getElementById("ac-results");
+  const prog = document.getElementById("ac-progress");
+  host.innerHTML = `<div class="ac-note">Baking <b>${rec.name}</b>… ~3–10 min. Keep this open.</div>`;
+  prog.textContent = "";
+  try {
+    const res = await fetch("/api/bake", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ boundaryId: rec.boundaryId, kind: rec.kind, id: rec.id, name: rec.name, center: rec.center }),
+    });
+    if (!res.ok) {                          // 400/409/502 — JSON error, not a stream
+      let msg = "HTTP " + res.status;
+      try { msg = (await res.json()).error || msg; } catch (e) { /* ignore */ }
+      host.innerHTML = `<div class="ac-note">Couldn’t bake: ${msg}</div>`;
+      _acBaking = false; return;
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      prog.textContent = buf;
+      prog.scrollTop = prog.scrollHeight;
+    }
+    const okM = buf.match(/__BAKE_OK__\s+(\{.*\})/);
+    if (okM) {
+      await loadManifest();
+      selectedCourseId = rec.id;
+      buildCourseList();
+      host.innerHTML = `<div class="ac-note">✓ Added <b>${rec.name}</b> — selected in the course list.</div>`;
+      _acBaking = false;
+      setTimeout(closeAddCourse, 1400);
+    } else {
+      const failM = buf.match(/__BAKE_FAIL__\s+(.*)/);
+      host.innerHTML = `<div class="ac-note">Bake failed${failM ? ": " + failM[1] : ""}. See log below.</div>`;
+      _acBaking = false;
+    }
+  } catch (e) {
+    host.innerHTML = `<div class="ac-note">Bake error: ${e.message}</div>`;
+    _acBaking = false;
+  }
 }
 
 // --- build a leaderboard row from the finished round ---
@@ -3099,6 +3222,14 @@ function closeLeaderboard() {
 }
 
 // --- wiring ---
+(function wireAddCourse() {
+  const open = document.getElementById("menu-add-course");
+  if (open) open.addEventListener("click", openAddCourse);
+  const cancel = document.getElementById("ac-cancel");
+  if (cancel) cancel.addEventListener("click", closeAddCourse);
+  const inp = document.getElementById("ac-search");
+  if (inp) inp.addEventListener("input", acOnInput);
+})();
 (function wireLeaderboard() {
   const ne = document.getElementById("name-entry");
   if (ne) {
@@ -3251,14 +3382,20 @@ async function fetchTournamentRounds(tournamentId) {
   } catch(e) { return []; }
 }
 
+const PHASE_MS = 60 * 60 * 1000;   // duration of each tournament phase (R1/R2, then R3/R4); adjustable
 async function createTournament(name, courseId, settings) {
   if (!LB_ON()) return null;
   const now = new Date();
-  const deadline = new Date(now.getTime() + 60 * 60 * 1000);
+  // Full 4-round event: R1/R2 open now for PHASE_MS, then R3/R4 (post-cut) for
+  // another PHASE_MS. Setting r3r4_deadline is what lets tournamentPhase reach "complete".
+  const r1r2Deadline = new Date(now.getTime() + PHASE_MS);
+  const r3r4Deadline = new Date(now.getTime() + 2 * PHASE_MS);
   const payload = {
     name, course_id: courseId,
     r1r2_opens: now.toISOString(),
-    r1r2_deadline: deadline.toISOString(),
+    r1r2_deadline: r1r2Deadline.toISOString(),
+    r3r4_opens: r1r2Deadline.toISOString(),
+    r3r4_deadline: r3r4Deadline.toISOString(),
     created_by: getPlayerName() || "Anonymous",
     settings: settings ? normalizeSettings(settings) : normalizeSettings(gameDefaults),
   };
@@ -3630,6 +3767,14 @@ async function openTournamentLobby() {
       "<button class=\"menu-btn secondary\" id=\"tl-view-final\">View Final Results</button>";
     document.getElementById("tl-view-final").onclick = () => { closeTournamentLobby(); showTournamentFinal(); };
   }
+
+  // Admins can always begin the next tournament (a new one supersedes this via
+  // fetchActiveTournament's newest-first ordering), regardless of the current phase.
+  if (isTournamentAdmin()) {
+    const sb = document.getElementById("tl-start");
+    sb.textContent = "+ Start new tournament";
+    sb.classList.remove("hidden");
+  }
 }
 
 function closeTournamentLobby() {
@@ -3657,6 +3802,8 @@ function startTournamentRound(roundNum) {
   const tlStart = document.getElementById("tl-start");
   if (tlStart) tlStart.addEventListener("click", async () => {
     if (!isTournamentAdmin()) return;   // gate: admins only
+    if (activeTournament && tournamentPhase(activeTournament) !== "complete" &&
+        !confirm("A tournament is still in progress. Start a new one anyway? (Players will move to the new tournament.)")) return;
     const courseName = (COURSES.find(c => c.id === selectedCourseId) || {}).name || selectedCourseId;
     const dateStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
     const name = courseName + " — " + dateStr;
@@ -3703,7 +3850,11 @@ buildCourseList();
 updateMenuPlayerLine();   // reflect saved player name (leaderboard identity)
 loop();
 showMenu();
-loadCourse(selectedCourseId).catch((e) => {
+probeBakeApi();           // reveal admin "Add course" only if the bake server is up
+loadManifest().then(() => {
+  buildCourseList();      // refresh list from courses/manifest.json (admin-baked courses)
+  return loadCourse(selectedCourseId);
+}).catch((e) => {
   console.warn("Course load failed, using fallback hole:", e);
 });
 
