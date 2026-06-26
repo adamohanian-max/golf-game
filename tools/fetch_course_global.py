@@ -210,6 +210,10 @@ def main():
                          "courses/scorecard/<id>.json if present)")
     ap.add_argument("--no-verify", action="store_true",
                     help="Skip the quality gate (verify_course.py) after baking")
+    ap.add_argument("--hole-filter",
+                    help="Keep only holes whose name contains this substring (e.g. "
+                         "'Black') and crop surfaces to that routing — for multi-course "
+                         "parks like Bethpage where one boundary holds several courses")
     args = ap.parse_args()
 
     if args.boundary_rel:
@@ -226,8 +230,11 @@ def main():
     grass = byt("landuse", "grass")
     waters = waters + byt("natural", "water")
 
+    hf = args.hole_filter.lower() if args.hole_filter else None
     best = {}
     for h in by("hole"):
+        if hf and hf not in (h["tags"].get("name") or "").lower():
+            continue                      # multi-course park: keep only this course's holes
         n = fc.hole_num(h)
         if n is None:
             continue
@@ -246,6 +253,29 @@ def main():
 
     # --- global bbox (meters) from play features: hole lines, greens, fairways, tees
     hole_lines = [(fc.hole_num(h), projall(h["geometry"])) for h in holes_sorted]
+
+    # Multi-course park: crop every surface to the filtered routing so we don't
+    # pull in the neighbouring courses' greens/bunkers/fairways.
+    if hf:
+        CROP = 70 * MPY   # yards -> meters; a feature kept if within CROP of a kept hole-line
+        def _near(el):
+            c = fc.centroid(projall(el["geometry"]))
+            return min(fc.polyline_dist(c, lm) for _, lm in hole_lines) <= CROP
+        greens   = [e for e in greens   if _near(e)]
+        fairways = [e for e in fairways if _near(e)]
+        bunkers  = [e for e in bunkers  if _near(e)]
+        waters   = [e for e in waters   if _near(e)]
+        tees     = [e for e in tees     if _near(e)]
+        cartpaths= [e for e in cartpaths if _near(e)]
+        roughs   = [e for e in roughs   if _near(e)]
+        woods    = [e for e in woods    if _near(e)]
+        grass    = [e for e in grass    if _near(e)]
+        if not greens:
+            sys.exit("hole-filter cropped away all greens — loosen CROP or check the filter.")
+        print(f"hole-filter '{args.hole_filter}': {len(holes_sorted)} holes; "
+              f"surfaces cropped to {CROP/MPY:.0f}y of the routing "
+              f"(greens={len(greens)} fairways={len(fairways)} bunkers={len(bunkers)})")
+
     bbox_pts = [p for _, lm in hole_lines for p in lm]
     for el in greens + fairways + tees + bunkers + waters:
         bbox_pts += projall(el["geometry"])

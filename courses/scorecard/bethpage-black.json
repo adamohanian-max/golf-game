@@ -1,0 +1,24 @@
+{
+  "name": "Bethpage Black",
+  "tee": "championship (Black)",
+  "holes": {
+    "1":  { "par": 4, "yards": 430 },
+    "2":  { "par": 4, "yards": 389 },
+    "3":  { "par": 3, "yards": 230 },
+    "4":  { "par": 5, "yards": 517 },
+    "5":  { "par": 4, "yards": 478 },
+    "6":  { "par": 4, "yards": 408 },
+    "7":  { "par": 5, "yards": 553 },
+    "8":  { "par": 3, "yards": 210 },
+    "9":  { "par": 4, "yards": 460 },
+    "10": { "par": 4, "yards": 502 },
+    "11": { "par": 4, "yards": 435 },
+    "12": { "par": 4, "yards": 501 },
+    "13": { "par": 5, "yards": 608 },
+    "14": { "par": 3, "yards": 161 },
+    "15": { "par": 4, "yards": 478 },
+    "16": { "par": 4, "yards": 490 },
+    "17": { "par": 3, "yards": 207 },
+    "18": { "par": 4, "yards": 411 }
+  }
+}
