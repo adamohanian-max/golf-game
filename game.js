@@ -11,7 +11,8 @@ const TUNE = {
   stopThreshold: 0.005,  // speed below this = ball stopped
   captureSpeed: 0.05,    // ball must be slower than this to drop in cup (low = hard)
   lipOutMaxSpeed: 0.18,  // putt at/under this that misses the cup is grabbed by the lip and dies 1–2 ft past; faster rams roll on
-  chipRangeYds: 45,      // greenside chip mode auto-engages within this distance to the pin (full swipe lands at the flag)
+  chipRangeYds: 45,      // greenside chip mode auto-engages within this distance to the pin
+  chipHeadroom: 1.4,     // full swipe in chip mode flies this × pin distance (pop without blowing way past; capped at club carry)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
   mousePuttScale: 0.75,    // extra putt scalar when swinging with a mouse (−25%; mouse flicks read faster)
 
@@ -811,13 +812,14 @@ function launchShot(ang, frac, spin, onGreen) {
     // full shot: follow the selected club's real arc, scaled by how full the swing is
     const c = TUNE.clubs[selectedClub];
     // Greenside chip mode: when enabled and within range of the pin, map swing power to
-    // the PIN distance so a full swipe lands at the flag (can't blow it way past); softer
-    // swipes fall short. Outside chip mode every club just flies its rated carry at full
-    // swing. The club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
+    // the pin distance with headroom — a FULL swipe flies ~chipHeadroom× the pin (pop, can
+    // clear trouble) so a full swing never feels weak; ease off to land at the flag, and you
+    // still can't blow it WAY past. Outside chip mode every club flies its rated carry at
+    // full swing. The club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
     const toPin = HOLE.isRange ? Infinity
                 : dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
     const chipActive = chipEnabled && !HOLE.isRange && toPin < TUNE.chipRangeYds;
-    const ef = chipActive ? Math.min(1, (toPin * f) / c.carry) : f;
+    const ef = chipActive ? Math.min(1, (toPin * TUNE.chipHeadroom * f) / c.carry) : f;
     const C = (c.carry / YARDS_PER_UNIT) * ef;   // carry (world units)
     const H = (c.maxH / YARDS_PER_UNIT) * ef;     // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * ef);           // real ball speed for the HUD
