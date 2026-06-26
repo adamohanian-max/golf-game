@@ -2880,19 +2880,20 @@ async function flushPendingRounds() {
   setPendingRounds(remaining);
 }
 
-// Called when a round completes. Logged in → post now; guest → queue + invite login.
+// Called when a round completes. Posts immediately — name-only for guests
+// (no login required); a set name is all that's needed to land on the board.
 function submitFinishedRound() {
   if (!LB_ON() || round._submitted) return;
   round._submitted = true;
   const payload = buildRoundPayload();
   if (!payload) return;
   const btn = document.getElementById("re-leaderboard");
-  if (isLoggedIn()) {
+  const post = () => {
+    payload.name = getPlayerName();   // pick up a name set just now
     submitRound(payload).then(ok => { if (btn && ok) btn.textContent = "View leaderboard ✓"; });
-  } else {
-    queuePendingRound(payload);      // don't lose the score across the login redirect
-    if (btn) btn.textContent = "🔑 Sign in to post score";   // CTA; tapping still opens the board
-  }
+  };
+  if (payload.name) post();
+  else openNameEntry(post);           // no name yet → prompt, then post
 }
 
 async function fetchLeaderboard(courseId) {
