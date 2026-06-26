@@ -2873,6 +2873,8 @@ function updateAuthUI() {
   account.classList.toggle("hidden", !on);
   const adminBtn = document.getElementById("menu-admin");
   if (adminBtn) adminBtn.classList.toggle("hidden", !isTournamentAdmin());
+  const manageBtn = document.getElementById("menu-manage");
+  if (manageBtn) manageBtn.classList.toggle("hidden", !isTournamentAdmin());
   const addBtn = document.getElementById("menu-add-course");
   // "Add course" needs the local bake server (no /api on a static deploy) AND admin.
   if (addBtn) addBtn.classList.toggle("hidden", !(isTournamentAdmin() && _bakeApi));
@@ -3382,23 +3384,32 @@ async function fetchTournamentRounds(tournamentId) {
   } catch(e) { return []; }
 }
 
-const PHASE_MS = 60 * 60 * 1000;   // duration of each tournament phase (R1/R2, then R3/R4); adjustable
+const PHASE_MS = 60 * 60 * 1000;   // default duration of each tournament phase (R1/R2, then R3/R4)
+
+// Round-window timestamps from an open time + per-phase durations (ms). R3/R4
+// opens when R1/R2 closes. Setting r3r4_deadline is what lets a tournament
+// reach "complete". Shared by create + admin time-limit edits so they agree.
+function computeWindows(openMs, r1r2Len, r3r4Len) {
+  const r1r2Deadline = openMs + (r1r2Len || PHASE_MS);
+  const r3r4Deadline = r1r2Deadline + (r3r4Len || PHASE_MS);
+  return {
+    r1r2_opens: new Date(openMs).toISOString(),
+    r1r2_deadline: new Date(r1r2Deadline).toISOString(),
+    r3r4_opens: new Date(r1r2Deadline).toISOString(),
+    r3r4_deadline: new Date(r3r4Deadline).toISOString(),
+  };
+}
+
 async function createTournament(name, courseId, settings) {
   if (!LB_ON()) return null;
-  const now = new Date();
-  // Full 4-round event: R1/R2 open now for PHASE_MS, then R3/R4 (post-cut) for
-  // another PHASE_MS. Setting r3r4_deadline is what lets tournamentPhase reach "complete".
-  const r1r2Deadline = new Date(now.getTime() + PHASE_MS);
-  const r3r4Deadline = new Date(now.getTime() + 2 * PHASE_MS);
-  const payload = {
-    name, course_id: courseId,
-    r1r2_opens: now.toISOString(),
-    r1r2_deadline: r1r2Deadline.toISOString(),
-    r3r4_opens: r1r2Deadline.toISOString(),
-    r3r4_deadline: r3r4Deadline.toISOString(),
-    created_by: getPlayerName() || "Anonymous",
-    settings: settings ? normalizeSettings(settings) : normalizeSettings(gameDefaults),
-  };
+  const payload = Object.assign(
+    computeWindows(Date.now(), PHASE_MS, PHASE_MS),
+    {
+      name, course_id: courseId,
+      created_by: getPlayerName() || "Anonymous",
+      settings: settings ? normalizeSettings(settings) : normalizeSettings(gameDefaults),
+    }
+  );
   try {
     const res = await fetch(LB_URL + "/rest/v1/tournaments", {
       method: "POST",
@@ -3409,6 +3420,54 @@ async function createTournament(name, courseId, settings) {
     const rows = await res.json();
     return rows[0] || null;
   } catch(e) { return null; }
+}
+
+// --- Admin management REST helpers (gated by isTournamentAdmin + RLS) ---
+async function fetchAllTournaments() {
+  if (!LB_ON()) return [];
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/tournaments?select=*&order=created_at.desc&limit=50",
+      { headers: lbHeaders() });
+    if (!res.ok) return [];
+    return res.json();
+  } catch(e) { return []; }
+}
+async function updateTournament(id, patch) {
+  if (!LB_ON() || !isTournamentAdmin()) return false;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/tournaments?id=eq." + encodeURIComponent(id), {
+      method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify(patch),
+    });
+    return res.ok;
+  } catch(e) { console.warn("Update tournament failed:", e); return false; }
+}
+async function deleteTournament(id) {
+  if (!LB_ON() || !isTournamentAdmin()) return false;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/tournaments?id=eq." + encodeURIComponent(id), {
+      method: "DELETE", headers: authHeaders({ Prefer: "return=minimal" }),
+    });
+    return res.ok;   // tournament_rounds cascade-delete via FK
+  } catch(e) { console.warn("Delete tournament failed:", e); return false; }
+}
+// Remove (DQ) a player: delete all their rounds in this tournament. Match by
+// account when present, else by name (mirrors entryKey identity).
+async function removeTournamentPlayer(tid, entry) {
+  if (!LB_ON() || !isTournamentAdmin()) return false;
+  let q = "/rest/v1/tournament_rounds?tournament_id=eq." + encodeURIComponent(tid) + "&";
+  q += entry.user_id
+    ? "user_id=eq." + encodeURIComponent(entry.user_id)
+    : "player_name=eq." + encodeURIComponent(entry.name || entry.player_name || "");
+  try {
+    const res = await fetch(LB_URL + q, { method: "DELETE", headers: authHeaders({ Prefer: "return=minimal" }) });
+    return res.ok;
+  } catch(e) { console.warn("Remove player failed:", e); return false; }
+}
+// Force-complete: push both deadlines into the past so tournamentPhase -> "complete".
+async function endTournamentNow(t) {
+  const past = new Date(Date.now() - 1000).toISOString();
+  return updateTournament(t.id, { r1r2_deadline: past, r3r4_deadline: past });
 }
 
 // --- Global game settings (singleton row id=1; admin writes, everyone reads) ---
@@ -3829,6 +3888,207 @@ function startTournamentRound(roundNum) {
     closeHud();
     elScorecard.style.display = "none";
   });
+})();
+
+// =====================================================================
+//  Admin tournament management screen (list + per-tournament detail).
+//  Gated by isTournamentAdmin(); all writes go through the admin REST
+//  helpers + RLS. Reuses computeWindows/SETTING_DEFS/computeCut/entryKey.
+// =====================================================================
+let _manageCondDraft = null;   // settings draft while editing a tournament's conditions
+
+function closeTournamentManage() {
+  document.getElementById("tournament-admin").classList.add("hidden");
+}
+
+// Group round rows into per-player standings (mirrors showTournamentFinal/computeCut).
+function manageGroupPlayers(rows) {
+  const by = {};
+  for (const r of rows) {
+    const key = entryKey({ user_id: r.user_id, player_name: r.player_name });
+    if (!by[key]) by[key] = { name: r.player_name, user_id: r.user_id || null, rounds: {}, total: 0 };
+    by[key].rounds[r.round_num] = r;
+    by[key].total += (r.to_par || 0);
+  }
+  return Object.values(by).sort((a, b) => a.total - b.total);
+}
+
+async function openTournamentManage() {
+  if (!isTournamentAdmin()) return;
+  document.getElementById("tournament-admin").classList.remove("hidden");
+  await renderManageList();
+}
+
+async function renderManageList() {
+  const body = document.getElementById("tm-body");
+  document.getElementById("tm-title").textContent = "🏁 Manage Tournaments";
+  body.innerHTML = "<p class=\"ne-sub\">Loading…</p>";
+  const all = await fetchAllTournaments();
+
+  const courseOpts = COURSES.map(c =>
+    "<option value=\"" + c.id + "\"" + (c.id === selectedCourseId ? " selected" : "") + ">" + escapeHTML(c.name) + "</option>"
+  ).join("");
+  const phaseLabel = { r1r2: "Rounds 1&2", r3r4: "Rounds 3&4", complete: "Complete" };
+  const rowsHTML = all.length ? all.map(t => {
+    const courseName = (COURSES.find(c => c.id === t.course_id) || {}).name || t.course_id;
+    const created = new Date(t.created_at || t.r1r2_opens).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return "<button class=\"tm-row\" data-id=\"" + t.id + "\">" +
+      "<span class=\"tm-row-name\">" + escapeHTML(t.name) + "</span>" +
+      "<span class=\"tm-row-sub\">" + escapeHTML(courseName) + " · " + (phaseLabel[tournamentPhase(t)] || "—") + " · " + created + "</span>" +
+      "</button>";
+  }).join("") : "<p class=\"ne-sub\">No tournaments yet.</p>";
+
+  body.innerHTML =
+    "<div class=\"tm-new\"><select id=\"tm-new-course\">" + courseOpts + "</select>" +
+    "<button class=\"menu-btn\" id=\"tm-new-btn\">➕ New tournament</button></div>" +
+    "<div class=\"tm-list\">" + rowsHTML + "</div>";
+
+  body.querySelectorAll(".tm-row").forEach(el => {
+    el.onclick = async () => {
+      const t = all.find(x => x.id === el.dataset.id);
+      if (t) await openManageDetail(t);
+    };
+  });
+  document.getElementById("tm-new-btn").onclick = async () => {
+    const cid = document.getElementById("tm-new-course").value;
+    const courseName = (COURSES.find(c => c.id === cid) || {}).name || cid;
+    const name = courseName + " — " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const t = await createTournament(name, cid);
+    if (t) await openManageDetail(t); else setManageStatus("Create failed (admin only).");
+  };
+}
+
+function setManageStatus(msg) {
+  const el = document.getElementById("tm-status");
+  if (el) el.textContent = msg || "";
+}
+
+async function openManageDetail(t) {
+  const body = document.getElementById("tm-body");
+  document.getElementById("tm-title").textContent = "Manage tournament";
+  body.innerHTML = "<p class=\"ne-sub\">Loading…</p>";
+  const rows = await fetchTournamentRounds(t.id);
+  const players = manageGroupPlayers(rows);
+  const { survivors } = computeCut(rows);
+  const survivorKeys = new Set(survivors.map(s => entryKey(s)));
+  _manageCondDraft = normalizeSettings(t.settings || gameDefaults);
+
+  const openMs = new Date(t.r1r2_opens).getTime();
+  const r1Len = Math.max(1, Math.round((new Date(t.r1r2_deadline).getTime() - openMs) / 60000));
+  const r3Len = t.r3r4_deadline
+    ? Math.max(1, Math.round((new Date(t.r3r4_deadline).getTime() - new Date(t.r3r4_opens || t.r1r2_deadline).getTime()) / 60000))
+    : 60;
+
+  const roundCell = (p, n) => p.rounds[n] ? "<span class=\"tm-rd done\">R" + n + "</span>" : "<span class=\"tm-rd\">R" + n + "</span>";
+  const playersHTML = players.length ? players.map(p =>
+    "<div class=\"tm-player\">" +
+      "<div class=\"tm-player-main\"><b>" + escapeHTML(p.name || "—") + "</b>" +
+        (survivorKeys.has(entryKey(p)) ? " <span class=\"tm-cut\">cut ✓</span>" : "") + "</div>" +
+      "<div class=\"tm-player-rds\">" + [1,2,3,4].map(n => roundCell(p, n)).join("") +
+        " <span class=\"tm-topar\">" + formatToPar(p.total) + "</span></div>" +
+      "<button class=\"tm-dq\" data-key=\"" + entryKey(p) + "\">Remove</button>" +
+    "</div>"
+  ).join("") : "<p class=\"ne-sub\">No players entered yet.</p>";
+
+  const condHTML = SETTING_DEFS.map(d =>
+    "<button class=\"admin-toggle" + (_manageCondDraft[d.key] ? " active" : "") + "\" data-key=\"" + d.key + "\">" +
+      (_manageCondDraft[d.key] ? "ON  " : "OFF  ") + d.label + "</button>"
+  ).join("");
+
+  body.innerHTML =
+    "<button class=\"tm-back\" id=\"tm-back\">← All tournaments</button>" +
+    "<div class=\"tm-sec\"><label class=\"tm-lbl\">Name</label>" +
+      "<input id=\"tm-name\" type=\"text\" value=\"" + escapeHTML(t.name) + "\">" +
+      "<button class=\"menu-btn secondary tm-save\" id=\"tm-save-name\">Save name</button></div>" +
+    "<div class=\"tm-sec\"><label class=\"tm-lbl\">Round time limits (minutes)</label>" +
+      "<div class=\"tm-times\"><span>R1/R2</span><input id=\"tm-r1len\" type=\"number\" min=\"1\" value=\"" + r1Len + "\">" +
+        "<span>R3/R4</span><input id=\"tm-r3len\" type=\"number\" min=\"1\" value=\"" + r3Len + "\"></div>" +
+      "<div class=\"tm-deadlines\" id=\"tm-deadlines\"></div>" +
+      "<button class=\"menu-btn secondary tm-save\" id=\"tm-save-times\">Save times</button></div>" +
+    "<div class=\"tm-sec\"><label class=\"tm-lbl\">Conditions</label>" +
+      "<div class=\"admin-toggles\" id=\"tm-conds\">" + condHTML + "</div>" +
+      "<button class=\"menu-btn secondary tm-save\" id=\"tm-save-conds\">Save conditions</button></div>" +
+    "<div class=\"tm-sec\"><label class=\"tm-lbl\">Field (" + players.length + ")</label>" +
+      "<div class=\"tm-players\">" + playersHTML + "</div></div>" +
+    "<div class=\"tm-sec tm-danger\">" +
+      "<button class=\"menu-btn secondary\" id=\"tm-end\">⏹ End now</button>" +
+      "<button class=\"menu-btn secondary tm-del\" id=\"tm-delete\">🗑 Delete tournament</button></div>";
+
+  function refreshDeadlines() {
+    const r1 = (parseInt(document.getElementById("tm-r1len").value, 10) || 1) * 60000;
+    const r3 = (parseInt(document.getElementById("tm-r3len").value, 10) || 1) * 60000;
+    const w = computeWindows(openMs, r1, r3);
+    document.getElementById("tm-deadlines").textContent =
+      "R1/R2 ends " + new Date(w.r1r2_deadline).toLocaleString() + " · R3/R4 ends " + new Date(w.r3r4_deadline).toLocaleString();
+  }
+  document.getElementById("tm-r1len").oninput = refreshDeadlines;
+  document.getElementById("tm-r3len").oninput = refreshDeadlines;
+  refreshDeadlines();
+
+  document.getElementById("tm-back").onclick = () => renderManageList();
+
+  document.getElementById("tm-save-name").onclick = async () => {
+    const name = document.getElementById("tm-name").value.trim();
+    if (!name) return;
+    setManageStatus((await updateTournament(t.id, { name })) ? "Name saved ✓" : "Save failed.");
+    t.name = name;
+  };
+
+  document.getElementById("tm-save-times").onclick = async () => {
+    const r1 = (parseInt(document.getElementById("tm-r1len").value, 10) || 1) * 60000;
+    const r3 = (parseInt(document.getElementById("tm-r3len").value, 10) || 1) * 60000;
+    const w = computeWindows(openMs, r1, r3);
+    const ok = await updateTournament(t.id, {
+      r1r2_deadline: w.r1r2_deadline, r3r4_opens: w.r3r4_opens, r3r4_deadline: w.r3r4_deadline });
+    if (ok) Object.assign(t, w);
+    setManageStatus(ok ? "Times saved ✓" : "Save failed.");
+  };
+
+  document.querySelectorAll("#tm-conds .admin-toggle").forEach(btn => {
+    btn.onclick = () => {
+      const k = btn.dataset.key;
+      _manageCondDraft[k] = !_manageCondDraft[k];
+      btn.classList.toggle("active", _manageCondDraft[k]);
+      btn.textContent = (_manageCondDraft[k] ? "ON  " : "OFF  ") + (SETTING_DEFS.find(d => d.key === k) || {}).label;
+    };
+  });
+  document.getElementById("tm-save-conds").onclick = async () => {
+    const settings = normalizeSettings(_manageCondDraft);
+    const ok = await updateTournament(t.id, { settings });
+    if (ok) t.settings = settings;
+    setManageStatus(ok ? "Conditions saved ✓" : "Save failed.");
+  };
+
+  body.querySelectorAll(".tm-dq").forEach(btn => {
+    btn.onclick = async () => {
+      const p = players.find(x => entryKey(x) === btn.dataset.key);
+      if (!p || !confirm("Remove " + (p.name || "this player") + " from the tournament? Their rounds will be deleted.")) return;
+      const ok = await removeTournamentPlayer(t.id, p);
+      setManageStatus(ok ? "Player removed ✓" : "Remove failed.");
+      if (ok) await openManageDetail(t);   // re-render field
+    };
+  });
+
+  document.getElementById("tm-end").onclick = async () => {
+    if (!confirm("End this tournament now? It will show as complete for all players.")) return;
+    const ok = await endTournamentNow(t);
+    if (ok) { t.r1r2_deadline = t.r3r4_deadline = new Date(Date.now() - 1000).toISOString(); }
+    setManageStatus(ok ? "Tournament ended ✓" : "End failed.");
+  };
+
+  document.getElementById("tm-delete").onclick = async () => {
+    if (!confirm("Delete \"" + t.name + "\" permanently? This removes all its scores.")) return;
+    const ok = await deleteTournament(t.id);
+    if (ok) { setManageStatus("Tournament deleted ✓"); await renderManageList(); }
+    else setManageStatus("Delete failed.");
+  };
+}
+
+(function wireManage() {
+  const open = document.getElementById("menu-manage");
+  if (open) open.addEventListener("click", openTournamentManage);
+  const close = document.getElementById("tm-close");
+  if (close) close.addEventListener("click", closeTournamentManage);
 })();
 
 // =====================================================================

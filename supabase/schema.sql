@@ -123,3 +123,14 @@ insert into game_settings (id, settings) values (1, '{}'::jsonb)
 
 -- per-tournament frozen conditions (snapshot of the toggle defaults at creation)
 alter table tournaments add column if not exists settings jsonb;
+
+-- ---------- ADMIN MANAGEMENT: edit/delete tournaments, DQ players ----------
+-- The management screen needs admins to UPDATE/DELETE tournaments and remove
+-- players' rounds. (tournament_rounds.tournament_id is ON DELETE CASCADE, so
+-- deleting a tournament drops its rounds automatically.)
+create policy "tournaments admin update" on tournaments for update using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
+create policy "tournaments admin delete" on tournaments for delete using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
+create policy "trounds admin delete" on tournament_rounds for delete using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));

@@ -107,8 +107,10 @@ html, body {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* margin:auto on the box centers when it fits AND stays scrollable when taller
+     (align/justify-center would clip the overflow top, making it unreachable) */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: radial-gradient(ellipse at 50% 38%, rgba(8, 38, 18, 0.62) 0%, rgba(2, 10, 5, 0.88) 100%);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
@@ -124,6 +126,11 @@ html, body {
 .menu-box {
   text-align: center;
   padding: 32px 24px;
+  /* auto margins center within the scroll container, top/bottom padding via
+     safe-area so nothing hides under a notch when the content overflows */
+  margin: auto;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 32px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
   animation: menuIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -773,7 +780,8 @@ html, body {
 /* ---- Tournament overlays (reuse lb-box layout) ---- */
 #tournament-lobby,
 #tournament-cut,
-#tournament-final {
+#tournament-final,
+#tournament-admin {
   position: fixed;
   inset: 0;
   display: flex;
@@ -786,7 +794,40 @@ html, body {
 }
 #tournament-lobby.hidden,
 #tournament-cut.hidden,
-#tournament-final.hidden { display: none; }
+#tournament-final.hidden,
+#tournament-admin.hidden { display: none; }
+
+/* Tournament management screen */
+.tm-box { max-height: 88vh; overflow-y: auto; text-align: left; }
+#tm-body { display: flex; flex-direction: column; gap: 4px; }
+.tm-new { display: flex; gap: 8px; margin-bottom: 12px; }
+.tm-new select { flex: 1; border-radius: 10px; padding: 10px; background: rgba(255,255,255,0.07); color: #f4f6f3; border: 1px solid rgba(255,255,255,0.18); }
+.tm-new .menu-btn { width: auto; margin: 0; padding: 10px 14px; }
+.tm-list { display: flex; flex-direction: column; gap: 8px; }
+.tm-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 12px 14px; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; background: rgba(255,255,255,0.05); color: #f4f6f3; cursor: pointer; text-align: left; }
+.tm-row:active { transform: scale(0.99); }
+.tm-row-name { font-weight: 700; font-size: 15px; }
+.tm-row-sub { font-size: 12px; opacity: 0.65; }
+.tm-back { background: none; border: none; color: #4ade80; font-size: 14px; cursor: pointer; padding: 4px 0; text-align: left; margin-bottom: 6px; }
+.tm-sec { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid rgba(255,255,255,0.1); }
+.tm-lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.55); }
+.tm-sec input[type=text], .tm-sec input[type=number] { border-radius: 10px; padding: 10px; background: rgba(255,255,255,0.07); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+.tm-times { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: center; gap: 8px; color: #f4f6f3; font-size: 14px; }
+.tm-times input { width: 100%; }
+.tm-deadlines { font-size: 11px; opacity: 0.6; color: #f4f6f3; }
+.tm-save { width: auto; align-self: flex-start; margin: 0; padding: 9px 14px; font-size: 14px; }
+.tm-players { display: flex; flex-direction: column; gap: 8px; }
+.tm-player { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; }
+.tm-player-main { color: #f4f6f3; font-size: 14px; }
+.tm-player-rds { grid-column: 1; display: flex; gap: 6px; align-items: center; }
+.tm-rd { font-size: 11px; color: rgba(255,255,255,0.35); }
+.tm-rd.done { color: #4ade80; }
+.tm-topar { color: #f4f6f3; font-weight: 700; font-size: 13px; margin-left: 4px; }
+.tm-cut { color: #4ade80; font-size: 11px; }
+.tm-dq { grid-row: 1 / span 2; grid-column: 2; background: rgba(255,90,82,0.14); border: 1px solid rgba(255,90,82,0.4); color: #ff7a73; border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+.tm-danger { flex-direction: row; gap: 8px; }
+.tm-danger .menu-btn { margin: 0; }
+.tm-del { color: #ff7a73; border-color: rgba(255,90,82,0.4); }
 
 .tl-name {
   color: #f4f6f3;

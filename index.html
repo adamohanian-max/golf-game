@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="style.css?v=46">
+  <link rel="stylesheet" href="style.css?v=47">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -86,6 +86,7 @@
       <button id="open-leaderboard" class="menu-btn secondary">🏆 Leaderboard</button>
       <button id="open-tournaments" class="menu-btn secondary">🏌️ Tournaments</button>
       <button id="menu-add-course" class="menu-btn secondary hidden">➕ Add course</button>
+      <button id="menu-manage" class="menu-btn secondary hidden">🏁 Manage tournaments</button>
       <button id="menu-admin" class="menu-btn secondary hidden">⚙️ Admin settings</button>
       <button id="menu-player" class="menu-player">Player: <b id="menu-player-name">Set name</b> ✎</button>
       <div id="menu-auth" class="menu-auth">
@@ -251,6 +252,15 @@
     </div>
   </div>
 
-  <script src="game.js?v=46"></script>
+  <div id="tournament-admin" class="hidden">
+    <div class="lb-box tm-box">
+      <h2 id="tm-title">🏁 Manage Tournaments</h2>
+      <div id="tm-status" class="tl-status"></div>
+      <div id="tm-body"></div>
+      <button id="tm-close" class="menu-btn secondary" style="margin-top:10px">Close</button>
+    </div>
+  </div>
+
+  <script src="game.js?v=47"></script>
 </body>
 </html>
