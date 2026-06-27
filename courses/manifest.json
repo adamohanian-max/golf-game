@@ -193,5 +193,10 @@
     "id": "braid-hills-golf-course",
     "name": "Braid Hills Golf Course",
     "sub": "Par 70 · 18 holes · 55.91, -3.19"
+  },
+  {
+    "id": "brent-valley-public-golf-course",
+    "name": "Brent Valley Public Golf Course",
+    "sub": "Par 67 · 18 holes · 51.52, -0.35"
   }
 ]
