@@ -352,6 +352,49 @@ def main():
         if yov:                       # keep the geometric estimate for QA
             rec["geomYards"] = geom_yards
         out_holes.append(rec)
+        # --- alternate tees + pin positions (shared global frame) ---------------
+        u = fc.unit(fc.sub(pin_m, tee_m))            # tee->pin direction
+        gpoly_m = projall(nearest_green(pin_m)[1]["geometry"])
+        TEE_PAL = ["Back", "Blue", "White", "Gold", "Green", "Red"]
+        tcands = [(rec["yards"], tee_m)]             # canonical hole-line tee
+        for el in tees:
+            cm = fc.centroid(projall(el["geometry"]))
+            if fc.polyline_dist(cm, lm) > fc.TEE_BOX_NEAR_YDS * MPY:
+                continue
+            along = (cm[0] - tee_m[0]) * u[0] + (cm[1] - tee_m[1]) * u[1]
+            if along < -15 * MPY or along > length_m * 0.6:
+                continue
+            tcands.append((round(fc.dist(cm, pin_m) / MPY), cm))
+        tcands.sort(key=lambda t: -t[0])             # longest first
+        touts, seen = [], []
+        for yds, cm in tcands:
+            if any(fc.dist(cm, s) < 6 * MPY for s in seen):
+                continue
+            seen.append(cm)
+            w = W(cm)
+            touts.append({"x": w["x"], "y": w["y"], "yards": yds,
+                          "name": TEE_PAL[min(len(touts), len(TEE_PAL) - 1)]})
+        if touts and yov:
+            touts[0]["yards"] = rec["yards"]         # longest tee carries scorecard yardage
+        if len(touts) > 1:
+            rec["tees"] = touts
+        # front / middle / back pins measured along the tee->pin axis
+        gcm = fc.centroid(gpoly_m)
+        alongs = [(p[0] - tee_m[0]) * u[0] + (p[1] - tee_m[1]) * u[1] for p in gpoly_m]
+        amin, amax = min(alongs), max(alongs)
+        span = (amax - amin) or 1.0
+        ag = (gcm[0] - tee_m[0]) * u[0] + (gcm[1] - tee_m[1]) * u[1]
+        pouts = []
+        def add_pin(at, label):
+            at = max(amin + 0.12 * span, min(amax - 0.12 * span, at))
+            pm = (gcm[0] + u[0] * (at - ag), gcm[1] + u[1] * (at - ag))
+            if not fc.point_in_poly(pm, gpoly_m):
+                pm = gcm
+            w = W(pm); pouts.append({"x": w["x"], "y": w["y"], "name": label})
+        add_pin(amin + 0.30 * span, "Front")
+        add_pin(ag,                 "Middle")
+        add_pin(amax - 0.30 * span, "Back")
+        rec["pins"] = pouts
         if card:
             card_count += 1
         if yov and abs(yov - geom_yards) > 60:

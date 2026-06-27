@@ -13,8 +13,21 @@ const TUNE = {
   lipOutMaxSpeed: 0.18,  // putt at/under this that misses the cup is grabbed by the lip and dies 1–2 ft past; faster rams roll on
   chipRangeYds: 45,      // greenside chip mode auto-engages within this distance to the pin
   chipHeadroom: 1.4,     // full swipe in chip mode flies this × pin distance (pop without blowing way past; capped at club carry)
+  chipCurve: 0.8,        // chip power easing (<1 dampens short-range input so a small misread = small distance error)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
   mousePuttScale: 0.75,    // extra putt scalar when swinging with a mouse (−25%; mouse flicks read faster)
+  // Putt control band: most putts are short, but max power reaches YARDS.maxPutt (50yd).
+  // Two-segment power curve — the first puttControlFrac of input covers 0..puttControlYds
+  // (the common 5–40ft band, low sensitivity = easy to lag), the top covers the rest up to max.
+  puttControlYds: 12,      // distance (yards) the wide low-sensitivity segment tops out at (~36 ft)
+  puttControlFrac: 0.72,   // fraction of input devoted to that wide control band
+  // Forgiveness: a full-swing club always flies ≥ clubMinFrac of its rated carry, so a
+  // misread weak stroke can't dribble. LW + putter + greenside chips keep full touch range.
+  clubMinFrac: 0.70,
+  // Pace forgiveness at the cup: a grounded putt that crosses near-dead-center at a good
+  // (not rammed) pace is grabbed by the lip and drops, like real life. Off-center / faster
+  // passes keep the normal lip-out. Only rewards already-good pace + line.
+  captureAssist: 0.08,     // max speed for the edge-catch drop (≈1.6× captureSpeed)
 
   // --- Ball flight ---
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
@@ -794,6 +807,61 @@ function curveFromPath(pts) {
   return (v1x * v2y - v1y * v2x) / (m1 * m2); // sign of cross product
 }
 
+// Release velocity over the last `lookMs` of a timestamped path, denoised so one
+// jittery sample (common on trackpads/mice) can't dictate the shot. We drop the
+// single worst per-step outlier, then least-squares fit x(t) and y(t) — the slope
+// is the velocity, the span × slope is the displacement vector returned.
+// Returns { dxs, dys, dt } in path units; dt is the fitted window length (s).
+function swipeVelocity(path, lookMs) {
+  const end = path[path.length - 1];
+  let si = path.length - 1;
+  while (si > 0 && end.t - path[si - 1].t < lookMs) si--;
+  const win = path.slice(si);
+  // Too few points to fit — fall back to the raw 2-point delta.
+  if (win.length < 3) {
+    const ref = path[si > 0 ? si - 1 : 0];
+    return { dxs: end.x - ref.x, dys: end.y - ref.y,
+             dt: Math.max((end.t - ref.t) / 1000, 0.001) };
+  }
+  // Per-step speeds; drop the one step that deviates most from the median speed.
+  const steps = [];
+  for (let i = 1; i < win.length; i++) {
+    const dt = (win[i].t - win[i - 1].t) / 1000 || 1e-3;
+    steps.push({ i, sp: Math.hypot(win[i].x - win[i - 1].x, win[i].y - win[i - 1].y) / dt });
+  }
+  const med = [...steps].sort((a, b) => a.sp - b.sp)[steps.length >> 1].sp;
+  let worst = -1, wd = -1;
+  for (const s of steps) { const d = Math.abs(s.sp - med); if (d > wd) { wd = d; worst = s.i; } }
+  const pts = win.filter((_, k) => k !== worst);
+  // Least-squares slope of x(t), y(t) over the cleaned window (t relative to first).
+  const t0 = pts[0].t;
+  let st = 0, stt = 0, sx = 0, sy = 0, stx = 0, sty = 0;
+  const n = pts.length;
+  for (const p of pts) {
+    const t = (p.t - t0) / 1000;
+    st += t; stt += t * t; sx += p.x; sy += p.y; stx += t * p.x; sty += t * p.y;
+  }
+  const denom = n * stt - st * st;
+  const span = Math.max((pts[n - 1].t - t0) / 1000, 0.001);
+  if (Math.abs(denom) < 1e-9) {            // degenerate (all same time) — raw delta
+    return { dxs: pts[n - 1].x - pts[0].x, dys: pts[n - 1].y - pts[0].y, dt: span };
+  }
+  const vx = (n * stx - st * sx) / denom;  // units / s
+  const vy = (n * sty - st * sy) / denom;
+  return { dxs: vx * span, dys: vy * span, dt: span };
+}
+
+// Putt power fraction with a widened control band: the first puttControlFrac of
+// input covers 0..puttControlYds (gentle, easy to lag), the top covers the rest
+// up to YARDS.maxPutt. Returns a 0..1 multiplier on puttMaxPower.
+function puttPowerFrac(f) {
+  const cf = TUNE.puttControlFrac;
+  // Putt distance ∝ power², so the power share at the knee is sqrt(distance ratio).
+  const cFrac = Math.min(1, Math.sqrt(TUNE.puttControlYds / YARDS.maxPutt));
+  if (f <= cf) return cFrac * Math.sqrt(f / cf);          // wide low-sensitivity segment
+  return cFrac + (1 - cFrac) * ((f - cf) / (1 - cf));     // steep top segment up to max
+}
+
 function pointerPos(e) {
   const rect = canvas.getBoundingClientRect();
   const src = e.touches && e.touches[0] ? e.touches[0]
@@ -908,7 +976,10 @@ function launchShot(ang, frac, spin, onGreen) {
     // friction (~30 yards max). Both use sqrt(f) for a gentle power ramp.
     const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
     const mouseScale = swingIsMouse ? TUNE.mousePuttScale : 1;   // mouse putts −25%
-    const power = maxPow * TUNE.puttSensitivity * mouseScale * Math.sqrt(f);
+    // On-green putts use the widened control band; off-green bump-and-run keeps the
+    // simple sqrt ramp (its max is already tiny).
+    const ramp = onGreen ? puttPowerFrac(f) : Math.sqrt(f);
+    const power = maxPow * TUNE.puttSensitivity * mouseScale * ramp;
     shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
     b.vx = Math.cos(ang) * power; b.vy = Math.sin(ang) * power;
     b.vz = 0; b.z = 0; b.spin = 0;
@@ -924,7 +995,16 @@ function launchShot(ang, frac, spin, onGreen) {
     const toPin = HOLE.isRange ? Infinity
                 : dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
     const chipActive = chipEnabled && !HOLE.isRange && toPin < TUNE.chipRangeYds;
-    const ef = chipActive ? Math.min(1, (toPin * TUNE.chipHeadroom * f) / c.carry) : f;
+    let ef = chipActive ? Math.min(1, (toPin * TUNE.chipHeadroom * f) / c.carry) : f;
+    if (chipActive) {
+      // Short-range dampening: soften the input→distance curve so a small misread
+      // moves the ball only a little in the touch zone.
+      ef = Math.pow(ef, TUNE.chipCurve);
+    } else if (selectedClub !== "lw") {
+      // Min power floor: a full-swing club (driver→SW) always flies ≥ clubMinFrac of
+      // its carry, so an imprecise weak read can't dribble it. LW stays full-touch.
+      ef = Math.max(ef, TUNE.clubMinFrac);
+    }
     const C = (c.carry / YARDS_PER_UNIT) * ef;   // carry (world units)
     const H = (c.maxH / YARDS_PER_UNIT) * ef;     // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * ef);           // real ball speed for the HUD
@@ -982,11 +1062,7 @@ function swingEnd(e) {
   // This makes "flick hard = far, flick soft = short" regardless of backswing size.
   const end = path[path.length - 1];
   const LOOK_MS = 80;
-  let ri = path.length - 2;
-  while (ri > 0 && end.t - path[ri].t < LOOK_MS) ri--;
-  const ref = path[ri];
-  const dxs = end.x - ref.x, dys = end.y - ref.y;
-  const dt = Math.max((end.t - ref.t) / 1000, 0.001);
+  const { dxs, dys, dt } = swipeVelocity(path, LOOK_MS);
   const fdist = Math.hypot(dxs, dys);
   if (fdist < 5) {
     // not a swing — treat as a tap: drop the rangefinder marker at the tap point
@@ -1028,12 +1104,12 @@ function onWheel(e) {
   if (now < wheelCooldownUntil) { wheelCooldownUntil = now + WHEEL_TAIL_MS; return; }
   if (!canSwing()) return;
   if (!wheelGesture) {
-    wheelGesture = { sx: 0, sy: 0, t0: now, path: [{ x: 0, y: 0 }] };
+    wheelGesture = { sx: 0, sy: 0, t0: now, path: [{ x: 0, y: 0, t: now }] };
     setTimeout(finishWheelSwing, WHEEL_WINDOW_MS);
   }
   wheelGesture.sx += e.deltaX;
   wheelGesture.sy += e.deltaY;
-  wheelGesture.path.push({ x: wheelGesture.sx, y: wheelGesture.sy });
+  wheelGesture.path.push({ x: wheelGesture.sx, y: wheelGesture.sy, t: now });
 }
 
 function finishWheelSwing() {
@@ -1041,9 +1117,11 @@ function finishWheelSwing() {
   wheelGesture = null;
   if (!g) return;
   const sign = (TUNE.wheelInvert ? 1 : -1) * TUNE.wheelSensitivity;
-  const dt = Math.max((performance.now() - g.t0) / 1000, 0.001);
+  // Denoise the wheel stream the same way as touch — drop the worst delta spike and
+  // fit the velocity — so one stray inertial event can't dictate power.
+  const v = swipeVelocity(g.path, WHEEL_WINDOW_MS + WHEEL_TAIL_MS);
   // curve sign is invariant to negating the path, so it matches the finger swoosh
-  launch(sign * g.sx, sign * g.sy, dt, curveFromPath(g.path));
+  launch(sign * v.dxs, sign * v.dys, v.dt, curveFromPath(g.path));
   wheelCooldownUntil = performance.now() + WHEEL_TAIL_MS; // start swallowing the tail
 }
 
@@ -2050,7 +2128,7 @@ const elPar = document.getElementById("par");
 const elYards = document.getElementById("yards");
 
 // Running total across completed holes. Score shows E until a hole is finished.
-const round = { score: 0, holesPlayed: 0, holeStats: [] };
+const round = { score: 0, holesPlayed: 0, holeStats: [], pinSeed: 0 };
 
 function formatToPar(d) {
   if (d === 0) return "E";
@@ -2936,6 +3014,11 @@ function startCourse() {
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
+  // Tournament pins are frozen per (tournament, round) so every entrant gets the
+  // same pins; casual rounds get fresh pins each time.
+  round.pinSeed = (activeTournamentRound !== null && activeTournament)
+    ? strSeed((activeTournament.id || "t") + ":" + activeTournamentRound)
+    : (Math.random() * 0xffffffff) | 0;
   if (course && course.id === selectedCourseId) {
     setYardsPerUnit(course.yardsPerUnit);   // already loaded: restore scale (range may have changed it)
     holeIndex = 0;
@@ -2994,6 +3077,7 @@ async function startDaily() {
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
+  round.pinSeed = strSeed(dateStr);  // date-seeded pins: same for everyone today
   try {
     if (!course || course.id !== c.id) await loadCourse(c.id);
     setYardsPerUnit(course.yardsPerUnit);
@@ -3071,6 +3155,13 @@ async function startRange() {
 }
 
 document.getElementById("play-course").addEventListener("click", startCourse);
+// Tee selector (Back / Middle / Forward) — sets the course-wide tee preference.
+document.querySelectorAll("#tee-select .tee-opt").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    teePref = parseInt(btn.dataset.tee, 10) || 0;
+    document.querySelectorAll("#tee-select .tee-opt").forEach((b) => b.classList.toggle("active", b === btn));
+  });
+});
 const _playDaily = document.getElementById("play-daily");
 if (_playDaily) _playDaily.addEventListener("click", startDaily);
 document.getElementById("play-range").addEventListener("click", startRange);
