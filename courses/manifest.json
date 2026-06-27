@@ -653,5 +653,10 @@
     "id": "golf-de-saint-germain-en-laye",
     "name": "Golf de Saint-Germain-en-Laye",
     "sub": "Par 73 · 18 holes · 48.92, 2.05"
+  },
+  {
+    "id": "golf-de-saint-germain-l-s-corbeil",
+    "name": "Golf de Saint-Germain-lès-Corbeil",
+    "sub": "Par 70 · 18 holes · 48.64, 2.49"
   }
 ]
