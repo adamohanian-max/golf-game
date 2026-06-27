@@ -143,5 +143,10 @@
     "id": "bangor-golf-club",
     "name": "Bangor Golf Club",
     "sub": "Par 72 · 18 holes · 54.66, -5.65"
+  },
+  {
+    "id": "banstead-downs-golf-club",
+    "name": "Banstead Downs Golf Club",
+    "sub": "Par 72 · 18 holes · 51.33, -0.21"
   }
 ]
