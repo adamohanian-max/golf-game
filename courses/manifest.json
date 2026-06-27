@@ -508,5 +508,10 @@
     "id": "elmwood-golf-course",
     "name": "Elmwood Golf Course",
     "sub": "Par 72 · 18 holes · 56.30, -3.04"
+  },
+  {
+    "id": "espiche-golf",
+    "name": "Espiche Golf",
+    "sub": "Par 72 · 18 holes · 37.12, -8.75"
   }
 ]
