@@ -198,5 +198,10 @@
     "id": "brent-valley-public-golf-course",
     "name": "Brent Valley Public Golf Course",
     "sub": "Par 67 · 18 holes · 51.52, -0.35"
+  },
+  {
+    "id": "bruntsfield-links",
+    "name": "Bruntsfield Links",
+    "sub": "Par 69 · 18 holes · 55.97, -3.29"
   }
 ]
