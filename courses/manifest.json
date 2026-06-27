@@ -158,5 +158,10 @@
     "id": "belleisle-seafield-golf-courses",
     "name": "Belleisle & Seafield Golf Courses",
     "sub": "Par 71 · 18 holes · 55.44, -4.64"
+  },
+  {
+    "id": "belvoir-golf-course",
+    "name": "Belvoir Golf Course",
+    "sub": "Par 70 · 18 holes · 54.56, -5.92"
   }
 ]
