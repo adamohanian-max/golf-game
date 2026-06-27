@@ -228,5 +228,10 @@
     "id": "campo-am-rica",
     "name": "Campo América",
     "sub": "Par 72 · 18 holes · 36.54, -4.73"
+  },
+  {
+    "id": "campo-asia",
+    "name": "Campo Asia",
+    "sub": "Par 72 · 18 holes · 36.54, -4.72"
   }
 ]
