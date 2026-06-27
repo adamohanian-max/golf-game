@@ -483,5 +483,10 @@
     "id": "east-course",
     "name": "East Course",
     "sub": "Par 73 · 18 holes · 55.90, -3.36"
+  },
+  {
+    "id": "eden-course",
+    "name": "Eden Course",
+    "sub": "Par 66 · 17 holes · 56.35, -2.83"
   }
 ]
