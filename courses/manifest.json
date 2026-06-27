@@ -498,5 +498,10 @@
     "id": "el-para-so-golf-club",
     "name": "El Paraíso Golf Club",
     "sub": "Par 71 · 18 holes · 36.48, -5.03"
+  },
+  {
+    "id": "elie-golf-course",
+    "name": "Elie Golf Course",
+    "sub": "Par 72 · 18 holes · 56.19, -2.84"
   }
 ]
