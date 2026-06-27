@@ -190,10 +190,11 @@ function clubForYards(y) {
   return best;
 }
 let autoClubEnabled = true;
+let manualClubThisShot = false; // one-shot manual override; auto resumes next shot
 let windEnabled = false;
 // Auto-select the club for the current shot (course only; putter is auto on green).
 function autoClub() {
-  if (!autoClubEnabled || mode === "range" || !HOLE) return;
+  if (!autoClubEnabled || manualClubThisShot || mode === "range" || !HOLE) return;
   // Pick the club for the elevation-adjusted ("plays like") distance, like a caddie.
   selectedClub = clubForYards(playsLikeYards(state.ball.x, state.ball.y).plays);
 }
@@ -639,6 +640,7 @@ function rollStep(b) {
     // pin (smoothly) so the next shot is already oriented toward the hole.
     frameRemaining();
     if (autoAimEnabled) aimAtHole();
+    manualClubThisShot = false; // manual pick was for the shot just hit
     autoClub(); // pick the club for the next shot's distance to the pin
     updateScorecard();
   }
@@ -2569,6 +2571,7 @@ function setHole(rec) {
     wind.speed = 0;
   }
   autoClubEnabled = !!activeSettings.autoClub; // honor the round's default each new hole
+  manualClubThisShot = false; // fresh hole starts clean (no carried-over override)
   autoClub(); // tee club for the hole length (range lets the player choose)
   // rotate the camera so this hole's tee->pin points up the screen (plays "up"
   // even though the global map is north-up and holes face different ways).
@@ -2974,9 +2977,7 @@ function setAutoClub(on) {
   if (on) autoClub(); // immediately pick the right club when re-enabling
 }
 function stepClub(delta) { // +1 = longer club, -1 = shorter
-  autoClubEnabled = false; // manual selection disables auto
-  const btn = document.getElementById("hm-autoclb");
-  if (btn) btn.classList.remove("active");
+  manualClubThisShot = true; // override only this shot; auto resumes after it
   const i = CLUB_ORDER.indexOf(selectedClub);
   selectedClub = CLUB_ORDER[Math.max(0, Math.min(CLUB_ORDER.length - 1, i - delta))];
   updateClubUI();
