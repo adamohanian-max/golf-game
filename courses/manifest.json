@@ -98,5 +98,10 @@
     "id": "ashford-manor-golf-club",
     "name": "Ashford Manor Golf Club",
     "sub": "Par 72 · 18 holes · 51.43, -0.46"
+  },
+  {
+    "id": "ashludie-course",
+    "name": "Ashludie Course",
+    "sub": "Par 68 · 18 holes · 56.49, -2.80"
   }
 ]
