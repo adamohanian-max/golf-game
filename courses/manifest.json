@@ -858,5 +858,10 @@
     "id": "kingsbarns-golf-links",
     "name": "Kingsbarns Golf Links",
     "sub": "Par 72 · 18 holes · 56.30, -2.64"
+  },
+  {
+    "id": "kirkiston-castle-golf-club",
+    "name": "Kirkiston Castle Golf Club",
+    "sub": "Par 70 · 18 holes · 54.44, -5.47"
   }
 ]
