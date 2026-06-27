@@ -21,6 +21,10 @@ const TUNE = {
   // (the common 5–40ft band, low sensitivity = easy to lag), the top covers the rest up to max.
   puttControlYds: 12,      // distance (yards) the wide low-sensitivity segment tops out at (~36 ft)
   puttControlFrac: 0.72,   // fraction of input devoted to that wide control band
+  // Pace forgiveness: on-green putt distance is clamped to this band around the cup
+  // distance (plays-like). f=0 -> Lo, f=0.5 -> ~1.0, f=1 -> Hi. Putting = aim, not pace.
+  puttBandLo: 0.8,   // softest swipe still rolls 80% of the way (never more than 20% short)
+  puttBandHi: 1.2,   // hardest swipe rolls 120% (never more than 20% long)
   // Forgiveness: a full-swing club always flies ≥ clubMinFrac of its rated carry, so a
   // misread weak stroke can't dribble. LW + putter + greenside chips keep full touch range.
   clubMinFrac: 0.70,
@@ -996,14 +1000,24 @@ function launchShot(ang, frac, spin, onGreen) {
   // (bump-and-run). Both stay on the deck; power scale differs to account for surface friction.
   const usePutter = onGreen || selectedClub === "putter";
   if (usePutter) {
-    // on-green: calibrated to green decel (max 50 yards); off-green: calibrated to fairway
-    // friction (~30 yards max). Both use sqrt(f) for a gentle power ramp.
-    const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
-    const mouseScale = swingIsMouse ? TUNE.mousePuttScale : 1;   // mouse putts −25%
-    // On-green putts use the widened control band; off-green bump-and-run keeps the
-    // simple sqrt ramp (its max is already tiny).
-    const ramp = onGreen ? puttPowerFrac(f) : Math.sqrt(f);
-    const power = maxPow * TUNE.puttSensitivity * mouseScale * ramp;
+    let power;
+    if (onGreen && !HOLE.isRange) {
+      // Pace forgiveness: map swipe across a band that always leaves the ball between
+      // 20% short and 20% long of the cup. f=0.5 = dead pace. Plays-like distance folds
+      // in uphill/downhill so the band holds on sloped greens.
+      const plays = playsLikeYards(b.x, b.y).plays;                  // yards to cup, slope-adj
+      const band = TUNE.puttBandLo + (TUNE.puttBandHi - TUNE.puttBandLo) * f;
+      const targetYds = Math.min(plays * band, YARDS.maxPutt);       // cap at max putt
+      const targetU = targetYds / YARDS_PER_UNIT;                    // world units
+      power = Math.sqrt(2 * TUNE.greenDecel * targetU);
+    } else {
+      // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
+      // simple sqrt ramp (its max is already tiny). Range putts keep the on-green ramp.
+      const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
+      const mouseScale = swingIsMouse ? TUNE.mousePuttScale : 1;   // mouse putts −25%
+      const ramp = onGreen ? puttPowerFrac(f) : Math.sqrt(f);
+      power = maxPow * TUNE.puttSensitivity * mouseScale * ramp;
+    }
     shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
     b.vx = Math.cos(ang) * power; b.vy = Math.sin(ang) * power;
     b.vz = 0; b.z = 0; b.spin = 0;
