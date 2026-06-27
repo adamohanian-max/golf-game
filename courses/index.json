@@ -1,4 +1,134 @@
 {
+ "": {
+  "boundaryWay": 360100924,
+  "center": [
+   25.02244,
+   55.253545
+  ],
+  "name": "\u0646\u0627\u062f\u064a \u062a\u0631\u0645\u0628 \u0627\u0644\u062f\u0648\u0644\u064a \u0644\u0644\u062c\u0644\u0641",
+  "source": "osm",
+  "type": "way"
+ },
+ "123-gc": {
+  "boundaryWay": 551202442,
+  "center": [
+   37.639636,
+   126.905572
+  ],
+  "name": "123 GC",
+  "source": "osm",
+  "type": "way"
+ },
+ "18": {
+  "boundaryWay": 922330293,
+  "center": [
+   37.502844,
+   126.870741
+  ],
+  "name": "18\ud640 \ud30c\ud06c \uace8\ud504\uc7a5",
+  "source": "osm",
+  "type": "way"
+ },
+ "2019-course": {
+  "boundaryWay": 1447938345,
+  "center": [
+   56.136951,
+   -3.158398
+  ],
+  "name": "2019 Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "27": {
+  "boundaryWay": 12546111,
+  "center": [
+   37.54856,
+   126.793159
+  ],
+  "name": "\uc778\uc11c\uc6b827\uace8\ud504\ud074\ub7fd",
+  "source": "osm",
+  "type": "relation"
+ },
+ "27h": {
+  "boundaryWay": 156274443,
+  "center": [
+   35.882082,
+   139.56767
+  ],
+  "name": "\u5927\u5bae\u30ab\u30f3\u30c8\u30ea\u30fc\u30af\u30e9\u30d6\u300027h",
+  "source": "osm",
+  "type": "way"
+ },
+ "3-loch-bungsplatz": {
+  "boundaryWay": 349328704,
+  "center": [
+   48.026392,
+   11.676242
+  ],
+  "name": "3-Loch \u00dcbungsplatz",
+  "source": "osm",
+  "type": "way"
+ },
+ "300cc": {
+  "boundaryWay": 389394676,
+  "center": [
+   37.383911,
+   127.181591
+  ],
+  "name": "\uac15\ub0a8300CC",
+  "source": "osm",
+  "type": "way"
+ },
+ "5-loch-akademieplatz-golf": {
+  "boundaryWay": 835808963,
+  "center": [
+   48.296194,
+   11.208616
+  ],
+  "name": "5-Loch Akademieplatz Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "abbey-moor-golf-club": {
+  "boundaryWay": 10153868,
+  "center": [
+   51.379111,
+   -0.499714
+  ],
+  "name": "Abbey Moor Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "aberdelghy-golf-course": {
+  "boundaryWay": 12254691,
+  "center": [
+   54.535178,
+   -6.02267
+  ],
+  "name": "Aberdelghy Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "aberdour-golf-club": {
+  "boundaryWay": 95090549,
+  "center": [
+   56.046383,
+   -3.3066
+  ],
+  "name": "Aberdour Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "academy-course": {
+  "boundaryWay": 85989739,
+  "center": [
+   51.294528,
+   0.941561
+  ],
+  "name": "Academy Course",
+  "source": "osm",
+  "type": "way"
+ },
  "acushnet-river-valley-golf-course": {
   "boundaryWay": 29688221,
   "center": [
@@ -17,6 +147,56 @@
   ],
   "name": "Adam's Rib Ranch",
   "source": "cc0",
+  "type": "way"
+ },
+ "adare-manor-golf-club": {
+  "boundaryWay": 266418244,
+  "center": [
+   52.570448,
+   -8.779002
+  ],
+  "name": "Adare Manor Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "adare-manor-hotel-golf-resort-ireland": {
+  "boundaryWay": 283343615,
+  "center": [
+   52.561969,
+   -8.773032
+  ],
+  "name": "Adare Manor Hotel & Golf Resort Ireland",
+  "source": "osm",
+  "type": "way"
+ },
+ "adare-pitch-putt": {
+  "boundaryWay": 194780230,
+  "center": [
+   52.556812,
+   -8.794965
+  ],
+  "name": "Adare Pitch & Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "aintree-golf-course": {
+  "boundaryWay": 121110632,
+  "center": [
+   53.476016,
+   -2.936843
+  ],
+  "name": "Aintree Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "airlinks-golf-course": {
+  "boundaryWay": 4251251,
+  "center": [
+   51.492077,
+   -0.391503
+  ],
+  "name": "Airlinks Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "airport-golf-course": {
@@ -49,6 +229,96 @@
   "source": "cc0",
   "type": "way"
  },
+ "akabanegc-in-course": {
+  "boundaryWay": 20291444,
+  "center": [
+   35.797212,
+   139.694619
+  ],
+  "name": "akabaneGC_IN_course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "akabanegc-out-course": {
+  "boundaryWay": 1484214459,
+  "center": [
+   35.792122,
+   139.70751
+  ],
+  "name": "akabaneGC_out_course",
+  "source": "osm",
+  "type": "way"
+ },
+ "al-badia-golf-club": {
+  "boundaryWay": 201577705,
+  "center": [
+   25.214114,
+   55.362801
+  ],
+  "name": "Al Badia Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "alamos-golf-course": {
+  "boundaryWay": 4524931,
+  "center": [
+   37.202998,
+   -8.568295
+  ],
+  "name": "Alamos Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "alcadeisa-links": {
+  "boundaryWay": 291682603,
+  "center": [
+   36.242199,
+   -5.309913
+  ],
+  "name": "Alcadeisa Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "alcaidesa-links-golf-resort": {
+  "boundaryWay": 3873410,
+  "center": [
+   36.243531,
+   -5.320717
+  ],
+  "name": "Alcaidesa Links Golf Resort",
+  "source": "osm",
+  "type": "relation"
+ },
+ "alferini-golf": {
+  "boundaryWay": 3300452,
+  "center": [
+   36.49123,
+   -5.048377
+  ],
+  "name": "Alferini Golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "algarve-golf-acadamy-driving-range": {
+  "boundaryWay": 106911686,
+  "center": [
+   37.104429,
+   -8.238489
+  ],
+  "name": "Algarve Golf Acadamy (Driving Range)",
+  "source": "osm",
+  "type": "way"
+ },
+ "alhaurin-golf": {
+  "boundaryWay": 3308783,
+  "center": [
+   36.607974,
+   -4.705298
+  ],
+  "name": "Alhaurin Golf",
+  "source": "osm",
+  "type": "relation"
+ },
  "allenmore-golf-course": {
   "boundaryWay": 23143257,
   "center": [
@@ -57,6 +327,26 @@
   ],
   "name": "Allenmore Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "allhallows-golf-course": {
+  "boundaryWay": 105680581,
+  "center": [
+   51.470563,
+   0.651518
+  ],
+  "name": "Allhallows Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "allhallows-holiday-park-golf-course": {
+  "boundaryWay": 112044082,
+  "center": [
+   51.474826,
+   0.636595
+  ],
+  "name": "Allhallows Holiday Park Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "alling-memorial-golf-course": {
@@ -69,6 +359,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "almenara-golf-resort": {
+  "boundaryWay": 3198971,
+  "center": [
+   36.275607,
+   -5.345948
+  ],
+  "name": "Almenara Golf Resort",
+  "source": "osm",
+  "type": "relation"
+ },
  "alpine-golf-country-club": {
   "boundaryWay": 263829849,
   "center": [
@@ -79,6 +379,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "amendoeira-golf-resort-faldo-o-connor-jnr": {
+  "boundaryWay": 17880819,
+  "center": [
+   37.153278,
+   -8.361018
+  ],
+  "name": "Amendoeira Golf Resort - Faldo & O'Connor Jnr.",
+  "source": "osm",
+  "type": "relation"
+ },
  "amherst-college-golf-course": {
   "boundaryWay": 29906730,
   "center": [
@@ -87,6 +397,26 @@
   ],
   "name": "Amherst College Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "amsterdam-old-course": {
+  "boundaryWay": 6320935,
+  "center": [
+   52.320016,
+   4.934352
+  ],
+  "name": "Amsterdam Old Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "amsterdamse-golf-club": {
+  "boundaryWay": 50845326,
+  "center": [
+   52.401256,
+   4.740164
+  ],
+  "name": "Amsterdamse Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "andrews-east-course": {
@@ -109,6 +439,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "annanhill-golf-club": {
+  "boundaryWay": 43653383,
+  "center": [
+   55.606052,
+   -4.523135
+  ],
+  "name": "Annanhill Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "anstruther-golf-club": {
+  "boundaryWay": 40952557,
+  "center": [
+   56.21693,
+   -2.711618
+  ],
+  "name": "Anstruther Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "antler-creek-golf-course": {
   "boundaryWay": -3232693,
   "center": [
@@ -129,6 +479,106 @@
   "source": "cc0",
   "type": "way"
  },
+ "arabian-ranches-golf-club": {
+  "boundaryWay": 149551902,
+  "center": [
+   25.051381,
+   55.267954
+  ],
+  "name": "Arabian Ranches Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "archerfield-links": {
+  "boundaryWay": 161228170,
+  "center": [
+   56.055672,
+   -2.792248
+  ],
+  "name": "Archerfield Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "ardeer-golf-club": {
+  "boundaryWay": 483958112,
+  "center": [
+   55.657866,
+   -4.75388
+  ],
+  "name": "Ardeer Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ardglass-golf-club": {
+  "boundaryWay": 793224207,
+  "center": [
+   54.253059,
+   -5.612195
+  ],
+  "name": "Ardglass Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ardminnan-golf-club": {
+  "boundaryWay": 1292189673,
+  "center": [
+   54.415244,
+   -5.471854
+  ],
+  "name": "Ardminnan Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ardnacrusha-pitch-putt-golf-course": {
+  "boundaryWay": 490480096,
+  "center": [
+   52.707771,
+   -8.61983
+  ],
+  "name": "Ardnacrusha Pitch & Putt Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "armagh-golf-club": {
+  "boundaryWay": 456756633,
+  "center": [
+   54.337669,
+   -6.646738
+  ],
+  "name": "Armagh Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "army-golf-course": {
+  "boundaryWay": 79824002,
+  "center": [
+   51.269461,
+   -0.769092
+  ],
+  "name": "Army Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "arndean": {
+  "boundaryWay": 1464367588,
+  "center": [
+   56.18045,
+   -3.602133
+  ],
+  "name": "Arndean",
+  "source": "osm",
+  "type": "way"
+ },
+ "arrowe-park-golf-course": {
+  "boundaryWay": 4047638,
+  "center": [
+   53.361981,
+   -3.096029
+  ],
+  "name": "Arrowe Park Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
  "ashfield-community-golf-course": {
   "boundaryWay": 29747748,
   "center": [
@@ -137,6 +587,76 @@
   ],
   "name": "Ashfield Community Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "ashfield-golf-course": {
+  "boundaryWay": 285599388,
+  "center": [
+   54.110094,
+   -6.579572
+  ],
+  "name": "Ashfield Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ashford-golf-club": {
+  "boundaryWay": 23514649,
+  "center": [
+   51.167283,
+   0.861208
+  ],
+  "name": "Ashford Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ashford-manor-golf-club": {
+  "boundaryWay": 250363948,
+  "center": [
+   51.426769,
+   -0.46237
+  ],
+  "name": "Ashford Manor Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ashludie-course": {
+  "boundaryWay": 1245335146,
+  "center": [
+   56.485962,
+   -2.801255
+  ],
+  "name": "Ashludie Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "atalaya-golf-country-club": {
+  "boundaryWay": 3300476,
+  "center": [
+   36.487902,
+   -5.022481
+  ],
+  "name": "Atalaya Golf & Country Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "auchenharvie-golf-course": {
+  "boundaryWay": 453854335,
+  "center": [
+   55.635505,
+   -4.768749
+  ],
+  "name": "Auchenharvie Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "auchterderran-golf-course": {
+  "boundaryWay": 354643600,
+  "center": [
+   56.150684,
+   -3.277979
+  ],
+  "name": "Auchterderran Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "avalon-golf-club": {
@@ -159,6 +679,26 @@
   "source": "osm",
   "type": "way"
  },
+ "azata-golf": {
+  "boundaryWay": 1155438104,
+  "center": [
+   36.417328,
+   -5.198624
+  ],
+  "name": "Azata Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "baberton-golf-course": {
+  "boundaryWay": 4891768,
+  "center": [
+   55.906981,
+   -3.295776
+  ],
+  "name": "Baberton Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "baiting-hallow-golf-club": {
   "boundaryWay": 29270704,
   "center": [
@@ -169,6 +709,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "balaia-golf-village-par-3-course": {
+  "boundaryWay": 3238152,
+  "center": [
+   37.097036,
+   -8.207425
+  ],
+  "name": "Balaia Golf Village Par 3 Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "balbirnie-park-golf-club": {
+  "boundaryWay": 3350963,
+  "center": [
+   56.209474,
+   -3.149012
+  ],
+  "name": "Balbirnie Park Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
  "balboa-park-golf-course": {
   "boundaryWay": -3573430,
   "center": [
@@ -178,6 +738,146 @@
   "name": "Balboa Park Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "balcomie-links": {
+  "boundaryWay": 1432609851,
+  "center": [
+   56.282845,
+   -2.601194
+  ],
+  "name": "Balcomie Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "balgove-course": {
+  "boundaryWay": 158718591,
+  "center": [
+   56.348341,
+   -2.821503
+  ],
+  "name": "Balgove Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ballumbie-castle-golf-course": {
+  "boundaryWay": 418751600,
+  "center": [
+   56.497844,
+   -2.904485
+  ],
+  "name": "Ballumbie Castle Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ballybunion-golf-club": {
+  "boundaryWay": 19920899,
+  "center": [
+   52.496137,
+   -9.678708
+  ],
+  "name": "Ballybunion Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "ballyclare-golf-course": {
+  "boundaryWay": 139316211,
+  "center": [
+   54.773753,
+   -6.034167
+  ],
+  "name": "Ballyclare Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ballyearl-golf-course": {
+  "boundaryWay": 441622154,
+  "center": [
+   54.700918,
+   -5.953856
+  ],
+  "name": "Ballyearl Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ballyheigue-castle-golf-club": {
+  "boundaryWay": 351893743,
+  "center": [
+   52.39536,
+   -9.840671
+  ],
+  "name": "Ballyheigue Castle Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ballymena-golf-course": {
+  "boundaryWay": 195646009,
+  "center": [
+   54.884892,
+   -6.223937
+  ],
+  "name": "Ballymena Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ballyneety-golf-club": {
+  "boundaryWay": 496236823,
+  "center": [
+   52.589903,
+   -8.555447
+  ],
+  "name": "Ballyneety Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ballyreagh-golf-course": {
+  "boundaryWay": 833697455,
+  "center": [
+   55.196201,
+   -6.682984
+  ],
+  "name": "Ballyreagh Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "balmoral-golf-club": {
+  "boundaryWay": 38839155,
+  "center": [
+   54.563571,
+   -5.970923
+  ],
+  "name": "Balmoral Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "banbridge-golf-club": {
+  "boundaryWay": 13052228,
+  "center": [
+   54.361752,
+   -6.288662
+  ],
+  "name": "Banbridge Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "bangor-golf-club": {
+  "boundaryWay": 4621702,
+  "center": [
+   54.656047,
+   -5.64978
+  ],
+  "name": "Bangor Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "banstead-downs-golf-club": {
+  "boundaryWay": 19445952,
+  "center": [
+   51.33471,
+   -0.206972
+  ],
+  "name": "Banstead Downs Golf Club",
+  "source": "osm",
+  "type": "relation"
  },
  "bass-river-golf-course": {
   "boundaryWay": 29800143,
@@ -239,6 +939,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "bearsted-golf-club": {
+  "boundaryWay": 88488836,
+  "center": [
+   51.279507,
+   0.57355
+  ],
+  "name": "Bearsted Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "beaufort-golf-club": {
+  "boundaryWay": 216934452,
+  "center": [
+   52.068691,
+   -9.673986
+  ],
+  "name": "Beaufort Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "beaver-dam-lodge-golf-course-hamilton-ranch": {
   "boundaryWay": 263785952,
   "center": [
@@ -249,6 +969,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "beaverbrook-golf-club": {
+  "boundaryWay": 13481658,
+  "center": [
+   51.278983,
+   -0.308464
+  ],
+  "name": "Beaverbrook Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
  "beckett-country-club": {
   "boundaryWay": -53887,
   "center": [
@@ -257,6 +987,16 @@
   ],
   "name": "Beckett Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "belleisle-seafield-golf-courses": {
+  "boundaryWay": 117940581,
+  "center": [
+   55.440904,
+   -4.637399
+  ],
+  "name": "Belleisle & Seafield Golf Courses",
+  "source": "osm",
   "type": "way"
  },
  "bellevue-golf-course": {
@@ -269,6 +1009,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "belvoir-golf-course": {
+  "boundaryWay": 40069675,
+  "center": [
+   54.559832,
+   -5.919645
+  ],
+  "name": "Belvoir Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "bentra-golf-course": {
+  "boundaryWay": 557358660,
+  "center": [
+   54.76194,
+   -5.722151
+  ],
+  "name": "Bentra Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "betchworth-park-golf-club": {
+  "boundaryWay": 19801516,
+  "center": [
+   51.236065,
+   -0.303944
+  ],
+  "name": "Betchworth Park Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "beverly-golf-and-tennis-club": {
   "boundaryWay": 29690080,
   "center": [
@@ -278,6 +1048,16 @@
   "name": "Beverly Golf and Tennis Club",
   "source": "cc0",
   "type": "way"
+ },
+ "bidston-golf-club": {
+  "boundaryWay": 3996638,
+  "center": [
+   53.412758,
+   -3.083576
+  ],
+  "name": "Bidston Golf Club",
+  "source": "osm",
+  "type": "relation"
  },
  "big-canyon-country-club": {
   "boundaryWay": -1506345,
@@ -289,6 +1069,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "bil-bil-pitch-putt": {
+  "boundaryWay": 3301393,
+  "center": [
+   36.595234,
+   -4.553039
+  ],
+  "name": "Bil Bil Pitch & Putt",
+  "source": "osm",
+  "type": "relation"
+ },
+ "bird-hills-golf-centre": {
+  "boundaryWay": 164702085,
+  "center": [
+   51.463108,
+   -0.749617
+  ],
+  "name": "Bird Hills Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "bishopshire-golf-club": {
+  "boundaryWay": 430538662,
+  "center": [
+   56.209032,
+   -3.323247
+  ],
+  "name": "Bishopshire Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "black-hall-golf-club": {
   "boundaryWay": 43439378,
   "center": [
@@ -297,6 +1107,16 @@
   ],
   "name": "Black Hall Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "blackwood-golf-centre": {
+  "boundaryWay": 1411403912,
+  "center": [
+   54.630633,
+   -5.726164
+  ],
+  "name": "Blackwood Golf Centre",
+  "source": "osm",
   "type": "way"
  },
  "blissful-meadows-golf-course": {
@@ -339,6 +1159,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "boavista-golf-resort": {
+  "boundaryWay": 2168122,
+  "center": [
+   37.097422,
+   -8.709752
+  ],
+  "name": "Boavista Golf Resort",
+  "source": "osm",
+  "type": "relation"
+ },
  "bob-o-connor-golf-course": {
   "boundaryWay": 27592237,
   "center": [
@@ -347,6 +1177,16 @@
   ],
   "name": "Bob O'Connor Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "bogside-house-golf-course": {
+  "boundaryWay": 1179624903,
+  "center": [
+   55.515166,
+   -4.553247
+  ],
+  "name": "Bogside House golf course",
+  "source": "osm",
   "type": "way"
  },
  "bonnie-brae-golf-course": {
@@ -369,6 +1209,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "bootle-golf-club": {
+  "boundaryWay": 38615412,
+  "center": [
+   53.481318,
+   -2.976928
+  ],
+  "name": "Bootle Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "boughton-golf-club": {
+  "boundaryWay": 4034054,
+  "center": [
+   51.290159,
+   0.940605
+  ],
+  "name": "Boughton Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "bowring-park-golf-course": {
+  "boundaryWay": 3996639,
+  "center": [
+   53.404249,
+   -2.861549
+  ],
+  "name": "Bowring Park Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
  "brae-burn-country-club": {
   "boundaryWay": 29871734,
   "center": [
@@ -377,6 +1247,36 @@
   ],
   "name": "Brae Burn Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "braid-hills-golf-centre": {
+  "boundaryWay": 26212560,
+  "center": [
+   55.912216,
+   -3.179749
+  ],
+  "name": "Braid Hills Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "braid-hills-golf-course": {
+  "boundaryWay": 26208798,
+  "center": [
+   55.914925,
+   -3.191689
+  ],
+  "name": "Braid Hills Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "brent-valley-public-golf-course": {
+  "boundaryWay": 221122455,
+  "center": [
+   51.517354,
+   -0.347084
+  ],
+  "name": "Brent Valley Public Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "briar-leaf-golf-club": {
@@ -399,6 +1299,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "bricch-golf": {
+  "boundaryWay": 608055661,
+  "center": [
+   45.648081,
+   9.121033
+  ],
+  "name": "Bricch golf",
+  "source": "osm",
+  "type": "way"
+ },
  "brickyard-crossing-golf-course": {
   "boundaryWay": -569616,
   "center": [
@@ -409,6 +1319,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "bridgend-district-golf-club": {
+  "boundaryWay": 144032515,
+  "center": [
+   55.964353,
+   -3.540376
+  ],
+  "name": "Bridgend & District Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "bright-golf-course": {
+  "boundaryWay": 437282292,
+  "center": [
+   54.273437,
+   -5.693309
+  ],
+  "name": "Bright Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "brockton-golf-club": {
   "boundaryWay": 29859242,
   "center": [
@@ -417,6 +1347,16 @@
   ],
   "name": "Brockton Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "bromborough-golf-club": {
+  "boundaryWay": 13857535,
+  "center": [
+   53.314592,
+   -3.000836
+  ],
+  "name": "Bromborough Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "brook-meadow-country-club": {
@@ -439,6 +1379,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "broome-park-golf-club": {
+  "boundaryWay": 92904491,
+  "center": [
+   51.19412,
+   1.173132
+  ],
+  "name": "Broome Park Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "brown-trout-inn-golf-course": {
+  "boundaryWay": 969618876,
+  "center": [
+   55.038197,
+   -6.598743
+  ],
+  "name": "Brown Trout Inn golf course",
+  "source": "osm",
+  "type": "way"
+ },
+ "brunston-castle-golf-club": {
+  "boundaryWay": 382875607,
+  "center": [
+   55.271937,
+   -4.739442
+  ],
+  "name": "Brunston Castle Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "bruntsfield-links": {
+  "boundaryWay": 6136782,
+  "center": [
+   55.97002,
+   -3.291138
+  ],
+  "name": "Bruntsfield Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "bruntsfield-links-short-hole-golf-course": {
+  "boundaryWay": 217619432,
+  "center": [
+   55.939698,
+   -3.201235
+  ],
+  "name": "Bruntsfield Links Short Hole Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "bunker-hill-golf-course": {
   "boundaryWay": -227820,
   "center": [
@@ -447,6 +1437,46 @@
   ],
   "name": "Bunker Hill Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "burhill-golf-club": {
+  "boundaryWay": 249653314,
+  "center": [
+   51.351946,
+   -0.41993
+  ],
+  "name": "Burhill Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "burnfield-house-golf-club": {
+  "boundaryWay": 441622159,
+  "center": [
+   54.697554,
+   -5.935212
+  ],
+  "name": "Burnfield House Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "burnham-beeches-golf-club": {
+  "boundaryWay": 339412146,
+  "center": [
+   51.549228,
+   -0.646063
+  ],
+  "name": "Burnham Beeches Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "bushfoot-golf-club": {
+  "boundaryWay": 508156888,
+  "center": [
+   55.216894,
+   -6.532744
+  ],
+  "name": "Bushfoot Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "butterfield-golf-course": {
@@ -469,6 +1499,136 @@
   "source": "cc0",
   "type": "way"
  },
+ "c-l-golf-country-club": {
+  "boundaryWay": 8914343,
+  "center": [
+   51.545969,
+   -0.402391
+  ],
+  "name": "C & L Golf & Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "cabopino-golf": {
+  "boundaryWay": 172434912,
+  "center": [
+   36.494738,
+   -4.742373
+  ],
+  "name": "Cabopino golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "cairndhu-golf-course": {
+  "boundaryWay": 779088387,
+  "center": [
+   54.892486,
+   -5.84791
+  ],
+  "name": "Cairndhu Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "calanova-golf-club": {
+  "boundaryWay": 16378288,
+  "center": [
+   36.512444,
+   -4.70529
+  ],
+  "name": "Calanova Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "caldy-golf-club": {
+  "boundaryWay": 155018731,
+  "center": [
+   53.351568,
+   -3.159391
+  ],
+  "name": "Caldy Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "camberley-heath-golf-club": {
+  "boundaryWay": 24150586,
+  "center": [
+   51.331691,
+   -0.71551
+  ],
+  "name": "Camberley Heath Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "campo-am-rica": {
+  "boundaryWay": 170984725,
+  "center": [
+   36.540831,
+   -4.72767
+  ],
+  "name": "Campo Am\u00e9rica",
+  "source": "osm",
+  "type": "way"
+ },
+ "campo-asia": {
+  "boundaryWay": 343672934,
+  "center": [
+   36.539656,
+   -4.716913
+  ],
+  "name": "Campo Asia",
+  "source": "osm",
+  "type": "way"
+ },
+ "campo-de-golf-miguel-ngel-jim-nez": {
+  "boundaryWay": 281634367,
+  "center": [
+   36.636177,
+   -4.496267
+  ],
+  "name": "Campo de Golf Miguel \u00c1ngel Jim\u00e9nez",
+  "source": "osm",
+  "type": "way"
+ },
+ "campo-de-golf-r-o-real": {
+  "boundaryWay": 3299743,
+  "center": [
+   36.50979,
+   -4.844055
+  ],
+  "name": "Campo de Golf R\u00edo Real",
+  "source": "osm",
+  "type": "relation"
+ },
+ "campo-europa": {
+  "boundaryWay": 170989070,
+  "center": [
+   36.546014,
+   -4.723037
+  ],
+  "name": "Campo Europa",
+  "source": "osm",
+  "type": "way"
+ },
+ "campo-los-lagos": {
+  "boundaryWay": 172222354,
+  "center": [
+   36.550138,
+   -4.665061
+  ],
+  "name": "Campo Los Lagos",
+  "source": "osm",
+  "type": "way"
+ },
+ "campo-los-olivos": {
+  "boundaryWay": 244709315,
+  "center": [
+   36.553376,
+   -4.672378
+  ],
+  "name": "Campo Los Olivos",
+  "source": "osm",
+  "type": "way"
+ },
  "candlewood-public-golf-course": {
   "boundaryWay": 29695251,
   "center": [
@@ -479,6 +1639,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "canmore-golf-club": {
+  "boundaryWay": 117916474,
+  "center": [
+   56.083172,
+   -3.457256
+  ],
+  "name": "Canmore Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "canoe-club-golf-course": {
   "boundaryWay": -1769052,
   "center": [
@@ -487,6 +1657,16 @@
   ],
   "name": "Canoe Club Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "canterbury-golf-club": {
+  "boundaryWay": 89678294,
+  "center": [
+   51.286041,
+   1.117957
+  ],
+  "name": "Canterbury Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "canyon-springs-golf-club": {
@@ -519,6 +1699,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "caprington-golf-club": {
+  "boundaryWay": 101165916,
+  "center": [
+   55.585943,
+   -4.512073
+  ],
+  "name": "Caprington Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "captains-golf-course": {
   "boundaryWay": 29844404,
   "center": [
@@ -539,6 +1729,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "carnalea-golf-club": {
+  "boundaryWay": 38625616,
+  "center": [
+   54.664072,
+   -5.698922
+  ],
+  "name": "Carnalea Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "carnfunnock-golf-course": {
+  "boundaryWay": 671265984,
+  "center": [
+   54.885335,
+   -5.842097
+  ],
+  "name": "Carnfunnock Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "carriage-greens-golf-club": {
   "boundaryWay": -2981936,
   "center": [
@@ -547,6 +1757,76 @@
   ],
   "name": "Carriage Greens Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "carrick-knowe-golf-club": {
+  "boundaryWay": 5776767,
+  "center": [
+   55.938414,
+   -3.26283
+  ],
+  "name": "Carrick Knowe Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "carrickfergus-golf-course": {
+  "boundaryWay": 38178440,
+  "center": [
+   54.723885,
+   -5.804723
+  ],
+  "name": "Carrickfergus Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "castle-course": {
+  "boundaryWay": 233133679,
+  "center": [
+   52.941807,
+   -9.346156
+  ],
+  "name": "Castle Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "castlegregory-golf-links": {
+  "boundaryWay": 231515504,
+  "center": [
+   52.258396,
+   -10.062071
+  ],
+  "name": "Castlegregory Golf Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "castlereagh-hills-golf-course": {
+  "boundaryWay": 195633335,
+  "center": [
+   54.567928,
+   -5.833993
+  ],
+  "name": "Castlereagh Hills Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "castlerock-golf-club": {
+  "boundaryWay": 284407631,
+  "center": [
+   55.163812,
+   -6.773442
+  ],
+  "name": "Castlerock Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "castletroy-golf-club": {
+  "boundaryWay": 38003791,
+  "center": [
+   52.659888,
+   -8.56166
+  ],
+  "name": "Castletroy Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "catawba-island-club": {
@@ -558,6 +1838,16 @@
   "name": "Catawba Island Club",
   "source": "cc0",
   "type": "way"
+ },
+ "cc": {
+  "boundaryWay": 11527738,
+  "center": [
+   37.310303,
+   127.11774
+  ],
+  "name": "\ud55c\uc131CC",
+  "source": "osm",
+  "type": "relation"
  },
  "cedar-glenn-golf-course": {
   "boundaryWay": -64866,
@@ -599,6 +1889,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "cerrado-del-aguila-golf": {
+  "boundaryWay": 172433462,
+  "center": [
+   36.525679,
+   -4.663045
+  ],
+  "name": "Cerrado del Aguila Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "charleton-golf-club": {
+  "boundaryWay": 621843735,
+  "center": [
+   56.222657,
+   -2.867265
+  ],
+  "name": "Charleton Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "charleville-golf-club": {
+  "boundaryWay": 6083609,
+  "center": [
+   52.344352,
+   -8.720674
+  ],
+  "name": "Charleville Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "charleville-pitch-and-putt-club": {
+  "boundaryWay": 421499733,
+  "center": [
+   52.351686,
+   -8.685379
+  ],
+  "name": "Charleville Pitch and Putt Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "chart-hills-golf-club": {
+  "boundaryWay": 95454603,
+  "center": [
+   51.13586,
+   0.652623
+  ],
+  "name": "Chart Hills Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "cherry-hill-golf-course": {
   "boundaryWay": 29908456,
   "center": [
@@ -609,6 +1949,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "chestfield-golf-club": {
+  "boundaryWay": 92743271,
+  "center": [
+   51.345061,
+   1.070333
+  ],
+  "name": "Chestfield Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "chestnut-hill-golf-course": {
   "boundaryWay": 29868806,
   "center": [
@@ -617,6 +1967,16 @@
   ],
   "name": "Chestnut Hill Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "chi-chi-the-golf-venue": {
+  "boundaryWay": 72105912,
+  "center": [
+   52.122869,
+   5.139201
+  ],
+  "name": "Chi Chi - The Golf Venue",
+  "source": "osm",
   "type": "way"
  },
  "chicago-golf-club": {
@@ -649,6 +2009,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "childwall-golf-club": {
+  "boundaryWay": 30800778,
+  "center": [
+   53.395046,
+   -2.839684
+  ],
+  "name": "Childwall Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "chippanee-golf-club-inc": {
   "boundaryWay": 43440355,
   "center": [
@@ -658,6 +2028,16 @@
   "name": "Chippanee Golf Club,Inc.",
   "source": "cc0",
   "type": "way"
+ },
+ "chobham-golf-club": {
+  "boundaryWay": 7388131,
+  "center": [
+   51.330759,
+   -0.619372
+  ],
+  "name": "Chobham Golf Club",
+  "source": "osm",
+  "type": "relation"
  },
  "christmas-valley": {
   "boundaryWay": -2673050,
@@ -679,6 +2059,86 @@
   "source": "cc0",
   "type": "way"
  },
+ "clandon-golf": {
+  "boundaryWay": 25783121,
+  "center": [
+   51.244772,
+   -0.51655
+  ],
+  "name": "Clandon Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "clandon-regis-golf-club": {
+  "boundaryWay": 9653591,
+  "center": [
+   51.25553,
+   -0.49438
+  ],
+  "name": "Clandon Regis Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "clandyboye-golf-club": {
+  "boundaryWay": 43006556,
+  "center": [
+   54.627101,
+   -5.687698
+  ],
+  "name": "Clandyboye Golf CLub",
+  "source": "osm",
+  "type": "way"
+ },
+ "claremont-park-golf-course": {
+  "boundaryWay": 161679119,
+  "center": [
+   51.362377,
+   -0.367972
+  ],
+  "name": "Claremont Park Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "cliftonville-golf-club": {
+  "boundaryWay": 39475685,
+  "center": [
+   54.626572,
+   -5.952237
+  ],
+  "name": "Cliftonville Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "cloghogue-pitch-and-putt": {
+  "boundaryWay": 1023814456,
+  "center": [
+   54.153272,
+   -6.342842
+  ],
+  "name": "Cloghogue Pitch and Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "cloverhill-golf-club": {
+  "boundaryWay": 5218731,
+  "center": [
+   54.103684,
+   -6.487566
+  ],
+  "name": "Cloverhill Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "club-de-golf-aloha": {
+  "boundaryWay": 1402560,
+  "center": [
+   36.511565,
+   -4.960941
+  ],
+  "name": "Club de Golf Aloha",
+  "source": "osm",
+  "type": "relation"
+ },
  "club-de-golf-brossard": {
   "boundaryWay": -338728,
   "center": [
@@ -687,6 +2147,36 @@
   ],
   "name": "Club de golf Brossard",
   "source": "cc0",
+  "type": "way"
+ },
+ "club-de-golf-de-guadalhorce": {
+  "boundaryWay": 175483665,
+  "center": [
+   36.699372,
+   -4.52879
+  ],
+  "name": "Club de Golf de Guadalhorce",
+  "source": "osm",
+  "type": "way"
+ },
+ "club-de-golf-el-candado": {
+  "boundaryWay": 8238880,
+  "center": [
+   36.719616,
+   -4.34142
+  ],
+  "name": "Club de Golf El Candado",
+  "source": "osm",
+  "type": "relation"
+ },
+ "club-de-golf-el-coto-de-la-serena": {
+  "boundaryWay": 188317272,
+  "center": [
+   36.456098,
+   -5.068051
+  ],
+  "name": "Club de Golf El Coto de la Serena",
+  "source": "osm",
   "type": "way"
  },
  "club-de-golf-hautes-plaines": {
@@ -699,6 +2189,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "club-de-golf-la-ca-ada": {
+  "boundaryWay": 105294806,
+  "center": [
+   36.294833,
+   -5.311957
+  ],
+  "name": "Club de Golf La Ca\u00f1ada",
+  "source": "osm",
+  "type": "way"
+ },
+ "club-de-golf-m-laga-parador": {
+  "boundaryWay": 60046149,
+  "center": [
+   36.654204,
+   -4.471724
+  ],
+  "name": "Club de Golf M\u00e1laga Parador",
+  "source": "osm",
+  "type": "way"
+ },
+ "club-de-golf-valderrama": {
+  "boundaryWay": 237391513,
+  "center": [
+   36.285515,
+   -5.329886
+  ],
+  "name": "Club de Golf Valderrama",
+  "source": "osm",
+  "type": "way"
+ },
+ "club-med-da-balaia-academy-pitch-putt": {
+  "boundaryWay": 106911695,
+  "center": [
+   37.090849,
+   -8.200525
+  ],
+  "name": "Club Med Da Balaia Academy Pitch & Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "cluny-golf": {
+  "boundaryWay": 172261913,
+  "center": [
+   56.155736,
+   -3.216511
+  ],
+  "name": "Cluny Golf",
+  "source": "osm",
+  "type": "way"
+ },
  "cobre-valley-country-club": {
   "boundaryWay": 264300287,
   "center": [
@@ -707,6 +2247,16 @@
   ],
   "name": "Cobre Valley Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "cobtree-manor-park-golf-club": {
+  "boundaryWay": 28303055,
+  "center": [
+   51.303267,
+   0.506975
+  ],
+  "name": "Cobtree Manor Park Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "cohasset-golf-club": {
@@ -718,6 +2268,26 @@
   "name": "Cohasset Golf Club",
   "source": "cc0",
   "type": "way"
+ },
+ "colin-valley-golf-course": {
+  "boundaryWay": 38968717,
+  "center": [
+   54.559576,
+   -6.007953
+  ],
+  "name": "Colin Valley Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "colina-verde-golf-sports-resort-executive-course": {
+  "boundaryWay": 1345680,
+  "center": [
+   37.086195,
+   -7.751624
+  ],
+  "name": "Colina Verde Golf & Sports Resort Executive Course",
+  "source": "osm",
+  "type": "relation"
  },
  "colonial-golf-course": {
   "boundaryWay": -64867,
@@ -749,6 +2319,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "concra-wood-golf-club": {
+  "boundaryWay": 721962532,
+  "center": [
+   54.108413,
+   -6.700027
+  ],
+  "name": "Concra Wood Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "coombe-hill-golf-club": {
+  "boundaryWay": 4782157,
+  "center": [
+   51.422414,
+   -0.261675
+  ],
+  "name": "Coombe Hill Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "coombe-wood-golf-course": {
+  "boundaryWay": 22392855,
+  "center": [
+   51.419109,
+   -0.273733
+  ],
+  "name": "Coombe Wood Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "copper-hill-golf-course": {
   "boundaryWay": 43439672,
   "center": [
@@ -757,6 +2357,16 @@
   ],
   "name": "Copper Hill Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "coronation-course": {
+  "boundaryWay": 1455505070,
+  "center": [
+   51.309631,
+   -0.273342
+  ],
+  "name": "Coronation Course",
+  "source": "osm",
   "type": "way"
  },
  "costa-greens-golf-course": {
@@ -809,6 +2419,126 @@
   "source": "cc0",
   "type": "way"
  },
+ "course-a": {
+  "boundaryWay": 3301112,
+  "center": [
+   36.506999,
+   -4.996734
+  ],
+  "name": "Course A",
+  "source": "osm",
+  "type": "relation"
+ },
+ "course-b": {
+  "boundaryWay": 3301113,
+  "center": [
+   36.515696,
+   -4.999065
+  ],
+  "name": "Course B",
+  "source": "osm",
+  "type": "relation"
+ },
+ "cowdenbeath-golf-course": {
+  "boundaryWay": 115966547,
+  "center": [
+   56.115633,
+   -3.329818
+  ],
+  "name": "Cowdenbeath Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "craigavon-golf-course": {
+  "boundaryWay": 162602247,
+  "center": [
+   54.475413,
+   -6.363149
+  ],
+  "name": "Craigavon Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "craigentinny-golf-course": {
+  "boundaryWay": 6175914,
+  "center": [
+   55.96395,
+   -3.141925
+  ],
+  "name": "Craigentinny Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "craighead-links": {
+  "boundaryWay": 1432609850,
+  "center": [
+   56.276412,
+   -2.596805
+  ],
+  "name": "Craighead Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "craigie-hill-golf-course": {
+  "boundaryWay": 55888009,
+  "center": [
+   56.38352,
+   -3.453672
+  ],
+  "name": "Craigie Hill Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "craigielaw-golf-club": {
+  "boundaryWay": 249130496,
+  "center": [
+   56.00862,
+   -2.876905
+  ],
+  "name": "Craigielaw Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "craigielaw-golf-course": {
+  "boundaryWay": 19018950,
+  "center": [
+   56.004931,
+   -2.877066
+  ],
+  "name": "Craigielaw Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "craigmillar-park-golf-club": {
+  "boundaryWay": 945815,
+  "center": [
+   55.921836,
+   -3.177715
+  ],
+  "name": "Craigmillar Park Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "craigtoun-country-park-course": {
+  "boundaryWay": 1395284185,
+  "center": [
+   56.317488,
+   -2.84067
+  ],
+  "name": "Craigtoun Country Park Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "craigtoun-course": {
+  "boundaryWay": 411433333,
+  "center": [
+   56.319416,
+   -2.844397
+  ],
+  "name": "Craigtoun Course",
+  "source": "osm",
+  "type": "way"
+ },
  "cranberry-valley-golf-club": {
   "boundaryWay": 29800968,
   "center": [
@@ -819,6 +2549,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "cranbrook-formerly-hemsted-forest-golf-club-permanently-closed": {
+  "boundaryWay": 27226456,
+  "center": [
+   51.090967,
+   0.579418
+  ],
+  "name": "Cranbrook (formerly Hemsted Forest) Golf Club (Permanently closed)",
+  "source": "osm",
+  "type": "way"
+ },
+ "cranfield-pitch-putt": {
+  "boundaryWay": 550874479,
+  "center": [
+   54.037059,
+   -6.05425
+  ],
+  "name": "Cranfield Pitch & Putt",
+  "source": "osm",
+  "type": "way"
+ },
  "creek-at-qualchan-golf-course": {
   "boundaryWay": -2994548,
   "center": [
@@ -827,6 +2577,16 @@
   ],
   "name": "Creek at Qualchan Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "crossgar-golf-club": {
+  "boundaryWay": 231877341,
+  "center": [
+   54.401915,
+   -5.758907
+  ],
+  "name": "Crossgar Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "crowfield-golf-club": {
@@ -869,6 +2629,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "cuddington-golf-course": {
+  "boundaryWay": 17750111,
+  "center": [
+   51.336755,
+   -0.220997
+  ],
+  "name": "Cuddington Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "cupar-golf-club": {
+  "boundaryWay": 131881973,
+  "center": [
+   56.30937,
+   -3.003544
+  ],
+  "name": "Cupar Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "d-w-field-golf-course": {
   "boundaryWay": 29859036,
   "center": [
@@ -877,6 +2657,66 @@
   ],
   "name": "D W Field Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "dalmilling-golf-course": {
+  "boundaryWay": 43476940,
+  "center": [
+   55.465426,
+   -4.591281
+  ],
+  "name": "Dalmilling Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "datchet-golf-club": {
+  "boundaryWay": 3903653,
+  "center": [
+   51.488473,
+   -0.58858
+  ],
+  "name": "Datchet Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "david-lloyd-hampton": {
+  "boundaryWay": 23060908,
+  "center": [
+   51.437079,
+   -0.365665
+  ],
+  "name": "David Lloyd Hampton",
+  "source": "osm",
+  "type": "way"
+ },
+ "de-utrechtse": {
+  "boundaryWay": 2586829,
+  "center": [
+   52.032996,
+   5.128805
+  ],
+  "name": "De Utrechtse",
+  "source": "osm",
+  "type": "relation"
+ },
+ "deer-park": {
+  "boundaryWay": 4632947,
+  "center": [
+   55.912838,
+   -3.537674
+  ],
+  "name": "Deer Park",
+  "source": "osm",
+  "type": "relation"
+ },
+ "deer-park-pitch-putt-club": {
+  "boundaryWay": 217748556,
+  "center": [
+   52.065699,
+   -9.501457
+  ],
+  "name": "Deer Park Pitch & Putt Club",
+  "source": "osm",
   "type": "way"
  },
  "deerwood-country-club": {
@@ -909,6 +2749,196 @@
   "source": "cc0",
   "type": "way"
  },
+ "dingle-pitch-and-putt": {
+  "boundaryWay": 248936799,
+  "center": [
+   52.138281,
+   -10.28958
+  ],
+  "name": "Dingle Pitch and Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "do-a-julia": {
+  "boundaryWay": 187380304,
+  "center": [
+   36.380728,
+   -5.22652
+  ],
+  "name": "Do\u00f1a Julia",
+  "source": "osm",
+  "type": "way"
+ },
+ "do-a-julia-golf-club": {
+  "boundaryWay": 2523808,
+  "center": [
+   36.388129,
+   -5.234496
+  ],
+  "name": "Do\u00f1a Julia Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "dodhead-golf-course": {
+  "boundaryWay": 117636564,
+  "center": [
+   56.068346,
+   -3.213922
+  ],
+  "name": "Dodhead Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "dom-pedro-laguna-golf-course": {
+  "boundaryWay": 3209452,
+  "center": [
+   37.093086,
+   -8.130258
+  ],
+  "name": "Dom Pedro Laguna Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "dom-pedro-millennium-golf-course": {
+  "boundaryWay": 3238919,
+  "center": [
+   37.104227,
+   -8.132512
+  ],
+  "name": "Dom Pedro Millennium Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "dom-pedro-old-course": {
+  "boundaryWay": 107196460,
+  "center": [
+   37.099451,
+   -8.116586
+  ],
+  "name": "Dom Pedro Old Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "dom-pedro-pinhal-golf-course": {
+  "boundaryWay": 3209386,
+  "center": [
+   37.085715,
+   -8.108233
+  ],
+  "name": "Dom Pedro Pinhal Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "dom-pedro-victoria-golf-course": {
+  "boundaryWay": 1506063,
+  "center": [
+   37.102949,
+   -8.143992
+  ],
+  "name": "Dom Pedro Victoria Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "donaghadee-golf-club": {
+  "boundaryWay": 4601406,
+  "center": [
+   54.650904,
+   -5.549655
+  ],
+  "name": "Donaghadee Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "doneraile-golf-club": {
+  "boundaryWay": 180363730,
+  "center": [
+   52.222579,
+   -8.588846
+  ],
+  "name": "Doneraile Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "dooks-golf-club": {
+  "boundaryWay": 224531699,
+  "center": [
+   52.085154,
+   -9.927891
+  ],
+  "name": "Dooks Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "doon-valley-golf-club": {
+  "boundaryWay": 377010472,
+  "center": [
+   55.360948,
+   -4.491997
+  ],
+  "name": "Doon Valley Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "doonbeg-golf-course": {
+  "boundaryWay": 207562122,
+  "center": [
+   52.756882,
+   -9.495822
+  ],
+  "name": "Doonbeg Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "doornse-golfclub": {
+  "boundaryWay": 1282437529,
+  "center": [
+   52.041674,
+   5.328306
+  ],
+  "name": "Doornse Golfclub",
+  "source": "osm",
+  "type": "way"
+ },
+ "dorking-golf-club": {
+  "boundaryWay": 19801467,
+  "center": [
+   51.224271,
+   -0.316965
+  ],
+  "name": "Dorking Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "down-royal-golf-club": {
+  "boundaryWay": 38809696,
+  "center": [
+   54.492274,
+   -6.127922
+  ],
+  "name": "Down Royal Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "downfield": {
+  "boundaryWay": 10616520,
+  "center": [
+   56.49012,
+   -3.031669
+  ],
+  "name": "Downfield",
+  "source": "osm",
+  "type": "relation"
+ },
+ "downshire-golf-complex": {
+  "boundaryWay": 12769689,
+  "center": [
+   51.394442,
+   -0.788124
+  ],
+  "name": "Downshire Golf Complex",
+  "source": "osm",
+  "type": "relation"
+ },
  "dreamland-villa-golf-course": {
   "boundaryWay": 263344757,
   "center": [
@@ -917,6 +2947,166 @@
   ],
   "name": "Dreamland Villa Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "driving-range": {
+  "boundaryWay": 612762336,
+  "center": [
+   51.238967,
+   -0.535312
+  ],
+  "name": "Driving Range",
+  "source": "osm",
+  "type": "way"
+ },
+ "driving-range-german-golf-academy": {
+  "boundaryWay": 244155660,
+  "center": [
+   36.524013,
+   -4.993128
+  ],
+  "name": "Driving Range / German Golf Academy",
+  "source": "osm",
+  "type": "way"
+ },
+ "drumoig-golf-centre": {
+  "boundaryWay": 122948305,
+  "center": [
+   56.418542,
+   -2.913647
+  ],
+  "name": "Drumoig Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "drumoig-golf-course": {
+  "boundaryWay": 3366723,
+  "center": [
+   56.412834,
+   -2.902287
+  ],
+  "name": "Drumoig Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "dsv-concordia-golf": {
+  "boundaryWay": 4459026,
+  "center": [
+   52.028556,
+   4.372302
+  ],
+  "name": "DSV Concordia Golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "duddingston-golf-course": {
+  "boundaryWay": 6175767,
+  "center": [
+   55.940374,
+   -3.135039
+  ],
+  "name": "Duddingston Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "dukes-meadows-golf-tennis-ski": {
+  "boundaryWay": 13891693,
+  "center": [
+   51.473315,
+   -0.263376
+  ],
+  "name": "Dukes Meadows Golf, Tennis & Ski",
+  "source": "osm",
+  "type": "way"
+ },
+ "dumbarnie-links": {
+  "boundaryWay": 735220025,
+  "center": [
+   56.208108,
+   -2.891979
+  ],
+  "name": "Dumbarnie Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "dunbar-golf-club": {
+  "boundaryWay": 2833655,
+  "center": [
+   55.993159,
+   -2.484812
+  ],
+  "name": "Dunbar Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "dundas-parks-golf-club": {
+  "boundaryWay": 31396100,
+  "center": [
+   55.973312,
+   -3.40762
+  ],
+  "name": "Dundas Parks Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "dundonald-links": {
+  "boundaryWay": 41275226,
+  "center": [
+   55.585089,
+   -4.656214
+  ],
+  "name": "Dundonald Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "dungannon-golf-club": {
+  "boundaryWay": 508153681,
+  "center": [
+   54.517496,
+   -6.785685
+  ],
+  "name": "Dungannon Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "dunluce-links": {
+  "boundaryWay": 1413316756,
+  "center": [
+   55.202754,
+   -6.625261
+  ],
+  "name": "Dunluce Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "dunmurry-golf-course": {
+  "boundaryWay": 6118831,
+  "center": [
+   54.54816,
+   -5.985458
+  ],
+  "name": "Dunmurry Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "dunnikier-park-golf-course": {
+  "boundaryWay": 128633952,
+  "center": [
+   56.139871,
+   -3.163114
+  ],
+  "name": "Dunnikier Park Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "dunning-golf-club": {
+  "boundaryWay": 240170897,
+  "center": [
+   56.313786,
+   -3.59311
+  ],
+  "name": "Dunning Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "duran-golf-club": {
@@ -959,6 +3149,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "ealing-golf-course": {
+  "boundaryWay": 4250571,
+  "center": [
+   51.530265,
+   -0.317202
+  ],
+  "name": "Ealing Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "east-clare-golf-club": {
+  "boundaryWay": 29390545,
+  "center": [
+   52.898751,
+   -8.604786
+  ],
+  "name": "East Clare Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "east-cliff-pitch-putt": {
+  "boundaryWay": 97603043,
+  "center": [
+   51.084912,
+   1.197618
+  ],
+  "name": "East Cliff Pitch & Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "east-course": {
+  "boundaryWay": 20059744,
+  "center": [
+   55.901209,
+   -3.360113
+  ],
+  "name": "East Course",
+  "source": "osm",
+  "type": "relation"
+ },
  "east-hartford-golf-course": {
   "boundaryWay": 43441142,
   "center": [
@@ -989,6 +3219,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "eastham-golf-course": {
+  "boundaryWay": 154068346,
+  "center": [
+   53.322463,
+   -2.96254
+  ],
+  "name": "Eastham Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "eastwell-manor": {
+  "boundaryWay": 90225345,
+  "center": [
+   51.189968,
+   0.886914
+  ],
+  "name": "Eastwell Manor",
+  "source": "osm",
+  "type": "way"
+ },
  "ed-oliver-golf-club": {
   "boundaryWay": -1242620,
   "center": [
@@ -997,6 +3247,26 @@
   ],
   "name": "Ed Oliver Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "eden-course": {
+  "boundaryWay": 158718157,
+  "center": [
+   56.353952,
+   -2.828854
+  ],
+  "name": "Eden Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "edenmore-golf-course": {
+  "boundaryWay": 598975449,
+  "center": [
+   54.452749,
+   -6.233192
+  ],
+  "name": "Edenmore Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "edge-hill-golf-course": {
@@ -1019,6 +3289,76 @@
   "source": "cc0",
   "type": "way"
  },
+ "effingham-golf-club": {
+  "boundaryWay": 7605715,
+  "center": [
+   51.261089,
+   -0.406398
+  ],
+  "name": "Effingham Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "el-campanario-golf-course": {
+  "boundaryWay": 244109824,
+  "center": [
+   36.475087,
+   -5.022909
+  ],
+  "name": "El Campanario Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "el-chaparral-golf-club": {
+  "boundaryWay": 172432255,
+  "center": [
+   36.513517,
+   -4.664099
+  ],
+  "name": "El Chaparral Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "el-higueral-golf": {
+  "boundaryWay": 186098955,
+  "center": [
+   36.50168,
+   -5.020448
+  ],
+  "name": "El Higueral Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "el-para-so-golf-club": {
+  "boundaryWay": 147409088,
+  "center": [
+   36.47541,
+   -5.033742
+  ],
+  "name": "El Para\u00edso Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "el-soto-golf": {
+  "boundaryWay": 170785539,
+  "center": [
+   36.524519,
+   -4.739781
+  ],
+  "name": "El Soto Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "elie-golf-course": {
+  "boundaryWay": 112530297,
+  "center": [
+   56.188858,
+   -2.839523
+  ],
+  "name": "Elie Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "elm-ridge-golf-course": {
   "boundaryWay": 43440031,
   "center": [
@@ -1027,6 +3367,86 @@
   ],
   "name": "Elm Ridge Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "elmwood-golf-course": {
+  "boundaryWay": 232421617,
+  "center": [
+   56.300579,
+   -3.044291
+  ],
+  "name": "Elmwood Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ennis-golf-club": {
+  "boundaryWay": 222331807,
+  "center": [
+   52.840587,
+   -9.001512
+  ],
+  "name": "Ennis Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "epsom-downs-golf-club": {
+  "boundaryWay": 17075970,
+  "center": [
+   51.317985,
+   -0.247348
+  ],
+  "name": "Epsom Downs Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "espiche-golf": {
+  "boundaryWay": 107214912,
+  "center": [
+   37.122772,
+   -8.754262
+  ],
+  "name": "Espiche Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "estec-golf-club": {
+  "boundaryWay": 6320911,
+  "center": [
+   52.217108,
+   4.423589
+  ],
+  "name": "ESTEC Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "estepona-golf": {
+  "boundaryWay": 244048306,
+  "center": [
+   36.413017,
+   -5.21223
+  ],
+  "name": "Estepona Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "etchinghill-golf-club": {
+  "boundaryWay": 4034078,
+  "center": [
+   51.118553,
+   1.095154
+  ],
+  "name": "Etchinghill Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "eton-college-golf-course": {
+  "boundaryWay": 119999696,
+  "center": [
+   51.497733,
+   -0.610607
+  ],
+  "name": "Eton College Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "evergreen-valley-golf-course": {
@@ -1049,6 +3469,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "fairhaven-golf-club": {
+  "boundaryWay": 6084942,
+  "center": [
+   53.748421,
+   -2.980201
+  ],
+  "name": "Fairhaven Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "faldo-course": {
+  "boundaryWay": 359502857,
+  "center": [
+   25.08491,
+   55.164105
+  ],
+  "name": "Faldo Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "falkland-golf-club": {
+  "boundaryWay": 98737327,
+  "center": [
+   56.255804,
+   -3.196184
+  ],
+  "name": "Falkland Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "falmouth-country-club-golf-course": {
   "boundaryWay": 29843313,
   "center": [
@@ -1067,6 +3517,46 @@
   ],
   "name": "Far Corners Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "farnham-golf-club": {
+  "boundaryWay": 1085701974,
+  "center": [
+   51.21359,
+   -0.743234
+  ],
+  "name": "Farnham Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "farnham-park-golf-course": {
+  "boundaryWay": 153351044,
+  "center": [
+   51.222532,
+   -0.801107
+  ],
+  "name": "Farnham Park Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "faversham-golf-course": {
+  "boundaryWay": 23598563,
+  "center": [
+   51.279336,
+   0.853106
+  ],
+  "name": "Faversham Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "feddinch-mains": {
+  "boundaryWay": 704055940,
+  "center": [
+   56.31589,
+   -2.830341
+  ],
+  "name": "Feddinch Mains",
+  "source": "osm",
   "type": "way"
  },
  "finley-golf-course": {
@@ -1089,6 +3579,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "flamingos-golf": {
+  "boundaryWay": 139728265,
+  "center": [
+   36.474522,
+   -5.056058
+  ],
+  "name": "Flamingos Golf",
+  "source": "osm",
+  "type": "way"
+ },
  "flanders-valley-golf-course": {
   "boundaryWay": -227741,
   "center": [
@@ -1097,6 +3597,26 @@
   ],
   "name": "Flanders Valley Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "folkestone-sports-centre": {
+  "boundaryWay": 96623496,
+  "center": [
+   51.088054,
+   1.16605
+  ],
+  "name": "Folkestone Sports Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "forest-golf": {
+  "boundaryWay": 640944361,
+  "center": [
+   35.76766,
+   140.038471
+  ],
+  "name": "FOREST GOLF",
+  "source": "osm",
   "type": "way"
  },
  "forest-hill-golf-club": {
@@ -1127,6 +3647,66 @@
   ],
   "name": "Forest Park Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "formby-golf-club": {
+  "boundaryWay": 19802085,
+  "center": [
+   53.572229,
+   -3.081381
+  ],
+  "name": "Formby Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "formby-hall-golf-course": {
+  "boundaryWay": 20778325,
+  "center": [
+   53.579608,
+   -3.039341
+  ],
+  "name": "Formby Hall Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "formby-ladies-golf-club": {
+  "boundaryWay": 1448188285,
+  "center": [
+   53.571115,
+   -3.080153
+  ],
+  "name": "Formby Ladies Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "forrester-park-golf-course": {
+  "boundaryWay": 94453954,
+  "center": [
+   56.068869,
+   -3.531602
+  ],
+  "name": "Forrester Park Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "fortwilliam-golf-club": {
+  "boundaryWay": 135051512,
+  "center": [
+   54.644156,
+   -5.929439
+  ],
+  "name": "Fortwilliam Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "foxhills": {
+  "boundaryWay": 157488856,
+  "center": [
+   51.375961,
+   -0.550577
+  ],
+  "name": "Foxhills",
+  "source": "osm",
   "type": "way"
  },
  "framingham-country-club": {
@@ -1169,6 +3749,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "frimley-lodge-pitch-and-putt": {
+  "boundaryWay": 762121499,
+  "center": [
+   51.299338,
+   -0.726358
+  ],
+  "name": "Frimley Lodge Pitch and Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "fulwell-golf-club": {
+  "boundaryWay": 293728142,
+  "center": [
+   51.434208,
+   -0.360014
+  ],
+  "name": "Fulwell Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "furnace-brook-golf-course": {
   "boundaryWay": 29862402,
   "center": [
@@ -1177,6 +3777,26 @@
   ],
   "name": "Furnace Brook Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "galecop-golf": {
+  "boundaryWay": 13641865,
+  "center": [
+   52.059072,
+   5.092538
+  ],
+  "name": "Galecop Golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "galgorm-castle-golf-club": {
+  "boundaryWay": 1062734778,
+  "center": [
+   54.851908,
+   -6.312367
+  ],
+  "name": "Galgorm Castle Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "galloping-hill-golf-course": {
@@ -1209,6 +3829,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "gc": {
+  "boundaryWay": 625850268,
+  "center": [
+   37.193515,
+   127.131081
+  ],
+  "name": "\ud654\uc131\uc0c1\ub85dGC",
+  "source": "osm",
+  "type": "way"
+ },
+ "gc-egmating-arabella-course": {
+  "boundaryWay": 882559026,
+  "center": [
+   48.003441,
+   11.802055
+  ],
+  "name": "GC Egmating Arabella Course",
+  "source": "osm",
+  "type": "way"
+ },
  "ge-athletic-association-golf-course": {
   "boundaryWay": 29687467,
   "center": [
@@ -1217,6 +3857,46 @@
   ],
   "name": "GE Athletic Association Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "gillingham-golf-club": {
+  "boundaryWay": 3369224,
+  "center": [
+   51.375974,
+   0.56743
+  ],
+  "name": "Gillingham Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "girvan": {
+  "boundaryWay": 3339551,
+  "center": [
+   55.250434,
+   -4.853459
+  ],
+  "name": "Girvan",
+  "source": "osm",
+  "type": "relation"
+ },
+ "glasgow-golf-club-gailes-links": {
+  "boundaryWay": 41275225,
+  "center": [
+   55.596567,
+   -4.664723
+  ],
+  "name": "Glasgow Golf Club / Gailes Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "glen-golf-club": {
+  "boundaryWay": 144045421,
+  "center": [
+   56.058592,
+   -2.689567
+  ],
+  "name": "Glen Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "glen-lakes-golf-and-learning-center": {
@@ -1229,6 +3909,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "glenrothes-golf-course": {
+  "boundaryWay": 3350929,
+  "center": [
+   56.186915,
+   -3.211641
+  ],
+  "name": "Glenrothes Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "gmg": {
+  "boundaryWay": 224739085,
+  "center": [
+   35.705251,
+   139.271131
+  ],
+  "name": "GMG \u516b\u738b\u5b50\u30b4\u30eb\u30d5\u5834",
+  "source": "osm",
+  "type": "way"
+ },
+ "gogarburn-golf-course": {
+  "boundaryWay": 31473433,
+  "center": [
+   55.933908,
+   -3.343726
+  ],
+  "name": "Gogarburn Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "gold-course": {
   "boundaryWay": -1564163,
   "center": [
@@ -1238,6 +3948,176 @@
   "name": "Gold Course",
   "source": "cc0",
   "type": "way"
+ },
+ "golf-academy-albayt-resort": {
+  "boundaryWay": 222531220,
+  "center": [
+   36.397441,
+   -5.205078
+  ],
+  "name": "Golf Academy Albayt Resort",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-amsteldijk": {
+  "boundaryWay": 423218102,
+  "center": [
+   52.282883,
+   4.876041
+  ],
+  "name": "Golf Amsteldijk",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-at-roe-valley": {
+  "boundaryWay": 387137135,
+  "center": [
+   55.038128,
+   -6.957368
+  ],
+  "name": "Golf at Roe Valley",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-barlassina-country-club": {
+  "boundaryWay": 69733027,
+  "center": [
+   45.658944,
+   9.113899
+  ],
+  "name": "Golf Barlassina Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-benalmadena-pitch-putt": {
+  "boundaryWay": 167071648,
+  "center": [
+   36.601901,
+   -4.55771
+  ],
+  "name": "Golf Benalmadena Pitch& Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-bluegreen-bellefontaine": {
+  "boundaryWay": 687955612,
+  "center": [
+   49.087938,
+   2.456724
+  ],
+  "name": "Golf Bluegreen Bellefontaine",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-bluegreen-rueil-malmaison": {
+  "boundaryWay": 425982307,
+  "center": [
+   48.878309,
+   2.160258
+  ],
+  "name": "Golf Bluegreen Rueil-Malmaison",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-brianza-country-club": {
+  "boundaryWay": 2418613,
+  "center": [
+   45.642353,
+   9.352342
+  ],
+  "name": "Golf Brianza Country Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-center-ismaning": {
+  "boundaryWay": 16628127,
+  "center": [
+   48.261301,
+   11.700195
+  ],
+  "name": "Golf Center Ismaning",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-centrum-noordwijk": {
+  "boundaryWay": 1400632,
+  "center": [
+   52.226962,
+   4.465901
+  ],
+  "name": "Golf Centrum Noordwijk",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-cl-ment-ader": {
+  "boundaryWay": 2915032,
+  "center": [
+   48.74522,
+   2.713084
+  ],
+  "name": "Golf Cl\u00e9ment Ader",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-club-ambrosiano": {
+  "boundaryWay": 98898499,
+  "center": [
+   45.331353,
+   9.007969
+  ],
+  "name": "Golf club Ambrosiano",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-club-de-menton": {
+  "boundaryWay": 766472471,
+  "center": [
+   43.779066,
+   7.475787
+  ],
+  "name": "Golf Club de Menton",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-club-grasbrunn": {
+  "boundaryWay": 24683850,
+  "center": [
+   48.0554,
+   11.76403
+  ],
+  "name": "Golf Club Grasbrunn",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-club-il-lagetto": {
+  "boundaryWay": 938860660,
+  "center": [
+   45.443446,
+   9.317008
+  ],
+  "name": "Golf Club Il Lagetto",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-club-lazzate": {
+  "boundaryWay": 294841130,
+  "center": [
+   45.678421,
+   9.068175
+  ],
+  "name": "Golf Club Lazzate",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-club-milano": {
+  "boundaryWay": 3301965,
+  "center": [
+   45.616982,
+   9.292866
+  ],
+  "name": "Golf Club Milano",
+  "source": "osm",
+  "type": "relation"
  },
  "golf-club-of-avon": {
   "boundaryWay": 43441038,
@@ -1259,6 +4139,756 @@
   "source": "cc0",
   "type": "way"
  },
+ "golf-club-san-vito": {
+  "boundaryWay": 6737666,
+  "center": [
+   45.413441,
+   9.015176
+  ],
+  "name": "Golf Club San Vito",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-club-vigevano-s-martretta": {
+  "boundaryWay": 217020720,
+  "center": [
+   45.302398,
+   8.902994
+  ],
+  "name": "Golf Club Vigevano \"S.Martretta\"",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-country-club": {
+  "boundaryWay": 419703884,
+  "center": [
+   43.738156,
+   7.185796
+  ],
+  "name": "Golf Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-country-club-cannes-mougins": {
+  "boundaryWay": 22376856,
+  "center": [
+   43.609077,
+   7.032039
+  ],
+  "name": "Golf Country Club Cannes-Mougins",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-country-club-de-saint-donat": {
+  "boundaryWay": 30657111,
+  "center": [
+   43.627459,
+   6.953579
+  ],
+  "name": "Golf Country Club de Saint-Donat",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-country-club-liemeer": {
+  "boundaryWay": 4431076,
+  "center": [
+   52.189785,
+   4.743248
+  ],
+  "name": "Golf- & Country Club Liemeer",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-countryclub-heiloo": {
+  "boundaryWay": 4463749,
+  "center": [
+   52.583771,
+   4.71264
+  ],
+  "name": "Golf- & Countryclub Heiloo",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-d-ableiges": {
+  "boundaryWay": 20324338,
+  "center": [
+   49.082783,
+   1.98644
+  ],
+  "name": "Golf d'Ableiges",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-d-ecancourt": {
+  "boundaryWay": 74463795,
+  "center": [
+   49.008849,
+   2.014995
+  ],
+  "name": "Golf d'Ecancourt",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-d-opio-valbonne": {
+  "boundaryWay": 7428915,
+  "center": [
+   43.652282,
+   7.023203
+  ],
+  "name": "Golf d\u2019Opio Valbonne",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-d-ormesson": {
+  "boundaryWay": 27486869,
+  "center": [
+   48.78639,
+   2.554635
+  ],
+  "name": "Golf d\u2019Ormesson",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-d-ozoir-la-ferri-re": {
+  "boundaryWay": 28684357,
+  "center": [
+   48.762744,
+   2.646792
+  ],
+  "name": "Golf d'Ozoir-la-Ferri\u00e8re",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-d-partemental": {
+  "boundaryWay": 17333547,
+  "center": [
+   48.935252,
+   2.544642
+  ],
+  "name": "Golf d\u00e9partemental",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-d-tiolles": {
+  "boundaryWay": 194844502,
+  "center": [
+   48.64459,
+   2.476083
+  ],
+  "name": "Golf d'\u00c9tiolles",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-b-themont": {
+  "boundaryWay": 1310109,
+  "center": [
+   48.910062,
+   1.997555
+  ],
+  "name": "Golf de B\u00e9themont",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-biot": {
+  "boundaryWay": 9459270,
+  "center": [
+   43.617411,
+   7.105073
+  ],
+  "name": "Golf de Biot",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-buc-toussus": {
+  "boundaryWay": 156015232,
+  "center": [
+   48.762951,
+   2.12902
+  ],
+  "name": "Golf de Buc-Toussus",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-bussy-guermantes": {
+  "boundaryWay": 375467,
+  "center": [
+   48.848243,
+   2.718537
+  ],
+  "name": "Golf de Bussy-Guermantes",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-cergy-vaur-al": {
+  "boundaryWay": 17130632,
+  "center": [
+   49.037745,
+   2.008324
+  ],
+  "name": "Golf de Cergy Vaur\u00e9al",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-domont-montmorency": {
+  "boundaryWay": 111797453,
+  "center": [
+   49.022229,
+   2.312296
+  ],
+  "name": "Golf de Domont-Montmorency",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-feucherolles": {
+  "boundaryWay": 47473272,
+  "center": [
+   48.871641,
+   1.989401
+  ],
+  "name": "Golf de Feucherolles",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-forges-les-bains": {
+  "boundaryWay": 159969048,
+  "center": [
+   48.63301,
+   2.074911
+  ],
+  "name": "Golf de Forges Les Bains",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-fourqueux": {
+  "boundaryWay": 47473334,
+  "center": [
+   48.885229,
+   2.055522
+  ],
+  "name": "Golf de Fourqueux",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-gif-sur-yvette-chevry": {
+  "boundaryWay": 19268438,
+  "center": [
+   48.683526,
+   2.114301
+  ],
+  "name": "Golf de Gif-sur-Yvette Chevry",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-joyenval": {
+  "boundaryWay": 2351017,
+  "center": [
+   48.890662,
+   2.024894
+  ],
+  "name": "Golf de Joyenval",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-l-hermitage": {
+  "boundaryWay": 685169687,
+  "center": [
+   49.061562,
+   2.114662
+  ],
+  "name": "Golf de l'Hermitage",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-l-le-fleurie": {
+  "boundaryWay": 166523254,
+  "center": [
+   48.902483,
+   2.180215
+  ],
+  "name": "Golf de l'\u00cele Fleurie",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-l-signy-r-veillon": {
+  "boundaryWay": 28797766,
+  "center": [
+   48.729528,
+   2.608057
+  ],
+  "name": "Golf de L\u00e9signy-R\u00e9veillon",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-l-yvette": {
+  "boundaryWay": 299046267,
+  "center": [
+   48.699213,
+   2.248131
+  ],
+  "name": "Golf de l'Yvette",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-la-croix-des-anges": {
+  "boundaryWay": 1447253378,
+  "center": [
+   48.609104,
+   2.626843
+  ],
+  "name": "Golf de la Croix des Anges",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-la-grande-bastide": {
+  "boundaryWay": 1736661,
+  "center": [
+   43.662332,
+   6.981283
+  ],
+  "name": "Golf de la Grande Bastide",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-la-grande-vall-e": {
+  "boundaryWay": 27134737,
+  "center": [
+   48.994667,
+   2.437437
+  ],
+  "name": "Golf de la Grande Vall\u00e9e",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-la-marsaudi-re": {
+  "boundaryWay": 343687533,
+  "center": [
+   48.744947,
+   2.697009
+  ],
+  "name": "Golf de la Marsaudi\u00e8re",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-la-tour-d-opio": {
+  "boundaryWay": 775359957,
+  "center": [
+   43.651243,
+   6.993478
+  ],
+  "name": "Golf de la Tour d'Opio",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-la-vanade": {
+  "boundaryWay": 1734815,
+  "center": [
+   43.662671,
+   7.099469
+  ],
+  "name": "Golf de la Vanade",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-maisons-laffitte": {
+  "boundaryWay": 7886332,
+  "center": [
+   48.955169,
+   2.170917
+  ],
+  "name": "Golf de Maisons Laffitte",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-marivaux": {
+  "boundaryWay": 166326788,
+  "center": [
+   48.629863,
+   2.168933
+  ],
+  "name": "Golf de Marivaux",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-marolles": {
+  "boundaryWay": 19211100,
+  "center": [
+   48.726377,
+   2.549714
+  ],
+  "name": "Golf de Marolles",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-noisy-le-roi": {
+  "boundaryWay": 22604155,
+  "center": [
+   48.853996,
+   2.04617
+  ],
+  "name": "Golf de Noisy le Roi",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-paris": {
+  "boundaryWay": 9926146,
+  "center": [
+   48.857324,
+   2.203951
+  ],
+  "name": "Golf de Paris",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-roissy": {
+  "boundaryWay": 87256088,
+  "center": [
+   49.002629,
+   2.498182
+  ],
+  "name": "Golf de Roissy",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-rosny-sous-bois": {
+  "boundaryWay": 23279540,
+  "center": [
+   48.876191,
+   2.474085
+  ],
+  "name": "Golf de Rosny-sous-Bois",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-s-nart": {
+  "boundaryWay": 2849080,
+  "center": [
+   48.623482,
+   2.515618
+  ],
+  "name": "Golf de S\u00e9nart",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-saint-aubin": {
+  "boundaryWay": 19230188,
+  "center": [
+   48.717821,
+   2.141357
+  ],
+  "name": "Golf de Saint-Aubin",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-saint-cloud": {
+  "boundaryWay": 22752042,
+  "center": [
+   48.851628,
+   2.183705
+  ],
+  "name": "Golf de Saint-Cloud",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-saint-germain-en-laye": {
+  "boundaryWay": 1350321773,
+  "center": [
+   48.917596,
+   2.05487
+  ],
+  "name": "Golf de Saint-Germain-en-Laye",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-saint-germain-l-s-corbeil": {
+  "boundaryWay": 19218935,
+  "center": [
+   48.635626,
+   2.488143
+  ],
+  "name": "Golf de Saint-Germain-l\u00e8s-Corbeil",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-saint-nom-la-bret-che": {
+  "boundaryWay": 22604082,
+  "center": [
+   48.847751,
+   2.02773
+  ],
+  "name": "Golf de Saint-Nom la Bret\u00eache",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-saint-ouen-l-aum-ne": {
+  "boundaryWay": 444895,
+  "center": [
+   49.050651,
+   2.112603
+  ],
+  "name": "Golf de Saint-Ouen l'Aum\u00f4ne",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-saint-quentin-en-yvelines": {
+  "boundaryWay": 22673458,
+  "center": [
+   48.791218,
+   1.994845
+  ],
+  "name": "Golf de Saint-Quentin en Yvelines",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-thiverval-grignon": {
+  "boundaryWay": 1055963578,
+  "center": [
+   48.838522,
+   1.915511
+  ],
+  "name": "Golf de Thiverval-Grignon",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-vaires-torcy": {
+  "boundaryWay": 31513841,
+  "center": [
+   48.863275,
+   2.656104
+  ],
+  "name": "Golf de Vaires-Torcy",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-val-grand": {
+  "boundaryWay": 24809232,
+  "center": [
+   48.606824,
+   2.381558
+  ],
+  "name": "Golf de Val Grand",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-valescure": {
+  "boundaryWay": 19947427,
+  "center": [
+   43.455956,
+   6.796513
+  ],
+  "name": "Golf de Valescure",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-de-verri-res-le-buisson": {
+  "boundaryWay": 213162073,
+  "center": [
+   48.738117,
+   2.239446
+  ],
+  "name": "Golf de Verri\u00e8res-le-Buisson",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-villacoublay": {
+  "boundaryWay": 47422171,
+  "center": [
+   48.767314,
+   2.201568
+  ],
+  "name": "Golf de Villacoublay",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-villennes": {
+  "boundaryWay": 85447354,
+  "center": [
+   48.931946,
+   1.990046
+  ],
+  "name": "Golf de Villennes",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-de-viltain-saint-marc": {
+  "boundaryWay": 14180078,
+  "center": [
+   48.752763,
+   2.147906
+  ],
+  "name": "Golf de Viltain Saint-Marc",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-du-haras-de-jardy": {
+  "boundaryWay": 19268500,
+  "center": [
+   48.830461,
+   2.153626
+  ],
+  "name": "Golf du Haras de Jardy",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-du-haras-lupin": {
+  "boundaryWay": 167467631,
+  "center": [
+   48.84436,
+   2.161136
+  ],
+  "name": "Golf du Haras Lupin",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-du-parc-du-tremblay": {
+  "boundaryWay": 174117499,
+  "center": [
+   48.822861,
+   2.485743
+  ],
+  "name": "Golf du Parc du Tremblay",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-du-stade-fran-ais-courson": {
+  "boundaryWay": 155575427,
+  "center": [
+   48.597516,
+   2.130243
+  ],
+  "name": "Golf du Stade Fran\u00e7ais - Courson",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-ducatif-de-coll-gien": {
+  "boundaryWay": 1398563959,
+  "center": [
+   48.838552,
+   2.67521
+  ],
+  "name": "Golf \u00e9ducatif de Coll\u00e9gien",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-duinzicht": {
+  "boundaryWay": 4463566,
+  "center": [
+   52.106695,
+   4.334064
+  ],
+  "name": "Golf Duinzicht",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-garden-forest": {
+  "boundaryWay": 972645185,
+  "center": [
+   35.487269,
+   139.530429
+  ],
+  "name": "GOLF GARDEN FOREST",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-grasse-country-club-claux-amic": {
+  "boundaryWay": 336817594,
+  "center": [
+   43.671166,
+   6.893583
+  ],
+  "name": "Golf Grasse Country Club \u2013 Claux Amic",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-isabella": {
+  "boundaryWay": 47473145,
+  "center": [
+   48.794719,
+   1.936454
+  ],
+  "name": "Golf Isabella",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-la-dama-de-noche": {
+  "boundaryWay": 3299762,
+  "center": [
+   36.501409,
+   -4.948457
+  ],
+  "name": "Golf La Dama de Noche",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-monza": {
+  "boundaryWay": 158091830,
+  "center": [
+   45.587209,
+   9.237579
+  ],
+  "name": "Golf Monza",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-national": {
+  "boundaryWay": 290619725,
+  "center": [
+   48.750534,
+   2.086786
+  ],
+  "name": "Golf National",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-ockenburgh": {
+  "boundaryWay": 15594997,
+  "center": [
+   52.058492,
+   4.215902
+  ],
+  "name": "Golf Ockenburgh",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-parislongchamp": {
+  "boundaryWay": 579387325,
+  "center": [
+   48.856829,
+   2.232839
+  ],
+  "name": "Golf ParisLongchamp",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-roches-d-azur": {
+  "boundaryWay": 19247330,
+  "center": [
+   43.426325,
+   6.849799
+  ],
+  "name": "Golf Roches d'Azur",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-santo-ant-nio-parque-da-floresta": {
+  "boundaryWay": 18068766,
+  "center": [
+   37.086178,
+   -8.842833
+  ],
+  "name": "Golf Santo Ant\u00f3nio / Parque da Floresta",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golf-shooting-club-sharjah": {
+  "boundaryWay": 235818093,
+  "center": [
+   25.353712,
+   55.488119
+  ],
+  "name": "Golf & Shooting Club Sharjah",
+  "source": "osm",
+  "type": "way"
+ },
  "golf-st-c-saire": {
   "boundaryWay": -1594602,
   "center": [
@@ -1269,6 +4899,736 @@
   "source": "cc0",
   "type": "way"
  },
+ "golf-su-pista-oasi-del-divertimento": {
+  "boundaryWay": 28337456,
+  "center": [
+   45.553905,
+   9.177485
+  ],
+  "name": "Golf su Pista - Oasi del Divertimento",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-tolcinasco": {
+  "boundaryWay": 44091106,
+  "center": [
+   45.362368,
+   9.18241
+  ],
+  "name": "Golf Tolcinasco",
+  "source": "osm",
+  "type": "way"
+ },
+ "golf-torrequebrada": {
+  "boundaryWay": 1170115,
+  "center": [
+   36.586003,
+   -4.549761
+  ],
+  "name": "Golf Torrequebrada",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfanlage-bergkramerhof": {
+  "boundaryWay": 107091842,
+  "center": [
+   47.91063,
+   11.407133
+  ],
+  "name": "Golfanlage Bergkramerhof",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfanlage-gut-rieden": {
+  "boundaryWay": 162097909,
+  "center": [
+   48.025132,
+   11.350987
+  ],
+  "name": "Golfanlage Gut Rieden",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfanlage-rottbach": {
+  "boundaryWay": 3347269,
+  "center": [
+   48.249198,
+   11.260881
+  ],
+  "name": "Golfanlage Rottbach",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfanlage-tegernbach": {
+  "boundaryWay": 96185578,
+  "center": [
+   48.268561,
+   11.083261
+  ],
+  "name": "Golfanlage Tegernbach",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-bentwoud": {
+  "boundaryWay": 160610181,
+  "center": [
+   52.071588,
+   4.572789
+  ],
+  "name": "Golfbaan Bentwoud",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-crimpenerhout": {
+  "boundaryWay": 453486454,
+  "center": [
+   51.906009,
+   4.615728
+  ],
+  "name": "Golfbaan Crimpenerhout",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-de-hoge-dijk": {
+  "boundaryWay": 27377987,
+  "center": [
+   52.285061,
+   4.955384
+  ],
+  "name": "Golfbaan De Hoge Dijk",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-de-hooge-rotterdamsche": {
+  "boundaryWay": 28054751,
+  "center": [
+   51.974425,
+   4.535917
+  ],
+  "name": "Golfbaan De Hooge Rotterdamsche",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-de-kroonprins": {
+  "boundaryWay": 628242979,
+  "center": [
+   51.966156,
+   5.082246
+  ],
+  "name": "Golfbaan de Kroonprins",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-delfland": {
+  "boundaryWay": 145186740,
+  "center": [
+   51.979773,
+   4.327712
+  ],
+  "name": "Golfbaan Delfland",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-het-wedde": {
+  "boundaryWay": 31288411,
+  "center": [
+   52.140281,
+   4.452919
+  ],
+  "name": "Golfbaan Het Wedde",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-hitland": {
+  "boundaryWay": 6320852,
+  "center": [
+   51.947514,
+   4.617264
+  ],
+  "name": "Golfbaan Hitland",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-hoenderdaal": {
+  "boundaryWay": 1443943829,
+  "center": [
+   52.054476,
+   5.261078
+  ],
+  "name": "Golfbaan Hoenderdaal",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-kralingen": {
+  "boundaryWay": 6320848,
+  "center": [
+   51.933459,
+   4.531482
+  ],
+  "name": "Golfbaan Kralingen",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-kromme-rijn": {
+  "boundaryWay": 71399860,
+  "center": [
+   52.066835,
+   5.215691
+  ],
+  "name": "Golfbaan Kromme Rijn",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-noordeloos": {
+  "boundaryWay": 15593074,
+  "center": [
+   51.897426,
+   4.928262
+  ],
+  "name": "Golfbaan Noordeloos",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfbaan-schinkelshoek": {
+  "boundaryWay": 140768056,
+  "center": [
+   51.910102,
+   4.304283
+  ],
+  "name": "Golfbaan Schinkelshoek",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-spaarnwoude": {
+  "boundaryWay": 4435414,
+  "center": [
+   52.426746,
+   4.693777
+  ],
+  "name": "Golfbaan Spaarnwoude",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfbaan-tespelduyn": {
+  "boundaryWay": 15595156,
+  "center": [
+   52.280364,
+   4.526122
+  ],
+  "name": "Golfbaan Tespelduyn",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfbaan-the-dunes": {
+  "boundaryWay": 106667666,
+  "center": [
+   52.38408,
+   4.548326
+  ],
+  "name": "Golfbaan The Dunes",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfbaan-waterland-amsterdam": {
+  "boundaryWay": 1153503,
+  "center": [
+   52.407145,
+   4.948181
+  ],
+  "name": "Golfbaan Waterland Amsterdam",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfbaan-weesp": {
+  "boundaryWay": 6320933,
+  "center": [
+   52.30095,
+   5.025084
+  ],
+  "name": "Golfbaan Weesp",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfcenter-eicherloh": {
+  "boundaryWay": 283961704,
+  "center": [
+   48.232217,
+   11.770739
+  ],
+  "name": "Golfcenter Eicherloh",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfcenter-seve": {
+  "boundaryWay": 34910023,
+  "center": [
+   51.943901,
+   4.463462
+  ],
+  "name": "Golfcenter Seve",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfcenter-uithoorn": {
+  "boundaryWay": 784952386,
+  "center": [
+   52.245844,
+   4.802303
+  ],
+  "name": "Golfcenter Uithoorn",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfcentrum-de-batouwe": {
+  "boundaryWay": 6320846,
+  "center": [
+   51.929282,
+   5.420968
+  ],
+  "name": "Golfcentrum De Batouwe",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfcity-m-nchen-puchheim": {
+  "boundaryWay": 387447991,
+  "center": [
+   48.167495,
+   11.361802
+  ],
+  "name": "GolfCity M\u00fcnchen Puchheim",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-almeerderhout": {
+  "boundaryWay": 23577480,
+  "center": [
+   52.350062,
+   5.294936
+  ],
+  "name": "Golfclub Almeerderhout",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-anderstein": {
+  "boundaryWay": 6320878,
+  "center": [
+   52.063436,
+   5.39766
+  ],
+  "name": "Golfclub Anderstein",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-broekpolder": {
+  "boundaryWay": 6320849,
+  "center": [
+   51.937467,
+   4.317557
+  ],
+  "name": "Golfclub Broekpolder",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-capelle": {
+  "boundaryWay": 6320851,
+  "center": [
+   51.94202,
+   4.592721
+  ],
+  "name": "Golfclub Capelle",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-dachau-e-v": {
+  "boundaryWay": 172536253,
+  "center": [
+   48.276105,
+   11.457846
+  ],
+  "name": "Golfclub Dachau e.V.",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-de-haar": {
+  "boundaryWay": 12525170,
+  "center": [
+   52.113591,
+   4.988577
+  ],
+  "name": "Golfclub De Haar",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfclub-de-hoge-kleij": {
+  "boundaryWay": 6320890,
+  "center": [
+   52.130058,
+   5.355908
+  ],
+  "name": "Golfclub De Hoge Kleij",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-flevoland": {
+  "boundaryWay": 6320977,
+  "center": [
+   52.535894,
+   5.450565
+  ],
+  "name": "Golfclub Flevoland",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-hohenp-hl": {
+  "boundaryWay": 1355821,
+  "center": [
+   47.914834,
+   11.190965
+  ],
+  "name": "Golfclub Hohenp\u00e4hl",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfclub-hoogland-amersfoort": {
+  "boundaryWay": 75426765,
+  "center": [
+   52.188753,
+   5.36454
+  ],
+  "name": "Golfclub Hoogland Amersfoort",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-houtrak": {
+  "boundaryWay": 50845327,
+  "center": [
+   52.405482,
+   4.724962
+  ],
+  "name": "Golfclub Houtrak",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-kagerzoom": {
+  "boundaryWay": 15595092,
+  "center": [
+   52.186097,
+   4.507183
+  ],
+  "name": "Golfclub Kagerzoom",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfclub-kleiburg": {
+  "boundaryWay": 4427659,
+  "center": [
+   51.923389,
+   4.163482
+  ],
+  "name": "Golfclub Kleiburg",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfclub-m-nchen-eichenried": {
+  "boundaryWay": 15561076,
+  "center": [
+   48.270722,
+   11.769059
+  ],
+  "name": "Golfclub M\u00fcnchen Eichenried",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-m-nchen-riedhof": {
+  "boundaryWay": 79833340,
+  "center": [
+   47.926121,
+   11.467388
+  ],
+  "name": "Golfclub M\u00fcnchen-Riedhof",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-m-nchen-west-odelzhausen": {
+  "boundaryWay": 172436226,
+  "center": [
+   48.292922,
+   11.201986
+  ],
+  "name": "Golfclub M\u00fcnchen-West Odelzhausen",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-mangfalltal": {
+  "boundaryWay": 16256861,
+  "center": [
+   47.918629,
+   11.841579
+  ],
+  "name": "Golfclub Mangfalltal",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfclub-mari-nweide": {
+  "boundaryWay": 6320945,
+  "center": [
+   52.353907,
+   4.583098
+  ],
+  "name": "Golfclub Mari\u00ebnweide",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-olching-e-v": {
+  "boundaryWay": 17727450,
+  "center": [
+   48.218963,
+   11.346462
+  ],
+  "name": "Golfclub Olching e.V.",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-ookmeer": {
+  "boundaryWay": 503015302,
+  "center": [
+   52.37192,
+   4.794869
+  ],
+  "name": "Golfclub Ookmeer",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-schlo-egmating-e-v": {
+  "boundaryWay": 24684203,
+  "center": [
+   48.000057,
+   11.804156
+  ],
+  "name": "Golfclub Schlo\u00df Egmating e.V.",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-starnberg-e-v": {
+  "boundaryWay": 381917915,
+  "center": [
+   48.014715,
+   11.274696
+  ],
+  "name": "Golfclub Starnberg e.V.",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-t-jagerspaadje": {
+  "boundaryWay": 675174231,
+  "center": [
+   52.226433,
+   5.143642
+  ],
+  "name": "Golfclub 't Jagerspaadje",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-w-rthsee": {
+  "boundaryWay": 49215185,
+  "center": [
+   48.080697,
+   11.218272
+  ],
+  "name": "Golfclub W\u00f6rthsee",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-westerpark": {
+  "boundaryWay": 4435286,
+  "center": [
+   52.054365,
+   4.432607
+  ],
+  "name": "Golfclub Westerpark",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfclub-westland": {
+  "boundaryWay": 98503895,
+  "center": [
+   51.992658,
+   4.174026
+  ],
+  "name": "Golfclub Westland",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfclub-zeegersloot": {
+  "boundaryWay": 4431635,
+  "center": [
+   52.146063,
+   4.697315
+  ],
+  "name": "Golfclub Zeegersloot",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfpark-de-biltse-duinen": {
+  "boundaryWay": 6320888,
+  "center": [
+   52.129681,
+   5.217931
+  ],
+  "name": "Golfpark De Biltse Duinen",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfpark-de-purmer": {
+  "boundaryWay": 6320976,
+  "center": [
+   52.501596,
+   4.997077
+  ],
+  "name": "Golfpark De Purmer",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfpark-de-star": {
+  "boundaryWay": 86920796,
+  "center": [
+   52.08578,
+   4.411331
+  ],
+  "name": "Golfpark De Star",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfpark-gut-h-usern": {
+  "boundaryWay": 368524,
+  "center": [
+   48.347817,
+   11.4187
+  ],
+  "name": "Golfpark Gut H\u00e4usern",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfpark-m-nchen-aschheim": {
+  "boundaryWay": 17728105,
+  "center": [
+   48.18017,
+   11.699323
+  ],
+  "name": "Golfpark M\u00fcnchen Aschheim",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfpark-rotterdam": {
+  "boundaryWay": 19848976,
+  "center": [
+   51.950777,
+   4.403068
+  ],
+  "name": "Golfpark Rotterdam",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfpark-soestduinen": {
+  "boundaryWay": 246307722,
+  "center": [
+   52.14264,
+   5.291068
+  ],
+  "name": "Golfpark Soestduinen",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfpark-spandersbosch": {
+  "boundaryWay": 318043522,
+  "center": [
+   52.254565,
+   5.171808
+  ],
+  "name": "Golfpark Spandersbosch",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfpark-wilnis": {
+  "boundaryWay": 4463831,
+  "center": [
+   52.184673,
+   4.88797
+  ],
+  "name": "Golfpark Wilnis",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfplatz-feldafing": {
+  "boundaryWay": 3348153,
+  "center": [
+   47.940062,
+   11.300262
+  ],
+  "name": "Golfplatz Feldafing",
+  "source": "osm",
+  "type": "relation"
+ },
+ "golfplatz-tutzing": {
+  "boundaryWay": 114440293,
+  "center": [
+   47.930293,
+   11.256268
+  ],
+  "name": "Golfplatz Tutzing",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfplex-entertainment-centre": {
+  "boundaryWay": 1344792189,
+  "center": [
+   51.428866,
+   -0.782752
+  ],
+  "name": "GolfPlex Entertainment Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfrange-m-nchen-brunnthal": {
+  "boundaryWay": 34250473,
+  "center": [
+   48.025738,
+   11.674561
+  ],
+  "name": "GolfRange M\u00fcnchen-Brunnthal",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfrange-m-nchen-germering": {
+  "boundaryWay": 147925111,
+  "center": [
+   48.113683,
+   11.345987
+  ],
+  "name": "Golfrange M\u00fcnchen-Germering",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfsoci-teit-de-lage-vuursche": {
+  "boundaryWay": 6320898,
+  "center": [
+   52.156295,
+   5.23679
+  ],
+  "name": "Golfsoci\u00ebteit De Lage Vuursche",
+  "source": "osm",
+  "type": "way"
+ },
+ "golfzentrum-m-nchen-riem": {
+  "boundaryWay": 12808130,
+  "center": [
+   48.150288,
+   11.677248
+  ],
+  "name": "Golfzentrum M\u00fcnchen Riem",
+  "source": "osm",
+  "type": "relation"
+ },
  "goodwin-park-golf-course": {
   "boundaryWay": 43441533,
   "center": [
@@ -1277,6 +5637,36 @@
   ],
   "name": "Goodwin Park Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "gooise-golfclub": {
+  "boundaryWay": 4435362,
+  "center": [
+   52.208631,
+   5.133531
+  ],
+  "name": "Gooise Golfclub",
+  "source": "osm",
+  "type": "relation"
+ },
+ "goyer-golf-country-club": {
+  "boundaryWay": 6320919,
+  "center": [
+   52.242898,
+   5.239449
+  ],
+  "name": "Goyer Golf & Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "gracehill-golf-club": {
+  "boundaryWay": 298477465,
+  "center": [
+   55.141189,
+   -6.39321
+  ],
+  "name": "Gracehill Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "grand-club-cypress-course": {
@@ -1289,6 +5679,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "grand-pgm": {
+  "boundaryWay": 591476248,
+  "center": [
+   35.782243,
+   140.160428
+  ],
+  "name": "\u6b66\u30ab\u30f3\u30c8\u30ea\u30fc\u30af\u30e9\u30d6 \u7dcf\u6b66\u30b3\u30fc\u30b9\u3010GRAND PGM\u3011",
+  "source": "osm",
+  "type": "way"
+ },
  "grassmere-golf-course": {
   "boundaryWay": 43442525,
   "center": [
@@ -1298,6 +5698,16 @@
   "name": "Grassmere Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "great-chart-golf-leisure": {
+  "boundaryWay": 3895686,
+  "center": [
+   51.151161,
+   0.802046
+  ],
+  "name": "Great Chart Golf & Leisure",
+  "source": "osm",
+  "type": "relation"
  },
  "great-gorge": {
   "boundaryWay": -240569,
@@ -1319,6 +5729,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "green-club-golf": {
+  "boundaryWay": 313985710,
+  "center": [
+   45.565552,
+   9.036856
+  ],
+  "name": "Green Club Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "green-club-lainate": {
+  "boundaryWay": 135078596,
+  "center": [
+   45.570581,
+   9.043678
+  ],
+  "name": "Green Club Lainate",
+  "source": "osm",
+  "type": "way"
+ },
+ "green-hill-golf-eventpark-m-nchen-ost": {
+  "boundaryWay": 168190418,
+  "center": [
+   48.183279,
+   11.701837
+  ],
+  "name": "Green Hill Golf & Eventpark M\u00fcnchen-Ost",
+  "source": "osm",
+  "type": "way"
+ },
+ "greenacres-golf-course": {
+  "boundaryWay": 39524604,
+  "center": [
+   54.728467,
+   -6.002825
+  ],
+  "name": "Greenacres Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "greencastle-golf-club": {
+  "boundaryWay": 207627004,
+  "center": [
+   55.210613,
+   -6.960035
+  ],
+  "name": "Greencastle Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "greenfield-park": {
   "boundaryWay": -1385081,
   "center": [
@@ -1329,6 +5789,116 @@
   "source": "cc0",
   "type": "way"
  },
+ "greenisland-golf-club": {
+  "boundaryWay": 38614094,
+  "center": [
+   54.706201,
+   -5.874265
+  ],
+  "name": "Greenisland Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "greenlife-golf-driving-range": {
+  "boundaryWay": 702311528,
+  "center": [
+   36.509975,
+   -4.780842
+  ],
+  "name": "Greenlife Golf Driving Range",
+  "source": "osm",
+  "type": "way"
+ },
+ "greenlife-golf-marbella": {
+  "boundaryWay": 172444896,
+  "center": [
+   36.505397,
+   -4.779435
+  ],
+  "name": "Greenlife Golf Marbella",
+  "source": "osm",
+  "type": "way"
+ },
+ "greenmount-golf-club": {
+  "boundaryWay": 238184046,
+  "center": [
+   54.698565,
+   -6.21819
+  ],
+  "name": "Greenmount Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "guildford-golf-club": {
+  "boundaryWay": 6174650,
+  "center": [
+   51.239983,
+   -0.523422
+  ],
+  "name": "Guildford Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "gullane-childrens-course": {
+  "boundaryWay": 156359056,
+  "center": [
+   56.033079,
+   -2.830565
+  ],
+  "name": "Gullane Childrens Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "gullane-golf-club": {
+  "boundaryWay": 1083233390,
+  "center": [
+   56.030466,
+   -2.845598
+  ],
+  "name": "Gullane Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "h-c-c-groen-geel-golf": {
+  "boundaryWay": 372126488,
+  "center": [
+   52.115131,
+   4.342224
+  ],
+  "name": "H.C.C. Groen-Geel Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "haagse-golfvereniging-leeuwenbergh": {
+  "boundaryWay": 4458924,
+  "center": [
+   52.055782,
+   4.36147
+  ],
+  "name": "Haagse Golfvereniging Leeuwenbergh",
+  "source": "osm",
+  "type": "relation"
+ },
+ "haarlemmermeersche-golfclub": {
+  "boundaryWay": 6320941,
+  "center": [
+   52.337519,
+   4.658416
+  ],
+  "name": "Haarlemmermeersche Golfclub",
+  "source": "osm",
+  "type": "way"
+ },
+ "haddington-golf-course": {
+  "boundaryWay": 56451887,
+  "center": [
+   55.957295,
+   -2.75659
+  ],
+  "name": "Haddington Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "hale-s-location-golf-course": {
   "boundaryWay": -3519860,
   "center": [
@@ -1337,6 +5907,36 @@
   ],
   "name": "Hale\u2019s Location Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "halkett-course": {
+  "boundaryWay": 1464314416,
+  "center": [
+   56.060814,
+   -3.503156
+  ],
+  "name": "Halkett Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "hampton-court-palace-golf-club": {
+  "boundaryWay": 293556109,
+  "center": [
+   51.397111,
+   -0.326915
+  ],
+  "name": "Hampton Court Palace Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "hanger-hill-park-pitch-putt": {
+  "boundaryWay": 23516929,
+  "center": [
+   51.526576,
+   -0.295951
+  ],
+  "name": "Hanger Hill Park Pitch & Putt",
+  "source": "osm",
   "type": "way"
  },
  "harbor-city-municipal": {
@@ -1389,6 +5989,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "hawkhurst-golf-club-closed": {
+  "boundaryWay": 89488632,
+  "center": [
+   51.054087,
+   0.504747
+  ],
+  "name": "Hawkhurst Golf Club (closed)",
+  "source": "osm",
+  "type": "way"
+ },
+ "heads-of-ayr-golf-course": {
+  "boundaryWay": 1395082255,
+  "center": [
+   55.429922,
+   -4.694295
+  ],
+  "name": "Heads of Ayr Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "heather-hill-golf-course": {
   "boundaryWay": 29861548,
   "center": [
@@ -1397,6 +6017,26 @@
   ],
   "name": "Heather Hill Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "heemskerkse-golfclub": {
+  "boundaryWay": 6320970,
+  "center": [
+   52.492012,
+   4.710336
+  ],
+  "name": "Heemskerkse Golfclub",
+  "source": "osm",
+  "type": "way"
+ },
+ "helen-s-bay-golf-club": {
+  "boundaryWay": 38539122,
+  "center": [
+   54.670588,
+   -5.736706
+  ],
+  "name": "Helen's Bay Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "hemlock-ridge-golf-course": {
@@ -1417,6 +6057,36 @@
   ],
   "name": "Heritage Village Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "hersham-golf-club": {
+  "boundaryWay": 212549661,
+  "center": [
+   51.373838,
+   -0.384144
+  ],
+  "name": "Hersham Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "hesketh-golf-club": {
+  "boundaryWay": 24415869,
+  "center": [
+   53.665644,
+   -2.983669
+  ],
+  "name": "Hesketh Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "heswall-golf-course": {
+  "boundaryWay": 25630303,
+  "center": [
+   53.310477,
+   -3.0945
+  ],
+  "name": "Heswall Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "hickory-hill-golf-course": {
@@ -1489,6 +6159,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "hillingdon-golf-course": {
+  "boundaryWay": 44772410,
+  "center": [
+   51.537907,
+   -0.464605
+  ],
+  "name": "Hillingdon Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "hillside-golf-club": {
+  "boundaryWay": 25720410,
+  "center": [
+   53.615093,
+   -3.037317
+  ],
+  "name": "Hillside Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "hilton-templepatrick-golf-course": {
+  "boundaryWay": 133434501,
+  "center": [
+   54.707116,
+   -6.102345
+  ],
+  "name": "Hilton Templepatrick Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "hilversumsche-golf-club": {
+  "boundaryWay": 6320907,
+  "center": [
+   52.200045,
+   5.210211
+  ],
+  "name": "Hilversumsche Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "hoebridge-golf-centre": {
+  "boundaryWay": 225180711,
+  "center": [
+   51.312896,
+   -0.528696
+  ],
+  "name": "Hoebridge Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
  "holden-hills-country-club": {
   "boundaryWay": 29758179,
   "center": [
@@ -1529,6 +6249,36 @@
   "source": "osm",
   "type": "relation"
  },
+ "holywood-golf-course": {
+  "boundaryWay": 38361386,
+  "center": [
+   54.63185,
+   -5.829932
+  ],
+  "name": "Holywood Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "home-park-golf-course": {
+  "boundaryWay": 18517840,
+  "center": [
+   51.480266,
+   -0.595613
+  ],
+  "name": "Home Park Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "homelands-golf-centre": {
+  "boundaryWay": 89808169,
+  "center": [
+   51.103165,
+   0.860317
+  ],
+  "name": "Homelands Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
  "hopmeadow-country-club": {
   "boundaryWay": 43436703,
   "center": [
@@ -1537,6 +6287,56 @@
   ],
   "name": "Hopmeadow Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "horsenden-hill-activity-centre": {
+  "boundaryWay": 218892441,
+  "center": [
+   51.546926,
+   -0.322381
+  ],
+  "name": "Horsenden Hill Activity Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "horton-park-golf-club": {
+  "boundaryWay": 23258941,
+  "center": [
+   51.355511,
+   -0.283372
+  ],
+  "name": "Horton Park Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "hounslow-golf-park": {
+  "boundaryWay": 1155660398,
+  "center": [
+   51.457298,
+   -0.393917
+  ],
+  "name": "Hounslow Golf Park",
+  "source": "osm",
+  "type": "way"
+ },
+ "houston-driving-range": {
+  "boundaryWay": 599063433,
+  "center": [
+   55.921729,
+   -3.512238
+  ],
+  "name": "Houston Driving Range",
+  "source": "osm",
+  "type": "way"
+ },
+ "hoylake-golf-club": {
+  "boundaryWay": 155010556,
+  "center": [
+   53.384875,
+   -3.17766
+  ],
+  "name": "Hoylake Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "hunter-memorial-golf-course": {
@@ -1557,6 +6357,56 @@
   ],
   "name": "Huntley Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "huntswood-golf-course": {
+  "boundaryWay": 173016778,
+  "center": [
+   51.541466,
+   -0.679129
+  ],
+  "name": "Huntswood Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "hurlston-hall-golf-club": {
+  "boundaryWay": 343403502,
+  "center": [
+   53.590814,
+   -2.911849
+  ],
+  "name": "Hurlston Hall Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "hurtmore-golf-club": {
+  "boundaryWay": 57897858,
+  "center": [
+   51.202077,
+   -0.64479
+  ],
+  "name": "Hurtmore Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "huyton-prescot-golf-club": {
+  "boundaryWay": 30800473,
+  "center": [
+   53.420736,
+   -2.819072
+  ],
+  "name": "Huyton & Prescot Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "hyatt-golf-park": {
+  "boundaryWay": 98642883,
+  "center": [
+   25.278454,
+   55.306305
+  ],
+  "name": "Hyatt Golf Park",
+  "source": "osm",
   "type": "way"
  },
  "indian-meadow-golf-course": {
@@ -1629,6 +6479,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "inniskeen-pitch-and-putt": {
+  "boundaryWay": 1458588831,
+  "center": [
+   54.00295,
+   -6.576157
+  ],
+  "name": "Inniskeen Pitch and Putt",
+  "source": "osm",
+  "type": "way"
+ },
  "ironwood-golf-course-yuma": {
   "boundaryWay": 263473988,
   "center": [
@@ -1637,6 +6497,56 @@
   ],
   "name": "Ironwood Golf Course (Yuma)",
   "source": "cc0",
+  "type": "way"
+ },
+ "irvine-golf-club": {
+  "boundaryWay": 483675566,
+  "center": [
+   55.625596,
+   -4.689171
+  ],
+  "name": "Irvine Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "irvine-ravenspark-golf-club": {
+  "boundaryWay": 552460847,
+  "center": [
+   55.632177,
+   -4.682175
+  ],
+  "name": "Irvine Ravenspark Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "iver-golf-club": {
+  "boundaryWay": 127674331,
+  "center": [
+   51.512399,
+   -0.533951
+  ],
+  "name": "Iver Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "j": {
+  "boundaryWay": 39984302,
+  "center": [
+   35.90162,
+   139.313029
+  ],
+  "name": "J\u30b4\u30eb\u30d5\u9db4\u30f6\u5cf6",
+  "source": "osm",
+  "type": "way"
+ },
+ "j-won-golf": {
+  "boundaryWay": 278901214,
+  "center": [
+   37.433302,
+   127.207225
+  ],
+  "name": "\uc81c\uc774\uc6d0\uace8\ud504(J-Won Golf)",
+  "source": "osm",
   "type": "way"
  },
  "jacksboro-country-club": {
@@ -1649,6 +6559,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "jebel-ali-golf-course": {
+  "boundaryWay": 5731796,
+  "center": [
+   24.983745,
+   55.024389
+  ],
+  "name": "Jebel Ali Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
  "jefferson-park-golf-course": {
   "boundaryWay": -537387,
   "center": [
@@ -1657,6 +6577,36 @@
   ],
   "name": "Jefferson Park Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "jj": {
+  "boundaryWay": 170485245,
+  "center": [
+   37.254467,
+   127.0906
+  ],
+  "name": "JJ\uace8\ud504\uc5f0\uc2b5\uc7a5",
+  "source": "osm",
+  "type": "way"
+ },
+ "jogwang-country": {
+  "boundaryWay": 278939419,
+  "center": [
+   37.403732,
+   127.212427
+  ],
+  "name": "\uc870\uad11\ucee8\ud2b8\ub9ac(Jogwang Country)",
+  "source": "osm",
+  "type": "way"
+ },
+ "jubilee-course": {
+  "boundaryWay": 68283454,
+  "center": [
+   56.356064,
+   -2.815632
+  ],
+  "name": "Jubilee Course",
+  "source": "osm",
   "type": "way"
  },
  "juniper-hill-golf-course": {
@@ -1669,6 +6619,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "kanturk-golf-club": {
+  "boundaryWay": 772978359,
+  "center": [
+   52.156614,
+   -8.92384
+  ],
+  "name": "Kanturk Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "kavel-ii-beemster": {
+  "boundaryWay": 434269682,
+  "center": [
+   52.525638,
+   4.921061
+  ],
+  "name": "Kavel II Beemster",
+  "source": "osm",
+  "type": "way"
+ },
  "kelly-greens-golf-course": {
   "boundaryWay": 29690174,
   "center": [
@@ -1677,6 +6647,16 @@
   ],
   "name": "Kelly Greens Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "kennemer-golf-country-club": {
+  "boundaryWay": 757288966,
+  "center": [
+   52.372891,
+   4.557544
+  ],
+  "name": "Kennemer Golf & Country Club",
+  "source": "osm",
   "type": "way"
  },
  "kernwood-cc-and-golf-course": {
@@ -1699,6 +6679,176 @@
   "source": "cc0",
   "type": "way"
  },
+ "kilkeel-golf-course": {
+  "boundaryWay": 4554384,
+  "center": [
+   54.074501,
+   -6.048063
+  ],
+  "name": "Kilkeel Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "killymoon-golf-club": {
+  "boundaryWay": 252652594,
+  "center": [
+   54.634138,
+   -6.724629
+  ],
+  "name": "Killymoon Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "kilmarnock-golf-club-barassie-links": {
+  "boundaryWay": 248434900,
+  "center": [
+   55.570374,
+   -4.649647
+  ],
+  "name": "Kilmarnock Golf Club Barassie Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "kilrea-golf-course": {
+  "boundaryWay": 1230344148,
+  "center": [
+   54.942468,
+   -6.555382
+  ],
+  "name": "Kilrea Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "kilrush-golf-club": {
+  "boundaryWay": 4452512,
+  "center": [
+   52.651077,
+   -9.466626
+  ],
+  "name": "Kilrush Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "kilspindie-golf-club": {
+  "boundaryWay": 939545275,
+  "center": [
+   56.009666,
+   -2.881928
+  ],
+  "name": "Kilspindie Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "kilwinning-sports-club-driving-range": {
+  "boundaryWay": 473321652,
+  "center": [
+   55.64702,
+   -4.708263
+  ],
+  "name": "Kilwinning Sports Club driving range",
+  "source": "osm",
+  "type": "way"
+ },
+ "king-james-vi-golf-club": {
+  "boundaryWay": 44014848,
+  "center": [
+   56.383541,
+   -3.420395
+  ],
+  "name": "King James VI Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "kingarrock-hickory-golf-course": {
+  "boundaryWay": 370188680,
+  "center": [
+   56.292699,
+   -3.003856
+  ],
+  "name": "Kingarrock Hickory Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "kinghorn-golf-course": {
+  "boundaryWay": 161947849,
+  "center": [
+   56.068045,
+   -3.184812
+  ],
+  "name": "Kinghorn Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "kings-parade-gardens-pitch-putt": {
+  "boundaryWay": 38773484,
+  "center": [
+   53.439268,
+   -3.054
+  ],
+  "name": "Kings Parade Gardens Pitch & Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "kingsbarns-golf-links": {
+  "boundaryWay": 636044440,
+  "center": [
+   56.299436,
+   -2.641312
+  ],
+  "name": "Kingsbarns Golf Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "kingsfield-golf-course": {
+  "boundaryWay": 277237873,
+  "center": [
+   55.984047,
+   -3.554397
+  ],
+  "name": "Kingsfield Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "kingsknowe-golf-course": {
+  "boundaryWay": 4891786,
+  "center": [
+   55.9148,
+   -3.270262
+  ],
+  "name": "Kingsknowe Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "kingswood-golf-country-club": {
+  "boundaryWay": 42935116,
+  "center": [
+   51.286305,
+   -0.201482
+  ],
+  "name": "Kingswood Golf & Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "kirkcaldy-golf-club": {
+  "boundaryWay": 128632438,
+  "center": [
+   56.099545,
+   -3.192862
+  ],
+  "name": "Kirkcaldy Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "kirkiston-castle-golf-club": {
+  "boundaryWay": 404946483,
+  "center": [
+   54.439684,
+   -5.472148
+  ],
+  "name": "Kirkiston Castle Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "kissing-camels-at-garden-of-the-gods-club": {
   "boundaryWay": -3117773,
   "center": [
@@ -1719,6 +6869,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "kittocks-course": {
+  "boundaryWay": 19949374,
+  "center": [
+   56.321218,
+   -2.722508
+  ],
+  "name": "Kittocks Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "knock-golf-club": {
+  "boundaryWay": 35907102,
+  "center": [
+   54.596964,
+   -5.820165
+  ],
+  "name": "Knock Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "koninklijke-haagsche-golf-en-country-club": {
+  "boundaryWay": 6320891,
+  "center": [
+   52.134129,
+   4.365472
+  ],
+  "name": "Koninklijke Haagsche Golf- en Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "kosigaya-golf-club": {
+  "boundaryWay": 572759415,
+  "center": [
+   35.887266,
+   139.887391
+  ],
+  "name": "KOSIGAYA GOLF CLUB",
+  "source": "osm",
+  "type": "way"
+ },
  "kulima-golf-course": {
   "boundaryWay": -1999222,
   "center": [
@@ -1727,6 +6917,126 @@
   ],
   "name": "Kulima Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "la-cala-resort": {
+  "boundaryWay": 3308721,
+  "center": [
+   36.540089,
+   -4.723037
+  ],
+  "name": "La Cala Resort",
+  "source": "osm",
+  "type": "relation"
+ },
+ "la-duquesa-golf-country-club": {
+  "boundaryWay": 3299445,
+  "center": [
+   36.357802,
+   -5.23844
+  ],
+  "name": "La Duquesa Golf & Country Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "la-hacienda-links-golf-resort": {
+  "boundaryWay": 291682602,
+  "center": [
+   36.246744,
+   -5.315788
+  ],
+  "name": "La Hacienda Links Golf Resort",
+  "source": "osm",
+  "type": "way"
+ },
+ "la-noria-golf-resort": {
+  "boundaryWay": 5450006,
+  "center": [
+   36.507396,
+   -4.687622
+  ],
+  "name": "La Noria Golf & Resort",
+  "source": "osm",
+  "type": "relation"
+ },
+ "la-quinta-golf-country-club": {
+  "boundaryWay": 3301126,
+  "center": [
+   36.513688,
+   -4.99707
+  ],
+  "name": "La Quinta Golf & Country Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "la-reserva-golf-club": {
+  "boundaryWay": 237391514,
+  "center": [
+   36.294658,
+   -5.328325
+  ],
+  "name": "La Reserva Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "la-resina-golf-country-club": {
+  "boundaryWay": 3299682,
+  "center": [
+   36.466769,
+   -5.075592
+  ],
+  "name": "La Resina Golf & Country Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "la-siesta-golf-calahonda": {
+  "boundaryWay": 16364140,
+  "center": [
+   36.498916,
+   -4.724175
+  ],
+  "name": "La Siesta Golf Calahonda",
+  "source": "osm",
+  "type": "relation"
+ },
+ "la-zagaleta-country-club-la-zagaleta-course": {
+  "boundaryWay": 244158078,
+  "center": [
+   36.532393,
+   -5.029713
+  ],
+  "name": "La Zagaleta Country Club - La Zagaleta Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "lackabane-course": {
+  "boundaryWay": 217849542,
+  "center": [
+   52.07026,
+   -9.5503
+  ],
+  "name": "Lackabane Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ladybank-golf-club": {
+  "boundaryWay": 19698190,
+  "center": [
+   56.286198,
+   -3.120689
+  ],
+  "name": "Ladybank Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "laganview-golf-centre": {
+  "boundaryWay": 1492248617,
+  "center": [
+   54.533498,
+   -6.012701
+  ],
+  "name": "Laganview Golf Centre",
+  "source": "osm",
   "type": "way"
  },
  "lakeview-golf-course": {
@@ -1749,6 +7059,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "landscape-house-golf-and-leisure": {
+  "boundaryWay": 6232164,
+  "center": [
+   52.705383,
+   -8.534534
+  ],
+  "name": "Landscape House Golf and Leisure",
+  "source": "osm",
+  "type": "relation"
+ },
  "langara-golf-course": {
   "boundaryWay": 26596220,
   "center": [
@@ -1757,6 +7077,16 @@
   ],
   "name": "Langara Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "larne-golf-club": {
+  "boundaryWay": 39682094,
+  "center": [
+   54.854932,
+   -5.778492
+  ],
+  "name": "Larne Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "las-barrancas-golf-course": {
@@ -1779,6 +7109,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "lauro-golf": {
+  "boundaryWay": 213412144,
+  "center": [
+   36.651767,
+   -4.628504
+  ],
+  "name": "Lauro Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "lavender-park-golf-centre": {
+  "boundaryWay": 69583587,
+  "center": [
+   51.410258,
+   -0.705105
+  ],
+  "name": "Lavender Park Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
  "lawton-golf-club": {
   "boundaryWay": 292976652,
   "center": [
@@ -1788,6 +7138,86 @@
   "name": "Lawton Golf Club",
   "source": "cc0",
   "type": "way"
+ },
+ "le-proven-al-golf": {
+  "boundaryWay": 14482930,
+  "center": [
+   43.62012,
+   7.073621
+  ],
+  "name": "Le Proven\u00e7al Golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "le-robinie-golf-club": {
+  "boundaryWay": 123203543,
+  "center": [
+   45.643444,
+   8.874513
+  ],
+  "name": "Le Robinie Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "le-rovedine-golf-club-milano": {
+  "boundaryWay": 2069415,
+  "center": [
+   45.391743,
+   9.223845
+  ],
+  "name": "Le Rovedine Golf Club Milano",
+  "source": "osm",
+  "type": "relation"
+ },
+ "leas-course": {
+  "boundaryWay": 98512043,
+  "center": [
+   51.119452,
+   1.088069
+  ],
+  "name": "Leas Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "leasowe-golf-club": {
+  "boundaryWay": 105929002,
+  "center": [
+   53.42059,
+   -3.101733
+  ],
+  "name": "Leasowe Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "lee-park-golf-club": {
+  "boundaryWay": 30930039,
+  "center": [
+   53.384997,
+   -2.844569
+  ],
+  "name": "Lee Park Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "leeds-castle-golf-club": {
+  "boundaryWay": 88488833,
+  "center": [
+   51.250121,
+   0.634948
+  ],
+  "name": "Leeds Castle Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "legends-golf-course": {
+  "boundaryWay": 7411023,
+  "center": [
+   25.085015,
+   55.298268
+  ],
+  "name": "Legends Golf Course",
+  "source": "osm",
+  "type": "relation"
  },
  "lehigh-county-golf-course": {
   "boundaryWay": 63521178,
@@ -1809,6 +7239,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "leslie-golf-club": {
+  "boundaryWay": 260101300,
+  "center": [
+   56.204491,
+   -3.218928
+  ],
+  "name": "Leslie Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "leven-links-golf-course": {
+  "boundaryWay": 134223324,
+  "center": [
+   56.202334,
+   -2.981316
+  ],
+  "name": "Leven Links Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "lexington-golf-club": {
   "boundaryWay": 29871037,
   "center": [
@@ -1817,6 +7267,36 @@
   ],
   "name": "Lexington Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "liberton-golf-course": {
+  "boundaryWay": 2885564,
+  "center": [
+   55.91817,
+   -3.146248
+  ],
+  "name": "Liberton Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "limerick-driving-range": {
+  "boundaryWay": 126614195,
+  "center": [
+   52.665109,
+   -8.686838
+  ],
+  "name": "Limerick Driving Range",
+  "source": "osm",
+  "type": "way"
+ },
+ "limerick-golf-club": {
+  "boundaryWay": 27232184,
+  "center": [
+   52.616479,
+   -8.630122
+  ],
+  "name": "Limerick Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "lions-golf-course": {
@@ -1829,6 +7309,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "lisburn-golf-course": {
+  "boundaryWay": 4561807,
+  "center": [
+   54.485947,
+   -6.073292
+  ],
+  "name": "Lisburn Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
  "little-harbor-golf-course": {
   "boundaryWay": -2004276,
   "center": [
@@ -1837,6 +7327,56 @@
   ],
   "name": "Little Harbor Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "littlestone-golf-club": {
+  "boundaryWay": 91903411,
+  "center": [
+   50.995122,
+   0.96826
+  ],
+  "name": "Littlestone Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "liverpool-municipal-north-golf-course": {
+  "boundaryWay": 316443546,
+  "center": [
+   53.477016,
+   -2.914477
+  ],
+  "name": "Liverpool Municipal North Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "liverpool-municipal-south-allerton-golf-course": {
+  "boundaryWay": 4525505,
+  "center": [
+   53.372519,
+   -2.883948
+  ],
+  "name": "Liverpool Municipal South (Allerton) Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "lochgelly-golf-club": {
+  "boundaryWay": 115966548,
+  "center": [
+   56.126636,
+   -3.322197
+  ],
+  "name": "Lochgelly Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "lochore-meadow-golf-course": {
+  "boundaryWay": 122388976,
+  "center": [
+   56.151913,
+   -3.330602
+  ],
+  "name": "Lochore Meadow Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "longleaf-golf-family-club": {
@@ -1859,6 +7399,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "longniddry-golf-course": {
+  "boundaryWay": 96897204,
+  "center": [
+   55.977004,
+   -2.909367
+  ],
+  "name": "Longniddry Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "los-naranjos-golf-club": {
+  "boundaryWay": 3299800,
+  "center": [
+   36.510067,
+   -4.979271
+  ],
+  "name": "Los Naranjos Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
  "lost-brook-country-club": {
   "boundaryWay": 29818705,
   "center": [
@@ -1867,6 +7427,46 @@
   ],
   "name": "Lost Brook Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "luffness-new-golf-club": {
+  "boundaryWay": 249921355,
+  "center": [
+   56.02232,
+   -2.844018
+  ],
+  "name": "Luffness New Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "lundin-golf-club": {
+  "boundaryWay": 134224071,
+  "center": [
+   56.208776,
+   -2.96492
+  ],
+  "name": "Lundin Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "lundin-ladies-golf-club": {
+  "boundaryWay": 111221971,
+  "center": [
+   56.214228,
+   -2.959643
+  ],
+  "name": "Lundin Ladies Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "lurgan-golf-course": {
+  "boundaryWay": 231714532,
+  "center": [
+   54.46703,
+   -6.317957
+  ],
+  "name": "Lurgan Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "lyman-meadow-golf-club": {
@@ -1878,6 +7478,66 @@
   "name": "Lyman Meadow Golf Club",
   "source": "cc0",
   "type": "way"
+ },
+ "lynedoch-course": {
+  "boundaryWay": 212440921,
+  "center": [
+   56.416275,
+   -3.363856
+  ],
+  "name": "Lynedoch Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "lytham-golf-academy": {
+  "boundaryWay": 303066725,
+  "center": [
+   53.746434,
+   -2.920476
+  ],
+  "name": "Lytham Golf Academy",
+  "source": "osm",
+  "type": "way"
+ },
+ "lytham-green-drive-golf-course": {
+  "boundaryWay": 303052114,
+  "center": [
+   53.748813,
+   -2.955214
+  ],
+  "name": "Lytham Green Drive Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "m-nchner-golf-club-e-v-stra-lach": {
+  "boundaryWay": 2278487,
+  "center": [
+   47.985449,
+   11.500259
+  ],
+  "name": "M\u00fcnchner Golf Club e.V. - Stra\u00dflach",
+  "source": "osm",
+  "type": "relation"
+ },
+ "m-nchner-golf-club-e-v-thalkirchen": {
+  "boundaryWay": 9722804,
+  "center": [
+   48.08994,
+   11.542779
+  ],
+  "name": "M\u00fcnchner Golf Club e.V. Thalkirchen",
+  "source": "osm",
+  "type": "relation"
+ },
+ "m-nchner-golfplatz-eschenried": {
+  "boundaryWay": 3346509,
+  "center": [
+   48.217526,
+   11.413839
+  ],
+  "name": "M\u00fcnchner Golfplatz Eschenried",
+  "source": "osm",
+  "type": "relation"
  },
  "macdonald-park": {
   "boundaryWay": 84983243,
@@ -1899,6 +7559,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "magna-marbella-golf": {
+  "boundaryWay": 97681590,
+  "center": [
+   36.505875,
+   -4.978516
+  ],
+  "name": "Magna Marbella Golf",
+  "source": "osm",
+  "type": "way"
+ },
  "magnolia": {
   "boundaryWay": 6384807,
   "center": [
@@ -1909,6 +7579,66 @@
   "source": "osm",
   "type": "relation"
  },
+ "mahee-island-golf-course": {
+  "boundaryWay": 1281233831,
+  "center": [
+   54.498534,
+   -5.638809
+  ],
+  "name": "Mahee Island Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "maidenhead-golf-course": {
+  "boundaryWay": 4714818,
+  "center": [
+   51.511345,
+   -0.722873
+  ],
+  "name": "Maidenhead Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "majlis-course": {
+  "boundaryWay": 359502813,
+  "center": [
+   25.086191,
+   55.164828
+  ],
+  "name": "Majlis Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "malden-golf-club": {
+  "boundaryWay": 22323645,
+  "center": [
+   51.410451,
+   -0.251519
+  ],
+  "name": "Malden Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "mallow-golf-club": {
+  "boundaryWay": 94975693,
+  "center": [
+   52.128134,
+   -8.620183
+  ],
+  "name": "Mallow Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "malone-golf-club": {
+  "boundaryWay": 38652468,
+  "center": [
+   54.538158,
+   -5.971958
+  ],
+  "name": "Malone Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "manchester-golf-and-country-club": {
   "boundaryWay": -3419289,
   "center": [
@@ -1917,6 +7647,26 @@
   ],
   "name": "Manchester Golf and Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "mannan-castle-golf-club": {
+  "boundaryWay": 5679011,
+  "center": [
+   54.006373,
+   -6.700512
+  ],
+  "name": "Mannan Castle Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "manston-golf-centre": {
+  "boundaryWay": 91580250,
+  "center": [
+   51.345342,
+   1.378986
+  ],
+  "name": "Manston Golf Centre",
+  "source": "osm",
   "type": "way"
  },
  "maple-meadows-golf-club": {
@@ -1938,6 +7688,26 @@
   "name": "Maplewood Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "marbella-club-golf-resort": {
+  "boundaryWay": 139728266,
+  "center": [
+   36.498992,
+   -5.056603
+  ],
+  "name": "Marbella Club Golf Resort",
+  "source": "osm",
+  "type": "way"
+ },
+ "marbella-golf-country-club": {
+  "boundaryWay": 3299714,
+  "center": [
+   36.513331,
+   -4.811962
+  ],
+  "name": "Marbella Golf Country Club",
+  "source": "osm",
+  "type": "relation"
  },
  "marina-golf-course": {
   "boundaryWay": 43985634,
@@ -1989,6 +7759,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "massereene-golf-club": {
+  "boundaryWay": 198386249,
+  "center": [
+   54.713513,
+   -6.2305
+  ],
+  "name": "Massereene Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "maybole-golf-course": {
+  "boundaryWay": 383041272,
+  "center": [
+   55.348438,
+   -4.688594
+  ],
+  "name": "Maybole Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "mayobridge-golf-club": {
+  "boundaryWay": 1065198129,
+  "center": [
+   54.193127,
+   -6.244502
+  ],
+  "name": "Mayobridge Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "mccullough-s-emerald-golf-links": {
   "boundaryWay": -229863,
   "center": [
@@ -2019,6 +7819,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "medal-course": {
+  "boundaryWay": 1245335145,
+  "center": [
+   56.485412,
+   -2.796356
+  ],
+  "name": "Medal Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "merchants-of-edinburgh-golf-club": {
+  "boundaryWay": 2867228,
+  "center": [
+   55.918657,
+   -3.231032
+  ],
+  "name": "Merchants of Edinburgh Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "mercure-hythe-imperial-golf-course": {
+  "boundaryWay": 90627097,
+  "center": [
+   51.069505,
+   1.101317
+  ],
+  "name": "Mercure Hythe Imperial Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "merrimack-valley-golf-club": {
   "boundaryWay": 251877604,
   "center": [
@@ -2027,6 +7857,16 @@
   ],
   "name": "Merrimack Valley Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "merrist-wood-golf-club": {
+  "boundaryWay": 28540972,
+  "center": [
+   51.269604,
+   -0.635651
+  ],
+  "name": "Merrist Wood Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "mid-south-club": {
@@ -2038,6 +7878,16 @@
   "name": "Mid South Club",
   "source": "osm",
   "type": "relation"
+ },
+ "middlebank-golf-driving-range": {
+  "boundaryWay": 210979413,
+  "center": [
+   56.426295,
+   -3.210977
+  ],
+  "name": "Middlebank Golf Driving Range",
+  "source": "osm",
+  "type": "way"
  },
  "midland-country-club": {
   "boundaryWay": 6387133,
@@ -2069,6 +7919,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "mill-ride-golf-country-club": {
+  "boundaryWay": 1000808857,
+  "center": [
+   51.424586,
+   -0.697193
+  ],
+  "name": "Mill Ride Golf & Country Club",
+  "source": "osm",
+  "type": "way"
+ },
  "mill-valley-golf-course": {
   "boundaryWay": 29913793,
   "center": [
@@ -2087,6 +7947,16 @@
   ],
   "name": "Millwood Farms Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "milnathort-golf-club": {
+  "boundaryWay": 116344990,
+  "center": [
+   56.22419,
+   -3.416499
+  ],
+  "name": "Milnathort Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "milton-hoosic-golf-course": {
@@ -2109,6 +7979,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "miraflores-golf": {
+  "boundaryWay": 2297099,
+  "center": [
+   36.501869,
+   -4.705762
+  ],
+  "name": "Miraflores golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "molinetto-country-club": {
+  "boundaryWay": 140397325,
+  "center": [
+   45.516629,
+   9.310082
+  ],
+  "name": "Molinetto Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "monte-carlo-golf-club": {
+  "boundaryWay": 326063030,
+  "center": [
+   43.765255,
+   7.414213
+  ],
+  "name": "Monte-Carlo Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "montgomery-village-golf-club": {
   "boundaryWay": -2664336,
   "center": [
@@ -2129,6 +8029,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "morden-park-golf-course": {
+  "boundaryWay": 501679797,
+  "center": [
+   51.391416,
+   -0.206677
+  ],
+  "name": "Morden Park golf course",
+  "source": "osm",
+  "type": "way"
+ },
+ "morgado-golf": {
+  "boundaryWay": 4540080,
+  "center": [
+   37.191789,
+   -8.563644
+  ],
+  "name": "Morgado Golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "mortonhall-golf-course": {
+  "boundaryWay": 2859930,
+  "center": [
+   55.909055,
+   -3.197216
+  ],
+  "name": "Mortonhall Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "mossock-hall-golf-club": {
+  "boundaryWay": 31779698,
+  "center": [
+   53.524683,
+   -2.893259
+  ],
+  "name": "Mossock Hall Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "mount-graham-golf-course": {
   "boundaryWay": 263615875,
   "center": [
@@ -2139,6 +8079,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "mount-ober-golf-club": {
+  "boundaryWay": 4660775,
+  "center": [
+   54.552032,
+   -5.881912
+  ],
+  "name": "Mount Ober Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
  "mount-pleasant-golf-club": {
   "boundaryWay": 29868153,
   "center": [
@@ -2147,6 +8097,26 @@
   ],
   "name": "Mount Pleasant Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "moyola-park": {
+  "boundaryWay": 542436987,
+  "center": [
+   54.782852,
+   -6.560479
+  ],
+  "name": "Moyola Park",
+  "source": "osm",
+  "type": "way"
+ },
+ "muirfield": {
+  "boundaryWay": 101336384,
+  "center": [
+   56.045774,
+   -2.821829
+  ],
+  "name": "Muirfield",
+  "source": "osm",
   "type": "way"
  },
  "mullenhurst-golf-course": {
@@ -2159,6 +8129,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "multigolf-maurik": {
+  "boundaryWay": 4435442,
+  "center": [
+   51.972857,
+   5.418566
+  ],
+  "name": "MultiGolf Maurik",
+  "source": "osm",
+  "type": "relation"
+ },
  "municipal-golf-course": {
   "boundaryWay": 29693537,
   "center": [
@@ -2168,6 +8148,56 @@
   "name": "Municipal Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "murrayfield-golf-course": {
+  "boundaryWay": 6138999,
+  "center": [
+   55.949734,
+   -3.260636
+  ],
+  "name": "Murrayfield Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "murrayshall-course": {
+  "boundaryWay": 20054064,
+  "center": [
+   56.418839,
+   -3.365572
+  ],
+  "name": "Murrayshall Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "musselburgh-golf-course": {
+  "boundaryWay": 19018943,
+  "center": [
+   55.930036,
+   -3.055075
+  ],
+  "name": "Musselburgh Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "musselburgh-links-the-old-golf-course": {
+  "boundaryWay": 2858120,
+  "center": [
+   55.946586,
+   -3.036293
+  ],
+  "name": "Musselburgh Links, The Old Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "naemoor": {
+  "boundaryWay": 20050270,
+  "center": [
+   56.183441,
+   -3.598624
+  ],
+  "name": "Naemoor",
+  "source": "osm",
+  "type": "relation"
  },
  "needham-golf-course": {
   "boundaryWay": 29869484,
@@ -2187,6 +8217,16 @@
   ],
   "name": "Nehoiden Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "new-course": {
+  "boundaryWay": 20787843,
+  "center": [
+   51.348674,
+   -0.412015
+  ],
+  "name": "New Course",
+  "source": "osm",
   "type": "way"
  },
  "new-meadows-golf-course": {
@@ -2209,6 +8249,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "new-zealand-golf-club": {
+  "boundaryWay": 51912000,
+  "center": [
+   51.340741,
+   -0.531471
+  ],
+  "name": "New Zealand Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "nichols-college-golf-course": {
   "boundaryWay": 29683899,
   "center": [
@@ -2217,6 +8267,36 @@
   ],
   "name": "Nichols College Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "niddry-castle-golf-course": {
+  "boundaryWay": 31398859,
+  "center": [
+   55.954046,
+   -3.448598
+  ],
+  "name": "Niddry Castle Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "nisshin-golf": {
+  "boundaryWay": 280672054,
+  "center": [
+   35.933372,
+   139.606374
+  ],
+  "name": "NISSHIN GOLF",
+  "source": "osm",
+  "type": "way"
+ },
+ "noordwijkse-golfclub": {
+  "boundaryWay": 6320924,
+  "center": [
+   52.284237,
+   4.472189
+  ],
+  "name": "Noordwijkse Golfclub",
+  "source": "osm",
   "type": "way"
  },
  "norfolk-golf-club": {
@@ -2229,6 +8309,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "north-foreland-golf-club": {
+  "boundaryWay": 3349870,
+  "center": [
+   51.38078,
+   1.438393
+  ],
+  "name": "North Foreland Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "north-gailes-golf-centre": {
+  "boundaryWay": 248433778,
+  "center": [
+   55.595401,
+   -4.658771
+  ],
+  "name": "North Gailes Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "north-inch-golf-course": {
+  "boundaryWay": 288236426,
+  "center": [
+   56.409224,
+   -3.436876
+  ],
+  "name": "North Inch Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "north-jersey-country-club": {
   "boundaryWay": -223657,
   "center": [
@@ -2237,6 +8347,16 @@
   ],
   "name": "North Jersey Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "northolt-golf-course": {
+  "boundaryWay": 8916938,
+  "center": [
+   51.537523,
+   -0.379655
+  ],
+  "name": "Northolt Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "northport-point-golf-club": {
@@ -2258,6 +8378,26 @@
   "name": "Norwood Country Club",
   "source": "cc0",
   "type": "way"
+ },
+ "nouveau-practice-de-golf": {
+  "boundaryWay": 1363850593,
+  "center": [
+   43.55193,
+   7.050249
+  ],
+  "name": "Nouveau practice de golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "o-f": {
+  "boundaryWay": 17827361,
+  "center": [
+   35.893596,
+   139.572827
+  ],
+  "name": "O\uff65F\u30d1\u30fc\u30af\u30b4\u30eb\u30d5",
+  "source": "osm",
+  "type": "relation"
  },
  "oak-hills-park-golf-course": {
   "boundaryWay": 43398908,
@@ -2309,6 +8449,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "oakley-court-hotel-golf-course": {
+  "boundaryWay": 299250197,
+  "center": [
+   51.487985,
+   -0.670153
+  ],
+  "name": "Oakley Court Hotel Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "oatridge-golf-course": {
+  "boundaryWay": 103543896,
+  "center": [
+   55.943537,
+   -3.514775
+  ],
+  "name": "Oatridge Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "ocean-acres-country-club": {
   "boundaryWay": -62878,
   "center": [
@@ -2318,6 +8478,16 @@
   "name": "Ocean Acres Country Club",
   "source": "cc0",
   "type": "way"
+ },
+ "ocean-course": {
+  "boundaryWay": 19952109,
+  "center": [
+   37.056574,
+   -8.068316
+  ],
+  "name": "Ocean Course",
+  "source": "osm",
+  "type": "relation"
  },
  "ocean-edge-conference-center": {
   "boundaryWay": 29800972,
@@ -2337,6 +8507,46 @@
   ],
   "name": "Odyssey Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "oegstgeester-golfclub": {
+  "boundaryWay": 1177761526,
+  "center": [
+   52.186232,
+   4.462723
+  ],
+  "name": "Oegstgeester golfclub",
+  "source": "osm",
+  "type": "way"
+ },
+ "old-course": {
+  "boundaryWay": 233132474,
+  "center": [
+   52.940216,
+   -9.351633
+  ],
+  "name": "Old Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "old-course-cannes-golf-links": {
+  "boundaryWay": 16704569,
+  "center": [
+   43.533357,
+   6.943759
+  ],
+  "name": "Old Course Cannes Golf Links",
+  "source": "osm",
+  "type": "relation"
+ },
+ "old-course-loenen": {
+  "boundaryWay": 236738602,
+  "center": [
+   52.213229,
+   5.009746
+  ],
+  "name": "Old Course Loenen",
+  "source": "osm",
   "type": "way"
  },
  "old-newbury-golf-club": {
@@ -2369,6 +8579,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "onyria-palmares-golf": {
+  "boundaryWay": 3134353,
+  "center": [
+   37.125938,
+   -8.638248
+  ],
+  "name": "Onyria Palmares Golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "open-9-golf-eichenried": {
+  "boundaryWay": 131542974,
+  "center": [
+   48.268536,
+   11.753388
+  ],
+  "name": "Open 9 Golf Eichenried",
+  "source": "osm",
+  "type": "way"
+ },
  "orchards-golf-course": {
   "boundaryWay": 121045846,
   "center": [
@@ -2377,6 +8607,46 @@
   ],
   "name": "Orchards Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "ormeau-golf-club": {
+  "boundaryWay": 392081117,
+  "center": [
+   54.582948,
+   -5.914465
+  ],
+  "name": "Ormeau Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ormskirk-golf-club": {
+  "boundaryWay": 4785267,
+  "center": [
+   53.572802,
+   -2.841527
+  ],
+  "name": "Ormskirk Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "oude-maas": {
+  "boundaryWay": 6320840,
+  "center": [
+   51.837835,
+   4.45285
+  ],
+  "name": "Oude Maas",
+  "source": "osm",
+  "type": "way"
+ },
+ "pachesham-golf-course": {
+  "boundaryWay": 27178922,
+  "center": [
+   51.312003,
+   -0.347987
+  ],
+  "name": "Pachesham Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "paddock-chevrolet-golf-dome": {
@@ -2399,6 +8669,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "palewell-pitch-putt": {
+  "boundaryWay": 3346748,
+  "center": [
+   51.459799,
+   -0.258306
+  ],
+  "name": "Palewell Pitch & Putt",
+  "source": "osm",
+  "type": "relation"
+ },
  "palm-harbour-golf-club": {
   "boundaryWay": -2000522,
   "center": [
@@ -2419,6 +8699,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "panmure-links": {
+  "boundaryWay": 26236148,
+  "center": [
+   56.491712,
+   -2.767525
+  ],
+  "name": "Panmure Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "par-3-9-hole-course": {
+  "boundaryWay": 359502862,
+  "center": [
+   25.081453,
+   55.160628
+  ],
+  "name": "Par 3 - 9 hole course",
+  "source": "osm",
+  "type": "way"
+ },
+ "par-3-course": {
+  "boundaryWay": 170980184,
+  "center": [
+   36.533279,
+   -4.720711
+  ],
+  "name": "Par 3 Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "par-3-course-and-driving-range": {
+  "boundaryWay": 87183078,
+  "center": [
+   25.06973,
+   55.16011
+  ],
+  "name": "Par 3 course and driving range",
+  "source": "osm",
+  "type": "way"
+ },
  "parcours-du-cerf": {
   "boundaryWay": -275632,
   "center": [
@@ -2427,6 +8747,16 @@
   ],
   "name": "Parcours Du Cerf",
   "source": "cc0",
+  "type": "way"
+ },
+ "paris-international-golf-club": {
+  "boundaryWay": 49038958,
+  "center": [
+   49.050879,
+   2.291949
+  ],
+  "name": "Paris International Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "paul-harney-golf-course": {
@@ -2459,6 +8789,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "penina-golf-resort": {
+  "boundaryWay": 3238135,
+  "center": [
+   37.159013,
+   -8.581858
+  ],
+  "name": "Penina Golf & Resort",
+  "source": "osm",
+  "type": "relation"
+ },
+ "penton-golf": {
+  "boundaryWay": 1300654223,
+  "center": [
+   35.625747,
+   139.877143
+  ],
+  "name": "Penton Golf",
+  "source": "osm",
+  "type": "way"
+ },
  "pequabuck-golf-course": {
   "boundaryWay": 43441123,
   "center": [
@@ -2478,6 +8828,66 @@
   "name": "Pequot Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "pestana-alto-golf": {
+  "boundaryWay": 3237974,
+  "center": [
+   37.126739,
+   -8.566645
+  ],
+  "name": "Pestana Alto Golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pestana-gramacho-golf-course": {
+  "boundaryWay": 1522538,
+  "center": [
+   37.126311,
+   -8.490393
+  ],
+  "name": "Pestana Gramacho Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pestana-silves-golf-course": {
+  "boundaryWay": 3238138,
+  "center": [
+   37.16892,
+   -8.420675
+  ],
+  "name": "Pestana Silves Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pestana-vale-da-pinta-golf-course": {
+  "boundaryWay": 3238096,
+  "center": [
+   37.131521,
+   -8.477269
+  ],
+  "name": "Pestana Vale da Pinta Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pestana-vila-sol-golf-course": {
+  "boundaryWay": 107196466,
+  "center": [
+   37.086771,
+   -8.093343
+  ],
+  "name": "Pestana Vila Sol Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "pgm": {
+  "boundaryWay": 14501882,
+  "center": [
+   35.935713,
+   139.944874
+  ],
+  "name": "\u30af\u30ea\u30a2\u30d3\u30e5\u30fc\u30b4\u30eb\u30d5\u30af\u30e9\u30d6&\u30db\u30c6\u30eb\u3010PGM\u3011",
+  "source": "osm",
+  "type": "relation"
  },
  "pheasant-ridge-golf": {
   "boundaryWay": -2515190,
@@ -2519,6 +8929,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "pine-cliffs-golf-course": {
+  "boundaryWay": 3240373,
+  "center": [
+   37.092685,
+   -8.174354
+  ],
+  "name": "Pine Cliffs Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
  "pine-creek-par-3-golf-course": {
   "boundaryWay": 43399734,
   "center": [
@@ -2557,6 +8977,16 @@
   ],
   "name": "Pine Oaks Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "pine-ridge-golf-course": {
+  "boundaryWay": 24150584,
+  "center": [
+   51.320094,
+   -0.706623
+  ],
+  "name": "Pine Ridge Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "pinehurst": {
@@ -2649,6 +9079,26 @@
   "source": "osm",
   "type": "way"
  },
+ "pinheiros-altos-golf-course": {
+  "boundaryWay": 107208466,
+  "center": [
+   37.047759,
+   -8.008278
+  ],
+  "name": "Pinheiros Altos Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "piperdam-golf-leisure-resort": {
+  "boundaryWay": 181323381,
+  "center": [
+   56.5,
+   -3.136918
+  ],
+  "name": "Piperdam Golf & Leisure Resort",
+  "source": "osm",
+  "type": "way"
+ },
  "pipers-landing": {
   "boundaryWay": -1587675,
   "center": [
@@ -2657,6 +9107,56 @@
   ],
   "name": "Pipers Landing",
   "source": "cc0",
+  "type": "way"
+ },
+ "pitch-and-putt-course": {
+  "boundaryWay": 414651963,
+  "center": [
+   52.444932,
+   -9.479693
+  ],
+  "name": "Pitch and Putt Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "pitch-putt-kameryck": {
+  "boundaryWay": 4427663,
+  "center": [
+   52.130641,
+   4.908146
+  ],
+  "name": "Pitch&Putt Kameryck",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pitch-putt-rhoon": {
+  "boundaryWay": 6135527,
+  "center": [
+   51.844598,
+   4.419699
+  ],
+  "name": "Pitch&Putt Rhoon",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pitfarrane-course": {
+  "boundaryWay": 20049523,
+  "center": [
+   56.059777,
+   -3.512065
+  ],
+  "name": "Pitfarrane Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "pitreavie-golf-club": {
+  "boundaryWay": 96427715,
+  "center": [
+   56.054006,
+   -3.427324
+  ],
+  "name": "Pitreavie Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "plainfield-country-club": {
@@ -2689,6 +9189,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "portadown-golf-club": {
+  "boundaryWay": 409244100,
+  "center": [
+   54.404215,
+   -6.413715
+  ],
+  "name": "Portadown Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "portland-course": {
+  "boundaryWay": 1436250708,
+  "center": [
+   55.52802,
+   -4.638856
+  ],
+  "name": "Portland Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "portobello-golf-course": {
+  "boundaryWay": 6175845,
+  "center": [
+   55.946749,
+   -3.11366
+  ],
+  "name": "Portobello Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "possible-golf-course": {
   "boundaryWay": 29786162,
   "center": [
@@ -2699,6 +9229,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "practice-golf": {
+  "boundaryWay": 186903193,
+  "center": [
+   48.726539,
+   2.295824
+  ],
+  "name": "Practice Golf",
+  "source": "osm",
+  "type": "way"
+ },
  "prairie-highlands-golf-course": {
   "boundaryWay": -2053563,
   "center": [
@@ -2707,6 +9247,16 @@
   ],
   "name": "Prairie Highlands Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "prenton-golf-course": {
+  "boundaryWay": 154989082,
+  "center": [
+   53.362661,
+   -3.051173
+  ],
+  "name": "Prenton Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "presidents-golf-course": {
@@ -2729,6 +9279,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "prestonfield-golf-course": {
+  "boundaryWay": 5364370,
+  "center": [
+   55.936218,
+   -3.156754
+  ],
+  "name": "Prestonfield Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "prestwick-golf-club": {
+  "boundaryWay": 12095589,
+  "center": [
+   55.508622,
+   -4.621193
+  ],
+  "name": "Prestwick Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "princes-golf-club": {
+  "boundaryWay": 24494292,
+  "center": [
+   51.293489,
+   1.371151
+  ],
+  "name": "Princes Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "priv-domaine-dassault": {
+  "boundaryWay": 56236701,
+  "center": [
+   48.751626,
+   1.911265
+  ],
+  "name": "Priv\u00e9 (domaine Dassault)",
+  "source": "osm",
+  "type": "way"
+ },
  "prospector-golf-course": {
   "boundaryWay": -3666278,
   "center": [
@@ -2737,6 +9327,16 @@
   ],
   "name": "Prospector Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "pumpherston-golf-club": {
+  "boundaryWay": 31799761,
+  "center": [
+   55.90733,
+   -3.482777
+  ],
+  "name": "Pumpherston Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "purple-sage-golf-course": {
@@ -2749,6 +9349,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "puttenham-golf-club": {
+  "boundaryWay": 22921244,
+  "center": [
+   51.220417,
+   -0.65234
+  ],
+  "name": "Puttenham Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "putterham-meadow-golf-course": {
   "boundaryWay": 29838628,
   "center": [
@@ -2758,6 +9368,16 @@
   "name": "Putterham Meadow Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "pyrford-golf-club": {
+  "boundaryWay": 3393965,
+  "center": [
+   51.316272,
+   -0.495141
+  ],
+  "name": "Pyrford Golf Club",
+  "source": "osm",
+  "type": "relation"
  },
  "quaboag-valley-golf-course": {
   "boundaryWay": 29915310,
@@ -2799,6 +9419,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "queenwood-golf-course": {
+  "boundaryWay": 157467156,
+  "center": [
+   51.364073,
+   -0.550464
+  ],
+  "name": "Queenwood Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "quinta-do-lago-laranjal-golf-course": {
+  "boundaryWay": 3238167,
+  "center": [
+   37.064742,
+   -7.999608
+  ],
+  "name": "Quinta do Lago Laranjal Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "quinta-do-lago-north-golf-course": {
+  "boundaryWay": 3238797,
+  "center": [
+   37.052245,
+   -8.02145
+  ],
+  "name": "Quinta do Lago North Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "quinta-do-lago-south-golf-course": {
+  "boundaryWay": 240113589,
+  "center": [
+   37.0474,
+   -8.022221
+  ],
+  "name": "Quinta do Lago South Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "racing-club-de-france-golf-de-la-boulie": {
+  "boundaryWay": 1408185825,
+  "center": [
+   48.77993,
+   2.14565
+  ],
+  "name": "Racing Club de France - Golf de la Boulie",
+  "source": "osm",
+  "type": "way"
+ },
  "randolph-golf-complex": {
   "boundaryWay": -3535718,
   "center": [
@@ -2809,6 +9479,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "rathbane-golf-course": {
+  "boundaryWay": 115836932,
+  "center": [
+   52.642335,
+   -8.603143
+  ],
+  "name": "Rathbane Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ratho-park-golf-club": {
+  "boundaryWay": 31452035,
+  "center": [
+   55.921563,
+   -3.359131
+  ],
+  "name": "Ratho Park Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "ravelston-golf-course": {
+  "boundaryWay": 6138953,
+  "center": [
+   55.952798,
+   -3.261533
+  ],
+  "name": "Ravelston Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "raven-golf-course-at-three-peaks": {
   "boundaryWay": -1793958,
   "center": [
@@ -2817,6 +9517,36 @@
   ],
   "name": "Raven Golf Course at Three Peaks",
   "source": "cc0",
+  "type": "way"
+ },
+ "real-club-de-golf-de-sotogrande": {
+  "boundaryWay": 258648125,
+  "center": [
+   36.280112,
+   -5.291939
+  ],
+  "name": "Real Club de Golf de Sotogrande",
+  "source": "osm",
+  "type": "way"
+ },
+ "real-club-de-golf-guadalmina": {
+  "boundaryWay": 3300481,
+  "center": [
+   36.475546,
+   -5.002602
+  ],
+  "name": "Real Club de Golf Guadalmina",
+  "source": "osm",
+  "type": "relation"
+ },
+ "real-club-de-golf-las-brisas": {
+  "boundaryWay": 97671239,
+  "center": [
+   36.505419,
+   -4.968936
+  ],
+  "name": "Real Club de Golf Las Brisas",
+  "source": "osm",
   "type": "way"
  },
  "red-hawk-ridge-golf-course": {
@@ -2837,6 +9567,16 @@
   ],
   "name": "Rehoboth Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "reigate-heath": {
+  "boundaryWay": 27739994,
+  "center": [
+   51.236739,
+   -0.232304
+  ],
+  "name": "Reigate Heath",
+  "source": "osm",
   "type": "way"
  },
  "renaissance-country-club": {
@@ -2869,6 +9609,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "richings-park-golf-and-country-club": {
+  "boundaryWay": 23294627,
+  "center": [
+   51.497678,
+   -0.519644
+  ],
+  "name": "Richings Park Golf and Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "richmond-park-golf-course": {
+  "boundaryWay": 4268580,
+  "center": [
+   51.444715,
+   -0.249115
+  ],
+  "name": "Richmond Park Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "ridders-golf-course": {
   "boundaryWay": 29695181,
   "center": [
@@ -2899,6 +9659,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "rijswijkse-golfclub": {
+  "boundaryWay": 6320869,
+  "center": [
+   52.035029,
+   4.350228
+  ],
+  "name": "Rijswijkse Golfclub",
+  "source": "osm",
+  "type": "way"
+ },
  "river-ridge-golf-club": {
   "boundaryWay": -174348,
   "center": [
@@ -2909,6 +9679,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "riverside-lodge-hotel-irvine-golf-course": {
+  "boundaryWay": 300579659,
+  "center": [
+   55.611899,
+   -4.65065
+  ],
+  "name": "Riverside Lodge Hotel Irvine Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "riverside-portstewart-golf-club": {
+  "boundaryWay": 447240646,
+  "center": [
+   55.166245,
+   -6.723344
+  ],
+  "name": "Riverside - Portstewart Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "rivi-re-saint-maurice": {
   "boundaryWay": -3064799,
   "center": [
@@ -2917,6 +9707,16 @@
   ],
   "name": "Rivi\u00e8re Saint-Maurice",
   "source": "cc0",
+  "type": "way"
+ },
+ "riviera-golf-club": {
+  "boundaryWay": 95304161,
+  "center": [
+   43.532096,
+   6.913921
+  ],
+  "name": "Riviera Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "rochester-golf-course": {
@@ -2959,6 +9759,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "rockmount-golf-course": {
+  "boundaryWay": 4642475,
+  "center": [
+   54.48812,
+   -5.88426
+  ],
+  "name": "Rockmount Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "roehampton-club-golf-course": {
+  "boundaryWay": 4268543,
+  "center": [
+   51.458962,
+   -0.249963
+  ],
+  "name": "Roehampton Club Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "rolling-greens-golf-course": {
   "boundaryWay": 29695056,
   "center": [
@@ -2967,6 +9787,86 @@
   ],
   "name": "Rolling Greens Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "ronan-valley-golf-course": {
+  "boundaryWay": 627562357,
+  "center": [
+   54.743627,
+   -6.599196
+  ],
+  "name": "Ronan Valley Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "roodlea-golf-course": {
+  "boundaryWay": 383576560,
+  "center": [
+   55.441868,
+   -4.543451
+  ],
+  "name": "Roodlea Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "rory-mcilroy-s-backyard-course": {
+  "boundaryWay": 1049742118,
+  "center": [
+   54.525746,
+   -5.848781
+  ],
+  "name": "Rory McIlroy's backyard course",
+  "source": "osm",
+  "type": "way"
+ },
+ "ross-golf-course": {
+  "boundaryWay": 217936677,
+  "center": [
+   52.046805,
+   -9.517629
+  ],
+  "name": "Ross Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "rossmore-golf-club": {
+  "boundaryWay": 5691501,
+  "center": [
+   54.215604,
+   -6.992777
+  ],
+  "name": "Rossmore Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "rouge": {
+  "boundaryWay": 1350396782,
+  "center": [
+   48.849104,
+   2.027468
+  ],
+  "name": "Rouge",
+  "source": "osm",
+  "type": "way"
+ },
+ "roundwood-hall-golf-club": {
+  "boundaryWay": 92473995,
+  "center": [
+   51.133029,
+   1.047286
+  ],
+  "name": "Roundwood Hall Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "rowallan-castle-golf-course": {
+  "boundaryWay": 599965887,
+  "center": [
+   55.649531,
+   -4.494533
+  ],
+  "name": "Rowallan Castle Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "roy-kizer-jimmy-clay-golf-course": {
@@ -2978,6 +9878,66 @@
   "name": "Roy Kizer/Jimmy Clay Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "royal-ascot-golf-club": {
+  "boundaryWay": 423576096,
+  "center": [
+   51.4195,
+   -0.666122
+  ],
+  "name": "Royal Ascot Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "royal-belfast-golf-club": {
+  "boundaryWay": 38496739,
+  "center": [
+   54.660005,
+   -5.784538
+  ],
+  "name": "Royal Belfast Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "royal-birkdale-golf-club": {
+  "boundaryWay": 25720345,
+  "center": [
+   53.624166,
+   -3.039679
+  ],
+  "name": "Royal Birkdale Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "royal-cinque-ports-golf-club": {
+  "boundaryWay": 24494291,
+  "center": [
+   51.248648,
+   1.393743
+  ],
+  "name": "Royal Cinque Ports Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "royal-county-down-golf-course": {
+  "boundaryWay": 78134737,
+  "center": [
+   54.223266,
+   -5.875831
+  ],
+  "name": "Royal County Down Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "royal-course": {
+  "boundaryWay": 19952110,
+  "center": [
+   37.053351,
+   -8.055756
+  ],
+  "name": "Royal Course",
+  "source": "osm",
+  "type": "relation"
  },
  "royal-fox-golf-club": {
   "boundaryWay": -1948076,
@@ -2997,6 +9957,66 @@
   ],
   "name": "Royal Hawk Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "royal-liverpool-golf-course": {
+  "boundaryWay": 155010530,
+  "center": [
+   53.382563,
+   -3.189867
+  ],
+  "name": "Royal Liverpool Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "royal-lytham-st-annes-golf-course": {
+  "boundaryWay": 6084940,
+  "center": [
+   53.746088,
+   -3.006303
+  ],
+  "name": "Royal Lytham & St Annes Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "royal-mid-surrey-golf-club": {
+  "boundaryWay": 4794012,
+  "center": [
+   51.469027,
+   -0.307658
+  ],
+  "name": "Royal Mid-Surrey Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "royal-mougins-golf": {
+  "boundaryWay": 19214269,
+  "center": [
+   43.589893,
+   6.968806
+  ],
+  "name": "Royal Mougins Golf",
+  "source": "osm",
+  "type": "relation"
+ },
+ "royal-musselburgh-golf-course": {
+  "boundaryWay": 3351883,
+  "center": [
+   55.951002,
+   -2.999416
+  ],
+  "name": "Royal Musselburgh Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "royal-wimbledon-golf-course": {
+  "boundaryWay": 5228072,
+  "center": [
+   51.423006,
+   -0.240664
+  ],
+  "name": "Royal Wimbledon Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "royal-york-golf-club": {
@@ -3049,6 +10069,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "salgados-golf-course": {
+  "boundaryWay": 1523440,
+  "center": [
+   37.095906,
+   -8.325477
+  ],
+  "name": "Salgados Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "saline-golf-course": {
+  "boundaryWay": 120547544,
+  "center": [
+   56.111045,
+   -3.558821
+  ],
+  "name": "Saline Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "salt-creek-golf-club": {
   "boundaryWay": 118687970,
   "center": [
@@ -3058,6 +10098,16 @@
   "name": "Salt Creek Golf Club",
   "source": "cc0",
   "type": "way"
+ },
+ "san-lorenzo-golf-course": {
+  "boundaryWay": 3517517,
+  "center": [
+   37.031179,
+   -8.012685
+  ],
+  "name": "San Lorenzo Golf Course",
+  "source": "osm",
+  "type": "relation"
  },
  "san-marcos-golf-course": {
   "boundaryWay": -109514,
@@ -3079,6 +10129,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "san-roque-club": {
+  "boundaryWay": 237391517,
+  "center": [
+   36.267538,
+   -5.333815
+  ],
+  "name": "San Roque Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "sandown-park-colt-course": {
+  "boundaryWay": 1125449576,
+  "center": [
+   51.377292,
+   -0.366255
+  ],
+  "name": "Sandown Park - Colt Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "sandown-park-eclipse-course": {
+  "boundaryWay": 1125449574,
+  "center": [
+   51.377992,
+   -0.359746
+  ],
+  "name": "Sandown Park - Eclipse Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "sandown-park-masters": {
+  "boundaryWay": 1125449575,
+  "center": [
+   51.376187,
+   -0.366678
+  ],
+  "name": "Sandown Park - Masters",
+  "source": "osm",
+  "type": "way"
+ },
  "sandy-burr-country-club": {
   "boundaryWay": 29776422,
   "center": [
@@ -3089,6 +10179,76 @@
   "source": "cc0",
   "type": "way"
  },
+ "santa-clara-golf-club-marbella": {
+  "boundaryWay": 3299716,
+  "center": [
+   36.510866,
+   -4.824474
+  ],
+  "name": "Santa Clara Golf Club Marbella",
+  "source": "osm",
+  "type": "relation"
+ },
+ "santa-mar-a-golf-country-club": {
+  "boundaryWay": 172443763,
+  "center": [
+   36.509923,
+   -4.769689
+  ],
+  "name": "Santa Mar\u00eda Golf & Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "santana-golf-country-club": {
+  "boundaryWay": 171834521,
+  "center": [
+   36.543506,
+   -4.700008
+  ],
+  "name": "Santana Golf & Country Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "schaerweijde-golf": {
+  "boundaryWay": 71410777,
+  "center": [
+   52.104909,
+   5.268286
+  ],
+  "name": "Schaerweijde Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "scoonie-golf-course": {
+  "boundaryWay": 133739387,
+  "center": [
+   56.204742,
+   -2.988888
+  ],
+  "name": "Scoonie Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "scotscraig-golf-club": {
+  "boundaryWay": 16662964,
+  "center": [
+   56.438631,
+   -2.875273
+  ],
+  "name": "Scotscraig Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "scrabo-golf-club": {
+  "boundaryWay": 39262710,
+  "center": [
+   54.581135,
+   -5.720248
+  ],
+  "name": "Scrabo Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "seattle-golf-club": {
   "boundaryWay": 35451517,
   "center": [
@@ -3097,6 +10257,26 @@
   ],
   "name": "Seattle Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "sene-valley-golf-club": {
+  "boundaryWay": 90627349,
+  "center": [
+   51.077369,
+   1.105218
+  ],
+  "name": "Sene Valley Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "seton-sands-9-hole-golf-course": {
+  "boundaryWay": 465147147,
+  "center": [
+   55.966803,
+   -2.926708
+  ],
+  "name": "Seton Sands 9 Hole Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "shaganappi-point-golf-course-valley-9": {
@@ -3129,6 +10309,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "shandon-park-golf-course": {
+  "boundaryWay": 41665408,
+  "center": [
+   54.581264,
+   -5.855929
+  ],
+  "name": "Shandon Park Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "shannon-golf-club": {
+  "boundaryWay": 685642318,
+  "center": [
+   52.692173,
+   -8.935763
+  ],
+  "name": "Shannon Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "sharon-country-club": {
   "boundaryWay": 29871905,
   "center": [
@@ -3149,6 +10349,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "sheerness-golf-club": {
+  "boundaryWay": 24484616,
+  "center": [
+   51.42943,
+   0.787828
+  ],
+  "name": "Sheerness Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "shinnecock-hills-golf-course": {
   "boundaryWay": 28989007,
   "center": [
@@ -3167,6 +10377,16 @@
   ],
   "name": "Short Beach Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "short-course": {
+  "boundaryWay": 1476234099,
+  "center": [
+   53.749975,
+   -3.012759
+  ],
+  "name": "Short Course",
+  "source": "osm",
   "type": "way"
  },
  "shovehaven-golf-course": {
@@ -3209,6 +10429,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "silverknowes-golf-course": {
+  "boundaryWay": 4955209,
+  "center": [
+   55.975828,
+   -3.270638
+  ],
+  "name": "Silverknowes Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "silvermere": {
+  "boundaryWay": 253833786,
+  "center": [
+   51.336091,
+   -0.450772
+  ],
+  "name": "Silvermere",
+  "source": "osm",
+  "type": "way"
+ },
  "silvermine-golf-club": {
   "boundaryWay": 43398690,
   "center": [
@@ -3229,6 +10469,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "sittingbourne-milton-regis-golf-club": {
+  "boundaryWay": 93365211,
+  "center": [
+   51.337981,
+   0.66818
+  ],
+  "name": "Sittingbourne & Milton Regis Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "sky-meadow-country-club": {
   "boundaryWay": -3562967,
   "center": [
@@ -3237,6 +10487,26 @@
   ],
   "name": "Sky Meadow Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "snodhurst-bottom-pitch-putt": {
+  "boundaryWay": 92136781,
+  "center": [
+   51.361117,
+   0.523397
+  ],
+  "name": "Snodhurst Bottom Pitch & Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "soga": {
+  "boundaryWay": 161768770,
+  "center": [
+   35.575252,
+   140.126999
+  ],
+  "name": "\u30b4\u30eb\u30d5\u30ea\u30be\u30fc\u30c8SOGA",
+  "source": "osm",
   "type": "way"
  },
  "somersett-golf-and-country-club": {
@@ -3259,6 +10529,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "southport-and-ainsdale-golf-club": {
+  "boundaryWay": 25720447,
+  "center": [
+   53.610869,
+   -3.031253
+  ],
+  "name": "Southport and Ainsdale Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "southport-golf-academy": {
+  "boundaryWay": 34571624,
+  "center": [
+   53.657091,
+   -2.893067
+  ],
+  "name": "Southport Golf Academy",
+  "source": "osm",
+  "type": "way"
+ },
+ "southport-municipal-golf-course": {
+  "boundaryWay": 24415900,
+  "center": [
+   53.661955,
+   -2.992209
+  ],
+  "name": "Southport Municipal Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "southport-old-links-golf-club": {
+  "boundaryWay": 24416172,
+  "center": [
+   53.648977,
+   -2.958184
+  ],
+  "name": "Southport Old Links Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "southwick-golf-course": {
   "boundaryWay": 29906135,
   "center": [
@@ -3267,6 +10577,26 @@
   ],
   "name": "Southwick Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "spa-golf-club": {
+  "boundaryWay": 4651565,
+  "center": [
+   54.392055,
+   -5.909004
+  ],
+  "name": "Spa Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "spanish-point-golf-club": {
+  "boundaryWay": 208238785,
+  "center": [
+   52.84078,
+   -9.42805
+  ],
+  "name": "Spanish Point Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "spring-brook-country-club": {
@@ -3299,6 +10629,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "st-annes-old-links": {
+  "boundaryWay": 301563528,
+  "center": [
+   53.766544,
+   -3.03984
+  ],
+  "name": "St Annes Old Links",
+  "source": "osm",
+  "type": "way"
+ },
+ "st-augustine-s-golf-club": {
+  "boundaryWay": 91579836,
+  "center": [
+   51.324042,
+   1.360167
+  ],
+  "name": "St Augustine's Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "st-brigid-s-community-centre-pitch-putt": {
+  "boundaryWay": 295640816,
+  "center": [
+   54.006894,
+   -6.370367
+  ],
+  "name": "St. Brigid's Community Centre Pitch & Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "st-cuthbert-golf-club": {
+  "boundaryWay": 43546578,
+  "center": [
+   55.490234,
+   -4.595908
+  ],
+  "name": "St. Cuthbert Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "st-george-s-hill-golf-club": {
+  "boundaryWay": 2712842,
+  "center": [
+   51.346648,
+   -0.451445
+  ],
+  "name": "St George's Hill Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
  "st-marks-golf-course": {
   "boundaryWay": 29782741,
   "center": [
@@ -3307,6 +10687,36 @@
   ],
   "name": "St. Marks Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "st-michaels-golf-club": {
+  "boundaryWay": 355781656,
+  "center": [
+   56.388481,
+   -2.900372
+  ],
+  "name": "St Michaels Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "st-nicholas-golf-club": {
+  "boundaryWay": 43546577,
+  "center": [
+   55.487586,
+   -4.622649
+  ],
+  "name": "St. Nicholas Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "st-patrick-s-golf-club": {
+  "boundaryWay": 405207721,
+  "center": [
+   54.331782,
+   -5.696123
+  ],
+  "name": "St Patrick's Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "stanley-lasker-richter-municipal-golf-course": {
@@ -3349,6 +10759,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "stoke-park-golf-course": {
+  "boundaryWay": 33118679,
+  "center": [
+   51.534992,
+   -0.604168
+  ],
+  "name": "Stoke Park Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "stone-creek-golf-course": {
   "boundaryWay": -1941143,
   "center": [
@@ -3389,6 +10809,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "stonelees-golf-centre": {
+  "boundaryWay": 899290780,
+  "center": [
+   51.31987,
+   1.353568
+  ],
+  "name": "Stonelees Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
  "stony-brook-golf-course": {
   "boundaryWay": 29783364,
   "center": [
@@ -3419,6 +10849,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "strathtyrum-course": {
+  "boundaryWay": 158718555,
+  "center": [
+   56.350704,
+   -2.829619
+  ],
+  "name": "Strathtyrum Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "strawberry-hill-golf-club": {
+  "boundaryWay": 23072324,
+  "center": [
+   51.436599,
+   -0.343613
+  ],
+  "name": "Strawberry Hill Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "strawberry-valley-golf-course": {
   "boundaryWay": 29691675,
   "center": [
@@ -3428,6 +10878,36 @@
   "name": "Strawberry Valley Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "sudbury-golf-course": {
+  "boundaryWay": 4250453,
+  "center": [
+   51.545154,
+   -0.315196
+  ],
+  "name": "Sudbury Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "sunbury-golf": {
+  "boundaryWay": 163062713,
+  "center": [
+   51.401902,
+   -0.440485
+  ],
+  "name": "Sunbury Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "sunningdale-golf-club": {
+  "boundaryWay": 15410213,
+  "center": [
+   51.38191,
+   -0.634233
+  ],
+  "name": "Sunningdale Golf Club",
+  "source": "osm",
+  "type": "relation"
  },
  "suntree-country-club": {
   "boundaryWay": -1230389,
@@ -3449,6 +10929,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "surbiton-golf-club": {
+  "boundaryWay": 36972679,
+  "center": [
+   51.368426,
+   -0.326763
+  ],
+  "name": "Surbiton Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "sutton-green-golf-club": {
+  "boundaryWay": 24634115,
+  "center": [
+   51.290343,
+   -0.564151
+  ],
+  "name": "Sutton Green Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "swansea-country-club": {
   "boundaryWay": 29831283,
   "center": [
@@ -3457,6 +10957,26 @@
   ],
   "name": "Swansea Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "swingolf-angerhof": {
+  "boundaryWay": 109769233,
+  "center": [
+   48.137852,
+   11.254012
+  ],
+  "name": "SwinGolf Angerhof",
+  "source": "osm",
+  "type": "way"
+ },
+ "swinley-forest-golf-club": {
+  "boundaryWay": 179307558,
+  "center": [
+   51.383851,
+   -0.688588
+  ],
+  "name": "Swinley Forest Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "sykes-lady-overland-park-golf-complex": {
@@ -3479,6 +10999,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "tandragee-golf-course": {
+  "boundaryWay": 65203553,
+  "center": [
+   54.348017,
+   -6.419972
+  ],
+  "name": "Tandragee Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "tashua-knolls-and-glen-golf-courses": {
   "boundaryWay": 43435440,
   "center": [
@@ -3487,6 +11017,46 @@
   ],
   "name": "Tashua Knolls and Glen Golf Courses",
   "source": "cc0",
+  "type": "way"
+ },
+ "temple-golf-course": {
+  "boundaryWay": 427224346,
+  "center": [
+   54.463722,
+   -5.908388
+  ],
+  "name": "Temple Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "tenterden-golf-club": {
+  "boundaryWay": 94237204,
+  "center": [
+   51.076592,
+   0.713321
+  ],
+  "name": "Tenterden Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "thames-ditton-and-esher-golf-club": {
+  "boundaryWay": 3345292,
+  "center": [
+   51.380664,
+   -0.350631
+  ],
+  "name": "Thames Ditton and Esher Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "the-baird-course": {
+  "boundaryWay": 1378995213,
+  "center": [
+   56.192833,
+   -2.827581
+  ],
+  "name": "The Baird Course",
+  "source": "osm",
   "type": "way"
  },
  "the-bandit-golf-club": {
@@ -3499,6 +11069,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "the-berkshire-golf-club": {
+  "boundaryWay": 11971832,
+  "center": [
+   51.385218,
+   -0.713238
+  ],
+  "name": "The Berkshire Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
  "the-broadmoor-mountain-golf-course": {
   "boundaryWay": -3132279,
   "center": [
@@ -3507,6 +11087,56 @@
   ],
   "name": "The Broadmoor Mountain Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "the-bruce": {
+  "boundaryWay": 1432241028,
+  "center": [
+   56.21264,
+   -3.41466
+  ],
+  "name": "The Bruce",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-carnoustie-buddon-course": {
+  "boundaryWay": 1459805267,
+  "center": [
+   56.491399,
+   -2.729841
+  ],
+  "name": "The Carnoustie Buddon Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-carnoustie-burnside-course": {
+  "boundaryWay": 26237513,
+  "center": [
+   56.494376,
+   -2.728453
+  ],
+  "name": "The Carnoustie Burnside Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-carnoustie-championship-course": {
+  "boundaryWay": 1459805268,
+  "center": [
+   56.493552,
+   -2.727197
+  ],
+  "name": "The Carnoustie Championship Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-castle-course": {
+  "boundaryWay": 250869978,
+  "center": [
+   56.327785,
+   -2.754188
+  ],
+  "name": "The Castle Course",
+  "source": "osm",
   "type": "way"
  },
  "the-club-at-sonterra": {
@@ -3528,6 +11158,36 @@
   "name": "The Cradle",
   "source": "osm",
   "type": "way"
+ },
+ "the-drift-golf-club": {
+  "boundaryWay": 20789011,
+  "center": [
+   51.290356,
+   -0.431524
+  ],
+  "name": "The Drift Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-dutch": {
+  "boundaryWay": 4428605,
+  "center": [
+   51.85212,
+   5.014225
+  ],
+  "name": "The Dutch",
+  "source": "osm",
+  "type": "relation"
+ },
+ "the-els-golf-course": {
+  "boundaryWay": 5353876,
+  "center": [
+   25.035667,
+   55.213018
+  ],
+  "name": "The Els Golf Course",
+  "source": "osm",
+  "type": "relation"
  },
  "the-evergreen-club": {
   "boundaryWay": -1587674,
@@ -3569,6 +11229,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "the-hills-golf-course": {
+  "boundaryWay": 9735028,
+  "center": [
+   25.12227,
+   55.269511
+  ],
+  "name": "The Hills Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "the-inspiration-club": {
+  "boundaryWay": 1443340912,
+  "center": [
+   51.544015,
+   -0.407051
+  ],
+  "name": "The Inspiration Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-international": {
+  "boundaryWay": 2257672,
+  "center": [
+   52.330323,
+   4.80264
+  ],
+  "name": "The International",
+  "source": "osm",
+  "type": "relation"
+ },
+ "the-leatherhead-club": {
+  "boundaryWay": 18209240,
+  "center": [
+   51.321809,
+   -0.335499
+  ],
+  "name": "The Leatherhead Club",
+  "source": "osm",
+  "type": "relation"
+ },
  "the-links-at-brigantine": {
   "boundaryWay": -53408,
   "center": [
@@ -3577,6 +11277,16 @@
   ],
   "name": "The Links at Brigantine",
   "source": "cc0",
+  "type": "way"
+ },
+ "the-london-beach-golf-club": {
+  "boundaryWay": 92277839,
+  "center": [
+   51.091842,
+   0.683081
+  ],
+  "name": "The London Beach Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "the-majors-golf-club": {
@@ -3589,6 +11299,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "the-manor-house-golf-course": {
+  "boundaryWay": 385423551,
+  "center": [
+   54.950241,
+   -6.546704
+  ],
+  "name": "The Manor House & Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "the-marshes-golf": {
   "boundaryWay": -1973201,
   "center": [
@@ -3599,6 +11319,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "the-montgomery": {
+  "boundaryWay": 1432241027,
+  "center": [
+   56.20978,
+   -3.412815
+  ],
+  "name": "The Montgomery",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-nestie": {
+  "boundaryWay": 1459805269,
+  "center": [
+   56.495345,
+   -2.717118
+  ],
+  "name": "The Nestie",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-north-berwick-golf-club": {
+  "boundaryWay": 44698834,
+  "center": [
+   56.059772,
+   -2.746481
+  ],
+  "name": "The North Berwick Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "the-oasis": {
   "boundaryWay": -49218,
   "center": [
@@ -3607,6 +11357,146 @@
   ],
   "name": "The Oasis",
   "source": "cc0",
+  "type": "way"
+ },
+ "the-old-course-portstewart-golf-club": {
+  "boundaryWay": 6598003,
+  "center": [
+   55.19058,
+   -6.703849
+  ],
+  "name": "The Old Course - Portstewart Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
+ "the-pine-trees": {
+  "boundaryWay": 243993148,
+  "center": [
+   36.272669,
+   -5.343275
+  ],
+  "name": "The Pine Trees",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-renaissance-club": {
+  "boundaryWay": 161230026,
+  "center": [
+   56.054169,
+   -2.807407
+  ],
+  "name": "The Renaissance Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-richmond-golf-club": {
+  "boundaryWay": 4795273,
+  "center": [
+   51.438774,
+   -0.298691
+  ],
+  "name": "The Richmond Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-ridge-golf-club": {
+  "boundaryWay": 94361166,
+  "center": [
+   51.218868,
+   0.617281
+  ],
+  "name": "The Ridge Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-royal-burgess-golfing-society-of-edinburgh": {
+  "boundaryWay": 6136684,
+  "center": [
+   55.965031,
+   -3.299322
+  ],
+  "name": "The Royal Burgess Golfing Society of Edinburgh",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-royal-golf-club": {
+  "boundaryWay": 470672205,
+  "center": [
+   37.581013,
+   126.905777
+  ],
+  "name": "The royal golf club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-royal-st-george-s-golf-club": {
+  "boundaryWay": 24494194,
+  "center": [
+   51.275903,
+   1.375029
+  ],
+  "name": "The Royal St. George's Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-south-buckinghamshire-golf-course": {
+  "boundaryWay": 197139095,
+  "center": [
+   51.544112,
+   -0.602633
+  ],
+  "name": "The South Buckinghamshire Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-strand-portstewart-golf-club": {
+  "boundaryWay": 298904954,
+  "center": [
+   55.167591,
+   -6.732405
+  ],
+  "name": "The Strand - Portstewart Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-weald-of-kent-golf-course": {
+  "boundaryWay": 94361157,
+  "center": [
+   51.191449,
+   0.608343
+  ],
+  "name": "The Weald of Kent Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-west-kilbride-golf-club": {
+  "boundaryWay": 122403613,
+  "center": [
+   55.692399,
+   -4.879443
+  ],
+  "name": "The West Kilbride Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-west-lancashire-golf-club": {
+  "boundaryWay": 25720491,
+  "center": [
+   53.504212,
+   -3.055938
+  ],
+  "name": "The West Lancashire Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "the-wisley": {
+  "boundaryWay": 172109992,
+  "center": [
+   51.318904,
+   -0.482081
+  ],
+  "name": "The Wisley",
+  "source": "osm",
   "type": "way"
  },
  "the-woodlands": {
@@ -3627,6 +11517,26 @@
   ],
   "name": "Thornapple Creek Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "thorney-park-golf-club": {
+  "boundaryWay": 1493539680,
+  "center": [
+   51.506327,
+   -0.493483
+  ],
+  "name": "Thorney Park Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "thornton-golf-club": {
+  "boundaryWay": 129216785,
+  "center": [
+   56.167284,
+   -3.125927
+  ],
+  "name": "Thornton Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "thorny-lea-golf-course": {
@@ -3657,6 +11567,36 @@
   ],
   "name": "Timberline Golf Course",
   "source": "cc0",
+  "type": "way"
+ },
+ "tobermore-golf-centre": {
+  "boundaryWay": 145320824,
+  "center": [
+   54.816813,
+   -6.696226
+  ],
+  "name": "Tobermore Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "topgolf-surrey": {
+  "boundaryWay": 161997874,
+  "center": [
+   51.357727,
+   -0.491063
+  ],
+  "name": "TopGolf Surrey",
+  "source": "osm",
+  "type": "way"
+ },
+ "torrance-course": {
+  "boundaryWay": 1457764231,
+  "center": [
+   56.32156,
+   -2.731451
+  ],
+  "name": "Torrance Course",
+  "source": "osm",
   "type": "way"
  },
  "tournament-players-club-of-connecticut": {
@@ -3699,6 +11639,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "tralee-golf-club": {
+  "boundaryWay": 351897616,
+  "center": [
+   52.302987,
+   -9.858108
+  ],
+  "name": "Tralee Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "tramores-golf": {
+  "boundaryWay": 244108926,
+  "center": [
+   36.478369,
+   -5.045649
+  ],
+  "name": "Tramores Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "troon-darley": {
+  "boundaryWay": 3362918,
+  "center": [
+   55.551694,
+   -4.647283
+  ],
+  "name": "Troon Darley",
+  "source": "osm",
+  "type": "relation"
+ },
+ "troon-fullarton": {
+  "boundaryWay": 3362923,
+  "center": [
+   55.539333,
+   -4.642631
+  ],
+  "name": "Troon Fullarton",
+  "source": "osm",
+  "type": "relation"
+ },
+ "troon-lochgreen": {
+  "boundaryWay": 3339559,
+  "center": [
+   55.536225,
+   -4.639546
+  ],
+  "name": "Troon Lochgreen",
+  "source": "osm",
+  "type": "relation"
+ },
  "trull-brook-golf-course": {
   "boundaryWay": 29859779,
   "center": [
@@ -3719,6 +11709,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "tudor-park-country-club": {
+  "boundaryWay": 94420394,
+  "center": [
+   51.262035,
+   0.589155
+  ],
+  "name": "Tudor Park Country Club",
+  "source": "osm",
+  "type": "way"
+ },
  "tumble-brook-country-club": {
   "boundaryWay": 43439653,
   "center": [
@@ -3737,6 +11737,26 @@
   ],
   "name": "Tunxis Plantation Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "turnberry": {
+  "boundaryWay": 46421398,
+  "center": [
+   55.321919,
+   -4.836144
+  ],
+  "name": "Turnberry",
+  "source": "osm",
+  "type": "way"
+ },
+ "turnhouse-golf-club": {
+  "boundaryWay": 30780978,
+  "center": [
+   55.952587,
+   -3.333826
+  ],
+  "name": "Turnhouse Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "turquoise-hills-family-golf-center": {
@@ -3809,6 +11829,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "twisted-stone-golf-course": {
+  "boundaryWay": 21389681,
+  "center": [
+   51.326374,
+   -0.497113
+  ],
+  "name": "Twisted Stone Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "tyrrells-wood-golf-course": {
+  "boundaryWay": 21850343,
+  "center": [
+   51.281587,
+   -0.29725
+  ],
+  "name": "Tyrrells Wood Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "unicorn-golf-and-country-club": {
   "boundaryWay": 29830185,
   "center": [
@@ -3817,6 +11857,56 @@
   ],
   "name": "Unicorn Golf and Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "upchurch-river-valley-golf-course-driving-range": {
+  "boundaryWay": 244589927,
+  "center": [
+   51.367035,
+   0.637954
+  ],
+  "name": "Upchurch River Valley Golf Course Driving Range",
+  "source": "osm",
+  "type": "way"
+ },
+ "upchurch-river-valley-north-course": {
+  "boundaryWay": 244589931,
+  "center": [
+   51.370812,
+   0.635637
+  ],
+  "name": "Upchurch River Valley North Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "upchurch-river-valley-south-course": {
+  "boundaryWay": 244589932,
+  "center": [
+   51.363295,
+   0.634286
+  ],
+  "name": "Upchurch River Valley South Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "upchurch-river-valley-west-course": {
+  "boundaryWay": 244589933,
+  "center": [
+   51.367671,
+   0.634844
+  ],
+  "name": "Upchurch River Valley West Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "uphall-golf-course": {
+  "boundaryWay": 53803640,
+  "center": [
+   55.92531,
+   -3.517287
+  ],
+  "name": "Uphall Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "urbandale-golf-country-club": {
@@ -3829,6 +11919,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "utrechtse-golfclub-amelisweerd": {
+  "boundaryWay": 6320877,
+  "center": [
+   52.06277,
+   5.156735
+  ],
+  "name": "Utrechtse Golfclub Amelisweerd",
+  "source": "osm",
+  "type": "way"
+ },
+ "utrechtse-golfclub-de-pan": {
+  "boundaryWay": 6320886,
+  "center": [
+   52.118071,
+   5.223819
+  ],
+  "name": "Utrechtse Golfclub 'De Pan'",
+  "source": "osm",
+  "type": "way"
+ },
  "v-a-golf-course": {
   "boundaryWay": 29743379,
   "center": [
@@ -3839,6 +11949,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "vale-de-milho-golf": {
+  "boundaryWay": 491957967,
+  "center": [
+   37.095881,
+   -8.44682
+  ],
+  "name": "Vale de Milho Golf",
+  "source": "osm",
+  "type": "way"
+ },
+ "vale-do-lobo": {
+  "boundaryWay": 3511048,
+  "center": [
+   37.053798,
+   -8.060359
+  ],
+  "name": "Vale do Lobo",
+  "source": "osm",
+  "type": "relation"
+ },
+ "valle-romano-golf-resort": {
+  "boundaryWay": 3299672,
+  "center": [
+   36.427696,
+   -5.195407
+  ],
+  "name": "Valle Romano Golf & Resort",
+  "source": "osm",
+  "type": "relation"
+ },
+ "valley-course": {
+  "boundaryWay": 23996941,
+  "center": [
+   51.118081,
+   1.100069
+  ],
+  "name": "Valley Course",
+  "source": "osm",
+  "type": "way"
+ },
  "valley-golf-club": {
   "boundaryWay": 215251563,
   "center": [
@@ -3847,6 +11997,16 @@
   ],
   "name": "Valley Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "valley-links": {
+  "boundaryWay": 1413316754,
+  "center": [
+   55.204131,
+   -6.633484
+  ],
+  "name": "Valley Links",
+  "source": "osm",
   "type": "way"
  },
  "vesper-country-club": {
@@ -3869,6 +12029,46 @@
   "source": "cc0",
   "type": "way"
  },
+ "victoria-golf-club": {
+  "boundaryWay": 23543863,
+  "center": [
+   43.627228,
+   7.020547
+  ],
+  "name": "Victoria Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "vila-monte-golf-course": {
+  "boundaryWay": 222567474,
+  "center": [
+   37.098236,
+   -7.794558
+  ],
+  "name": "Vila Monte Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "village-golf-sports-club": {
+  "boundaryWay": 94831941,
+  "center": [
+   51.173173,
+   0.542447
+  ],
+  "name": "Village Golf & Sports Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "villamoura-driving-range-golf-academy": {
+  "boundaryWay": 107218749,
+  "center": [
+   37.108178,
+   -8.118527
+  ],
+  "name": "Villamoura Driving Range & Golf Academy",
+  "source": "osm",
+  "type": "way"
+ },
  "wading-river-golf-course": {
   "boundaryWay": 29835070,
   "center": [
@@ -3878,6 +12078,36 @@
   "name": "Wading River Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "wallasey-beach-pitch-n-putt": {
+  "boundaryWay": 237421701,
+  "center": [
+   53.432662,
+   -3.074958
+  ],
+  "name": "Wallasey Beach Pitch n'Putt",
+  "source": "osm",
+  "type": "way"
+ },
+ "wallasey-golf-club": {
+  "boundaryWay": 105929019,
+  "center": [
+   53.427915,
+   -3.0802
+  ],
+  "name": "Wallasey Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "walmer-and-kingsdown-golf-links": {
+  "boundaryWay": 8273877,
+  "center": [
+   51.172839,
+   1.395437
+  ],
+  "name": "Walmer and Kingsdown Golf Links",
+  "source": "osm",
+  "type": "relation"
  },
  "walpole-country-club": {
   "boundaryWay": 132974397,
@@ -3889,6 +12119,36 @@
   "source": "cc0",
   "type": "way"
  },
+ "walton-heath-golf-course": {
+  "boundaryWay": 22084377,
+  "center": [
+   51.269244,
+   -0.236469
+  ],
+  "name": "Walton Heath Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "warren-municipal-golf-club": {
+  "boundaryWay": 154360725,
+  "center": [
+   53.432886,
+   -3.063903
+  ],
+  "name": "Warren Municipal Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "warrenpoint-golf-club": {
+  "boundaryWay": 59517707,
+  "center": [
+   54.108557,
+   -6.267155
+  ],
+  "name": "Warrenpoint Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "washington-golf-course": {
   "boundaryWay": 43439875,
   "center": [
@@ -3898,6 +12158,26 @@
   "name": "Washington Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "wassenaarse-golf-groendael": {
+  "boundaryWay": 6320885,
+  "center": [
+   52.11046,
+   4.339117
+  ],
+  "name": "Wassenaarse Golf Groendael",
+  "source": "osm",
+  "type": "way"
+ },
+ "wassenaarse-golfclub-rozenstein": {
+  "boundaryWay": 14861922,
+  "center": [
+   52.156985,
+   4.393895
+  ],
+  "name": "Wassenaarse Golfclub Rozenstein",
+  "source": "osm",
+  "type": "relation"
  },
  "waubeeka-golf-links": {
   "boundaryWay": 29198470,
@@ -3959,6 +12239,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "wee-braids-golf-course": {
+  "boundaryWay": 213763854,
+  "center": [
+   55.91232,
+   -3.190063
+  ],
+  "name": "Wee Braids Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "wee-burn-country-club": {
   "boundaryWay": 43398547,
   "center": [
@@ -3967,6 +12257,16 @@
   ],
   "name": "Wee Burn Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "wee-course": {
+  "boundaryWay": 914767620,
+  "center": [
+   56.287194,
+   -3.11792
+  ],
+  "name": "Wee Course",
+  "source": "osm",
   "type": "way"
  },
  "wellesley-country-club": {
@@ -3989,6 +12289,56 @@
   "source": "cc0",
   "type": "way"
  },
+ "wentworth-club": {
+  "boundaryWay": 22911115,
+  "center": [
+   51.394794,
+   -0.596682
+  ],
+  "name": "Wentworth Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "west": {
+  "boundaryWay": 188607319,
+  "center": [
+   35.935225,
+   139.286882
+  ],
+  "name": "\u30aa\u30ea\u30e0\u30d4\u30c3\u30af\u30ca\u30b7\u30e7\u30ca\u30eb\u30b4\u30eb\u30d5\u30af\u30e9\u30d6 (West)",
+  "source": "osm",
+  "type": "way"
+ },
+ "west-byfleet-golf-club": {
+  "boundaryWay": 23060246,
+  "center": [
+   51.330317,
+   -0.522299
+  ],
+  "name": "West Byfleet Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "west-course": {
+  "boundaryWay": 31787874,
+  "center": [
+   55.901265,
+   -3.3683
+  ],
+  "name": "West Course",
+  "source": "osm",
+  "type": "way"
+ },
+ "west-derby-golf-club": {
+  "boundaryWay": 31453252,
+  "center": [
+   53.430171,
+   -2.887523
+  ],
+  "name": "West Derby Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "west-end-golf": {
   "boundaryWay": 267711657,
   "center": [
@@ -3998,6 +12348,46 @@
   "name": "West End Golf",
   "source": "cc0",
   "type": "way"
+ },
+ "west-hill-golf-club": {
+  "boundaryWay": 1089409168,
+  "center": [
+   51.301535,
+   -0.617316
+  ],
+  "name": "West Hill Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "west-london-golf-centre": {
+  "boundaryWay": 8914749,
+  "center": [
+   51.544412,
+   -0.39217
+  ],
+  "name": "West London Golf Centre",
+  "source": "osm",
+  "type": "way"
+ },
+ "west-lothian-golf-course": {
+  "boundaryWay": 3351398,
+  "center": [
+   55.997012,
+   -3.600574
+  ],
+  "name": "West Lothian Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
+ "west-middlesex-golf-course": {
+  "boundaryWay": 19083538,
+  "center": [
+   51.513766,
+   -0.356988
+  ],
+  "name": "West Middlesex Golf Course",
+  "source": "osm",
+  "type": "relation"
  },
  "west-nantmeal-township": {
   "boundaryWay": -3049374,
@@ -4009,6 +12399,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "western-gailes-golf-club": {
+  "boundaryWay": 248433974,
+  "center": [
+   55.580917,
+   -4.663888
+  ],
+  "name": "Western Gailes Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "western-hills-municipal-golf-course": {
   "boundaryWay": 43440717,
   "center": [
@@ -4018,6 +12418,16 @@
   "name": "Western Hills Municipal Golf Course",
   "source": "cc0",
   "type": "way"
+ },
+ "westgate-and-birchington-golf-club": {
+  "boundaryWay": 3349883,
+  "center": [
+   51.380038,
+   1.32373
+  ],
+  "name": "Westgate and Birchington Golf Club",
+  "source": "osm",
+  "type": "relation"
  },
  "westminster-golf-course": {
   "boundaryWay": 29756394,
@@ -4049,6 +12459,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "wexham-park-golf-centre": {
+  "boundaryWay": 17773601,
+  "center": [
+   51.538118,
+   -0.572935
+  ],
+  "name": "Wexham Park Golf Centre",
+  "source": "osm",
+  "type": "relation"
+ },
  "white-eagle-golf-club": {
   "boundaryWay": -2684474,
   "center": [
@@ -4059,6 +12479,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "white-green-land": {
+  "boundaryWay": 278939421,
+  "center": [
+   37.4039,
+   127.209867
+  ],
+  "name": "\ud654\uc774\ud2b8\uadf8\ub9b0\ub79c\ub4dc(White Green Land)",
+  "source": "osm",
+  "type": "way"
+ },
+ "whitehead-golf-club": {
+  "boundaryWay": 40002031,
+  "center": [
+   54.76583,
+   -5.703244
+  ],
+  "name": "Whitehead Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "whitney-farms-golf-club": {
   "boundaryWay": -307285,
   "center": [
@@ -4067,6 +12507,16 @@
   ],
   "name": "Whitney Farms Golf Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "whitstable-and-seasalter-golf-club": {
+  "boundaryWay": 30193137,
+  "center": [
+   51.353928,
+   1.017232
+  ],
+  "name": "Whitstable and Seasalter Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "wianno-golf-course": {
@@ -4119,6 +12569,26 @@
   "source": "cc0",
   "type": "way"
  },
+ "wimbledon-common-golf-club-london-scottish-golf-club": {
+  "boundaryWay": 182023371,
+  "center": [
+   51.428131,
+   -0.235335
+  ],
+  "name": "Wimbledon Common Golf Club & London Scottish Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "wimbledon-park-golf-club": {
+  "boundaryWay": 4317455,
+  "center": [
+   51.435128,
+   -0.208524
+  ],
+  "name": "Wimbledon Park Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "winchester-country-club": {
   "boundaryWay": 29818882,
   "center": [
@@ -4127,6 +12597,26 @@
   ],
   "name": "Winchester Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "windlesham-golf-club": {
+  "boundaryWay": 148938567,
+  "center": [
+   51.367297,
+   -0.678244
+  ],
+  "name": "Windlesham Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "winterfield-golf-course": {
+  "boundaryWay": 96567046,
+  "center": [
+   56.003425,
+   -2.536316
+  ],
+  "name": "Winterfield Golf Course",
+  "source": "osm",
   "type": "way"
  },
  "wippernon-golf-course": {
@@ -4139,6 +12629,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "wirral-golf-club": {
+  "boundaryWay": 25713320,
+  "center": [
+   53.387757,
+   -3.064418
+  ],
+  "name": "Wirral Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "woburn-country-club": {
   "boundaryWay": 66508945,
   "center": [
@@ -4147,6 +12647,16 @@
   ],
   "name": "Woburn Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "woking-golf-club": {
+  "boundaryWay": 32599290,
+  "center": [
+   51.304689,
+   -0.597993
+  ],
+  "name": "Woking Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "wollaston-golf-course": {
@@ -4169,6 +12679,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "wonder-golf-park": {
+  "boundaryWay": 768981033,
+  "center": [
+   35.76273,
+   139.680089
+  ],
+  "name": "WONDER GOLF PARK",
+  "source": "osm",
+  "type": "way"
+ },
  "woodland-country-club": {
   "boundaryWay": 29868312,
   "center": [
@@ -4189,6 +12709,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "woodstock-golf-and-country-club": {
+  "boundaryWay": 221824988,
+  "center": [
+   52.837883,
+   -9.026525
+  ],
+  "name": "Woodstock Golf and Country Club",
+  "source": "osm",
+  "type": "way"
+ },
  "woodway-country-club": {
   "boundaryWay": -306829,
   "center": [
@@ -4197,6 +12727,26 @@
   ],
   "name": "Woodway Country Club",
   "source": "cc0",
+  "type": "way"
+ },
+ "woolton-golf-club": {
+  "boundaryWay": 402174824,
+  "center": [
+   53.364637,
+   -2.861286
+  ],
+  "name": "Woolton Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
+ "worplesdon-golf-club": {
+  "boundaryWay": 25780256,
+  "center": [
+   51.293212,
+   -0.615534
+  ],
+  "name": "Worplesdon Golf Club",
+  "source": "osm",
   "type": "way"
  },
  "worthington-golf-course": {
@@ -4229,6 +12779,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "wyke-green-golf-club": {
+  "boundaryWay": 15406999,
+  "center": [
+   51.491704,
+   -0.335014
+  ],
+  "name": "Wyke Green Golf Club",
+  "source": "osm",
+  "type": "relation"
+ },
  "wynn-golf-course": {
   "boundaryWay": 27910587,
   "center": [
@@ -4249,6 +12809,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "yokohama-sports-complex": {
+  "boundaryWay": 248384113,
+  "center": [
+   35.441947,
+   139.55461
+  ],
+  "name": "YOKOHAMA SPORTS COMPLEX \u30b4\u30eb\u30d5\u30c9\u30e9\u30a4\u30d3\u30f3\u30b0\u30ec\u30f3\u30b8",
+  "source": "osm",
+  "type": "way"
+ },
  "yuma-golf-desert-hills-par-3-arroyo-dunes": {
   "boundaryWay": 262523252,
   "center": [
@@ -4257,6 +12827,16 @@
   ],
   "name": "Yuma Golf Desert Hills Par 3 (Arroyo Dunes)",
   "source": "cc0",
+  "type": "way"
+ },
+ "zaanse-golf-club": {
+  "boundaryWay": 6320968,
+  "center": [
+   52.472941,
+   4.865715
+  ],
+  "name": "Zaanse Golf Club",
+  "source": "osm",
   "type": "way"
  }
 }
