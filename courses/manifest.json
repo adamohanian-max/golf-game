@@ -688,5 +688,10 @@
     "id": "golf-national",
     "name": "Golf National",
     "sub": "Par 73 · 18 holes · 48.75, 2.09"
+  },
+  {
+    "id": "golf-torrequebrada",
+    "name": "Golf Torrequebrada",
+    "sub": "Par 72 · 18 holes · 36.59, -4.55"
   }
 ]
