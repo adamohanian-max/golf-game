@@ -128,5 +128,10 @@
     "id": "ballybunion-golf-club",
     "name": "Ballybunion Golf Club",
     "sub": "Par 72 · 18 holes · 52.50, -9.68"
+  },
+  {
+    "id": "ballyclare-golf-course",
+    "name": "Ballyclare Golf Course",
+    "sub": "Par 68 · 18 holes · 54.77, -6.03"
   }
 ]
