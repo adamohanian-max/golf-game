@@ -838,5 +838,10 @@
     "id": "kilmarnock-golf-club-barassie-links",
     "name": "Kilmarnock Golf Club Barassie Links",
     "sub": "Par 73 · 18 holes · 55.57, -4.65"
+  },
+  {
+    "id": "kilspindie-golf-club",
+    "name": "Kilspindie Golf Club",
+    "sub": "Par 70 · 18 holes · 56.01, -2.88"
   }
 ]
