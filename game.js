@@ -12,8 +12,10 @@ const TUNE = {
   captureSpeed: 0.05,    // ball must be slower than this to drop in cup (low = hard)
   lipOutMaxSpeed: 0.18,  // putt at/under this that misses the cup is grabbed by the lip and dies 1–2 ft past; faster rams roll on
   chipRangeYds: 45,      // greenside chip mode auto-engages within this distance to the pin
-  chipHeadroom: 1.4,     // full swipe in chip mode flies this × pin distance (pop without blowing way past; capped at club carry)
-  chipCurve: 0.8,        // chip power easing (<1 dampens short-range input so a small misread = small distance error)
+  // Chip distance band: softest swipe flies chipReachLo×pin, hardest chipReachHi×pin (both
+  // capped at club carry). Tight band -> a chip is never very short or very far from the hole.
+  chipReachLo: 0.8,      // softest chip still flies 80% of the way to the pin
+  chipReachHi: 1.2,      // hardest chip flies 120% (never blows way past)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
   mousePuttScale: 0.75,    // extra putt scalar when swinging with a mouse (−25%; mouse flicks read faster)
   // Putt control band: most putts are short, but max power reaches YARDS.maxPutt (50yd).
@@ -25,8 +27,8 @@ const TUNE = {
   // distance (plays-like). f=0 -> Lo, f=0.5 -> ~1.0, f=1 -> Hi. Putting = aim, not pace.
   puttBandLo: 0.8,   // softest swipe still rolls 80% of the way (never more than 20% short)
   puttBandHi: 1.2,   // hardest swipe rolls 120% (never more than 20% long)
-  // Forgiveness: a full-swing club always flies ≥ clubMinFrac of its rated carry, so a
-  // misread weak stroke can't dribble. LW + putter + greenside chips keep full touch range.
+  // Forgiveness: every full-swing club (incl. LW) flies ≥ clubMinFrac of its rated carry, so a
+  // misread weak stroke can't dribble. Putter + greenside chips keep their own range/band.
   clubMinFrac: 0.70,
   // Pace forgiveness at the cup: a grounded putt that crosses near-dead-center at a good
   // (not rammed) pace is grabbed by the lip and drops, like real life. Off-center / faster
@@ -1025,23 +1027,23 @@ function launchShot(ang, frac, spin, onGreen) {
   } else {
     // full shot: follow the selected club's real arc, scaled by how full the swing is
     const c = TUNE.clubs[selectedClub];
-    // Greenside chip mode: when enabled and within range of the pin, map swing power to
-    // the pin distance with headroom — a FULL swipe flies ~chipHeadroom× the pin (pop, can
-    // clear trouble) so a full swing never feels weak; ease off to land at the flag, and you
-    // still can't blow it WAY past. Outside chip mode every club flies its rated carry at
-    // full swing. The club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
+    // Greenside chip mode: when enabled and within range of the pin, map swing power to a
+    // tight band around the pin — softest swipe flies chipReachLo×pin, hardest chipReachHi×pin
+    // (capped at club carry), so a chip is never very short or very far from the hole. Outside
+    // chip mode every club flies its rated carry at full swing, floored at clubMinFrac. The
+    // club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
     const toPin = HOLE.isRange ? Infinity
                 : dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
     const chipActive = chipEnabled && !HOLE.isRange && toPin < TUNE.chipRangeYds;
-    let ef = chipActive ? Math.min(1, (toPin * TUNE.chipHeadroom * f) / c.carry) : f;
+    let ef;
     if (chipActive) {
-      // Short-range dampening: soften the input→distance curve so a small misread
-      // moves the ball only a little in the touch zone.
-      ef = Math.pow(ef, TUNE.chipCurve);
-    } else if (selectedClub !== "lw") {
-      // Min power floor: a full-swing club (driver→SW) always flies ≥ clubMinFrac of
-      // its carry, so an imprecise weak read can't dribble it. LW stays full-touch.
-      ef = Math.max(ef, TUNE.clubMinFrac);
+      // Tight band: f=0 -> chipReachLo, f=1 -> chipReachHi of pin distance.
+      const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * f;
+      ef = Math.min(1, (toPin * reach) / c.carry);
+    } else {
+      // Min power floor for every full-swing club (incl. LW): an imprecise weak read can't
+      // dribble it — always flies ≥ clubMinFrac of its rated carry.
+      ef = Math.max(f, TUNE.clubMinFrac);
     }
     const C = (c.carry / YARDS_PER_UNIT) * ef;   // carry (world units)
     const H = (c.maxH / YARDS_PER_UNIT) * ef;     // apex height (scales with the swing)
@@ -4943,3 +4945,6 @@ loadManifest().then(() => {
   } catch (e) { console.warn("Auth boot failed:", e); }
   updateMenuPlayerLine();
 })();
+
+/* __TESTHOOK__ temporary — remove after putt pace verification */
+window.__T = { get s(){return state}, get H(){return HOLE}, get T(){return TUNE}, get ypu(){return YARDS_PER_UNIT}, get mode(){return mode}, setMode(m){mode=m}, launchShot, update, surfaceAt, playsLikeYards, dist };
