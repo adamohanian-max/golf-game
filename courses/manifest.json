@@ -513,5 +513,10 @@
     "id": "espiche-golf",
     "name": "Espiche Golf",
     "sub": "Par 72 · 18 holes · 37.12, -8.75"
+  },
+  {
+    "id": "faldo-course",
+    "name": "Faldo Course",
+    "sub": "Par 73 · 18 holes · 25.08, 55.16"
   }
 ]
