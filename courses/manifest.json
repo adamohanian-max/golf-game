@@ -298,5 +298,10 @@
     "id": "clandon-regis-golf-club",
     "name": "Clandon Regis Golf Club",
     "sub": "Par 72 · 18 holes · 51.26, -0.49"
+  },
+  {
+    "id": "club-de-golf-aloha",
+    "name": "Club de Golf Aloha",
+    "sub": "Par 72 · 18 holes · 36.51, -4.96"
   }
 ]
