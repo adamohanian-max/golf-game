@@ -643,5 +643,10 @@
     "id": "golf-de-s-nart",
     "name": "Golf de Sénart",
     "sub": "Par 71 · 18 holes · 48.62, 2.52"
+  },
+  {
+    "id": "golf-de-saint-cloud",
+    "name": "Golf de Saint-Cloud",
+    "sub": "Par 71 · 18 holes · 48.85, 2.18"
   }
 ]
