@@ -558,5 +558,10 @@
     "id": "glasgow-golf-club-gailes-links",
     "name": "Glasgow Golf Club / Gailes Links",
     "sub": "Par 71 · 18 holes · 55.60, -4.66"
+  },
+  {
+    "id": "glenrothes-golf-course",
+    "name": "Glenrothes Golf Course",
+    "sub": "Par 70 · 18 holes · 56.19, -3.21"
   }
 ]
