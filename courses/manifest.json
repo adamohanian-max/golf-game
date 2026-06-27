@@ -553,5 +553,10 @@
     "id": "galgorm-castle-golf-club",
     "name": "Galgorm Castle Golf Club",
     "sub": "Par 70 · 18 holes · 54.85, -6.31"
+  },
+  {
+    "id": "glasgow-golf-club-gailes-links",
+    "name": "Glasgow Golf Club / Gailes Links",
+    "sub": "Par 71 · 18 holes · 55.60, -4.66"
   }
 ]
