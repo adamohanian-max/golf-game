@@ -648,5 +648,10 @@
     "id": "golf-de-saint-cloud",
     "name": "Golf de Saint-Cloud",
     "sub": "Par 71 · 18 holes · 48.85, 2.18"
+  },
+  {
+    "id": "golf-de-saint-germain-en-laye",
+    "name": "Golf de Saint-Germain-en-Laye",
+    "sub": "Par 73 · 18 holes · 48.92, 2.05"
   }
 ]
