@@ -173,5 +173,10 @@
     "id": "bird-hills-golf-centre",
     "name": "Bird Hills Golf Centre",
     "sub": "Par 72 · 18 holes · 51.46, -0.75"
+  },
+  {
+    "id": "blackwood-golf-centre",
+    "name": "Blackwood Golf Centre",
+    "sub": "Par 71 · 18 holes · 54.63, -5.73"
   }
 ]
