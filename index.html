@@ -4,7 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="style.css?v=50">
+  <link rel="stylesheet" href="css/tokens.css?v=52">
+  <link rel="stylesheet" href="css/base.css?v=52">
+  <link rel="stylesheet" href="css/hud.css?v=52">
+  <link rel="stylesheet" href="css/menu.css?v=52">
+  <link rel="stylesheet" href="css/modals.css?v=52">
+  <link rel="stylesheet" href="css/tournament.css?v=52">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -42,7 +47,7 @@
     </div>
   </div>
 
-  <button id="hud-btn" class="hidden" aria-label="Controls">···</button>
+  <button id="hud-btn" class="hidden" aria-label="Controls"><span class="ic ic-menu"></span></button>
   <div id="hm-club-row" class="hidden">
     <button id="hm-club-up" class="hm-club-arrow" aria-label="Longer club">▲</button>
     <div id="hm-club-cur"><b id="hm-club-name">Driver</b><small id="hm-club-yds">282y</small></div>
@@ -50,24 +55,24 @@
   </div>
   <div id="hud-menu" class="hidden">
     <div id="hm-course-items">
-      <button class="hm-item active" id="hm-autoclb">🏌️ Auto club</button>
-      <button class="hm-item" id="hm-aim">⛳ Aim</button>
-      <button class="hm-item" id="hm-measure">📏 Range finder</button>
-      <button class="hm-item active" id="hm-slope">⛰ Slope</button>
-      <button class="hm-item active" id="hm-oob">🔴 OB areas</button>
-      <button class="hm-item" id="hm-wind">💨 Wind</button>
-      <button class="hm-item active" id="hm-autoaim">⛳ Auto-aim</button>
-      <button class="hm-item active" id="hm-chip">🪁 Chip mode</button>
-      <button class="hm-item" id="hm-slotted">🎯 Slotted mode</button>
-      <button class="hm-item" id="hm-card">📋 Scorecard</button>
+      <button class="hm-item active" id="hm-autoclb"><span class="ic ic-flag"></span>Auto club</button>
+      <button class="hm-item" id="hm-aim"><span class="ic ic-target"></span>Aim</button>
+      <button class="hm-item" id="hm-measure"><span class="ic ic-ruler"></span>Range finder</button>
+      <button class="hm-item active" id="hm-slope"><span class="ic ic-slope"></span>Slope</button>
+      <button class="hm-item active" id="hm-oob"><span class="ic ic-ob"></span>OB areas</button>
+      <button class="hm-item" id="hm-wind"><span class="ic ic-wind"></span>Wind</button>
+      <button class="hm-item active" id="hm-autoaim"><span class="ic ic-target"></span>Auto-aim</button>
+      <button class="hm-item active" id="hm-chip"><span class="ic ic-chip"></span>Chip mode</button>
+      <button class="hm-item" id="hm-slotted"><span class="ic ic-target"></span>Slotted mode</button>
+      <button class="hm-item" id="hm-card"><span class="ic ic-clipboard"></span>Scorecard</button>
       <div class="hm-sep"></div>
-      <button class="hm-item" id="hm-holes">☰ Select hole</button>
-      <button class="hm-item" id="hm-home">🏠 Home</button>
+      <button class="hm-item" id="hm-holes"><span class="ic ic-menu"></span>Select hole</button>
+      <button class="hm-item" id="hm-home"><span class="ic ic-home"></span>Home</button>
     </div>
   </div>
 
   <div id="hint">Swipe to swing · ← → to aim · ↑ ↓ club</div>
-  <div id="chip-ind" class="hidden">🪁 Chip · ease off for the flag</div>
+  <div id="chip-ind" class="hidden"><span class="ic ic-chip"></span>Chip · ease off for the flag</div>
 
   <div id="range-ui" class="hidden">
     <div class="range-row">
@@ -87,12 +92,13 @@
       <div id="course-list"></div>
       <button id="play-course" class="menu-btn">Play Course</button>
       <button id="play-range" class="menu-btn secondary">Driving Range</button>
-      <button id="open-leaderboard" class="menu-btn secondary">🏆 Leaderboard</button>
-      <button id="open-tournaments" class="menu-btn secondary">🏌️ Tournaments</button>
-      <button id="menu-add-course" class="menu-btn secondary hidden">➕ Add course</button>
-      <button id="menu-manage" class="menu-btn secondary hidden">🏁 Manage tournaments</button>
-      <button id="menu-admin" class="menu-btn secondary hidden">⚙️ Admin settings</button>
-      <button id="menu-player" class="menu-player">Player: <b id="menu-player-name">Set name</b> ✎</button>
+      <button id="open-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>Leaderboard</button>
+      <button id="open-tournaments" class="menu-btn secondary"><span class="ic ic-flag-checkered"></span>Tournaments</button>
+      <button id="open-account" class="menu-btn secondary hidden"><span class="ic ic-user"></span>My Account</button>
+      <button id="menu-add-course" class="menu-btn secondary hidden"><span class="ic ic-plus"></span>Add course</button>
+      <button id="menu-manage" class="menu-btn secondary hidden"><span class="ic ic-flag-checkered"></span>Manage tournaments</button>
+      <button id="menu-admin" class="menu-btn secondary hidden"><span class="ic ic-gear"></span>Admin settings</button>
+      <button id="menu-player" class="menu-player">Player: <b id="menu-player-name">Set name</b> <span class="ic ic-pencil"></span></button>
       <div id="menu-auth" class="menu-auth">
         <button id="menu-signin" class="menu-auth-link">Sign in / Create account</button>
         <span id="menu-account" class="menu-auth-account hidden">Signed in · <button id="menu-signout" class="menu-auth-link">Sign out</button></span>
@@ -125,11 +131,11 @@
         <div id="re-statslist"></div>
       </div>
       <div id="re-tournament-row" class="re-trn-row hidden">
-        <button id="re-tournament" class="menu-btn">🏆 Tournament</button>
+        <button id="re-tournament" class="menu-btn"><span class="ic ic-trophy"></span>Tournament</button>
       </div>
       <div class="re-actions">
         <button id="re-home" class="menu-btn secondary">Home</button>
-        <button id="re-leaderboard" class="menu-btn secondary">🏆 View leaderboard</button>
+        <button id="re-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>View leaderboard</button>
         <button id="re-replay" class="menu-btn">Play Again</button>
       </div>
     </div>
@@ -137,7 +143,7 @@
 
   <div id="leaderboard" class="hidden">
     <div class="lb-box">
-      <h2>🏆 Leaderboard</h2>
+      <h2><span class="ic ic-trophy"></span>Leaderboard</h2>
       <select id="lb-course" class="lb-course"></select>
       <div class="lb-table-wrap">
         <table class="lb-table">
@@ -147,6 +153,17 @@
         <div id="lb-empty" class="lb-empty hidden"></div>
       </div>
       <button id="lb-close" class="menu-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="account-viewer" class="hidden">
+    <div class="ne-box av-box">
+      <h2><span class="ic ic-user"></span>My Account</h2>
+      <div id="av-body"></div>
+      <div class="ne-actions">
+        <button id="av-signout" class="menu-btn secondary">Sign out</button>
+        <button id="av-close" class="menu-btn">Close</button>
+      </div>
     </div>
   </div>
 
@@ -188,7 +205,7 @@
         </div>
       </div>
       <div id="auth-sent" class="hidden">
-        <h2>Check your email 📬</h2>
+        <h2>Check your email <span class="ic ic-mail"></span></h2>
         <p class="ne-sub">We sent a login code to <b id="auth-sent-email"></b>. Enter it below.</p>
         <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Code from email" autocapitalize="off" autocorrect="off">
         <div id="auth-code-error" class="auth-error hidden"></div>
@@ -202,7 +219,7 @@
 
   <div id="admin-settings" class="hidden">
     <div class="ne-box">
-      <h2>⚙️ Admin settings</h2>
+      <h2><span class="ic ic-gear"></span>Admin settings</h2>
       <p class="ne-sub">Global game defaults. Applies to every player, and is snapshotted into any tournament you start.</p>
       <div id="admin-toggles" class="admin-toggles"></div>
       <div id="admin-status" class="ne-sub"></div>
@@ -215,7 +232,7 @@
 
   <div id="tournament-lobby" class="hidden">
     <div class="lb-box">
-      <h2>🏌️ Tournaments</h2>
+      <h2><span class="ic ic-flag-checkered"></span>Tournaments</h2>
       <div id="tl-name" class="tl-name"></div>
       <div id="tl-status" class="tl-status"></div>
       <div id="tl-timer" class="tl-timer"></div>
@@ -228,7 +245,7 @@
 
   <div id="tournament-cut" class="hidden">
     <div class="lb-box">
-      <h2>✂️ The Cut</h2>
+      <h2><span class="ic ic-scissors"></span>The Cut</h2>
       <div id="tc-field-count" class="tl-status"></div>
       <div id="tc-status" class="tc-status"></div>
       <div class="lb-table-wrap">
@@ -244,7 +261,7 @@
 
   <div id="tournament-final" class="hidden">
     <div class="lb-box">
-      <h2 id="tf-title">🏆 Tournament Final</h2>
+      <h2 id="tf-title"><span class="ic ic-trophy"></span>Tournament Final</h2>
       <div class="lb-table-wrap">
         <table class="lb-table">
           <thead><tr><th></th><th>Player</th><th>Score</th></tr></thead>
@@ -258,7 +275,7 @@
 
   <div id="tournament-admin" class="hidden">
     <div class="lb-box tm-box">
-      <h2 id="tm-title">🏁 Manage Tournaments</h2>
+      <h2 id="tm-title"><span class="ic ic-flag-checkered"></span>Manage Tournaments</h2>
       <div id="tm-status" class="tl-status"></div>
       <div id="tm-body"></div>
       <button id="tm-close" class="menu-btn secondary" style="margin-top:10px">Close</button>

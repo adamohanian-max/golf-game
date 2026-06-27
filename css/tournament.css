@@ -1,0 +1,109 @@
+/* ============================================================
+   Tournament overlays — lobby, cut, final, admin manage.
+   Reuse .lb-box layout (css/modals.css) inside these scrims.
+   ============================================================ */
+
+#tournament-lobby,
+#tournament-cut,
+#tournament-final,
+#tournament-admin {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  background: var(--surface-scrim);
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  backdrop-filter: blur(var(--blur-sm));
+  z-index: 30;
+}
+#tournament-lobby.hidden,
+#tournament-cut.hidden,
+#tournament-final.hidden,
+#tournament-admin.hidden { display: none; }
+
+/* ---- Lobby ------------------------------------------------ */
+.tl-name {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: var(--fw-black);
+  text-align: center;
+  margin-bottom: var(--s-1);
+  min-height: 22px;
+}
+.tl-status {
+  color: var(--text-dim);
+  font-size: var(--t-cap);
+  text-align: center;
+  margin-bottom: var(--s-1);
+  min-height: 18px;
+}
+.tl-timer {
+  color: var(--accent-bright);
+  font-size: 14px;
+  font-weight: var(--fw-bold);
+  text-align: center;
+  margin-bottom: var(--s-3);
+  font-variant-numeric: tabular-nums;
+  min-height: 20px;
+}
+.tl-field {
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+  margin-bottom: var(--s-4);
+  min-height: 16px;
+}
+.tl-rounds { display: flex; flex-direction: column; gap: var(--s-2); margin-bottom: var(--s-2); }
+.tl-rounds .menu-btn { margin: 0; }
+.tl-rounds .menu-btn[disabled] { opacity: 0.4; pointer-events: none; }
+#tl-start.hidden { display: none; }
+.tl-missed { text-align: center; color: var(--text-dim); font-size: 14px; padding: var(--s-3) 0; }
+
+/* ---- Cut results ------------------------------------------ */
+.tc-status {
+  text-align: center;
+  font-size: var(--t-body);
+  font-weight: var(--fw-bold);
+  padding: var(--s-3) 0 6px;
+  margin-bottom: var(--s-2);
+}
+.tc-status.tc-made { color: var(--accent-bright); }
+.tc-status.tc-missed { color: var(--status-under); }
+.lb-table .tc-row-made td { color: var(--w-85); }
+.lb-table .tc-row-missed td { color: var(--text-faint); }
+.lb-table .tc-me td { background: var(--accent-soft); }
+.lb-table .tc-badge { text-align: right; width: 26px; font-size: 13px; }
+
+/* ---- Tournament admin / manage ---------------------------- */
+.tm-box { max-height: 88vh; overflow-y: auto; text-align: left; }
+#tm-body { display: flex; flex-direction: column; gap: var(--s-1); }
+.tm-new { display: flex; gap: var(--s-2); margin-bottom: var(--s-3); }
+.tm-new select { flex: 1; border-radius: var(--r-sm); padding: var(--s-3); background: var(--surface-raised); color: var(--text); border: var(--border-edge); }
+.tm-new .menu-btn { width: auto; margin: 0; padding: var(--s-3) var(--s-4); }
+.tm-list { display: flex; flex-direction: column; gap: var(--s-2); }
+.tm-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: var(--s-3) var(--s-4); border: var(--border-hair); border-radius: var(--r-md); background: var(--w-05); color: var(--text); cursor: pointer; text-align: left; }
+.tm-row:active { transform: scale(0.99); }
+.tm-row-name { font-weight: var(--fw-bold); font-size: var(--t-body); }
+.tm-row-sub { font-size: 12px; opacity: 0.65; }
+.tm-back { background: none; border: none; color: var(--accent-bright); font-size: 14px; cursor: pointer; padding: var(--s-1) 0; text-align: left; margin-bottom: 6px; }
+.tm-sec { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) 0; border-top: 1px solid var(--w-12); }
+.tm-lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
+.tm-sec input[type=text], .tm-sec input[type=number] { border-radius: var(--r-sm); padding: var(--s-3); background: var(--surface-raised); color: #fff; border: var(--border-edge); }
+.tm-times { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: center; gap: var(--s-2); color: var(--text); font-size: 14px; }
+.tm-times input { width: 100%; }
+.tm-deadlines { font-size: 11px; opacity: 0.6; color: var(--text); }
+.tm-save { width: auto; align-self: flex-start; margin: 0; padding: 9px var(--s-4); font-size: 14px; }
+.tm-players { display: flex; flex-direction: column; gap: var(--s-2); }
+.tm-player { display: grid; grid-template-columns: 1fr auto; gap: var(--s-1) var(--s-3); align-items: center; padding: var(--s-2) var(--s-3); border: 1px solid var(--w-12); border-radius: var(--r-sm); }
+.tm-player-main { color: var(--text); font-size: 14px; }
+.tm-player-rds { grid-column: 1; display: flex; gap: 6px; align-items: center; }
+.tm-rd { font-size: 11px; color: var(--text-faint); }
+.tm-rd.done { color: var(--accent-bright); }
+.tm-topar { color: var(--text); font-weight: var(--fw-bold); font-size: 13px; margin-left: var(--s-1); }
+.tm-cut { color: var(--accent-bright); font-size: 11px; }
+.tm-dq { grid-row: 1 / span 2; grid-column: 2; background: rgba(255,90,82,0.14); border: 1px solid rgba(255,90,82,0.4); color: #ff7a73; border-radius: var(--s-2); padding: 6px var(--s-3); font-size: 12px; cursor: pointer; }
+.tm-danger { flex-direction: row; gap: var(--s-2); }
+.tm-danger .menu-btn { margin: 0; }
+.tm-del { color: #ff7a73; border-color: rgba(255,90,82,0.4); }

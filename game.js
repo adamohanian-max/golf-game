@@ -439,11 +439,14 @@ function ballisticFlightStep(b) {
     const down = -b.vz; // downward speed at impact
     if (surf === "water" || surf === "woods") {
       // splash / into the trees — kill it here; roll-stop applies the penalty
+      playLand(surf, down);
+      spawnBurst(b.x, b.y, surf === "water" ? "splash" : "dust");
       b.vx = b.vy = b.vz = 0;
       state.airborne = false;
     } else if (down > TUNE.bounceStopVz) {
       const bo = TUNE.bounce[surf] || TUNE.bounce.fairway;
       haptic(Math.max(2, Math.round(down * 35)));  // intensity scales with impact speed
+      if (!shot._landed) { playLand(surf, down); spawnBurst(b.x, b.y, "dust"); shot._landed = true; }
       b.vz = down * bo.e;   // bounce back up
       b.vx *= bo.h;         // scrub/grab forward speed
       b.vy *= bo.h;
@@ -534,6 +537,12 @@ function rollStep(b) {
         return;
       } else {
         // lip-out: too fast to drop — the ball catches the rim and rolls past.
+        if (!state._lippedThisShot) {   // fire the sting once per shot
+          state._lippedThisShot = true;
+          playNearMiss();
+          cameraPunch(0.018);
+          showToast("So close! 😣");
+        }
         const spd = Math.hypot(b.vx, b.vy) || 0.01;
         const dx = b.vx / spd, dy = b.vy / spd;
         // place ball just past the far lip so it exits the capture zone this frame
@@ -656,6 +665,89 @@ function playHolePlunk() {
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
   o.connect(g).connect(ac.destination);
   o.start(t + 0.06); o.stop(t + 0.36);
+}
+
+// --- Mute (every synth SFX honours this). Persisted so it survives reloads. ---
+let muted = (() => { try { return localStorage.getItem("golf.muted") === "1"; } catch (e) { return false; } })();
+function setMuted(m) { muted = !!m; try { localStorage.setItem("golf.muted", m ? "1" : "0"); } catch (e) {} }
+
+// Lazy white-noise buffer reused for "crack"/splash textures.
+let _noiseBuf = null;
+function noiseBuffer(ac) {
+  if (_noiseBuf) return _noiseBuf;
+  const n = Math.floor(ac.sampleRate * 0.25);
+  const buf = ac.createBuffer(1, n, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  _noiseBuf = buf; return buf;
+}
+// One decaying oscillator note (optionally pitch-sweeping to freqEnd).
+function tone(ac, when, freq, dur, vol, type = "sine", freqEnd) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, when);
+  if (freqEnd) o.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), when + dur);
+  g.gain.setValueAtTime(0, when);
+  g.gain.linearRampToValueAtTime(vol, when + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0006, when + dur);
+  o.connect(g).connect(ac.destination);
+  o.start(when); o.stop(when + dur + 0.02);
+}
+// One filtered noise burst (the "texture" layer for impacts/splashes).
+function noiseHit(ac, when, dur, vol, hp) {
+  const src = ac.createBufferSource(); src.buffer = noiseBuffer(ac);
+  const g = ac.createGain(), f = ac.createBiquadFilter();
+  f.type = "highpass"; f.frequency.value = hp || 400;
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.0006, when + dur);
+  src.connect(f).connect(g).connect(ac.destination);
+  src.start(when); src.stop(when + dur + 0.02);
+}
+// Crisp "crack" off the clubface — brighter/louder with swing power (0..1).
+function playStrike(power) {
+  if (muted) return; const ac = ensureAudio(); if (!ac) return;
+  const t = ac.currentTime, p = Math.max(0.2, Math.min(1, power || 0.6));
+  noiseHit(ac, t, 0.05, 0.22 * p, 1200 + 2600 * p);
+  tone(ac, t, 220 + 120 * p, 0.06, 0.10 * p, "square", 90);
+}
+// Soft tap of a putt.
+function playPutt() {
+  if (muted) return; const ac = ensureAudio(); if (!ac) return;
+  const t = ac.currentTime;
+  tone(ac, t, 300, 0.05, 0.09, "sine", 160);
+  noiseHit(ac, t, 0.03, 0.05, 800);
+}
+// Landing — soft thud on turf, deeper splash in water. `speed` = downward pace.
+function playLand(surface, speed) {
+  if (muted) return; const ac = ensureAudio(); if (!ac) return;
+  const t = ac.currentTime, v = Math.max(0.15, Math.min(1, (speed || 0.05) * 12));
+  if (surface === "water" || surface === "woods") {
+    noiseHit(ac, t, 0.22, 0.16 * v, 300);
+    tone(ac, t, 180, 0.18, 0.09, "sine", 80);
+  } else {
+    noiseHit(ac, t, 0.06, 0.09 * v, 250);
+    tone(ac, t, 110, 0.07, 0.07 * v, "sine", 70);
+  }
+}
+// "Aww" — a putt rims the cup and stays out. Near-miss = motivating sting.
+function playNearMiss() {
+  if (muted) return; const ac = ensureAudio(); if (!ac) return;
+  const t = ac.currentTime;
+  tone(ac, t, 520, 0.10, 0.10, "triangle");          // rim tick
+  tone(ac, t + 0.04, 660, 0.34, 0.11, "sine", 300);  // descending sigh
+}
+// Celebration arpeggio — longer + higher the better the hole (0 par … 4 ace).
+function playCelebrate(level) {
+  if (muted) return; const ac = ensureAudio(); if (!ac) return;
+  const t = ac.currentTime;
+  const scales = [
+    [392],                          // 0: par
+    [523, 659],                     // 1: birdie
+    [523, 659, 784],                // 2: eagle
+    [523, 659, 784, 1047],          // 3: albatross
+    [523, 659, 784, 1047, 1319],    // 4: ace
+  ];
+  const notes = scales[Math.max(0, Math.min(4, level))];
+  notes.forEach((f, i) => tone(ac, t + i * 0.085, f, 0.28, 0.15, "triangle"));
 }
 
 // Light haptic. navigator.vibrate is Android-only (iOS Safari has NO web vibration
@@ -793,8 +885,9 @@ function launchShot(ang, frac, spin, onGreen) {
   if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
   const b = state.ball;
   shot.startX = b.x; shot.startY = b.y;
-  shot.carry = null; shot.total = null; shot.carried = onGreen;
+  shot.carry = null; shot.total = null; shot.carried = onGreen; shot._landed = false;
   state.flight = null;
+  state._lippedThisShot = false;
   const f = Math.min(frac, 1);
   // Putter mode: on the green (normal putt) OR player manually selected putter off-green
   // (bump-and-run). Both stay on the deck; power scale differs to account for surface friction.
@@ -835,6 +928,7 @@ function launchShot(ang, frac, spin, onGreen) {
   }
   state.moving = true;
   haptic(usePutter ? 3 : 9);  // light tick for putter, firm buzz for full shot
+  if (usePutter) playPutt(); else playStrike(f);  // crack/tap on contact
   if (onGreen) {
     state.putts++;
   } else {
@@ -996,7 +1090,7 @@ function snapCamera() {
 // world->screen affine: screen = scale * R(angle) * (world - focus) + screenCenter.
 function applyView() {
   const cssW = window.innerWidth, cssH = window.innerHeight;
-  const s = camera.scale, cos = Math.cos(camera.angle), sin = Math.sin(camera.angle);
+  const s = camera.scale * (1 + camPunch), cos = Math.cos(camera.angle), sin = Math.sin(camera.angle);
   view.scale = s; view.angle = camera.angle;
   view.a = s * cos; view.b = -s * sin;
   view.d = s * sin; view.e = s * cos;
@@ -1022,6 +1116,7 @@ function updateCamera() {
   camera.focus.x += (camera.tFocus.x - camera.focus.x) * s;
   camera.focus.y += (camera.tFocus.y - camera.focus.y) * s;
   camera.scale += (camera.tScale - camera.scale) * s;
+  if (camPunch > 0.0005) camPunch *= 0.82; else camPunch = 0;  // ease the punch back
   applyView();
 }
 
@@ -1565,6 +1660,66 @@ function drawPhotoSurfaces() {
 let ballTrail = [];   // recent airborne ball positions (screen px) for motion trail
 let _vignette = null; // cached edge-darkening gradient, keyed to viewport size
 
+// --- Juice: particles + camera punch + toast --------------------------------
+// Particles live in WORLD coords so they ride the camera (rotation/zoom) like
+// everything else; drawn via wx/wy each frame, culled when life runs out.
+let particles = [];
+function spawnBurst(x, y, kind) {
+  const N = kind === "confetti" ? 46 : kind === "splash" ? 18 : 10;
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = (kind === "confetti" ? 0.10 + Math.random() * 0.22
+              : kind === "splash" ? 0.06 + Math.random() * 0.14
+              : 0.03 + Math.random() * 0.08);
+    let color;
+    if (kind === "confetti") color = `hsl(${Math.floor(Math.random() * 360)},90%,62%)`;
+    else if (kind === "splash") color = "rgba(150,200,255,0.9)";
+    else color = "rgba(210,196,160,0.85)"; // dust
+    particles.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - (kind === "dust" ? 0 : 0.04),
+      life: 1, decay: 0.012 + Math.random() * 0.02,
+      size: kind === "confetti" ? 2.4 + Math.random() * 2.4 : 1.6 + Math.random() * 1.6,
+      color, grav: kind === "dust" ? 0.0005 : 0.0016,
+    });
+  }
+  if (particles.length > 400) particles.splice(0, particles.length - 400);
+}
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += p.grav; p.vx *= 0.985; p.vy *= 0.985;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+function drawParticles() {
+  for (const p of particles) {
+    const sx = wx(p.x, p.y), sy = wy(p.x, p.y);
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(sx, sy, p.size, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Camera punch: a brief zoom-in bump that eases back (decays in updateCamera),
+// applied on top of camera.scale in applyView. Subtle — research warns against
+// over-juicing.
+let camPunch = 0;
+function cameraPunch(amt) { camPunch = Math.max(camPunch, amt || 0.03); }
+
+// Lightweight transient toast (reuses a single DOM node).
+let _toastTimer = null;
+function showToast(text, ms) {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove("hidden");
+  el.classList.add("show");
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.classList.remove("show"); el.classList.add("hidden"); }, ms || 1600);
+}
+
 function drawWindIndicator() {
   if (!HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) return;
   const cssW = window.innerWidth;
@@ -1802,6 +1957,10 @@ function draw() {
     }
   }
 
+  // celebration / impact particles (above the play surface + ball)
+  updateParticles();
+  drawParticles();
+
   // vignette — darken edges to draw the eye toward the hole
   if (!_vignette || _vignette.w !== cssW || _vignette.h !== cssH) {
     const g = ctx.createRadialGradient(cssW / 2, cssH * 0.45, Math.min(cssW, cssH) * 0.35,
@@ -1897,11 +2056,56 @@ function updateScorecard() {
 }
 function hideHint() { elHint.classList.add("hidden"); }
 
+// =====================================================================
+//  Personal bests + milestones (localStorage — no server, works offline)
+// =====================================================================
+function lsGet(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return fallback; }
+}
+function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+
+function getBests() { return lsGet("golf.bests", { perCourse: {}, perHole: {} }); }
+function setBests(b) { lsSet("golf.bests", b); }
+// The course these bests belong to (daily uses its real underlying course id).
+function bestsCourseId() { return (course && course.id) || selectedCourseId || "fallback"; }
+
+// Compare this hole's strokes to the stored best; update + report {isBest, prev}.
+function recordHoleBest(holeNum, strokes) {
+  const b = getBests();
+  const key = bestsCourseId() + ":" + holeNum;
+  const prev = b.perHole[key];
+  const isBest = prev == null || strokes < prev;
+  if (isBest) { b.perHole[key] = strokes; setBests(b); }
+  return { isBest, prev };
+}
+// Same for a whole round (by to-par; strokes breaks ties).
+function recordCourseBest(toPar, strokes) {
+  const b = getBests();
+  const key = bestsCourseId();
+  const prev = b.perCourse[key];
+  const isBest = !prev || toPar < prev.toPar || (toPar === prev.toPar && strokes < prev.strokes);
+  if (isBest) { b.perCourse[key] = { toPar, strokes, date: new Date().toISOString().slice(0, 10) }; setBests(b); }
+  return { isBest, prev };
+}
+function courseBest(id) { return getBests().perCourse[id || bestsCourseId()] || null; }
+
+// First-time milestones — fire a toast once, then remember.
+function getMilestones() { return lsGet("golf.milestones", {}); }
+function earnMilestone(id) {
+  const m = getMilestones();
+  if (m[id]) return false;
+  m[id] = new Date().toISOString().slice(0, 10);
+  lsSet("golf.milestones", m);
+  return true;
+}
+
 function showResult() {
   const d = state.strokes - HOLE.par;
+  const holeNum = HOLE.num || round.holesPlayed + 1;
   // Record per-hole stats
   round.holeStats.push({
-    hole: HOLE.num || round.holesPlayed + 1,
+    hole: holeNum,
     par: HOLE.par,
     strokes: state.strokes,
     gir: state.gir,
@@ -1916,10 +2120,43 @@ function showResult() {
   const names = { "-3": "Albatross!", "-2": "Eagle!", "-1": "Birdie!",
                   "0": "Par", "1": "Bogey", "2": "Double bogey" };
   const title = state.strokes === 1 ? "Hole in one!" : (names[String(d)] || (d > 0 ? "+" + d : d));
-  document.getElementById("result-title").textContent = title;
-  document.getElementById("result-detail").textContent =
-    `${state.strokes} stroke${state.strokes === 1 ? "" : "s"} · ${formatToPar(d)} this hole · ${formatToPar(round.score)} total`;
+
+  // Escalating celebration level: 0 par/worse · 1 birdie · 2 eagle · 3 albatross · 4 ace
+  let level = 0;
+  if (state.strokes === 1) level = 4;
+  else if (d <= -3) level = 3;
+  else if (d === -2) level = 2;
+  else if (d === -1) level = 1;
+
+  // Personal best on this hole (skip the range; daily/course both count)
+  const hb = HOLE.isRange ? { isBest: false } : recordHoleBest(holeNum, state.strokes);
+
+  const titleEl = document.getElementById("result-title");
+  titleEl.textContent = title;
+  titleEl.className = "rt-l" + level + (hb.isBest ? " rt-best" : "");
+
+  let detail = `${state.strokes} stroke${state.strokes === 1 ? "" : "s"} · ${formatToPar(d)} this hole · ${formatToPar(round.score)} total`;
+  if (hb.isBest && hb.prev != null) detail += `\n🏆 New best on this hole! (was ${hb.prev})`;
+  else if (hb.isBest && hb.prev == null && !HOLE.isRange) detail += `\n⛳ First time on this hole — best set`;
+  else if (hb.prev != null) detail += `\nYour best: ${hb.prev}` + (state.strokes > hb.prev ? ` — ${state.strokes - hb.prev} to beat` : "");
+  document.getElementById("result-detail").textContent = detail;
   elResult.classList.remove("hidden");
+
+  // Juice: sound + confetti + camera punch scaled to the moment
+  if (level >= 1) {
+    playCelebrate(level);
+    cameraPunch(0.02 + 0.012 * level);
+    const hp = HOLE.holePos;
+    spawnBurst(hp.x, hp.y, "confetti");
+    if (level >= 3) { spawnBurst(hp.x, hp.y, "confetti"); spawnBurst(hp.x, hp.y, "confetti"); }
+  }
+
+  // First-time milestone toasts (once ever, per device)
+  let ms = null;
+  if (level === 4 && earnMilestone("first-ace")) ms = "🏆 First hole-in-one!";
+  else if (level >= 2 && earnMilestone("first-eagle")) ms = "🦅 First eagle!";
+  else if (level === 1 && earnMilestone("first-birdie")) ms = "🐦 First birdie!";
+  if (ms) setTimeout(() => showToast(ms, 2200), 400);
 }
 
 document.getElementById("play-again").addEventListener("click", () => {
@@ -2060,6 +2297,22 @@ function showRoundSummary(midRound = false) {
   document.getElementById("re-tournament-row").classList.add("hidden");
   document.getElementById("round-end").classList.remove("hidden");
   if (!midRound) {
+    // Personal best for the whole round → the "one more round" return hook.
+    if (!dailyMode) {
+      const cb = recordCourseBest(round.score, totStrk);
+      const sub = document.getElementById("re-subtitle");
+      if (cb.isBest && cb.prev) {
+        sub.textContent += ` · 🏆 New best! (was ${formatToPar(cb.prev.toPar)})`;
+        spawnBurst(HOLE.holePos.x, HOLE.holePos.y, "confetti");
+        setTimeout(() => showToast("🏆 New course record!", 2400), 300);
+      } else if (cb.isBest) {
+        sub.textContent += " · 🏆 First record set";
+      } else if (cb.prev) {
+        const diff = round.score - cb.prev.toPar;
+        sub.textContent += ` · Best ${formatToPar(cb.prev.toPar)}` + (diff > 0 ? ` (${diff} to beat)` : "");
+      }
+    }
+    if (dailyMode) finishDaily(totStrk);  // streak + share + daily board
     submitFinishedRound();                // post to regular leaderboard
     handleTournamentRoundComplete();      // post to tournament (no-op if not in tournament)
   }
@@ -2248,7 +2501,9 @@ function buildCourseList() {
     const b = document.createElement("button");
     b.className = "course-opt" + (c.id === selectedCourseId ? " selected" : "");
     b.dataset.id = c.id;
-    b.innerHTML = `<span class="course-opt-name">${c.name}</span><span class="course-opt-sub">${c.sub}</span>`;
+    const best = courseBest(c.id);
+    const bestBadge = best ? `<span class="course-opt-best">🏆 Best ${formatToPar(best.toPar)}</span>` : "";
+    b.innerHTML = `<span class="course-opt-name">${c.name}</span><span class="course-opt-sub">${c.sub}</span>${bestBadge}`;
     b.addEventListener("click", () => {
       selectedCourseId = c.id;
       host.querySelectorAll(".course-opt").forEach((el) => el.classList.toggle("selected", el.dataset.id === c.id));
@@ -2459,14 +2714,14 @@ if (elChipBtn) elChipBtn.addEventListener("click", () => setChip(!chipEnabled));
 //  player faces the same conditions. Each def maps a key <-> live state.
 // =====================================================================
 const SETTING_DEFS = [
-  { key: "autoClub",    label: "🏌️ Auto club",      get: () => autoClubEnabled, set: (v) => setAutoClub(v) },
-  { key: "autoAim",     label: "⛳ Auto-aim at pin", get: () => autoAimEnabled,  set: (v) => setAutoAim(v) },
-  { key: "wind",        label: "💨 Wind",            get: () => windEnabled,     set: (v) => setWind(v) },
-  { key: "slope",       label: "⛰ Slope lines",     get: () => showSlope,       set: (v) => setSlopeMode(v) },
-  { key: "oob",         label: "🔴 OB areas",        get: () => showOOB,         set: (v) => setOOBMode(v) },
-  { key: "rangefinder", label: "📏 Range finder",    get: () => measureMode,     set: (v) => setMeasureMode(v) },
-  { key: "slotted",     label: "🎯 Slotted mode",    get: () => slottedMode,     set: (v) => setSlotted(v) },
-  { key: "chip",        label: "🪁 Chip mode",       get: () => chipEnabled,     set: (v) => setChip(v) },
+  { key: "autoClub",    label: "Auto club",      icon: "ic-flag",   get: () => autoClubEnabled, set: (v) => setAutoClub(v) },
+  { key: "autoAim",     label: "Auto-aim at pin", icon: "ic-target", get: () => autoAimEnabled,  set: (v) => setAutoAim(v) },
+  { key: "wind",        label: "Wind",            icon: "ic-wind",   get: () => windEnabled,     set: (v) => setWind(v) },
+  { key: "slope",       label: "Slope lines",     icon: "ic-slope",  get: () => showSlope,       set: (v) => setSlopeMode(v) },
+  { key: "oob",         label: "OB areas",        icon: "ic-ob",     get: () => showOOB,         set: (v) => setOOBMode(v) },
+  { key: "rangefinder", label: "Range finder",    icon: "ic-ruler",  get: () => measureMode,     set: (v) => setMeasureMode(v) },
+  { key: "slotted",     label: "Slotted mode",    icon: "ic-target", get: () => slottedMode,     set: (v) => setSlotted(v) },
+  { key: "chip",        label: "Chip mode",       icon: "ic-chip",   get: () => chipEnabled,     set: (v) => setChip(v) },
 ];
 // Effective defaults: hardcoded fallback until the global row loads.
 // Immutable fallback for each setting — used when a saved/loaded settings row
@@ -2497,7 +2752,7 @@ function renderAdminToggles() {
   for (const d of SETTING_DEFS) {
     const row = document.createElement("button");
     row.className = "admin-toggle" + (_adminDraft[d.key] ? " active" : "");
-    row.textContent = (_adminDraft[d.key] ? "ON  " : "OFF  ") + d.label;
+    row.innerHTML = '<span class="ic ' + d.icon + '"></span>' + d.label;
     row.onclick = () => { _adminDraft[d.key] = !_adminDraft[d.key]; renderAdminToggles(); };
     host.appendChild(row);
   }
@@ -2917,6 +3172,8 @@ function updateAuthUI() {
   const on = isLoggedIn();
   signin.classList.toggle("hidden", on);
   account.classList.toggle("hidden", !on);
+  const acctBtn = document.getElementById("open-account");
+  if (acctBtn) acctBtn.classList.toggle("hidden", !on);
   const adminBtn = document.getElementById("menu-admin");
   if (adminBtn) adminBtn.classList.toggle("hidden", !isTournamentAdmin());
   const manageBtn = document.getElementById("menu-manage");
@@ -3278,6 +3535,217 @@ function closeLeaderboard() {
   if (_lbReturn === "round-end") document.getElementById("round-end").classList.remove("hidden");
 }
 
+// =====================================================================
+//  Account viewer — personal stats dashboard (logged-in only).
+//  All numbers are computed client-side from rows already stored in
+//  Supabase (rounds + tournament_rounds), keyed by the account user_id.
+// =====================================================================
+function courseName(id) {
+  const c = COURSES.find((c) => c.id === id);
+  return c ? c.name : id;
+}
+
+async function fetchMyRounds() {
+  const u = currentUser();
+  if (!LB_ON() || !u) return [];
+  const q = "/rest/v1/rounds?user_id=eq." + encodeURIComponent(u.id) +
+            "&order=created_at.desc&limit=500";
+  const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return await res.json();
+}
+
+async function fetchMyTournamentRounds() {
+  const u = currentUser();
+  if (!LB_ON() || !u) return [];
+  const q = "/rest/v1/tournament_rounds?user_id=eq." + encodeURIComponent(u.id) +
+            "&order=submitted_at.desc&limit=200";
+  const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+  if (!res.ok) return [];
+  return await res.json();
+}
+
+// Aggregate a player's rounds into the dashboard numbers.
+function computeMyStats(rounds) {
+  const n = rounds.length;
+  const s = {
+    rounds: n, courses: 0, totalStrokes: 0,
+    avgToPar: null, best: null, handicap: null,
+    avgPutts: null, girPct: null, firPct: null, avgProx: null,
+    byCourse: [],
+  };
+  if (!n) return s;
+
+  const courseSet = new Set();
+  let parSum = 0, strokeSum = 0;
+  let puttSum = 0, puttN = 0;
+  let girHit = 0, girHoles = 0;
+  let firHit = 0, firHoles = 0;
+  let proxSum = 0, proxN = 0;
+  const byCourse = new Map();   // course_id -> best row
+
+  for (const r of rounds) {
+    courseSet_add(courseSet, r.course_id);
+    parSum += r.to_par || 0;
+    strokeSum += r.strokes || 0;
+    if (r.putts != null) { puttSum += r.putts; puttN++; }
+    if (r.gir != null && r.hole_count) { girHit += r.gir; girHoles += r.hole_count; }
+    if (r.fir != null && r.fir_holes) { firHit += r.fir; firHoles += r.fir_holes; }
+    if (r.prox_ft != null) { proxSum += r.prox_ft; proxN++; }
+    if (!s.best || r.to_par < s.best.to_par ||
+        (r.to_par === s.best.to_par && (r.strokes || 0) < (s.best.strokes || 0))) s.best = r;
+    const b = byCourse.get(r.course_id);
+    if (!b || r.to_par < b.to_par || (r.to_par === b.to_par && (r.strokes || 0) < (b.strokes || 0)))
+      byCourse.set(r.course_id, r);
+  }
+
+  s.courses = courseSet.size;
+  s.totalStrokes = strokeSum;
+  s.avgToPar = parSum / n;
+  if (puttN) s.avgPutts = puttSum / puttN;
+  if (girHoles) s.girPct = (girHit / girHoles) * 100;
+  if (firHoles) s.firPct = (firHit / firHoles) * 100;
+  if (proxN) s.avgProx = proxSum / proxN;
+
+  // Handicap estimate: avg of the best 8 to-par of the most recent 20 rounds.
+  const recent = rounds.slice(0, 20).map((r) => r.to_par || 0).sort((a, b) => a - b);
+  const take = Math.max(1, Math.min(8, recent.length));
+  s.handicap = recent.slice(0, take).reduce((a, b) => a + b, 0) / take;
+
+  s.byCourse = [...byCourse.values()].sort((a, b) => a.to_par - b.to_par);
+  return s;
+}
+function courseSet_add(set, id) { if (id) set.add(id); }
+
+function fmtAvg(v, d) { return v == null ? "—" : v.toFixed(d == null ? 1 : d); }
+function fmtSignedAvg(v) { return v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(1); }
+function dateShort(iso) {
+  if (!iso) return "";
+  const dt = new Date(iso);
+  return isNaN(dt) ? "" : (dt.getMonth() + 1) + "/" + dt.getDate() + "/" + String(dt.getFullYear()).slice(2);
+}
+function toparCell(v) {
+  const cls = v < 0 ? "under" : v > 0 ? "over" : "even";
+  return `<span class="${cls}">${formatToPar(v)}</span>`;
+}
+
+function renderAccount(stats, trounds) {
+  const body = document.getElementById("av-body");
+  if (!body) return;
+  const u = currentUser();
+  const name = getPlayerName() || "—";
+  const email = u ? u.email : "";
+  const joined = _profile && _profile.created_at ? dateShort(_profile.created_at) : "";
+  const adminBadge = isTournamentAdmin() ? ` <span class="av-badge">ADMIN</span>` : "";
+
+  const idHtml = `
+    <div class="av-id">
+      <div class="av-name">${escapeHTML(name)} <button id="av-editname" class="av-edit" title="Edit name"><span class="ic ic-pencil"></span></button>${adminBadge}</div>
+      ${email ? `<div class="av-email">${escapeHTML(email)}</div>` : ""}
+      ${joined ? `<div class="av-joined">Member since ${joined}</div>` : ""}
+    </div>`;
+
+  if (!stats.rounds) {
+    body.innerHTML = idHtml + `<div class="av-empty">No rounds yet — play one and your stats appear here.</div>`;
+    wireAvEditName();
+    return;
+  }
+
+  const cell = (label, val) => `<div class="av-cell"><div class="av-val">${val}</div><div class="av-lbl">${label}</div></div>`;
+  const totals = `
+    <div class="av-grid">
+      ${cell("Rounds", stats.rounds)}
+      ${cell("Courses", stats.courses)}
+      ${cell("Avg score", fmtSignedAvg(stats.avgToPar))}
+      ${cell("Handicap", "<span class='av-hcp'>" + fmtSignedAvg(stats.handicap) + "</span><small> est.</small>")}
+    </div>`;
+
+  const bestRow = stats.best
+    ? `<div class="av-best">Best round: <b>${toparCell(stats.best.to_par)}</b> · ${stats.best.strokes} strokes · ${escapeHTML(courseName(stats.best.course_id))}</div>`
+    : "";
+
+  const detail = `
+    <div class="av-grid av-grid-4">
+      ${cell("Putts/rd", fmtAvg(stats.avgPutts))}
+      ${cell("GIR", stats.girPct == null ? "—" : Math.round(stats.girPct) + "%")}
+      ${cell("FIR", stats.firPct == null ? "—" : Math.round(stats.firPct) + "%")}
+      ${cell("Prox", stats.avgProx == null ? "—" : Math.round(stats.avgProx) + " ft")}
+    </div>`;
+
+  const byCourse = stats.byCourse.length ? `
+    <div class="av-section">Best by course</div>
+    <table class="lb-table av-table">
+      <thead><tr><th>Course</th><th>Best</th><th>Strokes</th></tr></thead>
+      <tbody>${stats.byCourse.map((r) => `
+        <tr><td>${escapeHTML(courseName(r.course_id))}</td>
+        <td class="lb-topar">${toparCell(r.to_par)}</td>
+        <td class="lb-strk">${r.strokes}</td></tr>`).join("")}
+      </tbody>
+    </table>` : "";
+
+  const recent = `
+    <div class="av-section">Recent rounds</div>
+    <table class="lb-table av-table">
+      <thead><tr><th>Date</th><th>Course</th><th>Score</th><th>Strk</th><th>Putts</th></tr></thead>
+      <tbody>${stats._recent.map((r) => `
+        <tr><td class="av-date">${dateShort(r.created_at)}</td>
+        <td>${escapeHTML(courseName(r.course_id))}</td>
+        <td class="lb-topar">${toparCell(r.to_par)}</td>
+        <td class="lb-strk">${r.strokes}</td>
+        <td class="lb-strk">${r.putts == null ? "—" : r.putts}</td></tr>`).join("")}
+      </tbody>
+    </table>`;
+
+  const trn = (trounds && trounds.length) ? `
+    <div class="av-section">Tournament results</div>
+    <table class="lb-table av-table">
+      <thead><tr><th>Date</th><th>Round</th><th>Score</th><th>Strk</th></tr></thead>
+      <tbody>${trounds.map((t) => `
+        <tr><td class="av-date">${dateShort(t.submitted_at)}</td>
+        <td>R${t.round_num}</td>
+        <td class="lb-topar">${toparCell(t.to_par)}</td>
+        <td class="lb-strk">${t.strokes}</td></tr>`).join("")}
+      </tbody>
+    </table>` : "";
+
+  body.innerHTML = idHtml + totals + bestRow + detail + byCourse + recent + trn;
+  wireAvEditName();
+}
+function wireAvEditName() {
+  const e = document.getElementById("av-editname");
+  if (e) e.addEventListener("click", () => openNameEntry(() => openAccountViewer()));
+}
+
+async function openAccountViewer() {
+  if (!isLoggedIn()) { openAuthModal(); return; }
+  const ov = document.getElementById("account-viewer");
+  const body = document.getElementById("av-body");
+  if (!ov || !body) return;
+  ov.classList.remove("hidden");
+  body.innerHTML = `<div class="av-empty">Loading…</div>`;
+  try {
+    const [rounds, trounds] = await Promise.all([fetchMyRounds(), fetchMyTournamentRounds()]);
+    const stats = computeMyStats(rounds);
+    stats._recent = rounds.slice(0, 12);
+    renderAccount(stats, trounds);
+  } catch (e) {
+    console.warn(e);
+    body.innerHTML = `<div class="av-empty">Couldn't load your stats. Try again.</div>`;
+  }
+}
+function closeAccountViewer() {
+  const ov = document.getElementById("account-viewer");
+  if (ov) ov.classList.add("hidden");
+}
+(function wireAccountViewer() {
+  const open = document.getElementById("open-account");
+  if (open) open.addEventListener("click", openAccountViewer);
+  const close = document.getElementById("av-close");
+  if (close) close.addEventListener("click", closeAccountViewer);
+  const out = document.getElementById("av-signout");
+  if (out) out.addEventListener("click", async () => { await signOut(); closeAccountViewer(); updateMenuPlayerLine(); });
+})();
+
 // --- wiring ---
 (function wireAddCourse() {
   const open = document.getElementById("menu-add-course");
@@ -3558,14 +4026,14 @@ function startTournamentTimer(deadline, elId) {
   function tick() {
     const rem = deadlineMs - Date.now();
     if (rem <= 0) {
-      el.textContent = "⏱ Time's up";
+      el.textContent = "Time's up";
       el.classList.add("trn-timer-urgent");
       clearInterval(_trnTimerInterval); _trnTimerInterval = null;
       return;
     }
     const m = Math.floor(rem / 60000);
     const s = Math.floor((rem % 60000) / 1000);
-    el.textContent = "⏱ " + m + ":" + s.toString().padStart(2, "0");
+    el.textContent = m + ":" + s.toString().padStart(2, "0");
     el.classList.toggle("trn-timer-urgent", rem < 10 * 60 * 1000);
   }
   tick();
@@ -3608,14 +4076,14 @@ function handleTournamentRoundComplete() {
     const btn = document.getElementById("re-tournament");
     if (row && btn) {
       if (roundNum === 2) {
-        btn.textContent = "✂️ View Cut Results";
+        btn.innerHTML = '<span class="ic ic-scissors"></span>View Cut Results';
         row.classList.remove("hidden");
         btn.onclick = () => {
           document.getElementById("round-end").classList.add("hidden");
           showCutModal();
         };
       } else if (roundNum === 4) {
-        btn.textContent = "🏆 Final Results";
+        btn.innerHTML = '<span class="ic ic-trophy"></span>Final Results';
         row.classList.remove("hidden");
         btn.onclick = () => {
           document.getElementById("round-end").classList.add("hidden");
@@ -3976,7 +4444,7 @@ async function openTournamentManage() {
 
 async function renderManageList() {
   const body = document.getElementById("tm-body");
-  document.getElementById("tm-title").textContent = "🏁 Manage Tournaments";
+  document.getElementById("tm-title").innerHTML = '<span class="ic ic-flag-checkered"></span>Manage Tournaments';
   body.innerHTML = "<p class=\"ne-sub\">Loading…</p>";
   const all = await fetchAllTournaments();
 
@@ -3995,7 +4463,7 @@ async function renderManageList() {
 
   body.innerHTML =
     "<div class=\"tm-new\"><select id=\"tm-new-course\">" + courseOpts + "</select>" +
-    "<button class=\"menu-btn\" id=\"tm-new-btn\">➕ New tournament</button></div>" +
+    "<button class=\"menu-btn\" id=\"tm-new-btn\"><span class=\"ic ic-plus\"></span>New tournament</button></div>" +
     "<div class=\"tm-list\">" + rowsHTML + "</div>";
 
   body.querySelectorAll(".tm-row").forEach(el => {
@@ -4047,7 +4515,7 @@ async function openManageDetail(t) {
 
   const condHTML = SETTING_DEFS.map(d =>
     "<button class=\"admin-toggle" + (_manageCondDraft[d.key] ? " active" : "") + "\" data-key=\"" + d.key + "\">" +
-      (_manageCondDraft[d.key] ? "ON  " : "OFF  ") + d.label + "</button>"
+      "<span class=\"ic " + d.icon + "\"></span>" + d.label + "</button>"
   ).join("");
 
   body.innerHTML =
@@ -4066,8 +4534,8 @@ async function openManageDetail(t) {
     "<div class=\"tm-sec\"><label class=\"tm-lbl\">Field (" + players.length + ")</label>" +
       "<div class=\"tm-players\">" + playersHTML + "</div></div>" +
     "<div class=\"tm-sec tm-danger\">" +
-      "<button class=\"menu-btn secondary\" id=\"tm-end\">⏹ End now</button>" +
-      "<button class=\"menu-btn secondary tm-del\" id=\"tm-delete\">🗑 Delete tournament</button></div>";
+      "<button class=\"menu-btn secondary\" id=\"tm-end\">End now</button>" +
+      "<button class=\"menu-btn secondary tm-del\" id=\"tm-delete\">Delete tournament</button></div>";
 
   function refreshDeadlines() {
     const r1 = (parseInt(document.getElementById("tm-r1len").value, 10) || 1) * 60000;
@@ -4104,7 +4572,8 @@ async function openManageDetail(t) {
       const k = btn.dataset.key;
       _manageCondDraft[k] = !_manageCondDraft[k];
       btn.classList.toggle("active", _manageCondDraft[k]);
-      btn.textContent = (_manageCondDraft[k] ? "ON  " : "OFF  ") + (SETTING_DEFS.find(d => d.key === k) || {}).label;
+      const def = SETTING_DEFS.find(d => d.key === k) || {};
+      btn.innerHTML = '<span class="ic ' + (def.icon || "") + '"></span>' + (def.label || "");
     };
   });
   document.getElementById("tm-save-conds").onclick = async () => {

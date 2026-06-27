@@ -1,0 +1,101 @@
+/* ============================================================
+   Design tokens — single source of truth for the UI system.
+   3 tiers: primitives → semantic → component.
+   Keep the dark-green glassmorphism identity; kill magic numbers.
+   ============================================================ */
+
+:root {
+  /* ---- Primitives ---------------------------------------- */
+  /* green ramp */
+  --green-900: #0a3d1f;   /* app background */
+  --green-700: #11271a;   /* solid panel base */
+  --green-500: #2f9e44;   /* primary accent */
+  --green-300: #4ade80;   /* bright accent (active/links) */
+
+  /* neutral / white-alpha ramp (dark-mode tuned) */
+  --white: #f4f6f3;
+  --w-85: rgba(255, 255, 255, 0.85);
+  --w-70: rgba(255, 255, 255, 0.70);
+  --w-55: rgba(255, 255, 255, 0.55);
+  --w-45: rgba(255, 255, 255, 0.45);
+  --w-32: rgba(255, 255, 255, 0.32);
+  --w-14: rgba(255, 255, 255, 0.14);
+  --w-12: rgba(255, 255, 255, 0.12);
+  --w-08: rgba(255, 255, 255, 0.08);
+  --w-05: rgba(255, 255, 255, 0.05);
+
+  /* status */
+  --status-under:  #ff5a52;   /* under par / red */
+  --status-over:   #ffd24a;   /* over par / yellow */
+  --status-birdie: #2f9e44;
+  --status-eagle:  #ffd700;
+  --status-error:  #ff5a52;
+  --status-hazard: #ff8c5a;
+
+  /* glass tints (dark green, varying alpha) */
+  --glass-faint: rgba(8, 22, 14, 0.50);
+  --glass-solid: rgba(10, 26, 16, 0.94);
+
+  /* ---- Semantic surfaces --------------------------------- */
+  --surface-hud:    var(--glass-faint);   /* HUD chips */
+  --surface-panel:  var(--glass-solid);   /* modal bodies */
+  --surface-raised: var(--w-08);          /* inputs, secondary btn, list items */
+  --surface-scrim:  rgba(2, 10, 5, 0.72); /* full-screen overlay backdrop */
+
+  --border-hair: 1px solid var(--w-12);
+  --border-edge: 1px solid var(--w-14);
+
+  --blur-sm: 8px;
+  --blur-md: 12px;
+  --blur-lg: 16px;
+
+  /* ---- Accent -------------------------------------------- */
+  --accent: var(--green-500);
+  --accent-bright: var(--green-300);
+  --accent-soft: rgba(47, 158, 68, 0.16);
+  --accent-glow: 0 4px 24px rgba(47, 158, 68, 0.28);
+
+  /* ---- Text ---------------------------------------------- */
+  --text: var(--white);
+  --text-muted: var(--w-70);
+  --text-dim: var(--w-55);
+  --text-faint: var(--w-32);
+
+  /* ---- Radius scale (collapse the old 9–20px sprawl) ----- */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+
+  /* ---- Spacing scale ------------------------------------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  /* ---- Shadow scale -------------------------------------- */
+  --shadow-1: 0 4px 18px rgba(0, 0, 0, 0.35);   /* HUD chip */
+  --shadow-2: 0 8px 32px rgba(0, 0, 0, 0.50);   /* dropdown */
+  --shadow-3: 0 12px 44px rgba(0, 0, 0, 0.55);  /* modal */
+
+  /* ---- Type scale ---------------------------------------- */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --t-display: 76px;
+  --t-h1: 22px;
+  --t-h2: 19px;
+  --t-body: 15px;
+  --t-cap: 13px;
+  --t-micro: 11px;
+  --fw-reg: 500;
+  --fw-med: 600;
+  --fw-bold: 700;
+  --fw-black: 800;
+
+  /* ---- Motion -------------------------------------------- */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 0.12s;
+  --dur-modal: 0.3s;
+}
