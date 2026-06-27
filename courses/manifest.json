@@ -628,5 +628,10 @@
     "id": "golf-de-marivaux",
     "name": "Golf de Marivaux",
     "sub": "Par 72 · 18 holes · 48.63, 2.17"
+  },
+  {
+    "id": "golf-de-marolles",
+    "name": "Golf de Marolles",
+    "sub": "Par 72 · 18 holes · 48.73, 2.55"
   }
 ]
