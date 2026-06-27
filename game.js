@@ -16,6 +16,8 @@ const TUNE = {
   // capped at club carry). Tight band -> a chip is never very short or very far from the hole.
   chipReachLo: 0.8,      // softest chip still flies 80% of the way to the pin
   chipReachHi: 1.2,      // hardest chip flies 120% (never blows way past)
+  chipLandFrac: 0.75,    // chip CARRIES this much of the band target; the rest is roll-out
+  chipSpin: 0.1,         // chip backspin multiplier (< full -> ball releases and rolls out)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
   mousePuttScale: 0.75,    // extra putt scalar when swinging with a mouse (−25%; mouse flicks read faster)
   // Putt control band: most putts are short, but max power reaches YARDS.maxPutt (50yd).
@@ -1039,9 +1041,11 @@ function launchShot(ang, frac, spin, onGreen) {
     const chipActive = chipEnabled && !HOLE.isRange && toPin < TUNE.chipRangeYds;
     let ef;
     if (chipActive) {
-      // Tight band: f=0 -> chipReachLo, f=1 -> chipReachHi of pin distance.
+      // Tight band: f=0 -> chipReachLo, f=1 -> chipReachHi of pin distance. chipLandFrac
+      // lands the CARRY short of that so the ball releases and rolls out the rest (the spin
+      // drop below makes it run), with the total still finishing in the band.
       const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * f;
-      ef = Math.min(1, (toPin * reach) / c.carry);
+      ef = Math.min(1, (toPin * reach * TUNE.chipLandFrac) / c.carry);
     } else {
       // Min power floor for every full-swing club (incl. LW): an imprecise weak read can't
       // dribble it — always flies ≥ clubMinFrac of its rated carry.
@@ -1052,10 +1056,12 @@ function launchShot(ang, frac, spin, onGreen) {
     shot.mph = Math.round(c.ball * ef);           // real ball speed for the HUD
     // Slight amplification so deliberate hooks/slices still register.
     b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
-    // Chips/pitches: partial swings with lofted clubs still impart near-full spin rpm.
-    // Scale spinN up toward full as f drops below 0.6 (short shots check hard).
+    // Full-shot pitches: partial swings with lofted clubs still impart near-full spin rpm
+    // (scale up as f drops below 0.6, short shots check hard). Greenside CHIPS do the
+    // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
     const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
-    const effectiveSpinN = Math.min(1, c.spinN * chipBoost);
+    const spinScale = chipActive ? TUNE.chipSpin : chipBoost;
+    const effectiveSpinN = Math.min(1, c.spinN * spinScale);
     setupFlight(b, ang, C, H, c.land * Math.PI / 180, effectiveSpinN);
     state.airborne = true;
   }
@@ -4031,8 +4037,8 @@ function closeAccountViewer() {
   if (ne) {
     document.getElementById("ne-save").addEventListener("click", () => {
       const v = setPlayerName(document.getElementById("ne-input").value);
+      const cb = _namePending; _namePending = null;  // capture BEFORE close (closeNameEntry nulls _namePending)
       closeNameEntry();
-      const cb = _namePending; _namePending = null;
       if (v && cb) cb();
     });
     document.getElementById("ne-cancel").addEventListener("click", closeNameEntry);
