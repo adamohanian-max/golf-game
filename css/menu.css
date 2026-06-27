@@ -83,38 +83,6 @@
   background: var(--accent-soft);
   color: #fff;
 }
-.tee-select {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
-  margin: 0 auto var(--s-4);
-}
-.tee-select-label {
-  color: var(--text-faint);
-  font-size: var(--t-micro);
-  font-weight: var(--fw-med);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.tee-select-opts { display: flex; gap: 4px; }
-.tee-opt {
-  padding: 6px 12px;
-  border: var(--border-hair);
-  border-radius: var(--r-md);
-  background: var(--w-05);
-  color: var(--w-85);
-  font-size: 12px;
-  font-weight: var(--fw-med);
-  cursor: pointer;
-  transition: transform var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast);
-}
-.tee-opt:active { transform: scale(0.96); }
-.tee-opt.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: #fff;
-}
 .course-opt-name { font-size: var(--t-body); font-weight: var(--fw-bold); letter-spacing: 0.2px; }
 .course-opt-sub { font-size: 12px; font-weight: var(--fw-reg); opacity: 0.7; }
 .course-opt-best {

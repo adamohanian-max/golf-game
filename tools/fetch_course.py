@@ -44,7 +44,6 @@ FAIRWAY_NEAR_YDS = 70     # real fairway assigned to a hole if centroid within t
 BUNKER_NEAR_YDS = 50      # bunker assigned to a hole if centroid within this
 WATER_NEAR_YDS = 70
 TEE_NEAR_YDS = 35
-TEE_BOX_NEAR_YDS = 40     # alt tee box assigned to a hole if centroid within this of the centerline
 WOODS_NEAR_YDS = 90       # woods/grass are big & numerous -> wider catch
 GRASS_NEAR_YDS = 60
 CARTPATH_NEAR_YDS = 45
@@ -544,32 +543,6 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
     aerial = {"file": rel, "w": pxw, "h": pxh, "toWorld": [round(v, 6) for v in to_world]}
     aerial_meta = {"merc": (Xmin, Ymin, Xmax, Ymax), "w": pxw, "h": pxh, "rel": rel}
 
-    # --- alternate tee boxes: mapped golf=tee polygons near this hole's tee end,
-    #     emitted longest->shortest as {x,y,yards,name}. The canonical hole-line tee
-    #     is always included so a hole with no mapped boxes still yields one tee.
-    TEE_PALETTE = ["Back", "Blue", "White", "Gold", "Green", "Red"]
-    tee_cands = [(yards, tee_m)]                     # canonical (back) tee from the hole line
-    for el in tees:
-        gm = [project(p["lat"], p["lon"], lat0, lon0) for p in el["geometry"]]
-        c = centroid(gm)
-        if polyline_dist(c, line_m) > TEE_BOX_NEAR_YDS * M_PER_YARD:
-            continue
-        along = (c[0] - tee_m[0]) * u[0] + (c[1] - tee_m[1]) * u[1]  # 0 at back tee, +toward pin
-        if along < -15 * M_PER_YARD or along > length_m * 0.6:
-            continue                                 # keep boxes near the tee end, not up by the green
-        tee_cands.append((round(dist(c, pin_m) / M_PER_YARD), c))
-    tee_cands.sort(key=lambda t: -t[0])              # longest first
-    tees_out, seen = [], []
-    for yds, c in tee_cands:
-        if any(dist(c, s) < 6 * M_PER_YARD for s in seen):
-            continue                                 # de-dupe near-identical boxes
-        seen.append(c)
-        p = fix(to_frame(c))
-        tees_out.append({"x": p["x"], "y": p["y"], "yards": yds,
-                         "name": TEE_PALETTE[min(len(tees_out), len(TEE_PALETTE) - 1)]})
-    if tees_out and yards_override:
-        tees_out[0]["yards"] = yards                 # longest tee carries the scorecard yardage
-
     # --- pin positions: front / middle / back on this hole's green --------------
     pins_out = []
     if green_d <= GREEN_NEAR_M:
@@ -591,8 +564,6 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
     hole_rec = {"num": num, "par": par, "yards": yards, "world": world,
                 "tee": tee_pt, "pin": pin_pt, "aerial": aerial,
                 "surfaces": out_surfaces}
-    if len(tees_out) > 1:
-        hole_rec["tees"] = tees_out
     if pins_out:
         hole_rec["pins"] = pins_out
     if si is not None:

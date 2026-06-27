@@ -234,6 +234,8 @@ let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = ma
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let measureDragging = false;
+let markerDrag = null;     // active drag of the dropped marker: { moved, x, y } (screen px)
+const MARKER_HIT_PX = 22;  // touch/click radius around the marker to grab/dismiss it
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
 let rangeTarget = 150; // driving-range target distance (yards)
 let wind = { dir: 0, speed: 0 }; // dir = compass bearing wind comes FROM (radians, 0=N), speed in mph
@@ -898,6 +900,16 @@ function swingStart(e) {
     };
     return;
   }
+  // grab the dropped rangefinder marker if the press lands on it (drag to move, tap to dismiss)
+  if (measurePoint) {
+    const p = pointerPos(e);
+    const mx = wx(measurePoint.x, measurePoint.y), my = wy(measurePoint.x, measurePoint.y);
+    if (Math.hypot(p.x - mx, p.y - my) <= MARKER_HIT_PX) {
+      markerDrag = { moved: false, x: p.x, y: p.y };
+      swipe = null; swipePath = null;
+      return;
+    }
+  }
   if (!canSwing()) return;
   camTouch = null;
   swingIsMouse = !!(e && typeof e.type === "string" && e.type.indexOf("mouse") === 0);
@@ -935,6 +947,13 @@ function swingMove(e) {
     camera.tFocus.y = camTouch.focusY - (-dcx * sin + dcy * cos) / camera.scale;
     camera.focus.x = camera.tFocus.x;
     camera.focus.y = camera.tFocus.y;
+    return;
+  }
+  if (markerDrag) {
+    e.preventDefault();
+    const p = pointerPos(e);
+    if (Math.hypot(p.x - markerDrag.x, p.y - markerDrag.y) > 4) markerDrag.moved = true;
+    measurePoint = screenToWorld(p.x, p.y);
     return;
   }
   if (!swipe) return;
@@ -1052,6 +1071,12 @@ function launch(dxs, dys, dt, spin = 0) {
 
 function swingEnd(e) {
   if (measureMode) { measureDragging = false; return; }
+  if (markerDrag) {
+    // released on the marker without moving it => a click on the target => dismiss
+    if (!markerDrag.moved) measurePoint = null;
+    markerDrag = null;
+    return;
+  }
   if (camTouch) {
     if (!e.touches || e.touches.length < 2) camTouch = null;
     swipe = null; swipePath = null;
@@ -2454,16 +2479,6 @@ let holeIndex = 0;
 // Global courses share one world/aerial/surfaces map across all holes (the hole
 // rec only carries num/par/yards/tee/pin); standalone recs (range, fallback)
 // carry their own world/surfaces/aerial.
-// Course-wide tee preference: 0 = back (longest), 1 = middle, 2 = forward (shortest).
-let teePref = 1;
-// Choose this hole's tee box from the baked tees[] (sorted long->short) by the
-// course-wide preference. Falls back to the single baked tee when none are baked.
-function pickTee(rec) {
-  const t = rec.tees;
-  if (!t || !t.length) return { x: rec.tee.x, y: rec.tee.y, yards: rec.yards };
-  const i = Math.max(0, Math.min(t.length - 1, Math.round((teePref / 2) * (t.length - 1))));
-  return t[i];
-}
 // Choose this hole's pin from the baked pins[] (front/middle/back). Deterministic
 // per round (round.pinSeed) so a round is consistent but pins move between rounds.
 // Falls back to the single baked pin when none are baked.
@@ -2478,12 +2493,12 @@ function pickPin(rec) {
 function setHole(rec) {
   const glob = !!(course && course.global && !rec.world);
   const src = glob ? course : rec; // where world/surfaces/aerial come from
-  const tee = pickTee(rec), pin = pickPin(rec);
+  const pin = pickPin(rec);
   HOLE = {
     num: rec.num || 1,
     par: rec.par,
-    yards: tee.yards != null ? tee.yards : rec.yards,
-    teePos: { x: tee.x, y: tee.y },
+    yards: rec.yards,
+    teePos: { x: rec.tee.x, y: rec.tee.y },
     holePos: { x: pin.x, y: pin.y },
     holeRadius: HOLE_RADIUS_UNITS,
     greenSpeed: rec.greenSpeed || src.greenSpeed || DEFAULT_STIMP,
@@ -3160,13 +3175,6 @@ async function startRange() {
 }
 
 document.getElementById("play-course").addEventListener("click", startCourse);
-// Tee selector (Back / Middle / Forward) — sets the course-wide tee preference.
-document.querySelectorAll("#tee-select .tee-opt").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    teePref = parseInt(btn.dataset.tee, 10) || 0;
-    document.querySelectorAll("#tee-select .tee-opt").forEach((b) => b.classList.toggle("active", b === btn));
-  });
-});
 const _playDaily = document.getElementById("play-daily");
 if (_playDaily) _playDaily.addEventListener("click", startDaily);
 document.getElementById("play-range").addEventListener("click", startRange);
