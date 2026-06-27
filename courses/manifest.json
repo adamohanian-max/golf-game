@@ -853,5 +853,10 @@
     "id": "kinghorn-golf-course",
     "name": "Kinghorn Golf Course",
     "sub": "Par 72 · 18 holes · 56.07, -3.18"
+  },
+  {
+    "id": "kingsbarns-golf-links",
+    "name": "Kingsbarns Golf Links",
+    "sub": "Par 72 · 18 holes · 56.30, -2.64"
   }
 ]
