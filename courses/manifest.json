@@ -763,5 +763,10 @@
     "id": "golfclub-westerpark",
     "name": "Golfclub Westerpark",
     "sub": "Par 72 · 18 holes · 52.05, 4.43"
+  },
+  {
+    "id": "golfpark-wilnis",
+    "name": "Golfpark Wilnis",
+    "sub": "Par 72 · 18 holes · 52.18, 4.89"
   }
 ]
