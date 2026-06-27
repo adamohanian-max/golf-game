@@ -543,5 +543,10 @@
     "id": "forrester-park-golf-course",
     "name": "Forrester Park Golf Course",
     "sub": "Par 72 · 18 holes · 56.07, -3.53"
+  },
+  {
+    "id": "foxhills",
+    "name": "Foxhills",
+    "sub": "Par 73 · 18 holes · 51.38, -0.55"
   }
 ]
