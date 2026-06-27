@@ -293,5 +293,10 @@
     "id": "childwall-golf-club",
     "name": "Childwall Golf Club",
     "sub": "Par 68 · 17 holes · 53.40, -2.84"
+  },
+  {
+    "id": "clandon-regis-golf-club",
+    "name": "Clandon Regis Golf Club",
+    "sub": "Par 72 · 18 holes · 51.26, -0.49"
   }
 ]
