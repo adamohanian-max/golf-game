@@ -39,7 +39,7 @@ const TUNE = {
 
   // --- Ball flight ---
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
-  gravity: 0.011,        // downward accel (world units / frame^2) while airborne
+  gravity: 0.044,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
   spinFactor: 0.01,     // how hard a curved swipe bends flight (draw/fade)
   windEffect: 0.0002,   // world-units/frame² per mph — how hard wind pushes the ball
