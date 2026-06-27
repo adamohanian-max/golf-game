@@ -398,5 +398,10 @@
     "id": "dodhead-golf-course",
     "name": "Dodhead Golf Course",
     "sub": "Par 70 · 18 holes · 56.07, -3.21"
+  },
+  {
+    "id": "dom-pedro-laguna-golf-course",
+    "name": "Dom Pedro Laguna Golf Course",
+    "sub": "Par 74 · 18 holes · 37.09, -8.13"
   }
 ]
