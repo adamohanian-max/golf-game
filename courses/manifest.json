@@ -788,5 +788,10 @@
     "id": "guildford-golf-club",
     "name": "Guildford Golf Club",
     "sub": "Par 69 · 18 holes · 51.24, -0.52"
+  },
+  {
+    "id": "gullane-golf-club",
+    "name": "Gullane Golf Club",
+    "sub": "Par 74 · 18 holes · 56.03, -2.85"
   }
 ]
