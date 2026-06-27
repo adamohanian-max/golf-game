@@ -623,5 +623,10 @@
     "id": "golf-de-feucherolles",
     "name": "Golf de Feucherolles",
     "sub": "Par 72 · 18 holes · 48.87, 1.99"
+  },
+  {
+    "id": "golf-de-marivaux",
+    "name": "Golf de Marivaux",
+    "sub": "Par 72 · 18 holes · 48.63, 2.17"
   }
 ]
