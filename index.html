@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Golf — Phase 1</title>
-  <link rel="stylesheet" href="css/tokens.css?v=52">
-  <link rel="stylesheet" href="css/base.css?v=52">
-  <link rel="stylesheet" href="css/hud.css?v=52">
-  <link rel="stylesheet" href="css/menu.css?v=52">
-  <link rel="stylesheet" href="css/modals.css?v=52">
-  <link rel="stylesheet" href="css/tournament.css?v=52">
+  <link rel="stylesheet" href="css/tokens.css?v=54">
+  <link rel="stylesheet" href="css/base.css?v=54">
+  <link rel="stylesheet" href="css/hud.css?v=54">
+  <link rel="stylesheet" href="css/menu.css?v=54">
+  <link rel="stylesheet" href="css/modals.css?v=54">
+  <link rel="stylesheet" href="css/tournament.css?v=54">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -65,6 +65,7 @@
       <button class="hm-item active" id="hm-chip"><span class="ic ic-chip"></span>Chip mode</button>
       <button class="hm-item" id="hm-slotted"><span class="ic ic-target"></span>Slotted mode</button>
       <button class="hm-item" id="hm-card"><span class="ic ic-clipboard"></span>Scorecard</button>
+      <button class="hm-item active" id="hm-sound"><span class="ic ic-flag"></span>Sound</button>
       <div class="hm-sep"></div>
       <button class="hm-item" id="hm-holes"><span class="ic ic-menu"></span>Select hole</button>
       <button class="hm-item" id="hm-home"><span class="ic ic-home"></span>Home</button>
@@ -73,6 +74,7 @@
 
   <div id="hint">Swipe to swing · ← → to aim · ↑ ↓ club</div>
   <div id="chip-ind" class="hidden"><span class="ic ic-chip"></span>Chip · ease off for the flag</div>
+  <div id="toast" class="hidden"></div>
 
   <div id="range-ui" class="hidden">
     <div class="range-row">
@@ -90,7 +92,16 @@
       <h1>GOLF</h1>
       <div class="menu-divider"></div>
       <div id="course-list"></div>
+      <div id="tee-select" class="tee-select">
+        <span class="tee-select-label">Tees</span>
+        <div class="tee-select-opts">
+          <button type="button" class="tee-opt" data-tee="0">Back</button>
+          <button type="button" class="tee-opt active" data-tee="1">Middle</button>
+          <button type="button" class="tee-opt" data-tee="2">Forward</button>
+        </div>
+      </div>
       <button id="play-course" class="menu-btn">Play Course</button>
+      <button id="play-daily" class="menu-btn secondary"><span class="ic ic-flag"></span>Daily Challenge</button>
       <button id="play-range" class="menu-btn secondary">Driving Range</button>
       <button id="open-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>Leaderboard</button>
       <button id="open-tournaments" class="menu-btn secondary"><span class="ic ic-flag-checkered"></span>Tournaments</button>
@@ -282,6 +293,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=53"></script>
+  <script src="game.js?v=54"></script>
 </body>
 </html>

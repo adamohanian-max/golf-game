@@ -44,6 +44,24 @@
 }
 #play-again:active { transform: scale(0.97); }
 
+/* ---- Result detail keeps the personal-best line on its own row ---- */
+#result-detail { white-space: pre-line; }
+
+/* ---- Escalating celebration on the result title ------------------- */
+#result-title.rt-l1 { color: var(--status-birdie); }
+#result-title.rt-l2,
+#result-title.rt-l3,
+#result-title.rt-l4 {
+  color: var(--status-eagle);
+  text-shadow: 0 0 18px rgba(255, 215, 0, 0.55);
+  animation: rtPulse 0.6s var(--ease) 2;
+}
+#result-title.rt-best { animation: rtPulse 0.6s var(--ease) 2; }
+@keyframes rtPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
 /* ---- Round-end summary ------------------------------------ */
 #round-end {
   position: fixed;

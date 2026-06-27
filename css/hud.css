@@ -46,6 +46,32 @@
 }
 #hint.hidden { opacity: 0; }
 
+/* ---- Transient toast (milestones, near-miss, daily, share) -------- */
+#toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 18%);
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  max-width: 80vw;
+  text-align: center;
+  color: var(--text);
+  background: var(--glass-solid);
+  border: var(--border-edge);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-pill);
+  font-size: var(--t-body);
+  font-weight: var(--fw-bold);
+  box-shadow: var(--shadow-2);
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  backdrop-filter: blur(var(--blur-sm));
+  pointer-events: none;
+  opacity: 0;
+  z-index: 50;
+  transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.hidden { display: none; }
+
 /* greenside chip-mode cue — pill above the hint */
 #chip-ind {
   position: fixed;

@@ -22,6 +22,7 @@ const TUNE = {
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
   spinFactor: 0.01,     // how hard a curved swipe bends flight (draw/fade)
   windEffect: 0.0002,   // world-units/frame² per mph — how hard wind pushes the ball
+  playsLikePerFoot: 1.0, // caddie "plays like": yards added per foot of climb to the pin (uphill plays longer)
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
@@ -174,8 +175,8 @@ let windEnabled = false;
 // Auto-select the club for the current shot (course only; putter is auto on green).
 function autoClub() {
   if (!autoClubEnabled || mode === "range" || !HOLE) return;
-  selectedClub = clubForYards(dist(state.ball.x, state.ball.y,
-                                   HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
+  // Pick the club for the elevation-adjusted ("plays like") distance, like a caddie.
+  selectedClub = clubForYards(playsLikeYards(state.ball.x, state.ball.y).plays);
 }
 
 // =====================================================================
@@ -291,6 +292,16 @@ function terrainElevAt(x, y) {
     return (g.h(x, y) - hMid) / hHalf * 3.0;
   }
   return null;
+}
+// Caddie distance from a world point to the pin: the flat yardage plus an elevation
+// "plays like" correction (uphill plays longer). dz is climb to the pin in feet
+// (null DEM/green → plays == flat). Mirrors how a caddie reads a yardage book.
+function playsLikeYards(fromX, fromY) {
+  const flat = dist(fromX, fromY, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+  const eBall = terrainElevAt(fromX, fromY), ePin = terrainElevAt(HOLE.holePos.x, HOLE.holePos.y);
+  const dz = (eBall == null || ePin == null) ? null : ePin - eBall;   // feet of climb to the pin
+  const plays = dz == null ? flat : flat + dz * TUNE.playsLikePerFoot;
+  return { flat, plays, dz };
 }
 
 // =====================================================================
@@ -2161,6 +2172,8 @@ function showResult() {
 
 document.getElementById("play-again").addEventListener("click", () => {
   elResult.classList.add("hidden");
+  // Daily is a single hole → straight to the summary (streak + share live there)
+  if (dailyMode) { showRoundSummary(); return; }
   // Last hole of the course → show full round summary instead of advancing
   if (course && holeIndex >= course.holes.length - 1) {
     showRoundSummary();
@@ -2358,15 +2371,37 @@ let holeIndex = 0;
 // Global courses share one world/aerial/surfaces map across all holes (the hole
 // rec only carries num/par/yards/tee/pin); standalone recs (range, fallback)
 // carry their own world/surfaces/aerial.
+// Course-wide tee preference: 0 = back (longest), 1 = middle, 2 = forward (shortest).
+let teePref = 1;
+// Choose this hole's tee box from the baked tees[] (sorted long->short) by the
+// course-wide preference. Falls back to the single baked tee when none are baked.
+function pickTee(rec) {
+  const t = rec.tees;
+  if (!t || !t.length) return { x: rec.tee.x, y: rec.tee.y, yards: rec.yards };
+  const i = Math.max(0, Math.min(t.length - 1, Math.round((teePref / 2) * (t.length - 1))));
+  return t[i];
+}
+// Choose this hole's pin from the baked pins[] (front/middle/back). Deterministic
+// per round (round.pinSeed) so a round is consistent but pins move between rounds.
+// Falls back to the single baked pin when none are baked.
+function pickPin(rec) {
+  const p = rec.pins;
+  if (!p || !p.length) return { x: rec.pin.x, y: rec.pin.y };
+  const seed = ((round.pinSeed | 0) ^ Math.imul((rec.num || 1), 2654435761)) >>> 0;
+  const i = Math.floor(mulberry32(seed)() * p.length) % p.length;
+  return p[i];
+}
+
 function setHole(rec) {
   const glob = !!(course && course.global && !rec.world);
   const src = glob ? course : rec; // where world/surfaces/aerial come from
+  const tee = pickTee(rec), pin = pickPin(rec);
   HOLE = {
     num: rec.num || 1,
     par: rec.par,
-    yards: rec.yards,
-    teePos: { x: rec.tee.x, y: rec.tee.y },
-    holePos: { x: rec.pin.x, y: rec.pin.y },
+    yards: tee.yards != null ? tee.yards : rec.yards,
+    teePos: { x: tee.x, y: tee.y },
+    holePos: { x: pin.x, y: pin.y },
     holeRadius: HOLE_RADIUS_UNITS,
     greenSpeed: rec.greenSpeed || src.greenSpeed || DEFAULT_STIMP,
     world: src.world,
@@ -2578,7 +2613,15 @@ function updateStats() {
     stCarry.textContent = shot.carry != null ? Math.round(shot.carry) + " yds" : "—";
     stTotal.textContent = shot.total != null ? Math.round(shot.total) + " yds" : "—";
     stSpeed.textContent = spd;
-    stPin.textContent = Math.round(toPin) + " yds";
+    // Caddie number: flat yards, plus the elevation "plays like" when the climb to
+    // the pin is meaningful (≥3 ft). Uphill plays longer, downhill shorter.
+    const pl = playsLikeYards(b.x, b.y);
+    if (pl.dz != null && Math.abs(pl.dz) >= 3) {
+      const ft = Math.round(pl.dz);
+      stPin.textContent = `${Math.round(pl.flat)} yds · plays ${Math.round(pl.plays)} (${ft > 0 ? "+" : ""}${ft} ft)`;
+    } else {
+      stPin.textContent = Math.round(toPin) + " yds";
+    }
   }
 }
 
@@ -2681,6 +2724,15 @@ document.getElementById("hm-card").addEventListener("click", () => {
 });
 document.getElementById("hm-holes").addEventListener("click", () => { closeHud(); openCourseMenu(); });
 document.getElementById("hm-home").addEventListener("click", () => { closeHud(); showMenu(); });
+const elSoundBtn = document.getElementById("hm-sound");
+if (elSoundBtn) {
+  elSoundBtn.classList.toggle("active", !muted);
+  elSoundBtn.addEventListener("click", () => {
+    setMuted(!muted);
+    elSoundBtn.classList.toggle("active", !muted);
+    if (!muted) playPutt();   // little confirmation blip when re-enabling
+  });
+}
 function setWind(on) {
   windEnabled = on;
   document.getElementById("hm-wind").classList.toggle("active", on);
@@ -2867,6 +2919,7 @@ function setYardsPerUnit(ypu) {
 
 function startCourse() {
   mode = "course";
+  dailyMode = false;
   // Tournament rounds use the tournament's frozen conditions; otherwise the
   // global defaults. Apply before setHole so wind/auto-club pick them up.
   activeSettings = (activeTournamentRound !== null && activeTournament && activeTournament.settings)
@@ -2893,9 +2946,98 @@ function startCourse() {
   }
 }
 
+// =====================================================================
+//  Daily Challenge — one date-seeded hole, same for everyone, streak + share.
+//  Deterministic from the date string, so no server is needed to agree on
+//  today's course/hole. Reuses loadCourse/setHole and the Supabase board.
+// =====================================================================
+let dailyMode = false;
+let dailyInfo = null; // { date, courseId, holeNum }
+
+// Deterministic PRNG (mulberry32) + FNV-1a string hash for the seed.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function strSeed(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function todayStr() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+function dailyCourseFor(dateStr) {
+  const list = COURSES.length ? COURSES : FALLBACK_COURSES;
+  const rnd = mulberry32(strSeed(dateStr));
+  return list[Math.floor(rnd() * list.length)];
+}
+
+async function startDaily() {
+  const dateStr = todayStr();
+  const c = dailyCourseFor(dateStr);
+  mode = "course"; dailyMode = true; activeTournamentRound = null;
+  activeSettings = normalizeSettings(gameDefaults);
+  applySettings(activeSettings);
+  elMenu.classList.add("hidden");
+  elRangeUI.classList.add("hidden");
+  document.getElementById("round-end").classList.add("hidden");
+  elScorecard.style.display = "";
+  elHudBtn.classList.remove("hidden");
+  elHmClubRow.classList.remove("hidden");
+  elHmCourseItems.classList.remove("hidden");
+  selectedClub = "driver";
+  shot.carry = shot.total = null; shot.mph = 0;
+  round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
+  try {
+    if (!course || course.id !== c.id) await loadCourse(c.id);
+    setYardsPerUnit(course.yardsPerUnit);
+    const idx = Math.floor(mulberry32(strSeed(dateStr + ":hole"))() * course.holes.length);
+    holeIndex = idx;
+    dailyInfo = { date: dateStr, courseId: c.id, holeNum: course.holes[idx].num || idx + 1 };
+    setHole(course.holes[idx]);
+    showToast(`⛳ Daily: ${c.name}, hole ${dailyInfo.holeNum}`, 2400);
+  } catch (e) {
+    console.warn("daily load failed", e);
+    dailyInfo = { date: dateStr, courseId: c.id, holeNum: 1 };
+    setHole(FALLBACK_HOLE);
+  }
+}
+
+function getDaily() { return lsGet("golf.daily", { lastDate: null, streak: 0 }); }
+// Called once on completing today's daily: update streak (with a 1-day grace),
+// celebrate, and copy a shareable result.
+function finishDaily(totStrk) {
+  const dateStr = (dailyInfo && dailyInfo.date) || todayStr();
+  const st = getDaily();
+  if (st.lastDate !== dateStr) {
+    const day = 864e5, p = (n) => String(n).padStart(2, "0");
+    const fmt = (ms) => { const d = new Date(ms); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); };
+    const yest = fmt(Date.now() - day), dbefore = fmt(Date.now() - 2 * day);
+    if (st.lastDate === yest || st.lastDate === dbefore) st.streak = (st.streak || 0) + 1; // consecutive (+1 grace day)
+    else st.streak = 1;                                                                    // streak broke
+    st.lastDate = dateStr; st.lastScore = totStrk; st.lastToPar = round.score;
+    lsSet("golf.daily", st);
+  }
+  spawnBurst(HOLE.holePos.x, HOLE.holePos.y, "confetti");
+  const sub = document.getElementById("re-subtitle");
+  sub.textContent += ` · 🔥 Streak ${st.streak}`;
+  const text = `Golf Daily ${dateStr} · ${totStrk} strokes (${formatToPar(round.score)}) · ⛳️🔥${st.streak}`;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(text).then(() => showToast("Daily result copied 📋", 2000)).catch(() => {});
+  } catch (e) {}
+}
+
 let rangeRec = null; // baked real driving range (Pinehurst practice range)
 async function startRange() {
   mode = "range";
+  dailyMode = false;
   elMenu.classList.add("hidden");
   elScorecard.style.display = "none";
   elRangeUI.classList.remove("hidden");
@@ -2929,6 +3071,8 @@ async function startRange() {
 }
 
 document.getElementById("play-course").addEventListener("click", startCourse);
+const _playDaily = document.getElementById("play-daily");
+if (_playDaily) _playDaily.addEventListener("click", startDaily);
 document.getElementById("play-range").addEventListener("click", startRange);
 document.getElementById("range-menu-btn").addEventListener("click", showMenu);
 rangeSlider.addEventListener("input", () => {
@@ -3398,9 +3542,12 @@ function buildRoundPayload() {
   const proxHoles = stats.filter(h => h.proximity !== null);
   const avgProx = proxHoles.length ? proxHoles.reduce((s, h) => s + h.proximity, 0) / proxHoles.length : null;
   const strokes = stats.reduce((s, h) => s + h.strokes, 0);
+  // Daily forms its own date-keyed board (single hole), no schema change.
+  const courseId = dailyMode ? ("daily_" + ((dailyInfo && dailyInfo.date) || todayStr())) : selectedCourseId;
+  const holeCount = dailyMode ? 1 : course.holes.length;
   return {
     name: getPlayerName(), user_id: (currentUser() || {}).id || null,
-    course_id: selectedCourseId, hole_count: course.holes.length,
+    course_id: courseId, hole_count: holeCount,
     strokes, to_par: round.score, putts, gir: girs,
     fir: firs, fir_holes: firHoles.length,
     prox_ft: avgProx !== null ? Math.round(avgProx * 3) : null,
@@ -3520,7 +3667,10 @@ function escapeHTML(s) {
 // after the page, so a parse-time build only ever shows the fallback courses.
 function populateLbCourses() {
   const sel = document.getElementById("lb-course");
-  if (sel) sel.innerHTML = COURSES.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+  if (!sel) return;
+  const today = todayStr();
+  const daily = `<option value="daily_${today}">🔥 Daily Challenge (${today})</option>`;
+  sel.innerHTML = daily + COURSES.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
 }
 
 let _lbReturn = "menu";  // where Close goes back to
