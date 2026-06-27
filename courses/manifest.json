@@ -88,5 +88,10 @@
     "id": "ardglass-golf-club",
     "name": "Ardglass Golf Club",
     "sub": "Par 70 · 18 holes · 54.25, -5.61"
+  },
+  {
+    "id": "arrowe-park-golf-course",
+    "name": "Arrowe Park Golf Course",
+    "sub": "Par 70 · 18 holes · 53.36, -3.10"
   }
 ]
