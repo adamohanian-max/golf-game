@@ -818,5 +818,10 @@
     "id": "hesketh-golf-club",
     "name": "Hesketh Golf Club",
     "sub": "Par 72 · 18 holes · 53.67, -2.98"
+  },
+  {
+    "id": "heswall-golf-course",
+    "name": "Heswall Golf Course",
+    "sub": "Par 72 · 18 holes · 53.31, -3.09"
   }
 ]
