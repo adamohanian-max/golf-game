@@ -798,5 +798,10 @@
     "id": "haddington-golf-course",
     "name": "Haddington Golf Course",
     "sub": "Par 71 · 18 holes · 55.96, -2.76"
+  },
+  {
+    "id": "hampton-court-palace-golf-club",
+    "name": "Hampton Court Palace Golf Club",
+    "sub": "Par 71 · 18 holes · 51.40, -0.33"
   }
 ]
