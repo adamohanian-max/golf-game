@@ -528,5 +528,10 @@
     "id": "formby-golf-club",
     "name": "Formby Golf Club",
     "sub": "Par 72 · 18 holes · 53.57, -3.08"
+  },
+  {
+    "id": "formby-hall-golf-course",
+    "name": "Formby Hall Golf Course",
+    "sub": "Par 72 · 18 holes · 53.58, -3.04"
   }
 ]
