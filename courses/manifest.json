@@ -373,5 +373,10 @@
     "id": "craigmillar-park-golf-club",
     "name": "Craigmillar Park Golf Club",
     "sub": "Par 72 · 18 holes · 55.92, -3.18"
+  },
+  {
+    "id": "craigtoun-course",
+    "name": "Craigtoun Course",
+    "sub": "Par 71 · 18 holes · 56.32, -2.84"
   }
 ]
