@@ -263,5 +263,10 @@
     "id": "carnalea-golf-club",
     "name": "Carnalea Golf Club",
     "sub": "Par 69 · 18 holes · 54.66, -5.70"
+  },
+  {
+    "id": "carrick-knowe-golf-club",
+    "name": "Carrick Knowe Golf Club",
+    "sub": "Par 70 · 18 holes · 55.94, -3.26"
   }
 ]
