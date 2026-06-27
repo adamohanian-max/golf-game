@@ -478,5 +478,10 @@
     "id": "dunnikier-park-golf-course",
     "name": "Dunnikier Park Golf Course",
     "sub": "Par 71 · 18 holes · 56.14, -3.16"
+  },
+  {
+    "id": "east-course",
+    "name": "East Course",
+    "sub": "Par 73 · 18 holes · 55.90, -3.36"
   }
 ]
