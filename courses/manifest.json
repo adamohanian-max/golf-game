@@ -138,5 +138,10 @@
     "id": "ballymena-golf-course",
     "name": "Ballymena Golf Course",
     "sub": "Par 70 · 18 holes · 54.88, -6.22"
+  },
+  {
+    "id": "bangor-golf-club",
+    "name": "Bangor Golf Club",
+    "sub": "Par 72 · 18 holes · 54.66, -5.65"
   }
 ]
