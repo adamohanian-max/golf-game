@@ -783,5 +783,10 @@
     "id": "greenacres-golf-course",
     "name": "Greenacres Golf Course",
     "sub": "Par 70 · 18 holes · 54.73, -6.00"
+  },
+  {
+    "id": "guildford-golf-club",
+    "name": "Guildford Golf Club",
+    "sub": "Par 69 · 18 holes · 51.24, -0.52"
   }
 ]
