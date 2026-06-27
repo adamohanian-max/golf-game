@@ -318,5 +318,10 @@
     "id": "club-de-golf-m-laga-parador",
     "name": "Club de Golf Málaga Parador",
     "sub": "Par 72 · 18 holes · 36.65, -4.47"
+  },
+  {
+    "id": "club-de-golf-valderrama",
+    "name": "Club de Golf Valderrama",
+    "sub": "Par 71 · 18 holes · 36.29, -5.33"
   }
 ]
