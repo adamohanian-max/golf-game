@@ -473,5 +473,10 @@
     "id": "dunmurry-golf-course",
     "name": "Dunmurry Golf Course",
     "sub": "Par 71 · 18 holes · 54.55, -5.99"
+  },
+  {
+    "id": "dunnikier-park-golf-course",
+    "name": "Dunnikier Park Golf Course",
+    "sub": "Par 71 · 18 holes · 56.14, -3.16"
   }
 ]
