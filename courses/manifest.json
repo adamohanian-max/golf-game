@@ -273,5 +273,10 @@
     "id": "carrickfergus-golf-course",
     "name": "Carrickfergus Golf Course",
     "sub": "Par 72 · 18 holes · 54.72, -5.80"
+  },
+  {
+    "id": "castlerock-golf-club",
+    "name": "Castlerock Golf Club",
+    "sub": "Par 73 · 18 holes · 55.16, -6.77"
   }
 ]
