@@ -238,5 +238,10 @@
     "id": "campo-de-golf-r-o-real",
     "name": "Campo de Golf Río Real",
     "sub": "Par 72 · 18 holes · 36.51, -4.84"
+  },
+  {
+    "id": "campo-europa",
+    "name": "Campo Europa",
+    "sub": "Par 71 · 18 holes · 36.55, -4.72"
   }
 ]
