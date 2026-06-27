@@ -793,5 +793,10 @@
     "id": "gullane-golf-club",
     "name": "Gullane Golf Club",
     "sub": "Par 74 · 18 holes · 56.03, -2.85"
+  },
+  {
+    "id": "haddington-golf-course",
+    "name": "Haddington Golf Course",
+    "sub": "Par 71 · 18 holes · 55.96, -2.76"
   }
 ]
