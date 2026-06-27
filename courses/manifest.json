@@ -388,5 +388,10 @@
     "id": "dalmilling-golf-course",
     "name": "Dalmilling Golf Course",
     "sub": "Par 72 · 18 holes · 55.47, -4.59"
+  },
+  {
+    "id": "deer-park",
+    "name": "Deer Park",
+    "sub": "Par 73 · 18 holes · 55.91, -3.54"
   }
 ]
