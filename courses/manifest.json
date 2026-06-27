@@ -563,5 +563,10 @@
     "id": "glenrothes-golf-course",
     "name": "Glenrothes Golf Course",
     "sub": "Par 70 · 18 holes · 56.19, -3.21"
+  },
+  {
+    "id": "golf-brianza-country-club",
+    "name": "Golf Brianza Country Club",
+    "sub": "Par 72 · 18 holes · 45.64, 9.35"
   }
 ]
