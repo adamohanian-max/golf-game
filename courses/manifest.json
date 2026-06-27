@@ -568,5 +568,10 @@
     "id": "golf-brianza-country-club",
     "name": "Golf Brianza Country Club",
     "sub": "Par 72 · 18 holes · 45.64, 9.35"
+  },
+  {
+    "id": "golf-club-milano",
+    "name": "Golf Club Milano",
+    "sub": "Par 72 · 18 holes · 45.62, 9.29"
   }
 ]
