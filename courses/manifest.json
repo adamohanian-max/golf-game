@@ -458,5 +458,10 @@
     "id": "dunbar-golf-club",
     "name": "Dunbar Golf Club",
     "sub": "Par 70 · 18 holes · 55.99, -2.48"
+  },
+  {
+    "id": "dundonald-links",
+    "name": "Dundonald Links",
+    "sub": "Par 72 · 18 holes · 55.59, -4.66"
   }
 ]
