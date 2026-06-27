@@ -133,5 +133,10 @@
     "id": "ballyclare-golf-course",
     "name": "Ballyclare Golf Course",
     "sub": "Par 68 · 18 holes · 54.77, -6.03"
+  },
+  {
+    "id": "ballymena-golf-course",
+    "name": "Ballymena Golf Course",
+    "sub": "Par 70 · 18 holes · 54.88, -6.22"
   }
 ]
