@@ -163,5 +163,10 @@
     "id": "belvoir-golf-course",
     "name": "Belvoir Golf Course",
     "sub": "Par 70 · 18 holes · 54.56, -5.92"
+  },
+  {
+    "id": "bidston-golf-club",
+    "name": "Bidston Golf Club",
+    "sub": "Par 67 · 17 holes · 53.41, -3.08"
   }
 ]
