@@ -550,7 +550,12 @@ function rollStep(b) {
     const capR = HOLE.holeRadius + BALL_RADIUS_UNITS;  // ball overlaps the cup edge
     const cd = segPointDist(HOLE.holePos.x, HOLE.holePos.y, px, py, b.x, b.y);
     if (cd <= capR) {
-      if (speed < TUNE.captureSpeed) {
+      // Pace forgiveness: a grounded putt crossing near-dead-center (within 60% of the
+      // cup radius) at a good — not rammed — pace is grabbed by the lip and drops, like
+      // real life. Off-center / faster passes keep the strict captureSpeed → lip-out.
+      const deadCenter = !state.airborne && cd < 0.6 * HOLE.holeRadius;
+      const dropSpeed = deadCenter ? TUNE.captureAssist : TUNE.captureSpeed;
+      if (speed < dropSpeed) {
         // slow enough — drop in. Keep the entry point + heading so the ball can
         // visibly catch the lip, rattle to centre and sink; result modal waits for
         // the drop animation to finish (tickHoleDrop).
