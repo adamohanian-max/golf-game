@@ -218,5 +218,10 @@
     "id": "cairndhu-golf-course",
     "name": "Cairndhu Golf Course",
     "sub": "Par 70 · 18 holes · 54.89, -5.85"
+  },
+  {
+    "id": "calanova-golf-club",
+    "name": "Calanova Golf Club",
+    "sub": "Par 72 · 18 holes · 36.51, -4.71"
   }
 ]
