@@ -448,5 +448,10 @@
     "id": "duddingston-golf-course",
     "name": "Duddingston Golf Course",
     "sub": "Par 73 · 18 holes · 55.94, -3.14"
+  },
+  {
+    "id": "dumbarnie-links",
+    "name": "Dumbarnie Links",
+    "sub": "Par 72 · 18 holes · 56.21, -2.89"
   }
 ]
