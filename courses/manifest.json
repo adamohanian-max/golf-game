@@ -618,5 +618,10 @@
     "id": "golf-de-domont-montmorency",
     "name": "Golf de Domont-Montmorency",
     "sub": "Par 72 · 18 holes · 49.02, 2.31"
+  },
+  {
+    "id": "golf-de-feucherolles",
+    "name": "Golf de Feucherolles",
+    "sub": "Par 72 · 18 holes · 48.87, 1.99"
   }
 ]
