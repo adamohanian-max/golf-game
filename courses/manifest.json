@@ -683,5 +683,10 @@
     "id": "golf-de-viltain-saint-marc",
     "name": "Golf de Viltain Saint-Marc",
     "sub": "Par 71 · 18 holes · 48.75, 2.15"
+  },
+  {
+    "id": "golf-national",
+    "name": "Golf National",
+    "sub": "Par 73 · 18 holes · 48.75, 2.09"
   }
 ]
