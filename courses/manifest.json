@@ -358,5 +358,10 @@
     "id": "craigentinny-golf-course",
     "name": "Craigentinny Golf Course",
     "sub": "Par 72 · 18 holes · 55.96, -3.14"
+  },
+  {
+    "id": "craighead-links",
+    "name": "Craighead Links",
+    "sub": "Par 72 · 18 holes · 56.28, -2.60"
   }
 ]
