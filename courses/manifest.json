@@ -428,5 +428,10 @@
     "id": "donaghadee-golf-club",
     "name": "Donaghadee Golf Club",
     "sub": "Par 71 · 18 holes · 54.65, -5.55"
+  },
+  {
+    "id": "downfield",
+    "name": "Downfield",
+    "sub": "Par 61 · 15 holes · 56.49, -3.03"
   }
 ]
