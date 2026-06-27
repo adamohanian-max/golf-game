@@ -438,5 +438,10 @@
     "id": "downshire-golf-complex",
     "name": "Downshire Golf Complex",
     "sub": "Par 72 · 18 holes · 51.39, -0.79"
+  },
+  {
+    "id": "drumoig-golf-course",
+    "name": "Drumoig Golf Course",
+    "sub": "Par 73 · 18 holes · 56.41, -2.90"
   }
 ]
