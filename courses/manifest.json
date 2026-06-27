@@ -823,5 +823,10 @@
     "id": "heswall-golf-course",
     "name": "Heswall Golf Course",
     "sub": "Par 72 · 18 holes · 53.31, -3.09"
+  },
+  {
+    "id": "hilton-templepatrick-golf-course",
+    "name": "Hilton Templepatrick Golf Course",
+    "sub": "Par 72 · 18 holes · 54.71, -6.10"
   }
 ]
