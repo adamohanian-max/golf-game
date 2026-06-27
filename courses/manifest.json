@@ -258,5 +258,10 @@
     "id": "canmore-golf-club",
     "name": "Canmore Golf Club",
     "sub": "Par 72 · 18 holes · 56.08, -3.46"
+  },
+  {
+    "id": "carnalea-golf-club",
+    "name": "Carnalea Golf Club",
+    "sub": "Par 69 · 18 holes · 54.66, -5.70"
   }
 ]
