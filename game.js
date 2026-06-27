@@ -4945,6 +4945,3 @@ loadManifest().then(() => {
   } catch (e) { console.warn("Auth boot failed:", e); }
   updateMenuPlayerLine();
 })();
-
-/* __TESTHOOK__ temporary — remove after putt pace verification */
-window.__T = { get s(){return state}, get H(){return HOLE}, get T(){return TUNE}, get ypu(){return YARDS_PER_UNIT}, get mode(){return mode}, setMode(m){mode=m}, launchShot, update, surfaceAt, playsLikeYards, dist };
