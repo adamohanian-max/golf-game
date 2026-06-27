@@ -83,5 +83,10 @@
     "id": "ardeer-golf-club",
     "name": "Ardeer Golf Club",
     "sub": "Par 72 · 18 holes · 55.66, -4.75"
+  },
+  {
+    "id": "ardglass-golf-club",
+    "name": "Ardglass Golf Club",
+    "sub": "Par 70 · 18 holes · 54.25, -5.61"
   }
 ]
