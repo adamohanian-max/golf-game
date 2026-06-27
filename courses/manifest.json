@@ -573,5 +573,10 @@
     "id": "golf-club-milano",
     "name": "Golf Club Milano",
     "sub": "Par 72 · 18 holes · 45.62, 9.29"
+  },
+  {
+    "id": "golf-d-ableiges",
+    "name": "Golf d'Ableiges",
+    "sub": "Par 72 · 18 holes · 49.08, 1.99"
   }
 ]
