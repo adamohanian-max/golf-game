@@ -670,33 +670,6 @@ const canvas = document.getElementById("game");
 function canSwing() {
   return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition;
 }
-window.__dbg = {
-  get s() { return { moving: state.moving, inHole: state.inHole, air: state.airborne,
-    ht: !!holeTransition, hd: !!holeDrop, canSwing: canSwing(),
-    bx: +state.ball.x.toFixed(2), by: +state.ball.y.toFixed(2),
-    vx: +state.ball.vx.toFixed(4), vy: +state.ball.vy.toFixed(4),
-    lipped: state._lippedThisShot }; },
-  setMode(m) { mode = m; },
-  // Place ball heading at the cup at a given speed, then step physics N frames.
-  lip(speed, frames) {
-    const dx = HOLE.holePos.x - state.ball.x, dy = HOLE.holePos.y - state.ball.y;
-    const d = Math.hypot(dx, dy) || 1;
-    state.ball.vx = dx / d * speed; state.ball.vy = dy / d * speed;
-    state.ball.z = 0; state.ball.vz = 0; state.airborne = false; state.moving = true;
-    for (let i = 0; i < frames; i++) update();
-    return this.s;
-  },
-  putToGreen() {
-    const g = (HOLE.surfaces.green && HOLE.surfaces.green[0]) || null;
-    if (!g) return "no green";
-    let cx = 0, cy = 0; for (const p of g) { cx += p.x; cy += p.y; }
-    cx /= g.length; cy /= g.length;
-    // place ball 3 units below the pin, on the green
-    state.ball.x = HOLE.holePos.x; state.ball.y = HOLE.holePos.y + 3;
-    state.ball.z = 0; state.moving = false;
-    return this.s;
-  },
-};
 
 // =====================================================================
 //  Hole-out feedback — synthesized sound (Web Audio, no asset files),
