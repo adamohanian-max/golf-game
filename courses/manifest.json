@@ -2372,5 +2372,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "chicago-golf-club",
+    "name": "Chicago Golf Club",
+    "sub": "Par 70 · 18 holes · 41.85, -88.12",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
