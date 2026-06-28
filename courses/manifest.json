@@ -868,5 +868,10 @@
     "id": "la-quinta-golf-country-club",
     "name": "La Quinta Golf & Country Club",
     "sub": "Par 71 · 18 holes · 36.51, -5.00"
+  },
+  {
+    "id": "la-reserva-golf-club",
+    "name": "La Reserva Golf Club",
+    "sub": "Par 73 · 18 holes · 36.29, -5.33"
   }
 ]
