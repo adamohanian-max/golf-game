@@ -29,6 +29,9 @@ const TUNE = {
   // distance (plays-like). f=0 -> Lo, f=0.5 -> ~1.0, f=1 -> Hi. Putting = aim, not pace.
   puttBandLo: 0.8,   // softest swipe still rolls 80% of the way (never more than 20% short)
   puttBandHi: 1.2,   // hardest swipe rolls 120% (never more than 20% long)
+  puttFloorFt: 6,    // inside this distance a putt is never left short — floor pace to reach the cup
+                     // on flat (a soft downhill putt otherwise dies: its launch speed drops below
+                     // slopeStopSpeed before the downhill slope-aid it was discounted for kicks in)
   // Forgiveness: every full-swing club (incl. LW) flies ≥ clubMinFrac of its rated carry, so a
   // misread weak stroke can't dribble. Putter + greenside chips keep their own range/band.
   clubMinFrac: 0.70,
@@ -1110,6 +1113,12 @@ function launchShot(ang, frac, spin, onGreen) {
       const rise = (hB == null || hP == null) ? 0 : (hP - hB);       // + uphill, − downhill
       const v2 = 2 * TUNE.greenDecel * targetU + 2 * TUNE.slopeAccel * rise;
       power = Math.sqrt(Math.max(v2, 1e-9));                         // guard steep-downhill ≤0
+      // Short-putt floor: inside puttFloorFt never leave it short. Use at least the pace to
+      // reach the cup on flat — on a soft downhiller the discounted slope-aid doesn't engage
+      // (launch drops below slopeStopSpeed first), so without this it dies well short.
+      if (flatU * YARDS_PER_UNIT * 3 <= TUNE.puttFloorFt) {
+        power = Math.max(power, Math.sqrt(2 * TUNE.greenDecel * flatU));
+      }
     } else {
       // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
       // simple sqrt ramp (its max is already tiny). Range putts keep the on-green ramp.
