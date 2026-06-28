@@ -2741,5 +2741,14 @@
     "tags": [
       "pga"
     ]
+  },
+  {
+    "id": "memorial-park-golf-course",
+    "name": "Memorial Park Golf Course",
+    "sub": "Par 72 · 18 holes · 29.77, -95.44",
+    "region": "USA",
+    "tags": [
+      "pga"
+    ]
   }
 ]
