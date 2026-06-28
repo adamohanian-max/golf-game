@@ -333,7 +333,7 @@ function loadSurfaceMask(maskRec, onReady) {
     const oob = document.createElement("canvas"); oob.width = w; oob.height = h;
     const oc = oob.getContext("2d"), od = oc.createImageData(w, h);
     for (let i = 0; i < lab.length; i++) {
-      if (lab[i] === 0) { // OB only (woods are no longer out of bounds)
+      if (lab[i] === 0 || lab[i] === 3) { // OB or WOODS (both out of bounds)
         od.data[i * 4] = 204; od.data[i * 4 + 1] = 30; od.data[i * 4 + 2] = 30; od.data[i * 4 + 3] = 110;
       }
     }
@@ -712,7 +712,7 @@ function rollStep(b) {
       return;
     }
     const rest = surfaceAt(b.x, b.y);
-    const isOB = rest === "ob"; // only true out-of-bounds; trees play as they lie
+    const isOB = rest === "woods" || rest === "ob"; // trees + out-of-bounds
     if (rest === "water" || (isOB && TUNE.obPenalty)) {
       // hazard / out of bounds: +1 penalty, drop at last safe spot
       state.strokes += 1;
