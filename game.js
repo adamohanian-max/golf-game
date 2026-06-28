@@ -47,10 +47,10 @@ const TUNE = {
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
-  lie: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.72, bunker: 0.5, water: 0.5, woods: 0.5 },
+  lie: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.72, bunker: 0.5, water: 0.5, woods: 0.5, ob: 0.5 },
   // Lie spin penalty: backspin multiplier by the surface you're hitting FROM. Rough = "flyer"
   // (grass between club & ball kills backspin -> ball releases and runs out); sand also robs spin.
-  lieSpin: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.55, bunker: 0.6, water: 0.6, woods: 0.6 },
+  lieSpin: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.55, bunker: 0.6, water: 0.6, woods: 0.6, ob: 0.6 },
 
   friction: {            // per-frame velocity multiplier by surface (rolling)
     fairway: 0.97,
@@ -58,6 +58,7 @@ const TUNE = {
     bunker:  0.55,       // sand grabs hard — the ball stops fast
     water:   0.80,       // ball decelerates fast in water before penalty
     woods:   0.45,       // trees/brush kill the ball fast (then OB penalty)
+    ob:      0.45,       // out of bounds (off the aerial mask) — same dead stop, penalty on rest
   },
   // The green rolls realistically: CONSTANT deceleration per frame (not a
   // velocity multiplier), so the ball holds speed and glides, then dies — the
@@ -86,8 +87,12 @@ const TUNE = {
     bunker:  { e: 0.05, h: 0.12 },  // plugs in the sand, almost no release
     water:   { e: 0.0,  h: 0.0  },  // splash (penalty handled on roll-stop)
     woods:   { e: 0.0,  h: 0.1  },  // trees stop it dead (OB penalty on stop)
+    ob:      { e: 0.0,  h: 0.1  },  // out of bounds — dead stop
   },
   bounceStopVz: 0.06,    // downward speed below which the ball stops bouncing
+  // Out of bounds (woods + aerial-mask OOB): +1 penalty, replay from last safe
+  // spot. Toggle off for a forgiving round (ball stays playable where it lands).
+  obPenalty: true,
 
   // Full 14-club bag, each shot's trajectory mirrored to PGA Tour (Trackman)
   // averages: carry + max HEIGHT + LAND angle + ball speed. The flight follows a
@@ -114,7 +119,7 @@ const TUNE = {
 
   // Backspin grip on landing, by surface (greens grab hardest -> can spin back;
   // rough is a flyer with little spin). 0..1 multiplier on the club's spin.
-  spinGrip: { green: 1.0, fairway: 0.5, tee: 0.5, rough: 0.12, bunker: 0.3, woods: 0, water: 0 },
+  spinGrip: { green: 1.0, fairway: 0.5, tee: 0.5, rough: 0.12, bunker: 0.3, woods: 0, water: 0, ob: 0 },
   rolloutK: 7.0,    // base release distance scale (× landing speed) with no spin
   spinCheckK: 1.2,  // how strongly backspin kills/reverses the release (>1 can back up)
 
@@ -287,16 +292,83 @@ function inAnyPoly(x, y, polys) {
   }
   return false;
 }
+// --- Aerial surface mask ---------------------------------------------------
+// A baked per-pixel label raster classified straight from the aerial photo
+// (fairway / rough / woods / out-of-bounds), so OOB + fairway/rough match what
+// the player SEES instead of patchy OSM polygons. surfaceAt() samples it.
+const MASK_CLASS = ["ob", "fairway", "rough", "woods"];   // palette index -> surface
+// palette RGB — MUST match MASK_PALETTE in tools/fetch_course.py
+const MASK_PALETTE = [[200, 40, 40], [150, 210, 90], [60, 130, 55], [25, 60, 30]];
+function nearestMaskIdx(r, g, b) {
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < MASK_PALETTE.length; i++) {
+    const p = MASK_PALETTE[i];
+    const d = (r - p[0]) ** 2 + (g - p[1]) ** 2 + (b - p[2]) ** 2;
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+function invertAffine(t) {
+  const [a, b, c, d, e, f] = t, det = a * e - b * d;
+  if (Math.abs(det) < 1e-12) return null;
+  const ia = e / det, ib = -b / det, id = -d / det, ie = a / det;
+  return [ia, ib, -(ia * c + ib * f), id, ie, -(id * c + ie * f)]; // world -> px
+}
+// Decode the mask PNG once -> { w, h, lab:Uint8Array, w2p:[..] }; calls onReady.
+function loadSurfaceMask(maskRec, onReady) {
+  if (!maskRec || !maskRec.file || typeof Image === "undefined") return;
+  const w2p = invertAffine(maskRec.toWorld);
+  if (!w2p) return;
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    const c = cv.getContext("2d", { willReadFrequently: true });
+    c.drawImage(img, 0, 0);
+    const px = c.getImageData(0, 0, w, h).data, lab = new Uint8Array(w * h);
+    for (let i = 0; i < lab.length; i++) lab[i] = nearestMaskIdx(px[i * 4], px[i * 4 + 1], px[i * 4 + 2]);
+    // pre-render a red tint canvas over the OOB + woods cells (drawn through the
+    // aerial-style transform when the OB overlay is on)
+    const oob = document.createElement("canvas"); oob.width = w; oob.height = h;
+    const oc = oob.getContext("2d"), od = oc.createImageData(w, h);
+    for (let i = 0; i < lab.length; i++) {
+      if (lab[i] === 0 || lab[i] === 3) { // OB or WOODS
+        od.data[i * 4] = 204; od.data[i * 4 + 1] = 30; od.data[i * 4 + 2] = 30; od.data[i * 4 + 3] = 110;
+      }
+    }
+    oc.putImageData(od, 0, 0);
+    onReady({ w, h, lab, w2p, toWorld: maskRec.toWorld, oob });
+  };
+  img.src = "courses/" + maskRec.file;
+}
+// Surface class at a world point from the mask, or null (no mask / off image).
+function maskClassAt(x, y) {
+  const m = HOLE && HOLE._mask;
+  if (!m) return null;
+  const t = m.w2p;
+  const px = Math.round(t[0] * x + t[1] * y + t[2]);
+  const py = Math.round(t[3] * x + t[4] * y + t[5]);
+  if (px < 0 || py < 0 || px >= m.w || py >= m.h) return null;
+  return MASK_CLASS[m.lab[py * m.w + px]];
+}
+
 // Surfaces tested by priority: a hazard wins over the grass it sits on, etc.
+// Greens/bunkers/water/tees come from crisp OSM polygons; fairway/rough/woods/OOB
+// come from the aerial mask (what the player sees > OSM), with OSM as a fallback
+// for offline / vector holes that have no mask.
 function surfaceAt(x, y) {
   const s = HOLE.surfaces;
   if (inAnyPoly(x, y, s.water)) return "water";
   if (inAnyPoly(x, y, s.bunker)) return "bunker"; // sand
   if (inAnyPoly(x, y, s.green)) return "green";
-  // tee boxes play like fairway (short grass)
-  if (inAnyPoly(x, y, s.fairway) || inAnyPoly(x, y, s.tee)) return "fairway";
-  if (inAnyPoly(x, y, s.woods)) return "woods"; // trees = out of bounds (penalty)
-  if (s.rough && inAnyPoly(x, y, s.rough)) return "rough"; // mapped rough (else default)
+  if (inAnyPoly(x, y, s.tee)) return "fairway";   // tee boxes play like fairway
+  const m = maskClassAt(x, y);
+  if (m) return m;                                // fairway | rough | woods | ob
+  // no mask: fall back to OSM polygons
+  if (inAnyPoly(x, y, s.fairway)) return "fairway";
+  if (inAnyPoly(x, y, s.woods)) return "woods";   // trees = out of bounds (penalty)
+  if (s.rough && inAnyPoly(x, y, s.rough)) return "rough";
   return "rough";
 }
 // Downhill slope (gradient of the height field) at a point on a green, or null.
@@ -415,7 +487,7 @@ function arcFlightStep(b) {
     const surf = surfaceAt(b.x, b.y);
     const sp = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp, dy = b.vy / sp; // travel dir
     state.flight = null;
-    if (surf === "water" || surf === "woods") {
+    if (surf === "water" || surf === "woods" || surf === "ob") {
       b.vx = b.vy = b.vz = 0; state.airborne = false;
       return;
     }
@@ -476,9 +548,9 @@ function ballisticFlightStep(b) {
     }
     const surf = surfaceAt(b.x, b.y);
     const down = -b.vz; // downward speed at impact
-    if (surf === "water" || surf === "woods") {
-      // splash / into the trees — kill it here; roll-stop applies the penalty
-      playLand(surf, down);
+    if (surf === "water" || surf === "woods" || surf === "ob") {
+      // splash / into the trees / out of bounds — kill it; roll-stop applies penalty
+      playLand(surf === "ob" ? "woods" : surf, down);
       spawnBurst(b.x, b.y, surf === "water" ? "splash" : "dust");
       b.vx = b.vy = b.vz = 0;
       state.airborne = false;
@@ -637,7 +709,8 @@ function rollStep(b) {
       return;
     }
     const rest = surfaceAt(b.x, b.y);
-    if (rest === "water" || rest === "woods") {
+    const isOB = rest === "woods" || rest === "ob"; // trees + aerial-mask out of bounds
+    if (rest === "water" || (isOB && TUNE.obPenalty)) {
       // hazard / out of bounds: +1 penalty, drop at last safe spot
       state.strokes += 1;
       b.x = state.lastSafe.x;
@@ -1726,6 +1799,23 @@ function greensInPlay() {
 
 // Stylized vector rendering (used when no aerial, e.g. offline / St Andrews).
 function drawOOBOverlay(s) {
+  if (!showOOB) return;
+  // Mask-driven: draw the baked OOB/woods red raster through the aerial transform.
+  const m = HOLE && HOLE._mask;
+  if (m && m.oob) {
+    const t = m.toWorld, dpr = window.devicePixelRatio || 1;
+    const A = view.a * t[0] + view.b * t[3], C = view.a * t[1] + view.b * t[4];
+    const E = view.a * t[2] + view.b * t[5] + view.c;
+    const B = view.d * t[0] + view.e * t[3], D = view.d * t[1] + view.e * t[4];
+    const F = view.d * t[2] + view.e * t[5] + view.f;
+    ctx.save();
+    ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(m.oob, 0, 0);
+    ctx.restore();
+    return;
+  }
+  // Fallback (no mask): OSM woods polygons.
   if (!s.woods || !s.woods.length) return;
   ctx.save();
   ctx.globalAlpha = 0.32;
@@ -2587,6 +2677,15 @@ function setHole(rec) {
       }
     }
     HOLE._img = course._img; HOLE._imgReady = course._imgReady;
+    // aerial surface mask (OOB / fairway / rough), shared across all holes
+    if (course._mask === undefined) {
+      course._mask = null;
+      loadSurfaceMask(src.surfaceMask, (m) => {
+        course._mask = m;
+        if (HOLE && HOLE.isGlobal) HOLE._mask = m;
+      });
+    }
+    HOLE._mask = course._mask;
   } else {
     HOLE._dem = rec.dem ? buildDEM(rec.dem) : null;
     HOLE._greens = buildGreenTopo(HOLE.surfaces.green);  // always synthetic
@@ -2597,6 +2696,9 @@ function setHole(rec) {
       img.onload = () => { if (HOLE === target) { HOLE._img = processAerial(img); HOLE._imgReady = true; } };
       img.src = "courses/" + src.aerial.file;
     }
+    HOLE._mask = null;
+    const target = HOLE;
+    loadSurfaceMask(src.surfaceMask, (m) => { if (HOLE === target) HOLE._mask = m; });
   }
   WORLD.w = src.world.w;
   WORLD.h = src.world.h;
@@ -2661,6 +2763,7 @@ async function loadCourse(id) {
   course = await res.json();
   YARDS_PER_UNIT = course.yardsPerUnit || YARDS_PER_UNIT;
   course._greens = null; course._img = undefined; course._imgReady = false; // shared caches
+  course._mask = undefined;
   holeIndex = 0;
   setHole(course.holes[holeIndex]);
 }

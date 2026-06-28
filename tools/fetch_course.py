@@ -24,9 +24,10 @@ play surfaces. Disable with --no-imagery.
 import argparse, colorsys, json, math, os, re, sys, urllib.parse, urllib.request
 
 try:
-    from PIL import Image            # optional — only used to carve fairway from the aerial
+    # optional — used to carve fairways AND bake the surface-classification mask
+    from PIL import Image, ImageDraw, ImageFilter
 except ImportError:
-    Image = None
+    Image = ImageDraw = ImageFilter = None
 
 OVERPASS = "https://overpass-api.de/api/interpreter"
 ESRI = ("https://services.arcgisonline.com/ArcGIS/rest/services/"
@@ -64,6 +65,27 @@ FW_STEP_UNITS = 0.5       # outward march step (world units) when finding the ed
 FW_EDGE_RUN = 4           # this many consecutive non-fairway px == the edge
 FW_MIN_HALF_UNITS = 2.0   # ignore absurdly thin measurements (keep >= this)
 FW_MIN_HIT_FRAC = 0.4     # need this frac of stations to classify, else fall back
+
+# --- Aerial surface-classification mask (Pillow). One coarse raster per course
+# labelling every pixel fairway / rough / woods / out-of-bounds straight from the
+# Esri imagery (what the player actually sees), so OOB + fairway/rough no longer
+# depend on patchy OSM polygons. Heuristic HSV + local texture; guarded -> safe to
+# skip. The game samples this in surfaceAt(); greens/bunkers/water/tees stay OSM.
+MASK_MAX_PX   = 512       # long side of the baked label raster (a lie map, not display)
+MASK_OB, MASK_FAIRWAY, MASK_ROUGH, MASK_WOODS = 0, 1, 2, 3   # palette indices
+# debug palette (what the PNG looks like if you open it): red / light-green / green / dark-green
+MASK_PALETTE  = [200, 40, 40,  150, 210, 90,  60, 130, 55,  25, 60, 30]
+MASK_HUE_LO   = 55        # green-turf hue band (deg) — a touch wider than fairway-only
+MASK_HUE_HI   = 165
+MASK_SAT_MIN  = 0.10      # below this = grey (road/roof/concrete) -> OOB
+MASK_VAL_MIN  = 0.10      # near-black -> OOB (deep shadow, water already OSM)
+MASK_WOODS_VAL_MAX = 0.50 # tree canopy is darker green ...
+MASK_WOODS_EDGE_MIN = 34  # ... AND high local edge energy (smoothed FIND_EDGES, 0..255)
+MASK_FW_VAL_FALLBACK = 0.55  # fairway/rough brightness split if Otsu has too few turf px
+MASK_DESPECKLE = 5        # ModeFilter window (odd) to kill single-pixel noise
+# OOB only applies OUTSIDE the playing envelope (buffered hole corridors). Inside
+# it, a non-turf pixel (sand/path/dirt) is just rough, not out of bounds.
+MASK_CORRIDOR_UNITS = 26  # corridor half-width (~78 yds) -> course envelope
 
 
 def _rgb_to_hsv(r, g, b):
@@ -195,6 +217,133 @@ def carve_synth_fairway(hole, img_path):
     except Exception as e:
         print(f"  ! fairway carve failed hole {hole.get('num')}: {e}", file=sys.stderr)
         return False
+
+
+# --- Aerial surface-classification mask ------------------------------------
+def _otsu(values, default):
+    """Otsu threshold (0..1) splitting a list of 0..1 brightness samples into a
+    dark and a bright cluster. Falls back to `default` if too few samples."""
+    if len(values) < 500:
+        return default
+    hist = [0] * 256
+    for v in values:
+        hist[min(255, max(0, int(v * 255)))] += 1
+    total = len(values)
+    sum_all = sum(i * hist[i] for i in range(256))
+    w_b = sum_b = 0
+    best_var, best_t = -1.0, default
+    for t in range(256):
+        w_b += hist[t]
+        if w_b == 0:
+            continue
+        w_f = total - w_b
+        if w_f == 0:
+            break
+        sum_b += t * hist[t]
+        m_b = sum_b / w_b
+        m_f = (sum_all - sum_b) / w_f
+        var = w_b * w_f * (m_b - m_f) ** 2
+        if var > best_var:
+            best_var, best_t = var, t / 255.0
+    return best_t
+
+
+def _classify_px(r, g, b, edge, fw_cut, inside):
+    """One aerial pixel -> MASK_OB / FAIRWAY / ROUGH / WOODS.
+    fw_cut: fairway/rough brightness boundary; inside: pixel within the playing
+    envelope (if so, non-turf is rough, never out of bounds)."""
+    h, s, v = _rgb_to_hsv(r, g, b)
+    hue = h * 360.0
+    is_green = (s >= MASK_SAT_MIN and v >= MASK_VAL_MIN
+                and MASK_HUE_LO <= hue <= MASK_HUE_HI)
+    if not is_green:
+        return MASK_ROUGH if inside else MASK_OB   # sand/path/dirt inside, OOB outside
+    if v < MASK_WOODS_VAL_MAX and edge >= MASK_WOODS_EDGE_MIN:
+        return MASK_WOODS                          # dark + textured green canopy = trees
+    return MASK_FAIRWAY if v >= fw_cut else MASK_ROUGH
+
+
+def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path):
+    """Classify the baked aerial into a coarse fairway/rough/woods/OOB raster.
+    Returns {file,w,h,toWorld:[...]} (mask px -> world affine) or None to skip.
+
+    img_path: baked aerial JPG; aerial: its {w,h,toWorld}; world: {w,h};
+    woods_world: OSM woods polygons ([{x,y},...], world units) unioned in as a
+    strong WOODS prior; corridors: hole centerlines ([{x,y},...], world units)
+    buffered into the playing envelope (OOB only outside it); out_path: PNG out."""
+    if Image is None or not aerial:
+        return None
+    try:
+        with Image.open(img_path) as im:
+            im = im.convert("RGB")
+            aw, ah = im.size
+            scale = max(aw, ah) / float(MASK_MAX_PX)
+            mw, mh = max(1, round(aw / scale)), max(1, round(ah / scale))
+            small = im.resize((mw, mh), Image.BILINEAR)
+        # local edge energy: edges then box-blur -> "how textured is this area"
+        edges = small.convert("L").filter(ImageFilter.FIND_EDGES)
+        edges = edges.filter(ImageFilter.BoxBlur(2))
+        px, ex = small.load(), edges.load()
+
+        ratio = aerial["w"] / float(mw)   # aerial px -> mask px (uniform downscale)
+        a, b, c, d, e, f = aerial["toWorld"]
+        to_world = [a * ratio, b * ratio, c, d * ratio, e * ratio, f]
+        w2p = invert_affine(*to_world)
+
+        # playing envelope: fat the hole centerlines into a mask of "inside the course"
+        inside_im = Image.new("L", (mw, mh), 0)
+        if corridors and w2p is not None:
+            ia, ib, ic, id_, ie, if_ = w2p
+            units_per_px = math.hypot(to_world[0], to_world[3]) or 1.0
+            width_px = max(3, round(2 * MASK_CORRIDOR_UNITS / units_per_px))
+            d_ie = ImageDraw.Draw(inside_im)
+            for line in corridors:
+                pts = [(ia * p["x"] + ib * p["y"] + ic,
+                        id_ * p["x"] + ie * p["y"] + if_) for p in line]
+                if len(pts) >= 2:
+                    d_ie.line(pts, fill=255, width=width_px, joint="curve")
+        ins = inside_im.load()
+
+        # adaptive fairway/rough brightness split from the green-turf pixels only
+        turf_vals = []
+        for y in range(mh):
+            for x in range(mw):
+                r, g, b = px[x, y]
+                hh, ss, vv = _rgb_to_hsv(r, g, b)
+                if (ss >= MASK_SAT_MIN and vv >= MASK_VAL_MIN
+                        and MASK_HUE_LO <= hh * 360.0 <= MASK_HUE_HI
+                        and not (vv < MASK_WOODS_VAL_MAX and ex[x, y] >= MASK_WOODS_EDGE_MIN)):
+                    turf_vals.append(vv)
+        fw_cut = _otsu(turf_vals, MASK_FW_VAL_FALLBACK)
+
+        lab = Image.new("P", (mw, mh))
+        buf = bytearray(mw * mh)
+        for y in range(mh):
+            row = y * mw
+            for x in range(mw):
+                r, g, b = px[x, y]
+                buf[row + x] = _classify_px(r, g, b, ex[x, y], fw_cut, ins[x, y] > 0)
+        lab.frombytes(bytes(buf))
+        # despeckle (mode filter keeps it index-valued)
+        lab = lab.filter(ImageFilter.ModeFilter(MASK_DESPECKLE))
+
+        # union the OSM woods polygons in as WOODS (strong prior over the heuristic)
+        if woods_world and w2p is not None:
+            ia, ib, ic, id_, ie, if_ = w2p
+            draw = ImageDraw.Draw(lab)
+            for poly in woods_world:
+                pts = [(ia * p["x"] + ib * p["y"] + ic,
+                        id_ * p["x"] + ie * p["y"] + if_) for p in poly]
+                if len(pts) >= 3:
+                    draw.polygon(pts, fill=MASK_WOODS)
+
+        lab.putpalette(MASK_PALETTE)
+        lab.save(out_path)
+        return {"file": None, "w": mw, "h": mh,
+                "toWorld": [round(v, 6) for v in to_world]}
+    except Exception as e:
+        print(f"  ! surface mask failed: {e}", file=sys.stderr)
+        return None
 
 
 # --- Overpass --------------------------------------------------------------

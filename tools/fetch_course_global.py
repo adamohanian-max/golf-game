@@ -203,6 +203,8 @@ def main():
     ap.add_argument("--name", required=True)
     ap.add_argument("--cache")
     ap.add_argument("--no-imagery", action="store_true")
+    ap.add_argument("--no-mask", action="store_true",
+                    help="Skip the aerial surface-classification mask (OOB/fairway/rough)")
     ap.add_argument("--no-dem", action="store_true",
                     help="Skip DEM elevation baking")
     ap.add_argument("--scorecard",
@@ -465,10 +467,23 @@ def main():
             # Carve synth fairways from the now-downloaded aerial, then re-dump JSON.
             carved = carve_synth_fairways(surfaces, synth_fw_jobs, aerial,
                                           os.path.join(out_dir, rel))
-            if carved:
+            # Classify the aerial into a fairway/rough/woods/OOB mask the game samples.
+            mask = None
+            if not args.no_mask:
+                mrel = f"img/{args.id}/surfacemask.png"
+                corridors = [[W(p) for p in lm] for _, lm in hole_lines]
+                mask = fc.build_surface_mask(os.path.join(out_dir, rel), aerial, world,
+                                             surfaces["woods"], corridors,
+                                             os.path.join(out_dir, mrel))
+                if mask:
+                    mask["file"] = mrel
+                    course["surfaceMask"] = mask
+                    print(f"surface mask baked {mask['w']}x{mask['h']} -> courses/{mrel}")
+            if carved or mask:
                 with open(out, "w") as f:
                     json.dump(course, f, separators=(",", ":"))
-                print(f"  ({carved} synth fairway(s) carved from the aerial; JSON re-written)")
+                print(f"  ({carved} synth fairway(s) carved; mask={'yes' if mask else 'no'}; "
+                      f"JSON re-written)")
         except Exception as e:
             print(f"  ! aerial download failed ({e}); curl AERIAL_URL -> courses/{rel}")
 
