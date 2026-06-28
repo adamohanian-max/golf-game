@@ -2480,5 +2480,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "merion-golf-club-east",
+    "name": "Merion Golf Club East",
+    "sub": "Par 70 · 18 holes · 40.00, -75.31",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
