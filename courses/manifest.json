@@ -913,5 +913,10 @@
     "id": "littlestone-golf-club",
     "name": "Littlestone Golf Club",
     "sub": "Par 70 · 18 holes · 51.00, 0.97"
+  },
+  {
+    "id": "liverpool-municipal-north-golf-course",
+    "name": "Liverpool Municipal North Golf Course",
+    "sub": "Par 72 · 18 holes · 53.48, -2.91"
   }
 ]
