@@ -2795,5 +2795,14 @@
     "tags": [
       "pga"
     ]
+  },
+  {
+    "id": "tpc-scottsdale-stadium-course",
+    "name": "TPC Scottsdale Stadium Course",
+    "sub": "Par 71 · 18 holes · 33.64, -111.92",
+    "region": "USA",
+    "tags": [
+      "pga"
+    ]
   }
 ]
