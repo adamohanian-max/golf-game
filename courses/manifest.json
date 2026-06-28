@@ -883,5 +883,10 @@
     "id": "ladybank-golf-club",
     "name": "Ladybank Golf Club",
     "sub": "Par 71 · 18 holes · 56.29, -3.12"
+  },
+  {
+    "id": "lauro-golf",
+    "name": "Lauro Golf",
+    "sub": "Par 72 · 18 holes · 36.65, -4.63"
   }
 ]
