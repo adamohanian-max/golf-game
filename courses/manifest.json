@@ -2543,5 +2543,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "olympic-club-golf-course",
+    "name": "Olympic Club Golf Course",
+    "sub": "Par 73 · 18 holes · 37.71, -122.49",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
