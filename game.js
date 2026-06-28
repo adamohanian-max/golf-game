@@ -11,7 +11,7 @@ const TUNE = {
   stopThreshold: 0.005,  // speed below this = ball stopped
   captureSpeed: 0.05,    // ball must be slower than this to drop in cup (low = hard)
   lipOutMaxSpeed: 0.18,  // putt at/under this that misses the cup is grabbed by the lip and dies 1–2 ft past; faster rams roll on
-  chipRangeYds: 45,      // greenside chip mode auto-engages within this distance to the pin
+  chipRangeYds: 60,      // greenside chip mode auto-engages within this distance to the pin
   // Chip distance band: softest swipe flies chipReachLo×pin, hardest chipReachHi×pin (both
   // capped at club carry). Tight band -> a chip is never very short or very far from the hole.
   chipReachLo: 0.8,      // softest chip still flies 80% of the way to the pin
@@ -559,8 +559,11 @@ function rollStep(b) {
 
   // hole capture / lip-out (course only — the range has no cup). Test the ball's
   // PATH this frame against the cup (swept), so a putt rolling over the small
-  // real-scale hole can't step past it between frames.
-  if (!HOLE.isRange) {
+  // real-scale hole can't step past it between frames. Skip once the ball has
+  // already lipped out this shot: a rammed lip-out hops the ball at the rim, and
+  // re-testing capture every frame would re-trigger the hop in place forever
+  // (ball stuck airborne over the cup, never settling → can't take the next shot).
+  if (!HOLE.isRange && !state._lippedThisShot) {
     const px = b.x - b.vx, py = b.y - b.vy;            // last frame's position
     const capR = HOLE.holeRadius + BALL_RADIUS_UNITS;  // ball overlaps the cup edge
     const cd = segPointDist(HOLE.holePos.x, HOLE.holePos.y, px, py, b.x, b.y);
@@ -667,6 +670,33 @@ const canvas = document.getElementById("game");
 function canSwing() {
   return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition;
 }
+window.__dbg = {
+  get s() { return { moving: state.moving, inHole: state.inHole, air: state.airborne,
+    ht: !!holeTransition, hd: !!holeDrop, canSwing: canSwing(),
+    bx: +state.ball.x.toFixed(2), by: +state.ball.y.toFixed(2),
+    vx: +state.ball.vx.toFixed(4), vy: +state.ball.vy.toFixed(4),
+    lipped: state._lippedThisShot }; },
+  setMode(m) { mode = m; },
+  // Place ball heading at the cup at a given speed, then step physics N frames.
+  lip(speed, frames) {
+    const dx = HOLE.holePos.x - state.ball.x, dy = HOLE.holePos.y - state.ball.y;
+    const d = Math.hypot(dx, dy) || 1;
+    state.ball.vx = dx / d * speed; state.ball.vy = dy / d * speed;
+    state.ball.z = 0; state.ball.vz = 0; state.airborne = false; state.moving = true;
+    for (let i = 0; i < frames; i++) update();
+    return this.s;
+  },
+  putToGreen() {
+    const g = (HOLE.surfaces.green && HOLE.surfaces.green[0]) || null;
+    if (!g) return "no green";
+    let cx = 0, cy = 0; for (const p of g) { cx += p.x; cy += p.y; }
+    cx /= g.length; cy /= g.length;
+    // place ball 3 units below the pin, on the green
+    state.ball.x = HOLE.holePos.x; state.ball.y = HOLE.holePos.y + 3;
+    state.ball.z = 0; state.moving = false;
+    return this.s;
+  },
+};
 
 // =====================================================================
 //  Hole-out feedback — synthesized sound (Web Audio, no asset files),
