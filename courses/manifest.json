@@ -863,5 +863,10 @@
     "id": "kirkiston-castle-golf-club",
     "name": "Kirkiston Castle Golf Club",
     "sub": "Par 70 · 18 holes · 54.44, -5.47"
+  },
+  {
+    "id": "la-quinta-golf-country-club",
+    "name": "La Quinta Golf & Country Club",
+    "sub": "Par 71 · 18 holes · 36.51, -5.00"
   }
 ]
