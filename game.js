@@ -333,7 +333,7 @@ function loadSurfaceMask(maskRec, onReady) {
     const oob = document.createElement("canvas"); oob.width = w; oob.height = h;
     const oc = oob.getContext("2d"), od = oc.createImageData(w, h);
     for (let i = 0; i < lab.length; i++) {
-      if (lab[i] === 0 || lab[i] === 3) { // OB or WOODS
+      if (lab[i] === 0) { // OB only (woods are no longer out of bounds)
         od.data[i * 4] = 204; od.data[i * 4 + 1] = 30; od.data[i * 4 + 2] = 30; od.data[i * 4 + 3] = 110;
       }
     }
@@ -363,6 +363,9 @@ function surfaceAt(x, y) {
   if (inAnyPoly(x, y, s.bunker)) return "bunker"; // sand
   if (inAnyPoly(x, y, s.green)) return "green";
   if (inAnyPoly(x, y, s.tee)) return "fairway";   // tee boxes play like fairway
+  // Real OB = outside the course-boundary polygon (vector-exact, not the coarse
+  // aerial mask). Tested before the mask so the mask only labels turf inside.
+  if (HOLE._boundary && !inAnyPoly(x, y, HOLE._boundary)) return "ob";
   const m = maskClassAt(x, y);
   if (m) return m;                                // fairway | rough | woods | ob
   // no mask: fall back to OSM polygons
@@ -709,7 +712,7 @@ function rollStep(b) {
       return;
     }
     const rest = surfaceAt(b.x, b.y);
-    const isOB = rest === "woods" || rest === "ob"; // trees + aerial-mask out of bounds
+    const isOB = rest === "ob"; // only true out-of-bounds; trees play as they lie
     if (rest === "water" || (isOB && TUNE.obPenalty)) {
       // hazard / out of bounds: +1 penalty, drop at last safe spot
       state.strokes += 1;
@@ -2657,6 +2660,7 @@ function setHole(rec) {
     surfaces: src.surfaces,
     aerial: src.aerial || null,
     isGlobal: glob,
+    _boundary: (src.boundary && src.boundary.length) ? src.boundary : null, // real OB line
   };
   if (glob) {
     // share precomputed DEM + topo + aerial across every hole (load once)
@@ -2699,6 +2703,18 @@ function setHole(rec) {
     HOLE._mask = null;
     const target = HOLE;
     loadSurfaceMask(src.surfaceMask, (m) => { if (HOLE === target) HOLE._mask = m; });
+  }
+  // Boundary-OB only where the OSM boundary actually covers the hole. If the
+  // tee->pin line is largely outside it (mapping gap, e.g. a multi-parcel course
+  // missing a hole), drop boundary-OB for this hole and fall back to the mask —
+  // better than playing the whole hole as out of bounds.
+  if (HOLE._boundary) {
+    const t = HOLE.teePos, p = HOLE.holePos, N = 20; let outside = 0;
+    for (let i = 0; i <= N; i++) {
+      const x = t.x + (p.x - t.x) * i / N, y = t.y + (p.y - t.y) * i / N;
+      if (!inAnyPoly(x, y, HOLE._boundary)) outside++;
+    }
+    if (outside > N * 0.4) HOLE._boundary = null;
   }
   WORLD.w = src.world.w;
   WORLD.h = src.world.h;

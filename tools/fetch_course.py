@@ -263,14 +263,18 @@ def _classify_px(r, g, b, edge, fw_cut, inside):
     return MASK_FAIRWAY if v >= fw_cut else MASK_ROUGH
 
 
-def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path):
+def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path,
+                       boundary=None):
     """Classify the baked aerial into a coarse fairway/rough/woods/OOB raster.
     Returns {file,w,h,toWorld:[...]} (mask px -> world affine) or None to skip.
 
     img_path: baked aerial JPG; aerial: its {w,h,toWorld}; world: {w,h};
     woods_world: OSM woods polygons ([{x,y},...], world units) unioned in as a
-    strong WOODS prior; corridors: hole centerlines ([{x,y},...], world units)
-    buffered into the playing envelope (OOB only outside it); out_path: PNG out."""
+    strong WOODS prior; out_path: PNG out.
+
+    Playing envelope (OOB only outside it): the real course-boundary polygon
+    `boundary` ([[{x,y},...], ...], world units) when available; otherwise falls
+    back to `corridors` (hole centerlines buffered by MASK_CORRIDOR_UNITS)."""
     if Image is None or not aerial:
         return None
     try:
@@ -290,18 +294,26 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
         to_world = [a * ratio, b * ratio, c, d * ratio, e * ratio, f]
         w2p = invert_affine(*to_world)
 
-        # playing envelope: fat the hole centerlines into a mask of "inside the course"
+        # playing envelope = "inside the course". Prefer the real boundary polygon
+        # (OOB = a true property line); fall back to fattened hole centerlines.
         inside_im = Image.new("L", (mw, mh), 0)
-        if corridors and w2p is not None:
+        if w2p is not None:
             ia, ib, ic, id_, ie, if_ = w2p
-            units_per_px = math.hypot(to_world[0], to_world[3]) or 1.0
-            width_px = max(3, round(2 * MASK_CORRIDOR_UNITS / units_per_px))
             d_ie = ImageDraw.Draw(inside_im)
-            for line in corridors:
-                pts = [(ia * p["x"] + ib * p["y"] + ic,
-                        id_ * p["x"] + ie * p["y"] + if_) for p in line]
-                if len(pts) >= 2:
-                    d_ie.line(pts, fill=255, width=width_px, joint="curve")
+            if boundary:
+                for ring in boundary:
+                    pts = [(ia * p["x"] + ib * p["y"] + ic,
+                            id_ * p["x"] + ie * p["y"] + if_) for p in ring]
+                    if len(pts) >= 3:
+                        d_ie.polygon(pts, fill=255)
+            elif corridors:
+                units_per_px = math.hypot(to_world[0], to_world[3]) or 1.0
+                width_px = max(3, round(2 * MASK_CORRIDOR_UNITS / units_per_px))
+                for line in corridors:
+                    pts = [(ia * p["x"] + ib * p["y"] + ic,
+                            id_ * p["x"] + ie * p["y"] + if_) for p in line]
+                    if len(pts) >= 2:
+                        d_ie.line(pts, fill=255, width=width_px, joint="curve")
         ins = inside_im.load()
 
         # adaptive fairway/rough brightness split from the green-turf pixels only
@@ -353,11 +365,14 @@ def fetch_overpass(boundary_id, cache, kind="way"):
             return json.load(f)
     # `way` or `rel` boundary -> area; relations (multipolygon boundaries) work too.
     sel = "rel" if kind in ("rel", "relation") else "way"
-    q = (f'[out:json][timeout:90];{sel}({boundary_id});map_to_area->.oc;'
+    # Bind the boundary to .b, query play features inside its area, AND emit the
+    # boundary geometry itself (.b out geom) so we can bake the real OB line.
+    q = (f'[out:json][timeout:90];{sel}({boundary_id})->.b;.b map_to_area->.oc;'
          f'(way(area.oc)["golf"];'
          f'way(area.oc)["natural"~"wood|water"];'
          f'way(area.oc)["landuse"="grass"];);'
-         f'out tags geom;')
+         f'out tags geom;'
+         f'.b out geom;')
     req = urllib.request.Request(
         OVERPASS + "?" + urllib.parse.urlencode({"data": q}),
         headers={"User-Agent": UA})
@@ -367,6 +382,49 @@ def fetch_overpass(boundary_id, cache, kind="way"):
         with open(cache, "w") as f:
             json.dump(data, f)
     return data
+
+
+def _stitch_rings(ways):
+    """Chain open member-way arcs into closed ring(s) by matching shared
+    endpoints (a relation's outer boundary is often split across several ways).
+    ways: list of [{"lat","lon"},...]. Returns list of rings."""
+    def same(a, b):
+        return abs(a["lat"] - b["lat"]) < 1e-9 and abs(a["lon"] - b["lon"]) < 1e-9
+    segs = [list(w) for w in ways if w and len(w) >= 2]
+    rings = []
+    while segs:
+        ring = segs.pop(0)
+        changed = True
+        while changed and not same(ring[0], ring[-1]):
+            changed = False
+            for i, s in enumerate(segs):
+                if same(ring[-1], s[0]):    ring += s[1:]
+                elif same(ring[-1], s[-1]): ring += list(reversed(s))[1:]
+                elif same(ring[0], s[-1]):  ring = s[:-1] + ring
+                elif same(ring[0], s[0]):   ring = list(reversed(s))[1:] + ring
+                else:                       continue
+                segs.pop(i); changed = True; break
+        rings.append(ring)
+    return rings
+
+
+def boundary_rings(data, boundary_id, kind="way"):
+    """Pull the course-boundary polygon ring(s) from an Overpass response.
+    Returns a list of rings, each a list of {"lat","lon"} points (outer rings
+    only; inner/clubhouse holes are dropped — used only for an inside/outside
+    test). [] if the boundary geometry isn't present."""
+    if kind in ("rel", "relation"):
+        for e in data.get("elements", []):
+            if e.get("type") == "relation" and e.get("id") == boundary_id:
+                outers = [m["geometry"] for m in e.get("members", [])
+                          if m.get("type") == "way" and m.get("geometry")
+                          and m.get("role") in (None, "", "outer")]
+                return _stitch_rings(outers)
+        return []
+    for e in data.get("elements", []):
+        if e.get("type") == "way" and e.get("id") == boundary_id and e.get("geometry"):
+            return [e["geometry"]]
+    return []
 
 
 # --- Geometry helpers (plain math, no deps) --------------------------------

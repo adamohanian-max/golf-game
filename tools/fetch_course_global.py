@@ -223,6 +223,10 @@ def main():
     else:
         data = fc.fetch_overpass(args.boundary_way, args.cache)
     els = [e for e in data["elements"] if "geometry" in e and e.get("tags")]
+    # Real course-boundary polygon (the OB line). projected to world below.
+    _b_id = args.boundary_rel or args.boundary_way
+    _b_kind = "rel" if args.boundary_rel else "way"
+    boundary_geom = fc.boundary_rings(data, _b_id, _b_kind)
     by = lambda g: [e for e in els if e["tags"].get("golf") == g]
     byt = lambda k, v: [e for e in els if e["tags"].get(k) == v]
     greens, bunkers, waters, tees = by("green"), by("bunker"), by("water_hazard"), by("tee")
@@ -313,6 +317,13 @@ def main():
         return {"x": round((m[0] - MINX) * SCALE + MARGIN, 2),
                 "y": round((MAXY - m[1]) * SCALE + MARGIN, 2)}
     def polyU(geom): return [W(p) for p in projall(geom)]
+
+    boundary_world = [polyU(r) for r in boundary_geom if len(r) >= 3]
+    if boundary_world:
+        print(f"boundary: {len(boundary_world)} ring(s), "
+              f"{sum(len(r) for r in boundary_world)} pts")
+    else:
+        print("! no course boundary geometry — OB falls back to corridor tube")
 
     world = {"w": round((MAXX - MINX) * SCALE + 2 * MARGIN, 2),
              "h": round((MAXY - MINY) * SCALE + 2 * MARGIN, 2)}
@@ -439,6 +450,8 @@ def main():
               "world": world, "aerial": aerial, "surfaces": surfaces,
               "synthFairways": synth,
               "holes": sorted(out_holes, key=lambda h: h["num"])}
+    if boundary_world:
+        course["boundary"] = boundary_world
     if dem:
         course["dem"] = dem
     out = os.path.join(os.path.dirname(__file__), "..", "courses", args.id + ".json")
@@ -474,7 +487,8 @@ def main():
                 corridors = [[W(p) for p in lm] for _, lm in hole_lines]
                 mask = fc.build_surface_mask(os.path.join(out_dir, rel), aerial, world,
                                              surfaces["woods"], corridors,
-                                             os.path.join(out_dir, mrel))
+                                             os.path.join(out_dir, mrel),
+                                             boundary=boundary_world)
                 if mask:
                     mask["file"] = mrel
                     course["surfaceMask"] = mask
