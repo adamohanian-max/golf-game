@@ -1929,6 +1929,31 @@ function drawWindIndicator() {
 let _surround = null; // cached course-green surround gradient, keyed to viewport size
 const FLAG_FAR = 70, FLAG_NEAR = 12; // world-unit range over which the flag shrinks
 
+// Tee markers: two blocks flanking the teeing ground, square to the play line,
+// so the tee box reads clearly on the photo (and in the preview flyover).
+function drawTeeMarkers() {
+  const t = HOLE.teePos, p = HOLE.holePos;
+  const ang = Math.atan2(p.y - t.y, p.x - t.x);    // play direction
+  const px = -Math.sin(ang), py = Math.cos(ang);   // unit perpendicular (world)
+  const off = 1.8;                                  // world units to each side
+  const r = Math.max(ws(0.4), 5);                   // marker radius (screen px floor)
+  for (const sgn of [-1, 1]) {
+    const mx = wx(t.x + px * off * sgn, t.y + py * off * sgn);
+    const my = wy(t.x + px * off * sgn, t.y + py * off * sgn);
+    ctx.beginPath();
+    ctx.arc(mx, my, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,0.25)";   // soft drop shadow
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(mx - r * 0.18, my - r * 0.18, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#2563eb";            // blue tee marker
+    ctx.fill();
+    ctx.lineWidth = Math.max(r * 0.22, 1);
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.stroke();
+  }
+}
+
 function draw() {
   const cssW = window.innerWidth, cssH = window.innerHeight;
   computeViewAABB(); // for off-screen polygon culling this frame
@@ -1972,6 +1997,7 @@ function draw() {
     ctx.fillStyle = "#e02a25";
     ctx.fill();
   } else {
+  drawTeeMarkers();   // flank the tee box so it reads clearly
   // hole cup — dark hole with a bright rim so it reads on the photo
   const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wy(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
   ctx.beginPath();
@@ -2829,9 +2855,14 @@ function showPreviewHole() {
   }
   document.getElementById("pv-prev").disabled = previewIdx <= 0;
   document.getElementById("pv-next").disabled = previewIdx >= n - 1;
-  // Flyover: start on the tee, glide up toward the green (camera eases focus->tFocus).
-  camera.focus = { x: HOLE.teePos.x, y: HOLE.teePos.y };
-  camera.tFocus = { x: HOLE.holePos.x, y: HOLE.holePos.y };
+  // Frame the WHOLE hole so the teebox and the green/pin both stay on screen.
+  // (setHole already fit tee<->pin at the midpoint; ease the zoom in for a
+  // gentle cinematic settle instead of panning one end off the frame.)
+  const mid = { x: (HOLE.teePos.x + HOLE.holePos.x) / 2,
+                y: (HOLE.teePos.y + HOLE.holePos.y) / 2 };
+  camera.focus = { x: mid.x, y: mid.y };
+  camera.tFocus = { x: mid.x, y: mid.y };
+  camera.scale = camera.tScale * 0.82;  // start a touch wide, ease to full fit
 }
 
 function closePreview() {
