@@ -2138,5 +2138,14 @@
     "tags": [
       "local"
     ]
+  },
+  {
+    "id": "hickory-hill-golf-course",
+    "name": "Hickory Hill Golf Course",
+    "sub": "Par 71 · 18 holes · 42.70, -71.24",
+    "region": "USA",
+    "tags": [
+      "local"
+    ]
   }
 ]
