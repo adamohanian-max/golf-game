@@ -2642,5 +2642,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "spyglass-hill-golf-course",
+    "name": "Spyglass Hill Golf Course",
+    "sub": "Par 72 · 18 holes · 36.59, -121.96",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
