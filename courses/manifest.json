@@ -2291,5 +2291,14 @@
     "tags": [
       "local"
     ]
+  },
+  {
+    "id": "trull-brook-golf-course",
+    "name": "Trull Brook Golf Course",
+    "sub": "Par 72 · 18 holes · 42.65, -71.26",
+    "region": "USA",
+    "tags": [
+      "local"
+    ]
   }
 ]
