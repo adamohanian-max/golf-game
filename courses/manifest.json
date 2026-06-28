@@ -2057,5 +2057,14 @@
     "location": "Haverhill, MA",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "abenaqui-country-club",
+    "name": "Abenaqui Country Club",
+    "sub": "Par 72 · 18 holes · 42.98, -70.78",
+    "region": "USA",
+    "tags": [
+      "local"
+    ]
   }
 ]
