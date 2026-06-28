@@ -2813,5 +2813,14 @@
     "tags": [
       "pga"
     ]
+  },
+  {
+    "id": "tpc-twin-cities",
+    "name": "TPC Twin Cities",
+    "sub": "Par 71 · 18 holes · 45.18, -93.21",
+    "region": "USA",
+    "tags": [
+      "pga"
+    ]
   }
 ]
