@@ -2309,5 +2309,14 @@
     "tags": [
       "local"
     ]
+  },
+  {
+    "id": "windham-country-club",
+    "name": "Windham Country Club",
+    "sub": "Par 72 · 18 holes · 42.82, -71.31",
+    "region": "USA",
+    "tags": [
+      "local"
+    ]
   }
 ]
