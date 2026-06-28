@@ -2381,5 +2381,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "cypress-point-golf-course",
+    "name": "Cypress Point Golf Course",
+    "sub": "Par 72 · 18 holes · 36.58, -121.97",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
