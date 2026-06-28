@@ -2399,5 +2399,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "garden-city-golf-club",
+    "name": "Garden City Golf Club",
+    "sub": "Par 73 · 18 holes · 40.73, -73.65",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
