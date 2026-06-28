@@ -2228,5 +2228,14 @@
     "tags": [
       "local"
     ]
+  },
+  {
+    "id": "pease-golf-course",
+    "name": "Pease Golf Course",
+    "sub": "Par 71 · 18 holes · 43.07, -70.82",
+    "region": "USA",
+    "tags": [
+      "local"
+    ]
   }
 ]
