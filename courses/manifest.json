@@ -2768,5 +2768,14 @@
     "tags": [
       "pga"
     ]
+  },
+  {
+    "id": "silverado-resort",
+    "name": "Silverado Resort",
+    "sub": "Par 70 · 18 holes · 38.35, -122.26",
+    "region": "USA",
+    "tags": [
+      "pga"
+    ]
   }
 ]
