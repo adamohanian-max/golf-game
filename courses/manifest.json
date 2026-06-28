@@ -2804,5 +2804,14 @@
     "tags": [
       "pga"
     ]
+  },
+  {
+    "id": "tpc-southwind",
+    "name": "TPC Southwind",
+    "sub": "Par 71 · 18 holes · 35.05, -89.78",
+    "region": "USA",
+    "tags": [
+      "pga"
+    ]
   }
 ]
