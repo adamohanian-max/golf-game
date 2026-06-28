@@ -2786,5 +2786,14 @@
     "tags": [
       "pga"
     ]
+  },
+  {
+    "id": "tpc-scottsdale-champions-course",
+    "name": "TPC Scottsdale Champions Course",
+    "sub": "Par 71 · 18 holes · 33.64, -111.90",
+    "region": "USA",
+    "tags": [
+      "pga"
+    ]
   }
 ]
