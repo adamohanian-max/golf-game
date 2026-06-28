@@ -48,6 +48,9 @@ const TUNE = {
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
   lie: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.72, bunker: 0.5, water: 0.5, woods: 0.5 },
+  // Lie spin penalty: backspin multiplier by the surface you're hitting FROM. Rough = "flyer"
+  // (grass between club & ball kills backspin -> ball releases and runs out); sand also robs spin.
+  lieSpin: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.55, bunker: 0.6, water: 0.6, woods: 0.6 },
 
   friction: {            // per-frame velocity multiplier by surface (rolling)
     fairway: 0.97,
@@ -661,7 +664,7 @@ let refScale = 1;
 const canvas = document.getElementById("game");
 
 function canSwing() {
-  return mode !== "menu" && !state.moving && !state.inHole && !holeTransition;
+  return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition;
 }
 
 // =====================================================================
@@ -1022,7 +1025,8 @@ function launchShot(ang, frac, spin, onGreen) {
       const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
       const mouseScale = swingIsMouse ? TUNE.mousePuttScale : 1;   // mouse putts −25%
       const ramp = onGreen ? puttPowerFrac(f) : Math.sqrt(f);
-      power = maxPow * TUNE.puttSensitivity * mouseScale * ramp;
+      const lieMul = onGreen ? 1 : (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1);  // bump from rough/sand loses pace
+      power = maxPow * TUNE.puttSensitivity * mouseScale * ramp * lieMul;
     }
     shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
     b.vx = Math.cos(ang) * power; b.vy = Math.sin(ang) * power;
@@ -1051,17 +1055,20 @@ function launchShot(ang, frac, spin, onGreen) {
       // dribble it — always flies ≥ clubMinFrac of its rated carry.
       ef = Math.max(f, TUNE.clubMinFrac);
     }
-    const C = (c.carry / YARDS_PER_UNIT) * ef;   // carry (world units)
-    const H = (c.maxH / YARDS_PER_UNIT) * ef;     // apex height (scales with the swing)
-    shot.mph = Math.round(c.ball * ef);           // real ball speed for the HUD
+    // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
+    const lieMul = TUNE.lie[surfaceAt(b.x, b.y)] ?? 1;
+    const C = (c.carry / YARDS_PER_UNIT) * ef * lieMul;   // carry (world units)
+    const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul;     // apex height (scales with the swing)
+    shot.mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
     // Slight amplification so deliberate hooks/slices still register.
     b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
     // Full-shot pitches: partial swings with lofted clubs still impart near-full spin rpm
     // (scale up as f drops below 0.6, short shots check hard). Greenside CHIPS do the
     // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
     const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
+    const lieSpinMul = TUNE.lieSpin[surfaceAt(b.x, b.y)] ?? 1;  // rough flyer / sand kill backspin
     const spinScale = chipActive ? TUNE.chipSpin : chipBoost;
-    const effectiveSpinN = Math.min(1, c.spinN * spinScale);
+    const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul);
     setupFlight(b, ang, C, H, c.land * Math.PI / 180, effectiveSpinN);
     state.airborne = true;
   }
@@ -2651,24 +2658,190 @@ async function loadManifest() {
   } catch (e) { console.warn("manifest load failed, using fallback courses:", e); }
   if (!COURSES.some((c) => c.id === selectedCourseId)) selectedCourseId = COURSES[0].id;
 }
-function buildCourseList() {
-  const host = document.getElementById("course-list");
-  if (!host) return;
-  host.innerHTML = "";
-  for (const c of COURSES) {
-    const b = document.createElement("button");
-    b.className = "course-opt" + (c.id === selectedCourseId ? " selected" : "");
-    b.dataset.id = c.id;
-    const best = courseBest(c.id);
-    const bestBadge = best ? `<span class="course-opt-best">🏆 Best ${formatToPar(best.toPar)}</span>` : "";
-    b.innerHTML = `<span class="course-opt-name">${c.name}</span><span class="course-opt-sub">${c.sub}</span>${bestBadge}`;
-    b.addEventListener("click", () => {
-      selectedCourseId = c.id;
-      host.querySelectorAll(".course-opt").forEach((el) => el.classList.toggle("selected", el.dataset.id === c.id));
-    });
-    host.appendChild(b);
-  }
+// ---------------------------------------------------------------------
+//  Course-select page: search + filter rail + card grid
+// ---------------------------------------------------------------------
+const elCourseSelect = document.getElementById("course-select");
+const elCsGrid = document.getElementById("cs-grid");
+const elCsFilters = document.getElementById("cs-filters");
+const elCsSearch = document.getElementById("cs-search");
+const elCsCount = document.getElementById("cs-count");
+
+// Active filter: {type:"all"} | {type:"tag",value} | {type:"region",value}
+let courseFilter = { type: "all" };
+const FILTER_TAGS = [
+  { value: "pgaTour", label: "PGA Tour" },
+  { value: "major", label: "Major venues" },
+];
+
+function courseImg(id) { return "courses/img/" + id + "/course.jpg"; }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function courseMatchesFilter(c) {
+  if (courseFilter.type === "tag") return (c.tags || []).includes(courseFilter.value);
+  if (courseFilter.type === "region") return c.region === courseFilter.value;
+  return true;
 }
+function courseMatchesSearch(c, q) {
+  if (!q) return true;
+  return (c.name + " " + (c.location || "") + " " + (c.sub || "")).toLowerCase().includes(q);
+}
+
+function buildFilterRail() {
+  if (!elCsFilters) return;
+  const regions = [...new Set(COURSES.map((c) => c.region).filter(Boolean))]
+    .sort((a, b) => COURSES.filter((c) => c.region === b).length - COURSES.filter((c) => c.region === a).length);
+  let html = `<div class="cs-fgroup"><div class="cs-fgroup-title">Show</div>`;
+  html += `<button class="cs-chip" data-ft="all">All<span class="cs-chip-n">${COURSES.length}</span></button></div>`;
+  html += `<div class="cs-fgroup"><div class="cs-fgroup-title">Featured</div>`;
+  for (const t of FILTER_TAGS) {
+    const n = COURSES.filter((c) => (c.tags || []).includes(t.value)).length;
+    if (!n) continue;
+    html += `<button class="cs-chip" data-ft="tag" data-fv="${t.value}">${t.label}<span class="cs-chip-n">${n}</span></button>`;
+  }
+  html += `</div><div class="cs-fgroup"><div class="cs-fgroup-title">Region</div>`;
+  for (const r of regions) {
+    const n = COURSES.filter((c) => c.region === r).length;
+    html += `<button class="cs-chip" data-ft="region" data-fv="${esc(r)}">${esc(r)}<span class="cs-chip-n">${n}</span></button>`;
+  }
+  html += `</div>`;
+  elCsFilters.innerHTML = html;
+  elCsFilters.querySelectorAll(".cs-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const ft = chip.dataset.ft;
+      courseFilter = ft === "all" ? { type: "all" } : { type: ft, value: chip.dataset.fv };
+      renderCourseCards();
+    });
+  });
+}
+
+function renderCourseCards() {
+  if (!elCsGrid) return;
+  const q = (elCsSearch && elCsSearch.value || "").trim().toLowerCase();
+  const list = COURSES.filter((c) => courseMatchesFilter(c) && courseMatchesSearch(c, q));
+  // sync active chip
+  if (elCsFilters) elCsFilters.querySelectorAll(".cs-chip").forEach((chip) => {
+    const on = courseFilter.type === "all" ? chip.dataset.ft === "all"
+      : chip.dataset.ft === courseFilter.type && chip.dataset.fv === courseFilter.value;
+    chip.classList.toggle("active", on);
+  });
+  if (elCsCount) elCsCount.textContent = list.length + (list.length === 1 ? " course" : " courses");
+  if (!list.length) { elCsGrid.innerHTML = `<div class="cs-empty">No courses match.</div>`; return; }
+  const frag = document.createDocumentFragment();
+  for (const c of list) {
+    const card = document.createElement("div");
+    card.className = "cs-card";
+    const best = courseBest(c.id);
+    const bestBadge = best ? `<span class="cs-card-best">🏆 ${formatToPar(best.toPar)}</span>` : "";
+    const tags = c.tags || [];
+    let badges = "";
+    if (tags.includes("pgaTour")) badges += `<span class="cs-badge pga">PGA Tour</span>`;
+    if (tags.includes("major")) badges += `<span class="cs-badge major">Major</span>`;
+    const par = c.par != null ? c.par : "—";
+    const yds = c.yards ? c.yards.toLocaleString() + " yds" : "";
+    const loc = c.location && c.location !== "Unknown" ? esc(c.location) : "";
+    const meta = [loc, "Par " + par, yds].filter(Boolean).join(" · ");
+    card.innerHTML =
+      `<div class="cs-card-img">` +
+        `<div class="cs-card-badges">${badges}</div>${bestBadge}` +
+        `<img loading="lazy" src="${courseImg(c.id)}" alt="" onerror="this.style.display='none'">` +
+      `</div>` +
+      `<div class="cs-card-body">` +
+        `<div class="cs-card-name">${esc(c.name)}</div>` +
+        `<div class="cs-card-meta">${meta}</div>` +
+        `<div class="cs-card-btns">` +
+          `<button class="cs-play">Play</button>` +
+          `<button class="cs-preview">Preview</button>` +
+        `</div>` +
+      `</div>`;
+    card.querySelector(".cs-play").addEventListener("click", () => { selectedCourseId = c.id; startCourse(); });
+    card.querySelector(".cs-preview").addEventListener("click", () => openPreview(c.id));
+    frag.appendChild(card);
+  }
+  elCsGrid.innerHTML = "";
+  elCsGrid.appendChild(frag);
+}
+
+// Kept for legacy call sites (boot, manifest refresh, post-bake): rebuild the
+// filter rail + grid from the current COURSES list.
+function buildCourseList() { buildFilterRail(); renderCourseCards(); }
+
+function showCourseSelect() {
+  mode = "select";
+  elMenu.classList.add("hidden");
+  elCourseSelect.classList.remove("hidden");
+  buildFilterRail();
+  renderCourseCards();
+}
+function hideCourseSelect() { elCourseSelect.classList.add("hidden"); }
+
+if (elCsSearch) elCsSearch.addEventListener("input", renderCourseCards);
+document.getElementById("cs-back").addEventListener("click", () => { hideCourseSelect(); showMenu(); });
+
+// ---------------------------------------------------------------------
+//  Hole preview — Trackman/EA-style flyover reusing the live canvas
+// ---------------------------------------------------------------------
+const elPreview = document.getElementById("preview");
+let previewIdx = 0;
+
+async function openPreview(id) {
+  hideCourseSelect();
+  elPreview.classList.remove("hidden");
+  mode = "preview";
+  elHudBtn.classList.add("hidden");
+  elHmClubRow.classList.add("hidden");
+  elScorecard.style.display = "none";
+  if (elHint) elHint.classList.add("hidden");
+  try {
+    if (!course || course.id !== id) await loadCourse(id); // sets course + hole 0
+  } catch (e) { console.warn("preview load failed:", e); }
+  previewIdx = 0;
+  const meta = COURSES.find((c) => c.id === id);
+  document.getElementById("pv-course").textContent = (meta && meta.name) || (course && course.name) || id;
+  showPreviewHole();
+}
+
+function showPreviewHole() {
+  if (!course || !course.holes || !course.holes.length) return;
+  const n = course.holes.length;
+  previewIdx = Math.max(0, Math.min(previewIdx, n - 1));
+  setHole(course.holes[previewIdx]);
+  if (elHint) elHint.classList.add("hidden"); // setHole re-shows the swing hint
+  const h = course.holes[previewIdx];
+  document.getElementById("pv-hole").textContent = "Hole " + (h.num || previewIdx + 1) + " / " + n;
+  const si = h.si != null ? " · SI " + h.si : "";
+  document.getElementById("pv-stats").innerHTML =
+    "Par <b>" + h.par + "</b> · <b>" + (h.yards || HOLE.yards || "?") + "</b> yds" + si;
+  // dots
+  const dots = document.getElementById("pv-dots");
+  dots.innerHTML = "";
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement("span");
+    d.className = "pv-dot" + (i === previewIdx ? " active" : "");
+    d.addEventListener("click", () => { previewIdx = i; showPreviewHole(); });
+    dots.appendChild(d);
+  }
+  document.getElementById("pv-prev").disabled = previewIdx <= 0;
+  document.getElementById("pv-next").disabled = previewIdx >= n - 1;
+  // Flyover: start on the tee, glide up toward the green (camera eases focus->tFocus).
+  camera.focus = { x: HOLE.teePos.x, y: HOLE.teePos.y };
+  camera.tFocus = { x: HOLE.holePos.x, y: HOLE.holePos.y };
+}
+
+function closePreview() {
+  elPreview.classList.add("hidden");
+  showCourseSelect();
+}
+
+document.getElementById("pv-close").addEventListener("click", closePreview);
+document.getElementById("pv-prev").addEventListener("click", () => { previewIdx--; showPreviewHole(); });
+document.getElementById("pv-next").addEventListener("click", () => { previewIdx++; showPreviewHole(); });
+document.getElementById("pv-play").addEventListener("click", () => {
+  if (course) selectedCourseId = course.id;
+  elPreview.classList.add("hidden");
+  startCourse();
+});
 
 // =====================================================================
 //  Menu, driving range & shot-stats HUD
@@ -2686,6 +2859,8 @@ const stCarry = document.getElementById("st-carry");
 const stTotal = document.getElementById("st-total");
 const stSpeed = document.getElementById("st-speed");
 const stPin = document.getElementById("st-pin");
+const stLieFx = document.getElementById("st-lie-fx");
+const rowLieFx = document.getElementById("st-lie-fx-row");
 const rowCarry = stCarry.parentElement;
 
 function rangeFeedback(msg) { if (elRangeResult) elRangeResult.textContent = msg; }
@@ -2724,6 +2899,17 @@ function updateStats() {
   stLieNote.textContent = lieNote(lie);
   const b = state.ball;
   const onGreen = !HOLE.isRange && surfaceAt(b.x, b.y) === "green";
+  // Lie effect: how the current lie scales the next full shot's power + backspin. Hidden
+  // when on the green (putting) or when the lie is clean (no penalty).
+  const surf = HOLE.isRange ? "tee" : surfaceAt(b.x, b.y);
+  const lm = TUNE.lie[surf] ?? 1, sm = TUNE.lieSpin[surf] ?? 1;
+  if (onGreen || (lm === 1 && sm === 1)) {
+    rowLieFx.style.display = "none";
+  } else {
+    rowLieFx.style.display = "";
+    const dp = Math.round((lm - 1) * 100), ds = Math.round((sm - 1) * 100);
+    stLieFx.textContent = `${dp}% pwr · ${ds}% spin`;
+  }
   const toPin = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
   const spd = shot.mph ? shot.mph + " mph" : "—";
   if (onGreen) {
@@ -3023,6 +3209,8 @@ window.addEventListener("keyup", (e) => {
 function showMenu() {
   mode = "menu";
   elMenu.classList.remove("hidden");
+  elCourseSelect.classList.add("hidden");
+  elPreview.classList.add("hidden");
   elRangeUI.classList.add("hidden");
   elStats.classList.add("hidden");
   elHudBtn.classList.add("hidden");
@@ -3048,6 +3236,8 @@ function startCourse() {
     : normalizeSettings(gameDefaults);
   applySettings(activeSettings);
   elMenu.classList.add("hidden");
+  elCourseSelect.classList.add("hidden");
+  elPreview.classList.add("hidden");
   elRangeUI.classList.add("hidden");
   document.getElementById("round-end").classList.add("hidden");
   elScorecard.style.display = "";
@@ -3111,6 +3301,8 @@ async function startDaily() {
   activeSettings = normalizeSettings(gameDefaults);
   applySettings(activeSettings);
   elMenu.classList.add("hidden");
+  elCourseSelect.classList.add("hidden");
+  elPreview.classList.add("hidden");
   elRangeUI.classList.add("hidden");
   document.getElementById("round-end").classList.add("hidden");
   elScorecard.style.display = "";
@@ -3197,7 +3389,7 @@ async function startRange() {
   rangeFeedback("Aim up the range");
 }
 
-document.getElementById("play-course").addEventListener("click", startCourse);
+document.getElementById("play-course").addEventListener("click", showCourseSelect);
 const _playDaily = document.getElementById("play-daily");
 if (_playDaily) _playDaily.addEventListener("click", startDaily);
 document.getElementById("play-range").addEventListener("click", startRange);

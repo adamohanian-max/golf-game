@@ -6,8 +6,9 @@
   <title>Golf — Phase 1</title>
   <link rel="stylesheet" href="css/tokens.css?v=54">
   <link rel="stylesheet" href="css/base.css?v=54">
-  <link rel="stylesheet" href="css/hud.css?v=54">
-  <link rel="stylesheet" href="css/menu.css?v=56">
+  <link rel="stylesheet" href="css/hud.css?v=55">
+  <link rel="stylesheet" href="css/menu.css?v=57">
+  <link rel="stylesheet" href="css/courses.css?v=1">
   <link rel="stylesheet" href="css/modals.css?v=54">
   <link rel="stylesheet" href="css/tournament.css?v=54">
 </head>
@@ -30,6 +31,7 @@
   <div id="stats" class="hidden">
     <div class="srow"><span class="slabel">Lie</span><span class="sval" id="st-lie">—</span></div>
     <div class="snote" id="st-lie-note"></div>
+    <div class="srow" id="st-lie-fx-row"><span class="slabel">Lie effect</span><span class="sval" id="st-lie-fx">—</span></div>
     <div class="srow"><span class="slabel">Carry</span><span class="sval" id="st-carry">—</span></div>
     <div class="srow"><span class="slabel">Total</span><span class="sval" id="st-total">—</span></div>
     <div class="srow"><span class="slabel">Ball speed</span><span class="sval" id="st-speed">—</span></div>
@@ -88,11 +90,10 @@
 
   <div id="menu">
     <div class="menu-box">
-      <p class="menu-eyebrow">Choose a course</p>
+      <p class="menu-eyebrow">Tee it up</p>
       <h1>GOLF</h1>
       <div class="menu-divider"></div>
-      <div id="course-list"></div>
-      <button id="play-course" class="menu-btn">Play Course</button>
+      <button id="play-course" class="menu-btn menu-btn-play">▸ Play</button>
       <button id="play-daily" class="menu-btn secondary"><span class="ic ic-flag"></span>Daily Challenge</button>
       <button id="play-range" class="menu-btn secondary">Driving Range</button>
       <button id="open-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>Leaderboard</button>
@@ -107,6 +108,36 @@
         <span id="menu-account" class="menu-auth-account hidden">Signed in · <button id="menu-signout" class="menu-auth-link">Sign out</button></span>
       </div>
     </div>
+  </div>
+
+  <!-- Course selection page: search + filter rail + card grid -->
+  <div id="course-select" class="hidden">
+    <header id="cs-top">
+      <button id="cs-back" class="cs-back" aria-label="Back">‹</button>
+      <input id="cs-search" type="search" placeholder="Search courses, locations…" autocomplete="off">
+      <span id="cs-count" class="cs-count"></span>
+    </header>
+    <div id="cs-body">
+      <aside id="cs-filters"></aside>
+      <main id="cs-grid"></main>
+    </div>
+  </div>
+
+  <!-- Hole-by-hole preview (Trackman/EA-style flyover over the live canvas) -->
+  <div id="preview" class="hidden">
+    <header id="pv-top">
+      <button id="pv-close" class="pv-close" aria-label="Close preview">✕</button>
+      <div class="pv-title"><span id="pv-course"></span><span id="pv-hole"></span></div>
+    </header>
+    <footer id="pv-bottom">
+      <div id="pv-stats" class="pv-stats"></div>
+      <div class="pv-nav">
+        <button id="pv-prev" class="pv-arrow" aria-label="Previous hole">◀</button>
+        <div id="pv-dots" class="pv-dots"></div>
+        <button id="pv-next" class="pv-arrow" aria-label="Next hole">▶</button>
+      </div>
+      <button id="pv-play" class="menu-btn menu-btn-play">▸ Play this course</button>
+    </footer>
   </div>
 
   <div id="result" class="hidden">
@@ -285,6 +316,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=62"></script>
+  <script src="game.js?v=64"></script>
 </body>
 </html>
