@@ -873,5 +873,10 @@
     "id": "la-reserva-golf-club",
     "name": "La Reserva Golf Club",
     "sub": "Par 73 · 18 holes · 36.29, -5.33"
+  },
+  {
+    "id": "la-zagaleta-country-club-la-zagaleta-course",
+    "name": "La Zagaleta Country Club - La Zagaleta Course",
+    "sub": "Par 71 · 18 holes · 36.53, -5.03"
   }
 ]
