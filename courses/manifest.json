@@ -2,926 +2,2060 @@
   {
     "id": "pinehurst-no2",
     "name": "Pinehurst No. 2",
-    "sub": "Pinehurst, NC · Par 70"
+    "sub": "Pinehurst, NC · Par 70",
+    "par": 71,
+    "yards": 7386,
+    "holes": 18,
+    "location": "Pinehurst, NC",
+    "region": "USA",
+    "tags": [
+      "pgaTour",
+      "major"
+    ]
   },
   {
     "id": "four-oaks-dracut",
     "name": "Four Oaks Country Club",
-    "sub": "Dracut, MA · Par 70"
+    "sub": "Dracut, MA · Par 70",
+    "par": 70,
+    "yards": 6268,
+    "holes": 18,
+    "location": "Dracut, MA",
+    "region": "USA",
+    "tags": []
   },
   {
     "id": "tpc-river-highlands",
     "name": "TPC River Highlands",
-    "sub": "Cromwell, CT · Par 70"
+    "sub": "Cromwell, CT · Par 70",
+    "par": 70,
+    "yards": 6841,
+    "holes": 18,
+    "location": "Cromwell, CT",
+    "region": "USA",
+    "tags": [
+      "pgaTour"
+    ]
   },
   {
     "id": "st-andrews-old",
     "name": "St Andrews — Old Course",
-    "sub": "St Andrews, Scotland · Par 72"
+    "sub": "St Andrews, Scotland · Par 72",
+    "par": 72,
+    "yards": 7327,
+    "holes": 18,
+    "location": "St Andrews, Scotland",
+    "region": "UK & Ireland",
+    "tags": [
+      "major"
+    ]
   },
   {
     "id": "bethpage-black",
     "name": "Bethpage Black",
-    "sub": "Farmingdale, NY · Par 71"
+    "sub": "Farmingdale, NY · Par 71",
+    "par": 71,
+    "yards": 7468,
+    "holes": 18,
+    "location": "Farmingdale, NY",
+    "region": "USA",
+    "tags": [
+      "pgaTour",
+      "major"
+    ]
   },
   {
     "id": "overlook-golf-club",
     "name": "Overlook Golf Club",
-    "sub": "Hollis, NH · Par 71"
+    "sub": "Hollis, NH · Par 71",
+    "par": 71,
+    "yards": 6170,
+    "holes": 18,
+    "location": "Hollis, NH",
+    "region": "USA",
+    "tags": []
   },
   {
     "id": "butter-brook-golf-club",
     "name": "Butter Brook Golf Club",
-    "sub": "Par 72 · 18 holes · 42.53, -71.41"
+    "sub": "Par 72 · 18 holes · 42.53, -71.41",
+    "par": 72,
+    "yards": 4854,
+    "holes": 18,
+    "location": "USA",
+    "region": "USA",
+    "tags": []
   },
   {
     "id": "pebble-beach-golf-course",
     "name": "Pebble Beach Golf Course",
-    "sub": "Pebble Beach, CA · Par 72"
+    "sub": "Pebble Beach, CA · Par 72",
+    "par": 72,
+    "yards": 7052,
+    "holes": 18,
+    "location": "Pebble Beach, CA",
+    "region": "USA",
+    "tags": [
+      "pgaTour",
+      "major"
+    ]
   },
   {
     "id": "aberdour-golf-club",
     "name": "Aberdour Golf Club",
-    "sub": "Par 67 · 18 holes · 56.05, -3.31"
+    "sub": "Par 67 · 18 holes · 56.05, -3.31",
+    "par": 67,
+    "yards": 5170,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "alcaidesa-links-golf-resort",
     "name": "Alcaidesa Links Golf Resort",
-    "sub": "Par 75 · 18 holes · 36.24, -5.32"
+    "sub": "Par 75 · 18 holes · 36.24, -5.32",
+    "par": 75,
+    "yards": 6951,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "alferini-golf",
     "name": "Alferini Golf",
-    "sub": "Par 73 · 18 holes · 36.49, -5.05"
+    "sub": "Par 73 · 18 holes · 36.49, -5.05",
+    "par": 73,
+    "yards": 6419,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "alhaurin-golf",
     "name": "Alhaurin Golf",
-    "sub": "Par 68 · 17 holes · 36.61, -4.71"
+    "sub": "Par 68 · 17 holes · 36.61, -4.71",
+    "par": 68,
+    "yards": 5668,
+    "holes": 17,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "almenara-golf-resort",
     "name": "Almenara Golf Resort",
-    "sub": "Par 72 · 18 holes · 36.28, -5.35"
+    "sub": "Par 72 · 18 holes · 36.28, -5.35",
+    "par": 72,
+    "yards": 6050,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "amsterdamse-golf-club",
     "name": "Amsterdamse Golf Club",
-    "sub": "Par 72 · 18 holes · 52.40, 4.74"
+    "sub": "Par 72 · 18 holes · 52.40, 4.74",
+    "par": 72,
+    "yards": 6657,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "arabian-ranches-golf-club",
     "name": "Arabian Ranches Golf Club",
-    "sub": "Par 72 · 18 holes · 25.05, 55.27"
+    "sub": "Par 72 · 18 holes · 25.05, 55.27",
+    "par": 72,
+    "yards": 7315,
+    "holes": 18,
+    "location": "UAE",
+    "region": "Middle East",
+    "tags": []
   },
   {
     "id": "archerfield-links",
     "name": "Archerfield Links",
-    "sub": "Par 72 · 18 holes · 56.06, -2.79"
+    "sub": "Par 72 · 18 holes · 56.06, -2.79",
+    "par": 72,
+    "yards": 6915,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "ardeer-golf-club",
     "name": "Ardeer Golf Club",
-    "sub": "Par 72 · 18 holes · 55.66, -4.75"
+    "sub": "Par 72 · 18 holes · 55.66, -4.75",
+    "par": 72,
+    "yards": 6164,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "ardglass-golf-club",
     "name": "Ardglass Golf Club",
-    "sub": "Par 70 · 18 holes · 54.25, -5.61"
+    "sub": "Par 70 · 18 holes · 54.25, -5.61",
+    "par": 70,
+    "yards": 6071,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "arrowe-park-golf-course",
     "name": "Arrowe Park Golf Course",
-    "sub": "Par 70 · 18 holes · 53.36, -3.10"
+    "sub": "Par 70 · 18 holes · 53.36, -3.10",
+    "par": 70,
+    "yards": 5977,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "ashford-manor-golf-club",
     "name": "Ashford Manor Golf Club",
-    "sub": "Par 72 · 18 holes · 51.43, -0.46"
+    "sub": "Par 72 · 18 holes · 51.43, -0.46",
+    "par": 72,
+    "yards": 6295,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "ashludie-course",
     "name": "Ashludie Course",
-    "sub": "Par 68 · 18 holes · 56.49, -2.80"
+    "sub": "Par 68 · 18 holes · 56.49, -2.80",
+    "par": 68,
+    "yards": 4823,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "atalaya-golf-country-club",
     "name": "Atalaya Golf & Country Club",
-    "sub": "Par 74 · 18 holes · 36.49, -5.02"
+    "sub": "Par 74 · 18 holes · 36.49, -5.02",
+    "par": 74,
+    "yards": 6442,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "baberton-golf-course",
     "name": "Baberton Golf Course",
-    "sub": "Par 72 · 18 holes · 55.91, -3.30"
+    "sub": "Par 72 · 18 holes · 55.91, -3.30",
+    "par": 72,
+    "yards": 5635,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "balbirnie-park-golf-club",
     "name": "Balbirnie Park Golf Club",
-    "sub": "Par 71 · 18 holes · 56.21, -3.15"
+    "sub": "Par 71 · 18 holes · 56.21, -3.15",
+    "par": 71,
+    "yards": 6097,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "balcomie-links",
     "name": "Balcomie Links",
-    "sub": "Par 69 · 18 holes · 56.28, -2.60"
+    "sub": "Par 69 · 18 holes · 56.28, -2.60",
+    "par": 69,
+    "yards": 5741,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "ballybunion-golf-club",
     "name": "Ballybunion Golf Club",
-    "sub": "Par 72 · 18 holes · 52.50, -9.68"
+    "sub": "Par 72 · 18 holes · 52.50, -9.68",
+    "par": 72,
+    "yards": 6273,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "ballyclare-golf-course",
     "name": "Ballyclare Golf Course",
-    "sub": "Par 68 · 18 holes · 54.77, -6.03"
+    "sub": "Par 68 · 18 holes · 54.77, -6.03",
+    "par": 68,
+    "yards": 5971,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "ballymena-golf-course",
     "name": "Ballymena Golf Course",
-    "sub": "Par 70 · 18 holes · 54.88, -6.22"
+    "sub": "Par 70 · 18 holes · 54.88, -6.22",
+    "par": 70,
+    "yards": 5399,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "bangor-golf-club",
     "name": "Bangor Golf Club",
-    "sub": "Par 72 · 18 holes · 54.66, -5.65"
+    "sub": "Par 72 · 18 holes · 54.66, -5.65",
+    "par": 72,
+    "yards": 6131,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "banstead-downs-golf-club",
     "name": "Banstead Downs Golf Club",
-    "sub": "Par 72 · 18 holes · 51.33, -0.21"
+    "sub": "Par 72 · 18 holes · 51.33, -0.21",
+    "par": 72,
+    "yards": 6441,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "beaverbrook-golf-club",
     "name": "Beaverbrook Golf Club",
-    "sub": "Par 72 · 18 holes · 51.28, -0.31"
+    "sub": "Par 72 · 18 holes · 51.28, -0.31",
+    "par": 72,
+    "yards": 6857,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "belleisle-seafield-golf-courses",
     "name": "Belleisle & Seafield Golf Courses",
-    "sub": "Par 71 · 18 holes · 55.44, -4.64"
+    "sub": "Par 71 · 18 holes · 55.44, -4.64",
+    "par": 71,
+    "yards": 6215,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "belvoir-golf-course",
     "name": "Belvoir Golf Course",
-    "sub": "Par 70 · 18 holes · 54.56, -5.92"
+    "sub": "Par 70 · 18 holes · 54.56, -5.92",
+    "par": 70,
+    "yards": 6212,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "bidston-golf-club",
     "name": "Bidston Golf Club",
-    "sub": "Par 67 · 17 holes · 53.41, -3.08"
+    "sub": "Par 67 · 17 holes · 53.41, -3.08",
+    "par": 67,
+    "yards": 5585,
+    "holes": 17,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "bird-hills-golf-centre",
     "name": "Bird Hills Golf Centre",
-    "sub": "Par 72 · 18 holes · 51.46, -0.75"
+    "sub": "Par 72 · 18 holes · 51.46, -0.75",
+    "par": 72,
+    "yards": 5905,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "blackwood-golf-centre",
     "name": "Blackwood Golf Centre",
-    "sub": "Par 71 · 18 holes · 54.63, -5.73"
+    "sub": "Par 71 · 18 holes · 54.63, -5.73",
+    "par": 71,
+    "yards": 6347,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "boavista-golf-resort",
     "name": "Boavista Golf Resort",
-    "sub": "Par 72 · 18 holes · 37.10, -8.71"
+    "sub": "Par 72 · 18 holes · 37.10, -8.71",
+    "par": 72,
+    "yards": 6274,
+    "holes": 18,
+    "location": "Portugal",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "bootle-golf-club",
     "name": "Bootle Golf Club",
-    "sub": "Par 70 · 18 holes · 53.48, -2.98"
+    "sub": "Par 70 · 18 holes · 53.48, -2.98",
+    "par": 70,
+    "yards": 6042,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "braid-hills-golf-course",
     "name": "Braid Hills Golf Course",
-    "sub": "Par 70 · 18 holes · 55.91, -3.19"
+    "sub": "Par 70 · 18 holes · 55.91, -3.19",
+    "par": 70,
+    "yards": 5026,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "brent-valley-public-golf-course",
     "name": "Brent Valley Public Golf Course",
-    "sub": "Par 67 · 18 holes · 51.52, -0.35"
+    "sub": "Par 67 · 18 holes · 51.52, -0.35",
+    "par": 67,
+    "yards": 5123,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "bruntsfield-links",
     "name": "Bruntsfield Links",
-    "sub": "Par 69 · 18 holes · 55.97, -3.29"
+    "sub": "Par 69 · 18 holes · 55.97, -3.29",
+    "par": 69,
+    "yards": 6429,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "burhill-golf-club",
     "name": "Burhill Golf Club",
-    "sub": "Par 70 · 18 holes · 51.35, -0.42"
+    "sub": "Par 70 · 18 holes · 51.35, -0.42",
+    "par": 70,
+    "yards": 6268,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "cabopino-golf",
     "name": "Cabopino golf",
-    "sub": "Par 62 · 18 holes · 36.49, -4.74"
+    "sub": "Par 62 · 18 holes · 36.49, -4.74",
+    "par": 62,
+    "yards": 5526,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "cairndhu-golf-course",
     "name": "Cairndhu Golf Course",
-    "sub": "Par 70 · 18 holes · 54.89, -5.85"
+    "sub": "Par 70 · 18 holes · 54.89, -5.85",
+    "par": 70,
+    "yards": 5901,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "calanova-golf-club",
     "name": "Calanova Golf Club",
-    "sub": "Par 72 · 18 holes · 36.51, -4.71"
+    "sub": "Par 72 · 18 holes · 36.51, -4.71",
+    "par": 72,
+    "yards": 6104,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "campo-am-rica",
     "name": "Campo América",
-    "sub": "Par 72 · 18 holes · 36.54, -4.73"
+    "sub": "Par 72 · 18 holes · 36.54, -4.73",
+    "par": 72,
+    "yards": 6398,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "campo-asia",
     "name": "Campo Asia",
-    "sub": "Par 72 · 18 holes · 36.54, -4.72"
+    "sub": "Par 72 · 18 holes · 36.54, -4.72",
+    "par": 72,
+    "yards": 6131,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "campo-de-golf-r-o-real",
     "name": "Campo de Golf Río Real",
-    "sub": "Par 72 · 18 holes · 36.51, -4.84"
+    "sub": "Par 72 · 18 holes · 36.51, -4.84",
+    "par": 72,
+    "yards": 6435,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "campo-europa",
     "name": "Campo Europa",
-    "sub": "Par 71 · 18 holes · 36.55, -4.72"
+    "sub": "Par 71 · 18 holes · 36.55, -4.72",
+    "par": 71,
+    "yards": 6295,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "campo-los-lagos",
     "name": "Campo Los Lagos",
-    "sub": "Par 72 · 18 holes · 36.55, -4.67"
+    "sub": "Par 72 · 18 holes · 36.55, -4.67",
+    "par": 72,
+    "yards": 6516,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "campo-los-olivos",
     "name": "Campo Los Olivos",
-    "sub": "Par 72 · 18 holes · 36.55, -4.67"
+    "sub": "Par 72 · 18 holes · 36.55, -4.67",
+    "par": 72,
+    "yards": 5869,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "canmore-golf-club",
     "name": "Canmore Golf Club",
-    "sub": "Par 72 · 18 holes · 56.08, -3.46"
+    "sub": "Par 72 · 18 holes · 56.08, -3.46",
+    "par": 72,
+    "yards": 4916,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "carnalea-golf-club",
     "name": "Carnalea Golf Club",
-    "sub": "Par 69 · 18 holes · 54.66, -5.70"
+    "sub": "Par 69 · 18 holes · 54.66, -5.70",
+    "par": 69,
+    "yards": 5567,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "carrick-knowe-golf-club",
     "name": "Carrick Knowe Golf Club",
-    "sub": "Par 70 · 18 holes · 55.94, -3.26"
+    "sub": "Par 70 · 18 holes · 55.94, -3.26",
+    "par": 70,
+    "yards": 5132,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "carrickfergus-golf-course",
     "name": "Carrickfergus Golf Course",
-    "sub": "Par 72 · 18 holes · 54.72, -5.80"
+    "sub": "Par 72 · 18 holes · 54.72, -5.80",
+    "par": 72,
+    "yards": 5445,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "castlerock-golf-club",
     "name": "Castlerock Golf Club",
-    "sub": "Par 73 · 18 holes · 55.16, -6.77"
+    "sub": "Par 73 · 18 holes · 55.16, -6.77",
+    "par": 73,
+    "yards": 6245,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "castletroy-golf-club",
     "name": "Castletroy Golf Club",
-    "sub": "Par 73 · 18 holes · 52.66, -8.56"
+    "sub": "Par 73 · 18 holes · 52.66, -8.56",
+    "par": 73,
+    "yards": 6815,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "charleton-golf-club",
     "name": "Charleton Golf Club",
-    "sub": "Par 71 · 18 holes · 56.22, -2.87"
+    "sub": "Par 71 · 18 holes · 56.22, -2.87",
+    "par": 71,
+    "yards": 6241,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "childwall-golf-club",
     "name": "Childwall Golf Club",
-    "sub": "Par 68 · 17 holes · 53.40, -2.84"
+    "sub": "Par 68 · 17 holes · 53.40, -2.84",
+    "par": 68,
+    "yards": 6103,
+    "holes": 17,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "clandon-regis-golf-club",
     "name": "Clandon Regis Golf Club",
-    "sub": "Par 72 · 18 holes · 51.26, -0.49"
+    "sub": "Par 72 · 18 holes · 51.26, -0.49",
+    "par": 72,
+    "yards": 6341,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "club-de-golf-aloha",
     "name": "Club de Golf Aloha",
-    "sub": "Par 72 · 18 holes · 36.51, -4.96"
+    "sub": "Par 72 · 18 holes · 36.51, -4.96",
+    "par": 72,
+    "yards": 6710,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "club-de-golf-de-guadalhorce",
     "name": "Club de Golf de Guadalhorce",
-    "sub": "Par 72 · 18 holes · 36.70, -4.53"
+    "sub": "Par 72 · 18 holes · 36.70, -4.53",
+    "par": 72,
+    "yards": 6609,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "club-de-golf-la-ca-ada",
     "name": "Club de Golf La Cañada",
-    "sub": "Par 71 · 18 holes · 36.29, -5.31"
+    "sub": "Par 71 · 18 holes · 36.29, -5.31",
+    "par": 71,
+    "yards": 6161,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "club-de-golf-m-laga-parador",
     "name": "Club de Golf Málaga Parador",
-    "sub": "Par 72 · 18 holes · 36.65, -4.47"
+    "sub": "Par 72 · 18 holes · 36.65, -4.47",
+    "par": 72,
+    "yards": 6842,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "club-de-golf-valderrama",
     "name": "Club de Golf Valderrama",
-    "sub": "Par 71 · 18 holes · 36.29, -5.33"
+    "sub": "Par 71 · 18 holes · 36.29, -5.33",
+    "par": 71,
+    "yards": 7008,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "cobtree-manor-park-golf-club",
     "name": "Cobtree Manor Park Golf Club",
-    "sub": "Par 69 · 18 holes · 51.30, 0.51"
+    "sub": "Par 69 · 18 holes · 51.30, 0.51",
+    "par": 69,
+    "yards": 5209,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "coombe-hill-golf-club",
     "name": "Coombe Hill Golf Club",
-    "sub": "Par 71 · 18 holes · 51.42, -0.26"
+    "sub": "Par 71 · 18 holes · 51.42, -0.26",
+    "par": 71,
+    "yards": 6243,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "coronation-course",
     "name": "Coronation Course",
-    "sub": "Par 72 · 18 holes · 51.31, -0.27"
+    "sub": "Par 72 · 18 holes · 51.31, -0.27",
+    "par": 72,
+    "yards": 5785,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "country-club-of-north-carolina-cardinal",
     "name": "Country Club of North Carolina - Cardinal",
-    "sub": "Par 72 · 18 holes · 35.17, -79.45"
+    "sub": "Par 72 · 18 holes · 35.17, -79.45",
+    "par": 72,
+    "yards": 7129,
+    "holes": 18,
+    "location": "USA",
+    "region": "USA",
+    "tags": []
   },
   {
     "id": "country-club-of-north-carolina-dogwood",
     "name": "Country Club of North Carolina - Dogwood",
-    "sub": "Par 72 · 18 holes · 35.16, -79.44"
+    "sub": "Par 72 · 18 holes · 35.16, -79.44",
+    "par": 72,
+    "yards": 6998,
+    "holes": 18,
+    "location": "USA",
+    "region": "USA",
+    "tags": []
   },
   {
     "id": "cowdenbeath-golf-course",
     "name": "Cowdenbeath Golf Course",
-    "sub": "Par 72 · 18 holes · 56.12, -3.33"
+    "sub": "Par 72 · 18 holes · 56.12, -3.33",
+    "par": 72,
+    "yards": 5792,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "craigentinny-golf-course",
     "name": "Craigentinny Golf Course",
-    "sub": "Par 72 · 18 holes · 55.96, -3.14"
+    "sub": "Par 72 · 18 holes · 55.96, -3.14",
+    "par": 72,
+    "yards": 4933,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "craighead-links",
     "name": "Craighead Links",
-    "sub": "Par 72 · 18 holes · 56.28, -2.60"
+    "sub": "Par 72 · 18 holes · 56.28, -2.60",
+    "par": 72,
+    "yards": 6664,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "craigielaw-golf-club",
     "name": "Craigielaw Golf Club",
-    "sub": "Par 71 · 18 holes · 56.01, -2.88"
+    "sub": "Par 71 · 18 holes · 56.01, -2.88",
+    "par": 71,
+    "yards": 6321,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "craigmillar-park-golf-club",
     "name": "Craigmillar Park Golf Club",
-    "sub": "Par 72 · 18 holes · 55.92, -3.18"
+    "sub": "Par 72 · 18 holes · 55.92, -3.18",
+    "par": 72,
+    "yards": 5237,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "craigtoun-course",
     "name": "Craigtoun Course",
-    "sub": "Par 71 · 18 holes · 56.32, -2.84"
+    "sub": "Par 71 · 18 holes · 56.32, -2.84",
+    "par": 71,
+    "yards": 7253,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "cuddington-golf-course",
     "name": "Cuddington Golf Course",
-    "sub": "Par 72 · 18 holes · 51.34, -0.22"
+    "sub": "Par 72 · 18 holes · 51.34, -0.22",
+    "par": 72,
+    "yards": 6512,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dalmilling-golf-course",
     "name": "Dalmilling Golf Course",
-    "sub": "Par 72 · 18 holes · 55.47, -4.59"
+    "sub": "Par 72 · 18 holes · 55.47, -4.59",
+    "par": 72,
+    "yards": 5412,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "deer-park",
     "name": "Deer Park",
-    "sub": "Par 73 · 18 holes · 55.91, -3.54"
+    "sub": "Par 73 · 18 holes · 55.91, -3.54",
+    "par": 73,
+    "yards": 6451,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dodhead-golf-course",
     "name": "Dodhead Golf Course",
-    "sub": "Par 70 · 18 holes · 56.07, -3.21"
+    "sub": "Par 70 · 18 holes · 56.07, -3.21",
+    "par": 70,
+    "yards": 5491,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dom-pedro-laguna-golf-course",
     "name": "Dom Pedro Laguna Golf Course",
-    "sub": "Par 74 · 18 holes · 37.09, -8.13"
+    "sub": "Par 74 · 18 holes · 37.09, -8.13",
+    "par": 74,
+    "yards": 6751,
+    "holes": 18,
+    "location": "Portugal",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "dom-pedro-millennium-golf-course",
     "name": "Dom Pedro Millennium Golf Course",
-    "sub": "Par 72 · 18 holes · 37.10, -8.13"
+    "sub": "Par 72 · 18 holes · 37.10, -8.13",
+    "par": 72,
+    "yards": 6358,
+    "holes": 18,
+    "location": "Portugal",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "dom-pedro-old-course",
     "name": "Dom Pedro Old Course",
-    "sub": "Par 73 · 18 holes · 37.10, -8.12"
+    "sub": "Par 73 · 18 holes · 37.10, -8.12",
+    "par": 73,
+    "yards": 6414,
+    "holes": 18,
+    "location": "Portugal",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "dom-pedro-pinhal-golf-course",
     "name": "Dom Pedro Pinhal Golf Course",
-    "sub": "Par 72 · 18 holes · 37.09, -8.11"
+    "sub": "Par 72 · 18 holes · 37.09, -8.11",
+    "par": 72,
+    "yards": 6809,
+    "holes": 18,
+    "location": "Portugal",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "dom-pedro-victoria-golf-course",
     "name": "Dom Pedro Victoria Golf Course",
-    "sub": "Par 71 · 18 holes · 37.10, -8.14"
+    "sub": "Par 71 · 18 holes · 37.10, -8.14",
+    "par": 71,
+    "yards": 6942,
+    "holes": 18,
+    "location": "Portugal",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "donaghadee-golf-club",
     "name": "Donaghadee Golf Club",
-    "sub": "Par 71 · 18 holes · 54.65, -5.55"
+    "sub": "Par 71 · 18 holes · 54.65, -5.55",
+    "par": 71,
+    "yards": 5896,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "downfield",
     "name": "Downfield",
-    "sub": "Par 61 · 15 holes · 56.49, -3.03"
+    "sub": "Par 61 · 15 holes · 56.49, -3.03",
+    "par": 61,
+    "yards": 5620,
+    "holes": 15,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "downshire-golf-complex",
     "name": "Downshire Golf Complex",
-    "sub": "Par 72 · 18 holes · 51.39, -0.79"
+    "sub": "Par 72 · 18 holes · 51.39, -0.79",
+    "par": 72,
+    "yards": 6271,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "drumoig-golf-course",
     "name": "Drumoig Golf Course",
-    "sub": "Par 73 · 18 holes · 56.41, -2.90"
+    "sub": "Par 73 · 18 holes · 56.41, -2.90",
+    "par": 73,
+    "yards": 6740,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "duddingston-golf-course",
     "name": "Duddingston Golf Course",
-    "sub": "Par 73 · 18 holes · 55.94, -3.14"
+    "sub": "Par 73 · 18 holes · 55.94, -3.14",
+    "par": 73,
+    "yards": 6467,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dumbarnie-links",
     "name": "Dumbarnie Links",
-    "sub": "Par 72 · 18 holes · 56.21, -2.89"
+    "sub": "Par 72 · 18 holes · 56.21, -2.89",
+    "par": 72,
+    "yards": 7528,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dunbar-golf-club",
     "name": "Dunbar Golf Club",
-    "sub": "Par 70 · 18 holes · 55.99, -2.48"
+    "sub": "Par 70 · 18 holes · 55.99, -2.48",
+    "par": 70,
+    "yards": 6356,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dundonald-links",
     "name": "Dundonald Links",
-    "sub": "Par 72 · 18 holes · 55.59, -4.66"
+    "sub": "Par 72 · 18 holes · 55.59, -4.66",
+    "par": 72,
+    "yards": 7228,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dunluce-links",
     "name": "Dunluce Links",
-    "sub": "Par 72 · 18 holes · 55.20, -6.63"
+    "sub": "Par 72 · 18 holes · 55.20, -6.63",
+    "par": 72,
+    "yards": 7188,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dunmurry-golf-course",
     "name": "Dunmurry Golf Course",
-    "sub": "Par 71 · 18 holes · 54.55, -5.99"
+    "sub": "Par 71 · 18 holes · 54.55, -5.99",
+    "par": 71,
+    "yards": 6010,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "dunnikier-park-golf-course",
     "name": "Dunnikier Park Golf Course",
-    "sub": "Par 71 · 18 holes · 56.14, -3.16"
+    "sub": "Par 71 · 18 holes · 56.14, -3.16",
+    "par": 71,
+    "yards": 6479,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "east-course",
     "name": "East Course",
-    "sub": "Par 73 · 18 holes · 55.90, -3.36"
+    "sub": "Par 73 · 18 holes · 55.90, -3.36",
+    "par": 73,
+    "yards": 6792,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "eden-course",
     "name": "Eden Course",
-    "sub": "Par 66 · 17 holes · 56.35, -2.83"
+    "sub": "Par 66 · 17 holes · 56.35, -2.83",
+    "par": 66,
+    "yards": 5648,
+    "holes": 17,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "effingham-golf-club",
     "name": "Effingham Golf Club",
-    "sub": "Par 71 · 18 holes · 51.26, -0.41"
+    "sub": "Par 71 · 18 holes · 51.26, -0.41",
+    "par": 71,
+    "yards": 6833,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "el-para-so-golf-club",
     "name": "El Paraíso Golf Club",
-    "sub": "Par 71 · 18 holes · 36.48, -5.03"
+    "sub": "Par 71 · 18 holes · 36.48, -5.03",
+    "par": 71,
+    "yards": 6744,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "elie-golf-course",
     "name": "Elie Golf Course",
-    "sub": "Par 72 · 18 holes · 56.19, -2.84"
+    "sub": "Par 72 · 18 holes · 56.19, -2.84",
+    "par": 72,
+    "yards": 6184,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "elmwood-golf-course",
     "name": "Elmwood Golf Course",
-    "sub": "Par 72 · 18 holes · 56.30, -3.04"
+    "sub": "Par 72 · 18 holes · 56.30, -3.04",
+    "par": 72,
+    "yards": 6059,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "espiche-golf",
     "name": "Espiche Golf",
-    "sub": "Par 72 · 18 holes · 37.12, -8.75"
+    "sub": "Par 72 · 18 holes · 37.12, -8.75",
+    "par": 72,
+    "yards": 6487,
+    "holes": 18,
+    "location": "Portugal",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "faldo-course",
     "name": "Faldo Course",
-    "sub": "Par 73 · 18 holes · 25.08, 55.16"
+    "sub": "Par 73 · 18 holes · 25.08, 55.16",
+    "par": 73,
+    "yards": 7199,
+    "holes": 18,
+    "location": "UAE",
+    "region": "Middle East",
+    "tags": []
   },
   {
     "id": "flamingos-golf",
     "name": "Flamingos Golf",
-    "sub": "Par 71 · 18 holes · 36.47, -5.06"
+    "sub": "Par 71 · 18 holes · 36.47, -5.06",
+    "par": 71,
+    "yards": 6012,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "formby-golf-club",
     "name": "Formby Golf Club",
-    "sub": "Par 72 · 18 holes · 53.57, -3.08"
+    "sub": "Par 72 · 18 holes · 53.57, -3.08",
+    "par": 72,
+    "yards": 7039,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "formby-hall-golf-course",
     "name": "Formby Hall Golf Course",
-    "sub": "Par 72 · 18 holes · 53.58, -3.04"
+    "sub": "Par 72 · 18 holes · 53.58, -3.04",
+    "par": 72,
+    "yards": 7010,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "formby-ladies-golf-club",
     "name": "Formby Ladies Golf Club",
-    "sub": "Par 68 · 18 holes · 53.57, -3.08"
+    "sub": "Par 68 · 18 holes · 53.57, -3.08",
+    "par": 68,
+    "yards": 5415,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "forrester-park-golf-course",
     "name": "Forrester Park Golf Course",
-    "sub": "Par 72 · 18 holes · 56.07, -3.53"
+    "sub": "Par 72 · 18 holes · 56.07, -3.53",
+    "par": 72,
+    "yards": 6665,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "foxhills",
     "name": "Foxhills",
-    "sub": "Par 73 · 18 holes · 51.38, -0.55"
+    "sub": "Par 73 · 18 holes · 51.38, -0.55",
+    "par": 73,
+    "yards": 6916,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "galgorm-castle-golf-club",
     "name": "Galgorm Castle Golf Club",
-    "sub": "Par 70 · 18 holes · 54.85, -6.31"
+    "sub": "Par 70 · 18 holes · 54.85, -6.31",
+    "par": 70,
+    "yards": 6825,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "glasgow-golf-club-gailes-links",
     "name": "Glasgow Golf Club / Gailes Links",
-    "sub": "Par 71 · 18 holes · 55.60, -4.66"
+    "sub": "Par 71 · 18 holes · 55.60, -4.66",
+    "par": 71,
+    "yards": 6752,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "glenrothes-golf-course",
     "name": "Glenrothes Golf Course",
-    "sub": "Par 70 · 18 holes · 56.19, -3.21"
+    "sub": "Par 70 · 18 holes · 56.19, -3.21",
+    "par": 70,
+    "yards": 5949,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "golf-brianza-country-club",
     "name": "Golf Brianza Country Club",
-    "sub": "Par 72 · 18 holes · 45.64, 9.35"
+    "sub": "Par 72 · 18 holes · 45.64, 9.35",
+    "par": 72,
+    "yards": 5718,
+    "holes": 18,
+    "location": "Italy",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-club-milano",
     "name": "Golf Club Milano",
-    "sub": "Par 72 · 18 holes · 45.62, 9.29"
+    "sub": "Par 72 · 18 holes · 45.62, 9.29",
+    "par": 72,
+    "yards": 6534,
+    "holes": 18,
+    "location": "Italy",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-d-ableiges",
     "name": "Golf d'Ableiges",
-    "sub": "Par 72 · 18 holes · 49.08, 1.99"
+    "sub": "Par 72 · 18 holes · 49.08, 1.99",
+    "par": 72,
+    "yards": 6417,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-d-opio-valbonne",
     "name": "Golf d’Opio Valbonne",
-    "sub": "Par 73 · 18 holes · 43.65, 7.02"
+    "sub": "Par 73 · 18 holes · 43.65, 7.02",
+    "par": 73,
+    "yards": 6151,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-d-ormesson",
     "name": "Golf d’Ormesson",
-    "sub": "Par 72 · 18 holes · 48.79, 2.55"
+    "sub": "Par 72 · 18 holes · 48.79, 2.55",
+    "par": 72,
+    "yards": 5990,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-d-ozoir-la-ferri-re",
     "name": "Golf d'Ozoir-la-Ferrière",
-    "sub": "Par 75 · 18 holes · 48.76, 2.65"
+    "sub": "Par 75 · 18 holes · 48.76, 2.65",
+    "par": 75,
+    "yards": 6841,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-d-tiolles",
     "name": "Golf d'Étiolles",
-    "sub": "Par 73 · 18 holes · 48.64, 2.48"
+    "sub": "Par 73 · 18 holes · 48.64, 2.48",
+    "par": 73,
+    "yards": 6784,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-b-themont",
     "name": "Golf de Béthemont",
-    "sub": "Par 72 · 18 holes · 48.91, 2.00"
+    "sub": "Par 72 · 18 holes · 48.91, 2.00",
+    "par": 72,
+    "yards": 6345,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-bussy-guermantes",
     "name": "Golf de Bussy-Guermantes",
-    "sub": "Par 72 · 18 holes · 48.85, 2.72"
+    "sub": "Par 72 · 18 holes · 48.85, 2.72",
+    "par": 72,
+    "yards": 6637,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-cergy-vaur-al",
     "name": "Golf de Cergy Vauréal",
-    "sub": "Par 72 · 18 holes · 49.04, 2.01"
+    "sub": "Par 72 · 18 holes · 49.04, 2.01",
+    "par": 72,
+    "yards": 6200,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-domont-montmorency",
     "name": "Golf de Domont-Montmorency",
-    "sub": "Par 72 · 18 holes · 49.02, 2.31"
+    "sub": "Par 72 · 18 holes · 49.02, 2.31",
+    "par": 72,
+    "yards": 6074,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-feucherolles",
     "name": "Golf de Feucherolles",
-    "sub": "Par 72 · 18 holes · 48.87, 1.99"
+    "sub": "Par 72 · 18 holes · 48.87, 1.99",
+    "par": 72,
+    "yards": 6812,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-marivaux",
     "name": "Golf de Marivaux",
-    "sub": "Par 72 · 18 holes · 48.63, 2.17"
+    "sub": "Par 72 · 18 holes · 48.63, 2.17",
+    "par": 72,
+    "yards": 6485,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-marolles",
     "name": "Golf de Marolles",
-    "sub": "Par 72 · 18 holes · 48.73, 2.55"
+    "sub": "Par 72 · 18 holes · 48.73, 2.55",
+    "par": 72,
+    "yards": 4731,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-roissy",
     "name": "Golf de Roissy",
-    "sub": "Par 72 · 18 holes · 49.00, 2.50"
+    "sub": "Par 72 · 18 holes · 49.00, 2.50",
+    "par": 72,
+    "yards": 6967,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-s-nart",
     "name": "Golf de Sénart",
-    "sub": "Par 71 · 18 holes · 48.62, 2.52"
+    "sub": "Par 71 · 18 holes · 48.62, 2.52",
+    "par": 71,
+    "yards": 6260,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-saint-cloud",
     "name": "Golf de Saint-Cloud",
-    "sub": "Par 71 · 18 holes · 48.85, 2.18"
+    "sub": "Par 71 · 18 holes · 48.85, 2.18",
+    "par": 71,
+    "yards": 6946,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-saint-germain-en-laye",
     "name": "Golf de Saint-Germain-en-Laye",
-    "sub": "Par 73 · 18 holes · 48.92, 2.05"
+    "sub": "Par 73 · 18 holes · 48.92, 2.05",
+    "par": 73,
+    "yards": 6738,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-saint-germain-l-s-corbeil",
     "name": "Golf de Saint-Germain-lès-Corbeil",
-    "sub": "Par 70 · 18 holes · 48.64, 2.49"
+    "sub": "Par 70 · 18 holes · 48.64, 2.49",
+    "par": 70,
+    "yards": 5828,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-saint-nom-la-bret-che",
     "name": "Golf de Saint-Nom la Bretêche",
-    "sub": "Par 72 · 18 holes · 48.85, 2.03"
+    "sub": "Par 72 · 18 holes · 48.85, 2.03",
+    "par": 72,
+    "yards": 6654,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-saint-quentin-en-yvelines",
     "name": "Golf de Saint-Quentin en Yvelines",
-    "sub": "Par 72 · 18 holes · 48.79, 1.99"
+    "sub": "Par 72 · 18 holes · 48.79, 1.99",
+    "par": 72,
+    "yards": 7573,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-valescure",
     "name": "Golf de Valescure",
-    "sub": "Par 68 · 18 holes · 43.46, 6.80"
+    "sub": "Par 68 · 18 holes · 43.46, 6.80",
+    "par": 68,
+    "yards": 5517,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-villennes",
     "name": "Golf de Villennes",
-    "sub": "Par 72 · 18 holes · 48.93, 1.99"
+    "sub": "Par 72 · 18 holes · 48.93, 1.99",
+    "par": 72,
+    "yards": 6104,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-de-viltain-saint-marc",
     "name": "Golf de Viltain Saint-Marc",
-    "sub": "Par 71 · 18 holes · 48.75, 2.15"
+    "sub": "Par 71 · 18 holes · 48.75, 2.15",
+    "par": 71,
+    "yards": 6070,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-national",
     "name": "Golf National",
-    "sub": "Par 73 · 18 holes · 48.75, 2.09"
+    "sub": "Par 73 · 18 holes · 48.75, 2.09",
+    "par": 73,
+    "yards": 8194,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golf-torrequebrada",
     "name": "Golf Torrequebrada",
-    "sub": "Par 72 · 18 holes · 36.59, -4.55"
+    "sub": "Par 72 · 18 holes · 36.59, -4.55",
+    "par": 72,
+    "yards": 6295,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfanlage-gut-rieden",
     "name": "Golfanlage Gut Rieden",
-    "sub": "Par 72 · 18 holes · 48.03, 11.35"
+    "sub": "Par 72 · 18 holes · 48.03, 11.35",
+    "par": 72,
+    "yards": 6591,
+    "holes": 18,
+    "location": "Germany",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfanlage-tegernbach",
     "name": "Golfanlage Tegernbach",
-    "sub": "Par 73 · 18 holes · 48.27, 11.08"
+    "sub": "Par 73 · 18 holes · 48.27, 11.08",
+    "par": 73,
+    "yards": 6602,
+    "holes": 18,
+    "location": "Germany",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfbaan-de-hoge-dijk",
     "name": "Golfbaan De Hoge Dijk",
-    "sub": "Par 73 · 18 holes · 52.29, 4.96"
+    "sub": "Par 73 · 18 holes · 52.29, 4.96",
+    "par": 73,
+    "yards": 6429,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfbaan-de-kroonprins",
     "name": "Golfbaan de Kroonprins",
-    "sub": "Par 70 · 18 holes · 51.97, 5.08"
+    "sub": "Par 70 · 18 holes · 51.97, 5.08",
+    "par": 70,
+    "yards": 6140,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfbaan-hitland",
     "name": "Golfbaan Hitland",
-    "sub": "Par 71 · 18 holes · 51.95, 4.62"
+    "sub": "Par 71 · 18 holes · 51.95, 4.62",
+    "par": 71,
+    "yards": 6296,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfbaan-waterland-amsterdam",
     "name": "Golfbaan Waterland Amsterdam",
-    "sub": "Par 71 · 18 holes · 52.41, 4.95"
+    "sub": "Par 71 · 18 holes · 52.41, 4.95",
+    "par": 71,
+    "yards": 5389,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfclub-broekpolder",
     "name": "Golfclub Broekpolder",
-    "sub": "Par 68 · 17 holes · 51.94, 4.32"
+    "sub": "Par 68 · 17 holes · 51.94, 4.32",
+    "par": 68,
+    "yards": 5931,
+    "holes": 17,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfclub-capelle",
     "name": "Golfclub Capelle",
-    "sub": "Par 71 · 18 holes · 51.94, 4.59"
+    "sub": "Par 71 · 18 holes · 51.94, 4.59",
+    "par": 71,
+    "yards": 5330,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfclub-de-haar",
     "name": "Golfclub De Haar",
-    "sub": "Par 71 · 18 holes · 52.11, 4.99"
+    "sub": "Par 71 · 18 holes · 52.11, 4.99",
+    "par": 71,
+    "yards": 5547,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfclub-de-hoge-kleij",
     "name": "Golfclub De Hoge Kleij",
-    "sub": "Par 72 · 18 holes · 52.13, 5.36"
+    "sub": "Par 72 · 18 holes · 52.13, 5.36",
+    "par": 72,
+    "yards": 6929,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfclub-houtrak",
     "name": "Golfclub Houtrak",
-    "sub": "Par 72 · 18 holes · 52.41, 4.72"
+    "sub": "Par 72 · 18 holes · 52.41, 4.72",
+    "par": 72,
+    "yards": 6632,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfclub-m-nchen-west-odelzhausen",
     "name": "Golfclub München-West Odelzhausen",
-    "sub": "Par 72 · 18 holes · 48.29, 11.20"
+    "sub": "Par 72 · 18 holes · 48.29, 11.20",
+    "par": 72,
+    "yards": 6034,
+    "holes": 18,
+    "location": "Germany",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfclub-schlo-egmating-e-v",
     "name": "Golfclub Schloß Egmating e.V.",
-    "sub": "Par 71 · 18 holes · 48.00, 11.80"
+    "sub": "Par 71 · 18 holes · 48.00, 11.80",
+    "par": 71,
+    "yards": 6537,
+    "holes": 18,
+    "location": "Germany",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfclub-westerpark",
     "name": "Golfclub Westerpark",
-    "sub": "Par 72 · 18 holes · 52.05, 4.43"
+    "sub": "Par 72 · 18 holes · 52.05, 4.43",
+    "par": 72,
+    "yards": 5651,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfpark-wilnis",
     "name": "Golfpark Wilnis",
-    "sub": "Par 72 · 18 holes · 52.18, 4.89"
+    "sub": "Par 72 · 18 holes · 52.18, 4.89",
+    "par": 72,
+    "yards": 6257,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "golfsoci-teit-de-lage-vuursche",
     "name": "Golfsociëteit De Lage Vuursche",
-    "sub": "Par 71 · 18 holes · 52.16, 5.24"
+    "sub": "Par 71 · 18 holes · 52.16, 5.24",
+    "par": 71,
+    "yards": 6805,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "goyer-golf-country-club",
     "name": "Goyer Golf & Country Club",
-    "sub": "Par 72 · 18 holes · 52.24, 5.24"
+    "sub": "Par 72 · 18 holes · 52.24, 5.24",
+    "par": 72,
+    "yards": 6104,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "greenacres-golf-course",
     "name": "Greenacres Golf Course",
-    "sub": "Par 70 · 18 holes · 54.73, -6.00"
+    "sub": "Par 70 · 18 holes · 54.73, -6.00",
+    "par": 70,
+    "yards": 5515,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "guildford-golf-club",
     "name": "Guildford Golf Club",
-    "sub": "Par 69 · 18 holes · 51.24, -0.52"
+    "sub": "Par 69 · 18 holes · 51.24, -0.52",
+    "par": 69,
+    "yards": 5679,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "gullane-golf-club",
     "name": "Gullane Golf Club",
-    "sub": "Par 74 · 18 holes · 56.03, -2.85"
+    "sub": "Par 74 · 18 holes · 56.03, -2.85",
+    "par": 74,
+    "yards": 6697,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "haddington-golf-course",
     "name": "Haddington Golf Course",
-    "sub": "Par 71 · 18 holes · 55.96, -2.76"
+    "sub": "Par 71 · 18 holes · 55.96, -2.76",
+    "par": 71,
+    "yards": 5595,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "hampton-court-palace-golf-club",
     "name": "Hampton Court Palace Golf Club",
-    "sub": "Par 71 · 18 holes · 51.40, -0.33"
+    "sub": "Par 71 · 18 holes · 51.40, -0.33",
+    "par": 71,
+    "yards": 6185,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "heemskerkse-golfclub",
     "name": "Heemskerkse Golfclub",
-    "sub": "Par 72 · 18 holes · 52.49, 4.71"
+    "sub": "Par 72 · 18 holes · 52.49, 4.71",
+    "par": 72,
+    "yards": 6534,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "hersham-golf-club",
     "name": "Hersham Golf Club",
-    "sub": "Par 67 · 18 holes · 51.37, -0.38"
+    "sub": "Par 67 · 18 holes · 51.37, -0.38",
+    "par": 67,
+    "yards": 5232,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "hesketh-golf-club",
     "name": "Hesketh Golf Club",
-    "sub": "Par 72 · 18 holes · 53.67, -2.98"
+    "sub": "Par 72 · 18 holes · 53.67, -2.98",
+    "par": 72,
+    "yards": 6444,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "heswall-golf-course",
     "name": "Heswall Golf Course",
-    "sub": "Par 72 · 18 holes · 53.31, -3.09"
+    "sub": "Par 72 · 18 holes · 53.31, -3.09",
+    "par": 72,
+    "yards": 6464,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "hilton-templepatrick-golf-course",
     "name": "Hilton Templepatrick Golf Course",
-    "sub": "Par 72 · 18 holes · 54.71, -6.10"
+    "sub": "Par 72 · 18 holes · 54.71, -6.10",
+    "par": 72,
+    "yards": 6559,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "hilversumsche-golf-club",
     "name": "Hilversumsche Golf Club",
-    "sub": "Par 72 · 18 holes · 52.20, 5.21"
+    "sub": "Par 72 · 18 holes · 52.20, 5.21",
+    "par": 72,
+    "yards": 6641,
+    "holes": 18,
+    "location": "Netherlands",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "kilmarnock-golf-club-barassie-links",
     "name": "Kilmarnock Golf Club Barassie Links",
-    "sub": "Par 73 · 18 holes · 55.57, -4.65"
+    "sub": "Par 73 · 18 holes · 55.57, -4.65",
+    "par": 73,
+    "yards": 6845,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "kilspindie-golf-club",
     "name": "Kilspindie Golf Club",
-    "sub": "Par 70 · 18 holes · 56.01, -2.88"
+    "sub": "Par 70 · 18 holes · 56.01, -2.88",
+    "par": 70,
+    "yards": 5166,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "king-james-vi-golf-club",
     "name": "King James VI Golf Club",
-    "sub": "Par 72 · 18 holes · 56.38, -3.42"
+    "sub": "Par 72 · 18 holes · 56.38, -3.42",
+    "par": 72,
+    "yards": 5967,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "kinghorn-golf-course",
     "name": "Kinghorn Golf Course",
-    "sub": "Par 72 · 18 holes · 56.07, -3.18"
+    "sub": "Par 72 · 18 holes · 56.07, -3.18",
+    "par": 72,
+    "yards": 4984,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "kingsbarns-golf-links",
     "name": "Kingsbarns Golf Links",
-    "sub": "Par 72 · 18 holes · 56.30, -2.64"
+    "sub": "Par 72 · 18 holes · 56.30, -2.64",
+    "par": 72,
+    "yards": 7170,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "kirkiston-castle-golf-club",
     "name": "Kirkiston Castle Golf Club",
-    "sub": "Par 70 · 18 holes · 54.44, -5.47"
+    "sub": "Par 70 · 18 holes · 54.44, -5.47",
+    "par": 70,
+    "yards": 6109,
+    "holes": 18,
+    "location": "Ireland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "la-quinta-golf-country-club",
     "name": "La Quinta Golf & Country Club",
-    "sub": "Par 71 · 18 holes · 36.51, -5.00"
+    "sub": "Par 71 · 18 holes · 36.51, -5.00",
+    "par": 71,
+    "yards": 6314,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "la-reserva-golf-club",
     "name": "La Reserva Golf Club",
-    "sub": "Par 73 · 18 holes · 36.29, -5.33"
+    "sub": "Par 73 · 18 holes · 36.29, -5.33",
+    "par": 73,
+    "yards": 7168,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "la-zagaleta-country-club-la-zagaleta-course",
     "name": "La Zagaleta Country Club - La Zagaleta Course",
-    "sub": "Par 71 · 18 holes · 36.53, -5.03"
+    "sub": "Par 71 · 18 holes · 36.53, -5.03",
+    "par": 71,
+    "yards": 6586,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "ladybank-golf-club",
     "name": "Ladybank Golf Club",
-    "sub": "Par 71 · 18 holes · 56.29, -3.12"
+    "sub": "Par 71 · 18 holes · 56.29, -3.12",
+    "par": 71,
+    "yards": 6766,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "lauro-golf",
     "name": "Lauro Golf",
-    "sub": "Par 72 · 18 holes · 36.65, -4.63"
+    "sub": "Par 72 · 18 holes · 36.65, -4.63",
+    "par": 72,
+    "yards": 6372,
+    "holes": 18,
+    "location": "Spain",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "le-robinie-golf-club",
     "name": "Le Robinie Golf Club",
-    "sub": "Par 72 · 18 holes · 45.64, 8.87"
+    "sub": "Par 72 · 18 holes · 45.64, 8.87",
+    "par": 72,
+    "yards": 6915,
+    "holes": 18,
+    "location": "Italy",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "leasowe-golf-club",
     "name": "Leasowe Golf Club",
-    "sub": "Par 71 · 18 holes · 53.42, -3.10"
+    "sub": "Par 71 · 18 holes · 53.42, -3.10",
+    "par": 71,
+    "yards": 6158,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "lee-park-golf-club",
     "name": "Lee Park Golf Club",
-    "sub": "Par 66 · 17 holes · 53.38, -2.84"
+    "sub": "Par 66 · 17 holes · 53.38, -2.84",
+    "par": 66,
+    "yards": 5508,
+    "holes": 17,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "leven-links-golf-course",
     "name": "Leven Links Golf Course",
-    "sub": "Par 70 · 18 holes · 56.20, -2.98"
+    "sub": "Par 70 · 18 holes · 56.20, -2.98",
+    "par": 70,
+    "yards": 6482,
+    "holes": 18,
+    "location": "Scotland",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "littlestone-golf-club",
     "name": "Littlestone Golf Club",
-    "sub": "Par 70 · 18 holes · 51.00, 0.97"
+    "sub": "Par 70 · 18 holes · 51.00, 0.97",
+    "par": 70,
+    "yards": 6465,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "liverpool-municipal-north-golf-course",
     "name": "Liverpool Municipal North Golf Course",
-    "sub": "Par 72 · 18 holes · 53.48, -2.91"
+    "sub": "Par 72 · 18 holes · 53.48, -2.91",
+    "par": 72,
+    "yards": 6375,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
   },
   {
     "id": "liverpool-municipal-south-allerton-golf-course",
     "name": "Liverpool Municipal South (Allerton) Golf Course",
-    "sub": "Par 69 · 18 holes · 53.37, -2.88"
+    "sub": "Par 69 · 18 holes · 53.37, -2.88",
+    "par": 69,
+    "yards": 5234,
+    "holes": 18,
+    "location": "England",
+    "region": "UK & Ireland",
+    "tags": []
+  },
+  {
+    "id": "crystal-lake-haverhill",
+    "name": "Crystal Lake Golf Club",
+    "sub": "Haverhill, MA · Par 72 · 18 holes",
+    "par": 72,
+    "yards": 6436,
+    "holes": 18,
+    "location": "Haverhill, MA",
+    "region": "USA",
+    "tags": []
   }
 ]

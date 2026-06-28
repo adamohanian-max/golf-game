@@ -70,6 +70,7 @@ var document = {
   getElementById: function(id){ return __els[id] || (__els[id] = __el()); },
   createElement: function(){ return __el(); },
   createElementNS: function(){ return __el(); },
+  createDocumentFragment: function(){ return __el(); },
   createTextNode: function(){ return __el(); },
   querySelector: function(){ return __el(); },
   querySelectorAll: function(){ return []; },

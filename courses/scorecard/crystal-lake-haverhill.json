@@ -1,0 +1,23 @@
+{
+  "_source": "golflink.com White tees; par 72, 6436 yds",
+  "holes": {
+    "1":  {"par": 4, "yards": 367},
+    "2":  {"par": 3, "yards": 213},
+    "3":  {"par": 4, "yards": 351},
+    "4":  {"par": 4, "yards": 395},
+    "5":  {"par": 5, "yards": 472},
+    "6":  {"par": 3, "yards": 207},
+    "7":  {"par": 4, "yards": 387},
+    "8":  {"par": 5, "yards": 475},
+    "9":  {"par": 4, "yards": 415},
+    "10": {"par": 4, "yards": 389},
+    "11": {"par": 5, "yards": 491},
+    "12": {"par": 4, "yards": 394},
+    "13": {"par": 3, "yards": 210},
+    "14": {"par": 4, "yards": 332},
+    "15": {"par": 4, "yards": 316},
+    "16": {"par": 3, "yards": 135},
+    "17": {"par": 4, "yards": 415},
+    "18": {"par": 5, "yards": 472}
+  }
+}
