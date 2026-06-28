@@ -2390,5 +2390,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "east-lake-golf-club",
+    "name": "East Lake Golf Club",
+    "sub": "Par 70 · 18 holes · 33.74, -84.30",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
