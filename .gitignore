@@ -17,3 +17,10 @@ venv/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Capacitor / iOS
+node_modules/
+ios/App/Pods/
+ios/App/build/
+ios/App/Podfile.lock
+DerivedData/

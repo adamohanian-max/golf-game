@@ -1,0 +1,24 @@
+{
+  "appId": "com.adamohanian.golf",
+  "appName": "Golf",
+  "webDir": "capacitor-shell",
+  "server": {
+    "url": "https://adamohanian-max.github.io/golf-game/",
+    "cleartext": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#1b5e34"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#1b5e34",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "overlaysWebView": true
+    }
+  }
+}
