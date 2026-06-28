@@ -918,5 +918,10 @@
     "id": "liverpool-municipal-north-golf-course",
     "name": "Liverpool Municipal North Golf Course",
     "sub": "Par 72 · 18 holes · 53.48, -2.91"
+  },
+  {
+    "id": "liverpool-municipal-south-allerton-golf-course",
+    "name": "Liverpool Municipal South (Allerton) Golf Course",
+    "sub": "Par 69 · 18 holes · 53.37, -2.88"
   }
 ]
