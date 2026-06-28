@@ -2300,5 +2300,14 @@
     "tags": [
       "local"
     ]
+  },
+  {
+    "id": "vesper-country-club",
+    "name": "Vesper Country Club",
+    "sub": "Par 71 · 18 holes · 42.65, -71.39",
+    "region": "USA",
+    "tags": [
+      "local"
+    ]
   }
 ]
