@@ -244,6 +244,7 @@ let showOOB = true;        // red OOB overlay toggle
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
+let lieEffectEnabled = true; // rough/sand cost power + spin (off = every lie plays clean, easier)
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let measureDragging = false;
 let markerDrag = null;     // active drag of the dropped marker: { moved, x, y } (screen px)
@@ -1025,7 +1026,7 @@ function launchShot(ang, frac, spin, onGreen) {
       const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
       const mouseScale = swingIsMouse ? TUNE.mousePuttScale : 1;   // mouse putts −25%
       const ramp = onGreen ? puttPowerFrac(f) : Math.sqrt(f);
-      const lieMul = onGreen ? 1 : (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1);  // bump from rough/sand loses pace
+      const lieMul = (onGreen || !lieEffectEnabled) ? 1 : (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1);  // bump from rough/sand loses pace
       power = maxPow * TUNE.puttSensitivity * mouseScale * ramp * lieMul;
     }
     shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
@@ -1056,7 +1057,7 @@ function launchShot(ang, frac, spin, onGreen) {
       ef = Math.max(f, TUNE.clubMinFrac);
     }
     // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
-    const lieMul = TUNE.lie[surfaceAt(b.x, b.y)] ?? 1;
+    const lieMul = lieEffectEnabled ? (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1) : 1;
     const C = (c.carry / YARDS_PER_UNIT) * ef * lieMul;   // carry (world units)
     const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul;     // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
@@ -1066,7 +1067,7 @@ function launchShot(ang, frac, spin, onGreen) {
     // (scale up as f drops below 0.6, short shots check hard). Greenside CHIPS do the
     // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
     const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
-    const lieSpinMul = TUNE.lieSpin[surfaceAt(b.x, b.y)] ?? 1;  // rough flyer / sand kill backspin
+    const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[surfaceAt(b.x, b.y)] ?? 1) : 1;  // rough flyer / sand kill backspin
     const spinScale = chipActive ? TUNE.chipSpin : chipBoost;
     const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul);
     setupFlight(b, ang, C, H, c.land * Math.PI / 180, effectiveSpinN);
@@ -2903,7 +2904,7 @@ function updateStats() {
   // when on the green (putting) or when the lie is clean (no penalty).
   const surf = HOLE.isRange ? "tee" : surfaceAt(b.x, b.y);
   const lm = TUNE.lie[surf] ?? 1, sm = TUNE.lieSpin[surf] ?? 1;
-  if (onGreen || (lm === 1 && sm === 1)) {
+  if (!lieEffectEnabled || onGreen || (lm === 1 && sm === 1)) {
     rowLieFx.style.display = "none";
   } else {
     rowLieFx.style.display = "";
@@ -3061,6 +3062,12 @@ function setChip(on) {
   const btn = document.getElementById("hm-chip");
   if (btn) btn.classList.toggle("active", on);
 }
+function setLieEffect(on) {
+  lieEffectEnabled = on;
+  const btn = document.getElementById("hm-lieeffect");
+  if (btn) btn.classList.toggle("active", on);
+  updateStats(); // refresh the lie-effect HUD row immediately
+}
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
 document.getElementById("hm-wind").addEventListener("click", () => setWind(!windEnabled));
 document.getElementById("hm-slotted").addEventListener("click", () => setSlotted(!slottedMode));
@@ -3083,12 +3090,13 @@ const SETTING_DEFS = [
   { key: "rangefinder", label: "Range finder",    icon: "ic-ruler",  get: () => measureMode,     set: (v) => setMeasureMode(v) },
   { key: "slotted",     label: "Slotted mode",    icon: "ic-target", get: () => slottedMode,     set: (v) => setSlotted(v) },
   { key: "chip",        label: "Chip mode",       icon: "ic-chip",   get: () => chipEnabled,     set: (v) => setChip(v) },
+  { key: "lieEffect",   label: "Lie effect",      icon: "ic-slope",  get: () => lieEffectEnabled, set: (v) => setLieEffect(v) },
 ];
 // Effective defaults: hardcoded fallback until the global row loads.
 // Immutable fallback for each setting — used when a saved/loaded settings row
 // predates a key (e.g. a global Supabase row baked before "chip" existed). A
 // MISSING key falls back to this default, NOT to false.
-const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true };
+const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true, lieEffect: true };
 let gameDefaults = Object.assign({}, SETTING_DEFAULTS);
 let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
 
