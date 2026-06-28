@@ -1,0 +1,15 @@
+{
+  "_comment": "Hand-curated course tags consumed by enrich_manifest.py. Add course ids to extend filters. pgaTour = featured on the PGA Tour; major = has hosted a men's major championship.",
+  "pgaTour": [
+    "pinehurst-no2",
+    "tpc-river-highlands",
+    "pebble-beach-golf-course",
+    "bethpage-black"
+  ],
+  "major": [
+    "pinehurst-no2",
+    "pebble-beach-golf-course",
+    "bethpage-black",
+    "st-andrews-old"
+  ]
+}

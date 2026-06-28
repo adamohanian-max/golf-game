@@ -1,0 +1,277 @@
+/* Course-select page + hole preview. Reuses design tokens from tokens.css. */
+
+/* ---------- Course-select page ---------- */
+#course-select {
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(47,158,68,0.18), transparent 60%),
+    var(--green-900, #0a3d1f);
+  color: var(--white, #f4f6f3);
+}
+#course-select.hidden { display: none; }
+
+#cs-top {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3, 12px);
+  padding: calc(env(safe-area-inset-top, 0px) + var(--s-3, 12px)) var(--s-4, 16px) var(--s-3, 12px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.cs-back {
+  flex: none;
+  width: 40px; height: 40px;
+  font-size: 26px; line-height: 1;
+  color: var(--white, #f4f6f3);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--r-pill, 999px);
+  cursor: pointer;
+}
+.cs-back:active { transform: scale(0.94); }
+#cs-search {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0 var(--s-4, 16px);
+  font-size: 16px;
+  color: var(--white, #f4f6f3);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: var(--r-pill, 999px);
+  outline: none;
+}
+#cs-search:focus { border-color: var(--green-500, #2f9e44); background: rgba(255,255,255,0.1); }
+#cs-search::placeholder { color: rgba(244,246,243,0.4); }
+.cs-count { flex: none; font-size: 12px; color: rgba(244,246,243,0.45); white-space: nowrap; }
+
+#cs-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* Filter rail */
+#cs-filters {
+  flex: none;
+  width: 200px;
+  padding: var(--s-4, 16px);
+  overflow-y: auto;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.cs-fgroup { margin-bottom: var(--s-5, 24px); }
+.cs-fgroup-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(244,246,243,0.4);
+  margin-bottom: var(--s-2, 8px);
+}
+.cs-chip {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(244,246,243,0.82);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--r-sm, 10px);
+  cursor: pointer;
+}
+.cs-chip:active { transform: scale(0.98); }
+.cs-chip.active {
+  color: #fff;
+  background: rgba(47,158,68,0.22);
+  border-color: var(--green-500, #2f9e44);
+}
+.cs-chip .cs-chip-n { float: right; opacity: 0.5; font-weight: 500; }
+
+/* Card grid */
+#cs-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s-4, 16px);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-auto-rows: max-content;
+  gap: var(--s-4, 16px);
+  align-content: start;
+}
+.cs-empty { grid-column: 1 / -1; text-align: center; padding: 40px; color: rgba(244,246,243,0.5); }
+
+.cs-card {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  background: var(--green-700, #11271a);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--r-md, 14px);
+  overflow: hidden;
+}
+.cs-card-img {
+  position: relative;
+  height: 160px;
+  flex: none;
+  background: #0c1c12 center/cover no-repeat;
+}
+.cs-card-img img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cs-card-badges {
+  position: absolute;
+  top: 8px; left: 8px;
+  display: flex; gap: 4px; flex-wrap: wrap;
+}
+.cs-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: var(--r-pill, 999px);
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  color: #fff;
+}
+.cs-badge.pga { background: rgba(47,158,68,0.9); }
+.cs-badge.major { background: rgba(255,210,74,0.92); color: #1a1205; }
+.cs-card-best {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 11px; font-weight: 700;
+  color: #ffd700;
+  background: rgba(0,0,0,0.55);
+  padding: 3px 8px; border-radius: var(--r-pill, 999px);
+}
+.cs-card-body { padding: var(--s-3, 12px); display: flex; flex-direction: column; gap: 4px; }
+.cs-card-name { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.cs-card-meta { font-size: 12px; color: rgba(244,246,243,0.6); }
+.cs-card-btns { display: flex; gap: 8px; margin-top: var(--s-2, 8px); }
+.cs-card-btns button {
+  flex: 1;
+  height: 38px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--r-sm, 10px);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.cs-card-btns button:active { transform: scale(0.97); }
+.cs-play {
+  background: var(--green-500, #2f9e44);
+  color: #fff;
+}
+.cs-preview {
+  background: rgba(255,255,255,0.06);
+  color: var(--white, #f4f6f3);
+  border-color: rgba(255,255,255,0.16) !important;
+}
+
+/* Mobile: filters collapse to a horizontal scroll strip above the grid */
+@media (max-width: 640px) {
+  #cs-body { flex-direction: column; }
+  #cs-filters {
+    width: auto;
+    display: flex;
+    gap: var(--s-3, 12px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: var(--s-3, 12px) var(--s-4, 16px);
+  }
+  .cs-fgroup { margin-bottom: 0; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .cs-fgroup-title { margin: 0 4px 0 0; }
+  .cs-chip { width: auto; margin: 0; white-space: nowrap; }
+  .cs-chip .cs-chip-n { display: none; }
+  #cs-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s-3, 12px); }
+  .cs-card-name { font-size: 14px; }
+}
+
+/* ---------- Hole preview overlay (over the live canvas) ---------- */
+#preview {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none; /* canvas underneath stays visible; only controls catch input */
+}
+#preview.hidden { display: none; }
+#preview > * { pointer-events: auto; }
+
+#pv-top {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3, 12px);
+  padding: calc(env(safe-area-inset-top, 0px) + var(--s-3, 12px)) var(--s-4, 16px) var(--s-4, 16px);
+  background: linear-gradient(to bottom, rgba(4,12,8,0.82), transparent);
+  color: #fff;
+}
+.pv-close {
+  flex: none;
+  width: 38px; height: 38px;
+  font-size: 18px; line-height: 1;
+  color: #fff;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: var(--r-pill, 999px);
+  cursor: pointer;
+}
+.pv-title { display: flex; flex-direction: column; line-height: 1.2; }
+.pv-title #pv-course { font-size: 16px; font-weight: 700; }
+.pv-title #pv-hole { font-size: 12px; color: rgba(255,255,255,0.7); }
+
+#pv-bottom {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3, 12px);
+  padding: var(--s-5, 24px) var(--s-4, 16px) calc(env(safe-area-inset-bottom, 0px) + var(--s-4, 16px));
+  background: linear-gradient(to top, rgba(4,12,8,0.9), transparent);
+}
+.pv-stats {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: var(--r-pill, 999px);
+  background: rgba(4,12,8,0.62);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.pv-stats b { color: var(--green-300, #4ade80); }
+.pv-nav { display: flex; align-items: center; gap: var(--s-3, 12px); }
+.pv-arrow {
+  width: 44px; height: 44px;
+  font-size: 16px;
+  color: #fff;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: var(--r-pill, 999px);
+  cursor: pointer;
+}
+.pv-arrow:active { transform: scale(0.93); }
+.pv-arrow:disabled { opacity: 0.3; cursor: default; }
+.pv-dots { display: flex; gap: 5px; flex-wrap: wrap; max-width: 60vw; justify-content: center; }
+.pv-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  cursor: pointer;
+}
+.pv-dot.active { background: var(--green-300, #4ade80); transform: scale(1.3); }
+#pv-play { margin-top: 4px; }
+
+/* Landing "Play" button gets a touch more weight */
+.menu-btn-play { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; }

@@ -75,6 +75,14 @@ GOLFBERT_KEY=… GOLFBERT_AWS_KEY=… GOLFBERT_AWS_SECRET=… \
 ## Point the game at a course
 In `game.js` near the bottom: `loadCourse("<slug>")`. Course name shows automatically.
 
+## Enrich the manifest (course-select page metadata)
+After baking (the tool appends `{id,name,sub}` to `courses/manifest.json`), run
+`python3 tools/enrich_manifest.py` to backfill the fields the course-select page +
+cards need: `par`, `yards`, `holes` (summed from the baked geometry), `location` +
+`region` (from the `sub` lat/lon or "City, ST"), and curated `tags`. Add PGA Tour /
+major-venue ids to `tools/course_tags.json` first if the new course qualifies.
+Idempotent — safe to re-run after every bake.
+
 ## Definition of done — `verify_course.py` (the gate)
 A course is up to standard only when **`python3 tools/verify_course.py <id>` exits 0**. The gate (calibrated so Pinehurst scores grade A) runs automatically:
 - **HARD (any failure → exit 1):** `global:true` + `world`/`aerial`/`surfaces` present; expected hole count (`--holes N`, default 18) each with par/yards/tee/pin; `course.jpg` exists + valid JPEG + **every tee/pin registers inside it** via the inverse `toWorld` affine; DEM grid `nx*ny == len(data)` covering the world rect (waive with `--allow-no-dem`); and the **engine smoke test** — `tools/engine_smoke.js` via `osascript -l JavaScript` stubs DOM/canvas/Image and runs `draw()` on every hole in BOTH vector + photoreal modes plus a swing + putt (no throw = pass). `--no-engine` skips it.

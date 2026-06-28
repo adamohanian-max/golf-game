@@ -2792,6 +2792,7 @@ async function openPreview(id) {
   mode = "preview";
   elHudBtn.classList.add("hidden");
   elHmClubRow.classList.add("hidden");
+  elStats.classList.add("hidden");
   elScorecard.style.display = "none";
   if (elHint) elHint.classList.add("hidden");
   try {
@@ -2892,7 +2893,7 @@ function lieNote(label) {
 
 // Shot stats HUD. Yards normally; feet (carry omitted) once on the green.
 function updateStats() {
-  if (mode === "menu") { elStats.classList.add("hidden"); return; }
+  if (mode !== "course" && mode !== "range") { elStats.classList.add("hidden"); return; }
   elStats.classList.remove("hidden");
   updateClubUI();
   const lie = lieLabel();
