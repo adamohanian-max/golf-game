@@ -2318,5 +2318,14 @@
     "tags": [
       "local"
     ]
+  },
+  {
+    "id": "augusta-national-golf-club",
+    "name": "Augusta National Golf Club",
+    "sub": "Par 72 · 18 holes · 33.50, -82.02",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
