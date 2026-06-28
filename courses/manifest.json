@@ -2426,5 +2426,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "inverness-golf-club",
+    "name": "Inverness Golf Club",
+    "sub": "Par 72 · 18 holes · 42.12, -88.08",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
