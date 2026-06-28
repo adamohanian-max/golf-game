@@ -2705,5 +2705,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "bay-hill-golf-club",
+    "name": "Bay Hill Golf Club",
+    "sub": "Par 72 · 18 holes · 28.46, -81.51",
+    "region": "USA",
+    "tags": [
+      "pga"
+    ]
   }
 ]
