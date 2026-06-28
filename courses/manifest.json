@@ -2552,5 +2552,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "olympic-club-lake-course",
+    "name": "Olympic Club Lake Course",
+    "sub": "Par 70 · 18 holes · 37.71, -122.49",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
