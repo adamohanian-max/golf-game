@@ -334,7 +334,7 @@ function loadSurfaceMask(maskRec, onReady) {
     const oc = oob.getContext("2d"), od = oc.createImageData(w, h);
     for (let i = 0; i < lab.length; i++) {
       if (lab[i] === 0 || lab[i] === 3) { // OB or WOODS (both out of bounds)
-        od.data[i * 4] = 204; od.data[i * 4 + 1] = 30; od.data[i * 4 + 2] = 30; od.data[i * 4 + 3] = 110;
+        od.data[i * 4] = 200; od.data[i * 4 + 1] = 45; od.data[i * 4 + 2] = 45; od.data[i * 4 + 3] = 55;
       }
     }
     oc.putImageData(od, 0, 0);
@@ -1821,10 +1821,10 @@ function drawOOBOverlay(s) {
   // Fallback (no mask): OSM woods polygons.
   if (!s.woods || !s.woods.length) return;
   ctx.save();
-  ctx.globalAlpha = 0.32;
+  ctx.globalAlpha = 0.16;
   fillPolys(s.woods, "#cc1f1f");
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = "rgba(210,40,40,0.65)";
+  ctx.strokeStyle = "rgba(210,40,40,0.4)";
   ctx.lineWidth = 1.5;
   for (const poly of s.woods) { tracePoly(poly); ctx.stroke(); }
   ctx.restore();
