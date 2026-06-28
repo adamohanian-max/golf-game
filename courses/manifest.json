@@ -2264,5 +2264,14 @@
     "tags": [
       "local"
     ]
+  },
+  {
+    "id": "scottish-highlands",
+    "name": "Scottish Highlands",
+    "sub": "Par 71 · 18 holes · 42.75, -71.24",
+    "region": "USA",
+    "tags": [
+      "local"
+    ]
   }
 ]
