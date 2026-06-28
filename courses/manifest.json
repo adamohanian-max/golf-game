@@ -2678,5 +2678,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "valhalla-golf-club",
+    "name": "Valhalla Golf Club",
+    "sub": "Par 73 · 18 holes · 38.24, -85.47",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
