@@ -2723,5 +2723,14 @@
     "tags": [
       "pga"
     ]
+  },
+  {
+    "id": "detroit-golf-club",
+    "name": "Detroit Golf Club",
+    "sub": "Par 73 · 18 holes · 42.42, -83.12",
+    "region": "USA",
+    "tags": [
+      "pga"
+    ]
   }
 ]
