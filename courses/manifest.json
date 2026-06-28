@@ -2525,5 +2525,14 @@
     "tags": [
       "ranked"
     ]
+  },
+  {
+    "id": "national-golf-links-of-america",
+    "name": "National Golf Links of America",
+    "sub": "Par 72 · 18 holes · 40.91, -72.45",
+    "region": "USA",
+    "tags": [
+      "ranked"
+    ]
   }
 ]
