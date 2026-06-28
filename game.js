@@ -4,8 +4,8 @@
 //  Tunables — tweak these to change game feel
 // =====================================================================
 const TUNE = {
-  fullPowerSwipe: 1400,  // trackpad wheel swipe speed (world u/s) = max power
-  touchPowerSwipe: 500,  // touch/mouse flick speed (world u/s) = max power (calibrated to phone)
+  fullPowerSwipe: 1120,  // trackpad wheel swipe speed (world u/s) = max power
+  touchPowerSwipe: 400,  // touch/mouse flick speed (world u/s) = max power (calibrated to phone)
   wheelSensitivity: 1.0, // two-finger trackpad swipe -> swing power scaling
   wheelInvert: false,    // true if you use classic (non-natural) scrolling
   stopThreshold: 0.005,  // speed below this = ball stopped
@@ -379,6 +379,13 @@ function surfaceAt(x, y) {
 function greenSlopeAt(x, y) {
   for (const g of HOLE._greens || []) {
     if (g.grad && pointInPoly(x, y, g.poly)) return g.grad(x, y);
+  }
+  return null;
+}
+// Synthetic green-field height at a point (same field that breaks), or null off-green.
+function greenHeightAt(x, y) {
+  for (const g of HOLE._greens || []) {
+    if (g.h && pointInPoly(x, y, g.poly)) return g.h(x, y);
   }
   return null;
 }
@@ -1094,11 +1101,15 @@ function launchShot(ang, frac, spin, onGreen) {
       // Pace forgiveness: map swipe across a band that always leaves the ball between
       // 20% short and 20% long of the cup. f=0.5 = dead pace. Plays-like distance folds
       // in uphill/downhill so the band holds on sloped greens.
-      const plays = playsLikeYards(b.x, b.y).plays;                  // yards to cup, slope-adj
+      const flatU = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y);
       const band = TUNE.puttBandLo + (TUNE.puttBandHi - TUNE.puttBandLo) * f;
-      const targetYds = Math.min(plays * band, YARDS.maxPutt);       // cap at max putt
-      const targetU = targetYds / YARDS_PER_UNIT;                    // world units
-      power = Math.sqrt(2 * TUNE.greenDecel * targetU);
+      const targetU = Math.min(flatU * band, YARDS.maxPutt / YARDS_PER_UNIT);  // world units
+      // Climb cost in the SAME field/units the roll's slope force uses → dead pace reaches
+      // the cup uphill and down (slope force opposes uphill, aids downhill — budget for it).
+      const hB = greenHeightAt(b.x, b.y), hP = greenHeightAt(HOLE.holePos.x, HOLE.holePos.y);
+      const rise = (hB == null || hP == null) ? 0 : (hP - hB);       // + uphill, − downhill
+      const v2 = 2 * TUNE.greenDecel * targetU + 2 * TUNE.slopeAccel * rise;
+      power = Math.sqrt(Math.max(v2, 1e-9));                         // guard steep-downhill ≤0
     } else {
       // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
       // simple sqrt ramp (its max is already tiny). Range putts keep the on-green ramp.
@@ -1120,14 +1131,16 @@ function launchShot(ang, frac, spin, onGreen) {
     // (capped at club carry), so a chip is never very short or very far from the hole. Outside
     // chip mode every club flies its rated carry at full swing, floored at clubMinFrac. The
     // club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
-    const toPin = HOLE.isRange ? Infinity
+    const toPinFlat = HOLE.isRange ? Infinity
                 : dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-    const chipActive = chipEnabled && !HOLE.isRange && toPin < TUNE.chipRangeYds;
+    const chipActive = chipEnabled && !HOLE.isRange && toPinFlat < TUNE.chipRangeYds;  // gate on real distance
     let ef;
     if (chipActive) {
       // Tight band: f=0 -> chipReachLo, f=1 -> chipReachHi of pin distance. chipLandFrac
       // lands the CARRY short of that so the ball releases and rolls out the rest (the spin
-      // drop below makes it run), with the total still finishing in the band.
+      // drop below makes it run), with the total still finishing in the band. Reach uses
+      // plays-like distance so an uphill chip flies/rolls longer (downhill shorter).
+      const toPin = playsLikeYards(b.x, b.y).plays;
       const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * f;
       ef = Math.min(1, (toPin * reach * TUNE.chipLandFrac) / c.carry);
     } else {
