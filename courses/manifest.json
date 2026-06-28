@@ -908,5 +908,10 @@
     "id": "leven-links-golf-course",
     "name": "Leven Links Golf Course",
     "sub": "Par 70 · 18 holes · 56.20, -2.98"
+  },
+  {
+    "id": "littlestone-golf-club",
+    "name": "Littlestone Golf Club",
+    "sub": "Par 70 · 18 holes · 51.00, 0.97"
   }
 ]
