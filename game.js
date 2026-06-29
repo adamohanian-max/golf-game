@@ -3747,18 +3747,22 @@ function storeTokens(tok, user) {
   });
 }
 
-// Send a magic link to the email. Returns true on success.
+// Email a 6-digit OTP code to the email (no magic link). Returns true on success.
+// NOTE: we deliberately omit email_redirect_to — we verify the code via /verify
+// (see verifyOtp), never a redirect link (broken on GitHub Pages). The email's
+// link-vs-code content is controlled by the Supabase email TEMPLATES: both the
+// "Confirm signup" (new users) and "Magic Link" (existing users) templates must
+// use {{ .Token }} so the first send always shows a code, not a link.
 async function sendMagicLink(email) {
   if (!LB_ON()) return false;
   try {
     const res = await fetch(LB_URL + "/auth/v1/otp", {
       method: "POST",
       headers: { apikey: LB_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ email: (email || "").trim(), create_user: true,
-                             options: { email_redirect_to: location.origin + location.pathname } }),
+      body: JSON.stringify({ email: (email || "").trim(), create_user: true }),
     });
     return res.ok;
-  } catch (e) { console.warn("Magic link failed:", e); return false; }
+  } catch (e) { console.warn("OTP send failed:", e); return false; }
 }
 
 // Verify a 6-digit email OTP → returns a session with no redirect needed.
