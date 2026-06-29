@@ -1317,8 +1317,13 @@ const VIEW_MIN = 7;         // smallest framed dimension (caps how far we zoom i
 // HUD bands kept clear of the framed hole (css px, added on top of safe-area
 // insets). The camera fits the ball↔pin into the area BETWEEN these bands and
 // centers it there, so the pin/ball don't sit under the scorecard/stats/club UI.
-const HUD_RESERVE_TOP = 50; // scorecard / stats / wind / notch live up here
-const HUD_RESERVE_BOT = 76; // club selector + swing hint live down here
+// Per-device reserve bands. Desktop panels sit in the screen corners with more
+// room, so they need less vertical reserve than phone-stacked HUD. Picked by
+// IS_DESKTOP in hudReserve(); tune after seeing it on each form factor.
+const HUD_RESERVE = {
+  mobile:  { top: 50, bot: 76 }, // scorecard/stats/wind/notch ; club + hint
+  desktop: { top: 56, bot: 64 },
+};
 let holeFitW = 100, holeFitH = 100; // full-hole framing dims -> refScale
 
 // Camera = a world focus point + a zoom scale + an angle. Rotation pivots around
@@ -1423,12 +1428,27 @@ function readSafeInsets() {
     l: parseFloat(cs.getPropertyValue("--sal")) || 0,
   };
 }
+// Device mode: single source of truth for mobile vs desktop, driving BOTH the
+// DOM panels (body.is-mobile/.is-desktop -> CSS) and the canvas HUD (IS_DESKTOP).
+// matchMedia so it live-updates on resize/rotation. A coarse-pointer touchscreen
+// laptop counts as mobile here (desired for a swing game).
+const mqMobile = window.matchMedia("(pointer: coarse), (max-width: 820px)");
+let IS_DESKTOP = false;
+function applyDeviceMode() {
+  const mobile = mqMobile.matches;
+  IS_DESKTOP = !mobile;
+  document.body.classList.toggle("is-mobile", mobile);
+  document.body.classList.toggle("is-desktop", !mobile);
+}
+mqMobile.addEventListener("change", () => { applyDeviceMode(); resize(); });
+
 // HUD bands (px) the camera keeps the framed hole clear of: safe-area inset + the
-// reserve constant on each edge. Top/bottom hold the scorecard/stats and club UI.
+// per-device reserve on each edge. Top/bottom hold the scorecard/stats and club UI.
 function hudReserve() {
+  const r = HUD_RESERVE[IS_DESKTOP ? "desktop" : "mobile"];
   return {
-    top: safeInset.t + HUD_RESERVE_TOP,
-    bot: safeInset.b + HUD_RESERVE_BOT,
+    top: safeInset.t + r.top,
+    bot: safeInset.b + r.bot,
     left: safeInset.l,
     right: safeInset.r,
   };
@@ -2856,6 +2876,7 @@ function setHole(rec) {
   holeFitW = camera._w; holeFitH = camera._h;          // full-hole fit -> refScale
   camera.focus = { x: camera.tFocus.x, y: camera.tFocus.y }; // snap, no ease-in
   camera.scale = camera.tScale;
+  applyDeviceMode(); // set body class + IS_DESKTOP before first framing
   resize();
   updateScorecard();
   if (matchLive() && !HOLE.isRange) pushMatchShot({ cur_strokes: 0 });  // new hole, ball on tee

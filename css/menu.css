@@ -276,3 +276,10 @@
   background: rgba(74, 222, 128, 0.08);
 }
 .admin-toggle:active { transform: scale(0.99); }
+
+/* ============================================================
+   Desktop layout overrides (body.is-desktop) — home menu wider
+   with more breathing room than the phone-stacked layout.
+   ============================================================ */
+body.is-desktop .menu-box { padding: var(--s-6) var(--s-6); }
+body.is-desktop #course-list { width: 340px; max-width: 70vw; }

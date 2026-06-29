@@ -293,3 +293,20 @@
 }
 .trn-timer.hidden { display: none; }
 .trn-timer.trn-timer-urgent { color: var(--status-under); }
+
+/* ============================================================
+   Desktop layout overrides (body.is-desktop)
+   Base styles are mobile-first; desktop has more room, so the
+   corner panels scale up. Driven by IS_DESKTOP / body class in
+   game.js (matchMedia). Add per-device HUD tweaks here.
+   ============================================================ */
+body.is-desktop #scorecard { padding: 13px 18px; font-size: 15px; }
+body.is-desktop #scorecard b { font-size: 19px; }
+body.is-desktop #scorecard #course { font-size: 13px; }
+
+body.is-desktop #stats { padding: var(--s-3) 18px; font-size: 13px; min-width: 150px; }
+
+body.is-desktop #hint { max-width: none; font-size: 13px; }
+
+body.is-desktop #hud-menu { min-width: 224px; }
+body.is-desktop .hm-item { font-size: 15px; }
