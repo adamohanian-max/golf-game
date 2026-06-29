@@ -2062,765 +2062,946 @@
     "id": "abenaqui-country-club",
     "name": "Abenaqui Country Club",
     "sub": "Par 72 · 18 holes · 42.98, -70.78",
+    "par": 72,
+    "yards": 6560,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "andover-country-club",
     "name": "Andover Country Club",
     "sub": "Par 72 · 18 holes · 42.67, -71.17",
+    "par": 72,
+    "yards": 6588,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "apple-hill-golf-club",
     "name": "Apple Hill Golf Club",
     "sub": "Par 67 · 17 holes · 42.92, -70.98",
+    "par": 67,
+    "yards": 5611,
+    "holes": 17,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "atkinson-resort-country-club",
     "name": "Atkinson Resort & Country Club",
     "sub": "Par 72 · 18 holes · 42.82, -71.18",
+    "par": 72,
+    "yards": 6509,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "black-swan-country-club",
     "name": "Black Swan Country Club",
     "sub": "Par 72 · 18 holes · 42.71, -71.01",
+    "par": 72,
+    "yards": 6820,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "bradford-country-club",
     "name": "Bradford Country Club",
     "sub": "Par 71 · 18 holes · 42.75, -71.07",
+    "par": 71,
+    "yards": 4401,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "breakfast-hill-golf-club",
     "name": "Breakfast Hill Golf Club",
     "sub": "Par 72 · 18 holes · 43.02, -70.82",
+    "par": 72,
+    "yards": 6378,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "candia-woods",
     "name": "Candia Woods",
     "sub": "Par 71 · 18 holes · 43.05, -71.32",
+    "par": 71,
+    "yards": 6469,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "derryfield-country-club",
     "name": "Derryfield Country Club",
     "sub": "Par 70 · 18 holes · 42.99, -71.43",
+    "par": 70,
+    "yards": 6073,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "hickory-hill-golf-course",
     "name": "Hickory Hill Golf Course",
     "sub": "Par 71 · 18 holes · 42.70, -71.24",
+    "par": 71,
+    "yards": 6259,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "hidden-valley-championship-course",
     "name": "Hidden Valley Championship Course",
     "sub": "Par 72 · 18 holes · 42.92, -71.25",
+    "par": 72,
+    "yards": 5983,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "indian-ridge-golf-club",
     "name": "Indian Ridge Golf Club",
     "sub": "Par 72 · 18 holes · 42.64, -71.17",
+    "par": 72,
+    "yards": 6408,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "ipswich-country-club",
     "name": "Ipswich Country Club",
     "sub": "Par 72 · 18 holes · 42.70, -70.90",
+    "par": 72,
+    "yards": 6880,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "londonderry-country-club",
     "name": "Londonderry Country Club",
     "sub": "Par 62 · 18 holes · 42.89, -71.42",
+    "par": 62,
+    "yards": 3878,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "manchester-country-club",
     "name": "Manchester Country Club",
     "sub": "Par 70 · 18 holes · 42.94, -71.48",
+    "par": 70,
+    "yards": 6702,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "merrimack-valley-golf-club",
     "name": "Merrimack Valley Golf Club",
     "sub": "Par 70 · 18 holes · 42.75, -71.18",
+    "par": 70,
+    "yards": 4350,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "myopia-hunt-club",
     "name": "Myopia Hunt Club",
     "sub": "Par 72 · 18 holes · 42.61, -70.86",
+    "par": 72,
+    "yards": 6566,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "nashua-country-club",
     "name": "Nashua Country Club",
     "sub": "Par 72 · 18 holes · 42.74, -71.45",
+    "par": 72,
+    "yards": 6305,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "passaconaway-country-club",
     "name": "Passaconaway Country Club",
     "sub": "Par 71 · 18 holes · 42.86, -71.48",
+    "par": 71,
+    "yards": 6732,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "pease-golf-course",
     "name": "Pease Golf Course",
     "sub": "Par 71 · 18 holes · 43.07, -70.82",
+    "par": 71,
+    "yards": 5830,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "portsmouth-country-club",
     "name": "Portsmouth Country Club",
     "sub": "Par 72 · 18 holes · 43.05, -70.84",
+    "par": 72,
+    "yards": 6731,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "renaissance-golf-club",
     "name": "Renaissance Golf Club",
     "sub": "Par 71 · 18 holes · 42.78, -71.04",
+    "par": 71,
+    "yards": 6988,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "sagamore-hampton-golf-club",
     "name": "Sagamore-Hampton Golf Club",
     "sub": "Par 71 · 18 holes · 43.00, -70.84",
+    "par": 71,
+    "yards": 5688,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "scottish-highlands",
     "name": "Scottish Highlands",
     "sub": "Par 71 · 18 holes · 42.75, -71.24",
+    "par": 71,
+    "yards": 5942,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "sky-meadow-country-club",
     "name": "Sky Meadow Country Club",
     "sub": "Par 72 · 18 holes · 42.70, -71.47",
+    "par": 72,
+    "yards": 6283,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "the-golf-club-of-new-england",
     "name": "The Golf Club of New England",
     "sub": "Par 72 · 18 holes · 43.01, -70.86",
+    "par": 72,
+    "yards": 7295,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "trull-brook-golf-course",
     "name": "Trull Brook Golf Course",
     "sub": "Par 72 · 18 holes · 42.65, -71.26",
+    "par": 72,
+    "yards": 5430,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "vesper-country-club",
     "name": "Vesper Country Club",
     "sub": "Par 71 · 18 holes · 42.65, -71.39",
+    "par": 71,
+    "yards": 6474,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "windham-country-club",
     "name": "Windham Country Club",
     "sub": "Par 72 · 18 holes · 42.82, -71.31",
+    "par": 72,
+    "yards": 6352,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "local"
-    ]
+    "tags": []
   },
   {
     "id": "augusta-national-golf-club",
     "name": "Augusta National Golf Club",
     "sub": "Par 72 · 18 holes · 33.50, -82.02",
+    "par": 72,
+    "yards": 7619,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "baltusrol-golf-course",
     "name": "Baltusrol Golf Course",
     "sub": "Par 72 · 18 holes · 40.70, -74.33",
+    "par": 72,
+    "yards": 7349,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "bandon-dunes-golf-resort",
     "name": "Bandon Dunes Golf Resort",
     "sub": "Par 73 · 18 holes · 43.20, -124.39",
+    "par": 73,
+    "yards": 6275,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "bandon-sheep-ranch",
     "name": "Bandon Sheep Ranch",
     "sub": "Par 72 · 18 holes · 43.22, -124.39",
+    "par": 72,
+    "yards": 6710,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "bandon-trails",
     "name": "Bandon Trails",
     "sub": "Par 71 · 18 holes · 43.18, -124.39",
+    "par": 71,
+    "yards": 6804,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "bethpage-state-park-golf-courses",
     "name": "Bethpage State Park Golf Courses",
     "sub": "Par 75 · 18 holes · 40.75, -73.45",
+    "par": 75,
+    "yards": 8298,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "chicago-golf-club",
     "name": "Chicago Golf Club",
     "sub": "Par 70 · 18 holes · 41.85, -88.12",
+    "par": 70,
+    "yards": 6934,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "cypress-point-golf-course",
     "name": "Cypress Point Golf Course",
     "sub": "Par 72 · 18 holes · 36.58, -121.97",
+    "par": 72,
+    "yards": 6541,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "east-lake-golf-club",
     "name": "East Lake Golf Club",
     "sub": "Par 70 · 18 holes · 33.74, -84.30",
+    "par": 70,
+    "yards": 7115,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "garden-city-golf-club",
     "name": "Garden City Golf Club",
     "sub": "Par 73 · 18 holes · 40.73, -73.65",
+    "par": 73,
+    "yards": 6911,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "harbour-town-golf-links",
     "name": "Harbour Town Golf Links",
     "sub": "Par 71 · 18 holes · 32.13, -80.81",
+    "par": 71,
+    "yards": 7071,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "hazeltine-national-golf-course",
     "name": "Hazeltine National Golf Course",
     "sub": "Par 72 · 18 holes · 44.83, -93.59",
+    "par": 72,
+    "yards": 7701,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "inverness-golf-club",
     "name": "Inverness Golf Club",
     "sub": "Par 72 · 18 holes · 42.12, -88.08",
+    "par": 72,
+    "yards": 6625,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "kiawah-island-club-cassique",
     "name": "Kiawah Island Club - Cassique",
     "sub": "Par 72 · 18 holes · 32.60, -80.15",
+    "par": 72,
+    "yards": 6865,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "kiawah-island-club-river-course",
     "name": "Kiawah Island Club - River Course",
     "sub": "Par 72 · 18 holes · 32.61, -80.10",
+    "par": 72,
+    "yards": 6913,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "kiawah-island-golf-resort-the-ocean-course",
     "name": "Kiawah Island Golf Resort - The Ocean Course",
     "sub": "Par 72 · 18 holes · 32.61, -80.02",
+    "par": 72,
+    "yards": 7727,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "los-angeles-country-club",
     "name": "Los Angeles Country Club",
     "sub": "Par 71 · 18 holes · 34.07, -118.42",
+    "par": 71,
+    "yards": 7659,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "maidstone-club",
     "name": "Maidstone Club",
     "sub": "Par 75 · 18 holes · 40.95, -72.18",
+    "par": 75,
+    "yards": 6526,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "merion-golf-club-east",
     "name": "Merion Golf Club East",
     "sub": "Par 70 · 18 holes · 40.00, -75.31",
+    "par": 70,
+    "yards": 6485,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "merion-golf-club-west",
     "name": "Merion Golf Club West",
     "sub": "Par 70 · 18 holes · 39.99, -75.33",
+    "par": 70,
+    "yards": 5914,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "monterey-peninsula-country-club-dunes-course",
     "name": "Monterey Peninsula Country Club - Dunes Course",
     "sub": "Par 71 · 18 holes · 36.60, -121.95",
+    "par": 71,
+    "yards": 6741,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "monterey-peninsula-country-club-shore-course",
     "name": "Monterey Peninsula Country Club - Shore Course",
     "sub": "Par 72 · 18 holes · 36.60, -121.96",
+    "par": 72,
+    "yards": 6899,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "muirfield-village-golf-club",
     "name": "Muirfield Village Golf Club",
     "sub": "Par 72 · 18 holes · 40.14, -83.14",
+    "par": 72,
+    "yards": 7545,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "national-golf-links-of-america",
     "name": "National Golf Links of America",
     "sub": "Par 72 · 18 holes · 40.91, -72.45",
+    "par": 72,
+    "yards": 6981,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "oakmont-country-club",
     "name": "Oakmont Country Club",
     "sub": "Par 71 · 18 holes · 40.53, -79.82",
+    "par": 71,
+    "yards": 7208,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "olympic-club-golf-course",
     "name": "Olympic Club Golf Course",
     "sub": "Par 73 · 18 holes · 37.71, -122.49",
+    "par": 73,
+    "yards": 7424,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "olympic-club-lake-course",
     "name": "Olympic Club Lake Course",
     "sub": "Par 70 · 18 holes · 37.71, -122.49",
+    "par": 70,
+    "yards": 7298,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "pine-valley-country-club",
     "name": "Pine Valley Country Club",
     "sub": "Par 70 · 18 holes · 39.79, -74.97",
+    "par": 70,
+    "yards": 7279,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "plainfield-country-club",
     "name": "Plainfield Country Club",
     "sub": "Par 72 · 18 holes · 40.59, -74.39",
+    "par": 72,
+    "yards": 6904,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "prairie-dunes",
     "name": "Prairie Dunes",
     "sub": "Par 70 · 18 holes · 38.09, -97.85",
+    "par": 70,
+    "yards": 6821,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "quaker-ridge-golf-club",
     "name": "Quaker Ridge Golf Club",
     "sub": "Par 70 · 18 holes · 40.97, -73.76",
+    "par": 70,
+    "yards": 6992,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "riviera-country-club",
     "name": "Riviera Country Club",
     "sub": "Par 71 · 18 holes · 34.05, -118.50",
+    "par": 71,
+    "yards": 7359,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "riviera-golf-club",
     "name": "Riviera Golf Club",
     "sub": "Par 71 · 18 holes · 43.53, 6.91",
-    "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "par": 71,
+    "yards": 5667,
+    "holes": 18,
+    "location": "France",
+    "region": "Europe",
+    "tags": []
   },
   {
     "id": "scioto-reserve-country-club",
     "name": "Scioto Reserve Country Club",
     "sub": "Par 72 · 18 holes · 40.20, -83.13",
+    "par": 72,
+    "yards": 6880,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "shinnecock-hills-golf-club",
     "name": "Shinnecock Hills Golf Club",
     "sub": "Par 71 · 18 holes · 40.90, -72.44",
+    "par": 71,
+    "yards": 7332,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "southern-hills-country-club",
     "name": "Southern Hills Country Club",
     "sub": "Par 71 · 18 holes · 36.07, -95.95",
+    "par": 71,
+    "yards": 7262,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "spyglass-hill-golf-course",
     "name": "Spyglass Hill Golf Course",
     "sub": "Par 72 · 18 holes · 36.59, -121.96",
+    "par": 72,
+    "yards": 6890,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "the-country-club-at-muirfield-village",
     "name": "The Country Club at Muirfield Village",
     "sub": "Par 72 · 18 holes · 40.14, -83.16",
+    "par": 72,
+    "yards": 6857,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "torrey-pines-north-course",
     "name": "Torrey Pines North Course",
     "sub": "Par 72 · 18 holes · 32.91, -117.25",
+    "par": 72,
+    "yards": 7026,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "torrey-pines-south-course",
     "name": "Torrey Pines South Course",
     "sub": "Par 72 · 18 holes · 32.90, -117.25",
+    "par": 72,
+    "yards": 7786,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "valhalla-golf-club",
     "name": "Valhalla Golf Club",
     "sub": "Par 73 · 18 holes · 38.24, -85.47",
+    "par": 73,
+    "yards": 7425,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "whistling-straits",
     "name": "Whistling Straits",
     "sub": "Par 72 · 18 holes · 43.85, -87.73",
+    "par": 72,
+    "yards": 7541,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "winged-foot-golf-club",
     "name": "Winged Foot Golf Club",
     "sub": "Par 71 · 18 holes · 40.96, -73.75",
+    "par": 71,
+    "yards": 7444,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "ranked"
-    ]
+    "tags": []
   },
   {
     "id": "bay-hill-golf-club",
     "name": "Bay Hill Golf Club",
     "sub": "Par 72 · 18 holes · 28.46, -81.51",
+    "par": 72,
+    "yards": 7304,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "colonial-country-club",
     "name": "Colonial Country Club",
     "sub": "Par 70 · 18 holes · 32.72, -97.37",
+    "par": 70,
+    "yards": 7119,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "detroit-golf-club",
     "name": "Detroit Golf Club",
     "sub": "Par 73 · 18 holes · 42.42, -83.12",
+    "par": 73,
+    "yards": 7217,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "liberty-national-golf-club",
     "name": "Liberty National Golf Club",
     "sub": "Par 72 · 18 holes · 40.69, -74.07",
+    "par": 72,
+    "yards": 7294,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "memorial-park-golf-course",
     "name": "Memorial Park Golf Course",
     "sub": "Par 72 · 18 holes · 29.77, -95.44",
+    "par": 72,
+    "yards": 7344,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "quail-hollow-club",
     "name": "Quail Hollow Club",
     "sub": "Par 71 · 18 holes · 35.11, -80.84",
+    "par": 71,
+    "yards": 7341,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "silverado-golf-club",
     "name": "Silverado Golf Club",
     "sub": "Par 70 · 18 holes · 33.53, -111.90",
+    "par": 70,
+    "yards": 6105,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "silverado-resort",
     "name": "Silverado Resort",
     "sub": "Par 70 · 18 holes · 38.35, -122.26",
+    "par": 70,
+    "yards": 7107,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "the-country-club-at-castle-pines",
     "name": "The Country Club at Castle Pines",
     "sub": "Par 72 · 18 holes · 39.45, -104.90",
+    "par": 72,
+    "yards": 7261,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "tpc-scottsdale-champions-course",
     "name": "TPC Scottsdale Champions Course",
     "sub": "Par 71 · 18 holes · 33.64, -111.90",
+    "par": 71,
+    "yards": 6913,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "tpc-scottsdale-stadium-course",
     "name": "TPC Scottsdale Stadium Course",
     "sub": "Par 71 · 18 holes · 33.64, -111.92",
+    "par": 71,
+    "yards": 7340,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "tpc-southwind",
     "name": "TPC Southwind",
     "sub": "Par 71 · 18 holes · 35.05, -89.78",
+    "par": 71,
+    "yards": 7129,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
   },
   {
     "id": "tpc-twin-cities",
     "name": "TPC Twin Cities",
     "sub": "Par 71 · 18 holes · 45.18, -93.21",
+    "par": 71,
+    "yards": 7168,
+    "holes": 18,
+    "location": "USA",
     "region": "USA",
-    "tags": [
-      "pga"
-    ]
+    "tags": []
+  },
+  {
+    "id": "agawam-hunt",
+    "name": "Agawam Hunt",
+    "sub": "East Providence, RI · Par 69",
+    "par": 69,
+    "yards": 6119,
+    "holes": 18,
+    "location": "East Providence, RI",
+    "region": "USA",
+    "tags": []
   }
 ]
