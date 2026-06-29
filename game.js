@@ -5552,6 +5552,7 @@ function enterLiveMatch() {
   closeMatchMenu();
   startCourse();
   startBoardPoll();
+  toggleMatchBoard(true);   // auto-show the standings during a match
 }
 
 // --- Live standings panel (toggle from HUD; polls every 5s while live) ---

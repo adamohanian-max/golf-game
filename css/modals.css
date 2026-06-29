@@ -280,10 +280,10 @@
 .ms-len-row .ms-len { flex: 1; margin: 0; }
 .ms-len-row .ms-len.active { background: var(--accent); color: #fff; }
 
-/* Live standings — floating panel, top-right */
+/* Live standings — auto-shown during a match, top-left under the scorecard */
 #match-standings {
-  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 56px); right: 10px;
-  width: min(280px, 70vw); z-index: 40;
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 178px); left: var(--s-3); right: auto;
+  width: min(240px, 60vw); z-index: 40;
   background: var(--surface-scrim); backdrop-filter: var(--blur-sm);
   border: 1px solid var(--border-edge); border-radius: var(--r-lg);
   box-shadow: var(--shadow-3); overflow: hidden;
@@ -321,7 +321,7 @@
 .mr-box {
   width: min(440px, 100%); max-height: 100%; overflow-y: auto;
   display: flex; flex-direction: column; gap: 14px;
-  background: var(--surface); border: 1px solid var(--border-edge);
+  background: var(--surface-panel); border: 1px solid var(--border-edge);
   border-radius: var(--r-lg); box-shadow: var(--shadow-3); padding: 20px;
 }
 .mr-head { text-align: center; }
