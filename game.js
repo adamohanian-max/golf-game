@@ -541,7 +541,8 @@ function ballisticFlightStep(b) {
   b.x += b.vx;
   b.y += b.vy;
   b.z += b.vz;
-  b.vz -= TUNE.gravity;
+  const impactVz = b.vz; // velocity that carried the ball to this height THIS frame
+  b.vz -= TUNE.gravity;  // (apply gravity after, so the landing test below uses impactVz)
 
   // sidespin curves the flight: accel perpendicular to travel, grows with speed
   const sp = Math.hypot(b.vx, b.vy);
@@ -568,7 +569,9 @@ function ballisticFlightStep(b) {
       shot.carried = true;
     }
     const surf = surfaceAt(b.x, b.y);
-    const down = -b.vz; // downward speed at impact
+    const down = -impactVz; // downward speed at impact (pre-gravity; using post-gravity vz
+                            // double-counts a frame of gravity and creates a perpetual
+                            // low-bounce limit cycle that never settles)
     if (surf === "water" || surf === "woods" || surf === "ob") {
       // splash / into the trees / out of bounds — kill it; roll-stop applies penalty
       playLand(surf === "ob" ? "woods" : surf, down);
