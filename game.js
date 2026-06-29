@@ -5630,15 +5630,24 @@ async function renderMatchBoard() {
     if (mp.decided) matchDecided = true;
     if (title) title.textContent = mp.result ? "Match: " + mp.result : "Match play";
     const honors = whoseHonors(me, opp);
-    const oppMoving = opp.cur_at_rest === false;
-    const oppHole = opp.cur_hole != null ? ("Hole " + opp.cur_hole) : "—";
-    const oppDist = (opp.cur_to_pin != null && opp.cur_to_pin >= 0) ? (opp.cur_to_pin + " yds")
-                  : (opp.finished ? "done" : "—");
+    // Show what the opponent scored on the hole I'M currently playing (from their
+    // hole_scores, written on hole-out) — not their live state on their own hole.
+    const curHole = (typeof HOLE !== "undefined" && HOLE && HOLE.num) || (round.holesPlayed + 1);
+    const curPar = (typeof HOLE !== "undefined" && HOLE && HOLE.par) || 0;
+    const os = (opp.hole_scores || {})[curHole];
+    let oppLine;
+    if (os != null) {
+      const rel = (os | 0) - curPar;
+      const tag = curPar ? (rel === 0 ? "E" : (rel > 0 ? "+" + rel : String(rel))) : "";
+      oppLine = `Hole ${curHole}: ${os | 0}${tag ? " (" + tag + ")" : ""}`;
+    } else {
+      oppLine = `Hole ${curHole}: yet to play`;
+    }
     body.innerHTML =
       `<div class="mb-status">${esc(mp.result || mp.status)} · thru ${mp.thru}</div>` +
       `<div class="mb-opp">` +
         `<div class="mb-opp-name">${esc(opp.player_name)}</div>` +
-        `<div class="mb-opp-line">${oppHole} · ${opp.cur_strokes || 0} this hole · ${oppDist} · ${esc(opp.cur_lie || "—")}${oppMoving ? " · hitting…" : ""}</div>` +
+        `<div class="mb-opp-line">${esc(oppLine)}</div>` +
       `</div>` +
       (honors ? `<div class="mb-honors">⛳ ${esc(honors)}</div>` : "");
     return;
