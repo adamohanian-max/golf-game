@@ -164,7 +164,8 @@
 .cm-actions .menu-btn { width: auto; flex: 1; margin: 0; padding: var(--s-3); font-size: var(--t-body); }
 
 /* ---- Name-entry / auth / add-course / admin / account: scrim */
-#name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer {
+#name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer,
+#match-menu, #match-lobby, #match-setup {
   position: fixed;
   inset: 0;
   display: flex;
@@ -178,7 +179,9 @@
 #name-entry { z-index: 40; }
 #add-course { z-index: 30; }
 #auth-modal, #admin-settings, #account-viewer { z-index: 40; }
-#name-entry.hidden, #add-course.hidden, #auth-modal.hidden, #admin-settings.hidden, #account-viewer.hidden { display: none; }
+#match-menu, #match-lobby, #match-setup { z-index: 40; }
+#name-entry.hidden, #add-course.hidden, #auth-modal.hidden, #admin-settings.hidden, #account-viewer.hidden,
+#match-menu.hidden, #match-lobby.hidden, #match-setup.hidden { display: none; }
 
 /* Account viewer internals */
 .av-box { width: min(420px, 92vw); max-height: 88vh; display: flex; flex-direction: column; text-align: left; }

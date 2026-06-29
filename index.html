@@ -13,9 +13,9 @@
   <link rel="stylesheet" href="css/tokens.css?v=55">
   <link rel="stylesheet" href="css/base.css?v=54">
   <link rel="stylesheet" href="css/hud.css?v=55">
-  <link rel="stylesheet" href="css/menu.css?v=57">
+  <link rel="stylesheet" href="css/menu.css?v=58">
   <link rel="stylesheet" href="css/courses.css?v=3">
-  <link rel="stylesheet" href="css/modals.css?v=54">
+  <link rel="stylesheet" href="css/modals.css?v=55">
   <link rel="stylesheet" href="css/tournament.css?v=54">
 </head>
 <body>
@@ -73,6 +73,7 @@
       <button class="hm-item active" id="hm-chip"><span class="ic ic-chip"></span>Chip mode</button>
       <button class="hm-item" id="hm-slotted"><span class="ic ic-target"></span>Slotted mode</button>
       <button class="hm-item" id="hm-card"><span class="ic ic-clipboard"></span>Scorecard</button>
+      <button class="hm-item hidden" id="hm-match"><span class="ic ic-trophy"></span>Match board</button>
       <button class="hm-item active" id="hm-sound"><span class="ic ic-flag"></span>Sound</button>
       <div class="hm-sep"></div>
       <button class="hm-item" id="hm-holes"><span class="ic ic-menu"></span>Select hole</button>
@@ -104,6 +105,7 @@
       <button id="play-range" class="menu-btn secondary">Driving Range</button>
       <button id="open-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>Leaderboard</button>
       <button id="open-tournaments" class="menu-btn secondary"><span class="ic ic-flag-checkered"></span>Tournaments</button>
+      <button id="open-match" class="menu-btn secondary"><span class="ic ic-user"></span>Match vs Friends</button>
       <button id="open-account" class="menu-btn secondary hidden"><span class="ic ic-user"></span>My Account</button>
       <button id="menu-add-course" class="menu-btn secondary hidden"><span class="ic ic-plus"></span>Add course</button>
       <button id="menu-manage" class="menu-btn secondary hidden"><span class="ic ic-flag-checkered"></span>Manage tournaments</button>
@@ -322,6 +324,63 @@
     </div>
   </div>
 
-  <script src="game.js?v=77"></script>
+  <!-- ===== Multiplayer matches: menu, lobby, host setup, live standings ===== -->
+  <div id="match-menu" class="hidden">
+    <div class="ne-box">
+      <h2><span class="ic ic-user"></span>Match vs Friends</h2>
+      <p class="ne-sub">Play a live round against friends. Lowest score wins.</p>
+      <button id="mm-start" class="menu-btn menu-btn-play">Start a match</button>
+      <div class="mm-or">or join with a code</div>
+      <input id="mm-code" type="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" autocorrect="off">
+      <div id="mm-error" class="auth-error hidden"></div>
+      <div class="ne-actions">
+        <button id="mm-close" class="menu-btn secondary">Cancel</button>
+        <button id="mm-join" class="menu-btn">Join match</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="match-lobby" class="hidden">
+    <div class="lb-box">
+      <h2><span class="ic ic-user"></span>Match Lobby</h2>
+      <div class="ml-code-wrap">
+        <span class="ml-code-label">Share this code</span>
+        <span id="ml-code" class="ml-code">——————</span>
+      </div>
+      <div id="ml-field" class="tl-field"></div>
+      <ul id="ml-players" class="ml-players"></ul>
+      <button id="ml-begin" class="menu-btn menu-btn-play hidden">Begin — pick course</button>
+      <div id="ml-waiting" class="tl-status hidden">Waiting for the host to start…</div>
+      <button id="ml-leave" class="menu-btn secondary" style="margin-top:8px">Leave</button>
+    </div>
+  </div>
+
+  <div id="match-setup" class="hidden" data-holes="18">
+    <div class="ne-box">
+      <h2><span class="ic ic-gear"></span>Match settings</h2>
+      <p class="ne-sub">Course: <b id="ms-course">—</b>. Locked once the match begins.</p>
+      <div class="ms-len-row">
+        <button class="menu-btn secondary ms-len" data-holes="9">9 holes</button>
+        <button class="menu-btn secondary ms-len" data-holes="18">18 holes</button>
+      </div>
+      <div class="ne-sub" style="margin-top:10px">Aids</div>
+      <div id="ms-toggles" class="admin-toggles"></div>
+      <div id="ms-status" class="ne-sub"></div>
+      <div class="ne-actions">
+        <button id="ms-back" class="menu-btn secondary">Back</button>
+        <button id="ms-confirm" class="menu-btn">Begin match</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="match-standings" class="hidden">
+    <div class="mb-head">
+      <span id="mb-title">Match standings</span>
+      <button id="mb-close" class="mb-x" aria-label="Close">✕</button>
+    </div>
+    <div id="mb-list" class="mb-list"></div>
+  </div>
+
+  <script src="game.js?v=78"></script>
 </body>
 </html>

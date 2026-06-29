@@ -243,6 +243,12 @@ let mode = "menu";
 // Tournament state — set when player enters a tournament round via the lobby.
 let activeTournament = null;     // full tournament row from Supabase
 let activeTournamentRound = null; // 1-4, which round the player is currently playing
+// Match state — live head-to-head game with friends (see "Multiplayer matches").
+let activeMatch = null;      // full matches row from Supabase (null when not in a match)
+let matchHoleCount = 18;     // holes this match plays (9 or 18), set at Begin
+let matchSetupMode = false;  // host is picking course/settings for a match
+let _matchEntered = false;   // guard so we only drop into the live round once
+function matchLive() { return !!(activeMatch && activeMatch.status === "live"); }
 let holeTransition = null; // active hole-change animation (fade + zoom-in), or null
 let holeDrop = null;       // active ball-into-cup drop animation, or null
 const HOLE_DROP_MS = 520;  // drop animation length; result modal opens when it ends
@@ -1300,6 +1306,11 @@ const view = { a: 1, b: 0, c: 0, d: 0, e: 1, f: 0, scale: 1, angle: 0 };
 const VIEW_PAD_MIN = 3;     // world-unit margin when ball is right by the cup
 const VIEW_PAD_FRAC = 0.25; // extra margin as a fraction of the ball->cup span
 const VIEW_MIN = 7;         // smallest framed dimension (caps how far we zoom in)
+// HUD bands kept clear of the framed hole (css px, added on top of safe-area
+// insets). The camera fits the ball↔pin into the area BETWEEN these bands and
+// centers it there, so the pin/ball don't sit under the scorecard/stats/club UI.
+const HUD_RESERVE_TOP = 50; // scorecard / stats / wind / notch live up here
+const HUD_RESERVE_BOT = 76; // club selector + swing hint live down here
 let holeFitW = 100, holeFitH = 100; // full-hole framing dims -> refScale
 
 // Camera = a world focus point + a zoom scale + an angle. Rotation pivots around
@@ -1326,7 +1337,11 @@ function frameTarget() {
   const w = Math.max(Math.abs(bx - px) + 2 * pad, VIEW_MIN);
   const h = Math.max(Math.abs(by - py) + 2 * pad, VIEW_MIN);
   camera._w = w; camera._h = h;
-  camera.tScale = Math.min(window.innerWidth / w, window.innerHeight / h);
+  // Fit into the play area between the HUD bands (not the full screen).
+  const rsv = hudReserve();
+  const availW = Math.max(120, window.innerWidth - rsv.left - rsv.right);
+  const availH = Math.max(120, window.innerHeight - rsv.top - rsv.bot);
+  camera.tScale = Math.min(availW / w, availH / h);
   camera.tFocus.x = (state.ball.x + HOLE.holePos.x) / 2;
   camera.tFocus.y = (state.ball.y + HOLE.holePos.y) / 2;
 }
@@ -1346,8 +1361,12 @@ function applyView() {
   view.scale = s; view.angle = camera.angle;
   view.a = s * cos; view.b = -s * sin;
   view.d = s * sin; view.e = s * cos;
-  view.c = cssW / 2 - (view.a * camera.focus.x + view.b * camera.focus.y);
-  view.f = cssH / 2 - (view.d * camera.focus.x + view.e * camera.focus.y);
+  // Center the focus in the play area between the HUD bands, not the raw screen.
+  const rsv = hudReserve();
+  const cx = (rsv.left + (cssW - rsv.right)) / 2;
+  const cy = (rsv.top + (cssH - rsv.bot)) / 2;
+  view.c = cx - (view.a * camera.focus.x + view.b * camera.focus.y);
+  view.f = cy - (view.d * camera.focus.x + view.e * camera.focus.y);
 }
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
@@ -1373,10 +1392,14 @@ function updateCamera() {
 }
 
 // Visible world rect (axis-aligned; used by the vector renderer at angle≈0).
+// Matches applyView's play-area centering so stripe ranges cover the full screen.
 function visibleRect() {
-  const s = camera.scale;
-  return { x: camera.focus.x - window.innerWidth / (2 * s), w: window.innerWidth / s,
-           y: camera.focus.y - window.innerHeight / (2 * s), h: window.innerHeight / s };
+  const s = camera.scale, cssW = window.innerWidth, cssH = window.innerHeight;
+  const rsv = hudReserve();
+  const cx = (rsv.left + (cssW - rsv.right)) / 2;
+  const cy = (rsv.top + (cssH - rsv.bot)) / 2;
+  return { x: camera.focus.x - cx / s, w: cssW / s,
+           y: camera.focus.y - cy / s, h: cssH / s };
 }
 
 // Safe-area insets (notch / Dynamic Island / home indicator). The DOM HUD uses
@@ -1390,6 +1413,16 @@ function readSafeInsets() {
     r: parseFloat(cs.getPropertyValue("--sar")) || 0,
     b: parseFloat(cs.getPropertyValue("--sab")) || 0,
     l: parseFloat(cs.getPropertyValue("--sal")) || 0,
+  };
+}
+// HUD bands (px) the camera keeps the framed hole clear of: safe-area inset + the
+// reserve constant on each edge. Top/bottom hold the scorecard/stats and club UI.
+function hudReserve() {
+  return {
+    top: safeInset.t + HUD_RESERVE_TOP,
+    bot: safeInset.b + HUD_RESERVE_BOT,
+    left: safeInset.l,
+    right: safeInset.r,
   };
 }
 
@@ -2428,6 +2461,11 @@ function showResult() {
   round.score += d;
   round.holesPlayed += 1;
   updateScorecard();
+  // Live match: push my score/progress so opponents' standings update.
+  if (matchLive()) {
+    const finished = round.holesPlayed >= roundHoleCount();
+    updateMyMatchProgress(round.score, round.holesPlayed, finished);
+  }
   const names = { "-3": "Albatross!", "-2": "Eagle!", "-1": "Birdie!",
                   "0": "Par", "1": "Bogey", "2": "Double bogey" };
   const title = state.strokes === 1 ? "Hole in one!" : (names[String(d)] || (d > 0 ? "+" + d : d));
@@ -2474,8 +2512,10 @@ document.getElementById("play-again").addEventListener("click", () => {
   elResult.classList.add("hidden");
   // Daily is a single hole → straight to the summary (streak + share live there)
   if (dailyMode) { showRoundSummary(); return; }
-  // Last hole of the course → show full round summary instead of advancing
-  if (course && holeIndex >= course.holes.length - 1) {
+  // Last hole → show full round summary instead of advancing. A match plays a
+  // capped number of holes (9 or 18), so end on roundHoleCount() not the full
+  // course length.
+  if (course && holeIndex >= roundHoleCount() - 1) {
     showRoundSummary();
     return;
   }
@@ -2602,6 +2642,9 @@ function showRoundSummary(midRound = false) {
     ? `${course ? course.name : "Golf"} · Hole ${played} of ${n} · ${formatToPar(round.score)}`
     : `${course ? course.name : "Golf"} · ${totStrk} (${formatToPar(round.score)})`;
   document.getElementById("re-replay").textContent = midRound ? "Resume" : "Play Again";
+  // A match is a single locked round — replaying it would corrupt the shared
+  // standings, so hide the replay button at the end of a match.
+  document.getElementById("re-replay").classList.toggle("hidden", matchLive() && !midRound);
   // reset to scorecard tab each open
   document.querySelectorAll(".re-tab").forEach(t => t.classList.toggle("active", t.dataset.panel === "re-card"));
   document.querySelectorAll(".re-panel").forEach(p => p.classList.toggle("hidden", p.id !== "re-card"));
@@ -2628,6 +2671,13 @@ function showRoundSummary(midRound = false) {
     if (dailyMode) finishDaily(totStrk);  // streak + share + daily board
     submitFinishedRound();                // post to regular leaderboard
     handleTournamentRoundComplete();      // post to tournament (no-op if not in tournament)
+    // Live match: mark my round finished and surface the standings (which keep
+    // polling until everyone's done → the winner locks at the top).
+    if (matchLive()) {
+      updateMyMatchProgress(round.score, round.holesPlayed, true);
+      startBoardPoll();
+      toggleMatchBoard(true);
+    }
   }
 }
 
@@ -2645,6 +2695,7 @@ document.getElementById("re-home").addEventListener("click", () => {
   document.getElementById("round-end").classList.add("hidden");
   activeTournamentRound = null;
   stopTournamentTimer();
+  leaveMatch();           // tear down match polls/state if we were in one
   mode = "menu";
   elMenu.classList.remove("hidden");
   elHudBtn.classList.add("hidden");
@@ -2964,7 +3015,12 @@ function showCourseSelect() {
 function hideCourseSelect() { elCourseSelect.classList.add("hidden"); }
 
 if (elCsSearch) elCsSearch.addEventListener("input", renderCourseCards);
-document.getElementById("cs-back").addEventListener("click", () => { hideCourseSelect(); showMenu(); });
+document.getElementById("cs-back").addEventListener("click", () => {
+  hideCourseSelect();
+  // Host picking a course for a match → back returns to the lobby, not the menu.
+  if (matchSetupMode) { matchSetupMode = false; openMatchLobby(); return; }
+  showMenu();
+});
 
 // ---------------------------------------------------------------------
 //  Hole preview — Trackman/EA-style flyover reusing the live canvas
@@ -3085,6 +3141,9 @@ function lieNote(label) {
 // Shot stats HUD. Yards normally; feet (carry omitted) once on the green.
 function updateStats() {
   if (mode !== "course" && mode !== "range") { elStats.classList.add("hidden"); return; }
+  // Hide the stats panel while the ball is in motion so it doesn't cover the
+  // hole/ball during a shot; it returns once the ball settles.
+  if (state.moving) { elStats.classList.add("hidden"); return; }
   elStats.classList.remove("hidden");
   updateClubUI();
   const lie = lieLabel();
@@ -3427,13 +3486,19 @@ function setYardsPerUnit(ypu) {
 }
 
 function startCourse() {
+  // Match host is mid-setup: the course pick funnels here → divert to the
+  // match settings/length step instead of starting a solo round.
+  if (matchSetupMode) { openMatchSetup(); return; }
   mode = "course";
   dailyMode = false;
-  // Tournament rounds use the tournament's frozen conditions; otherwise the
-  // global defaults. Apply before setHole so wind/auto-club pick them up.
-  activeSettings = (activeTournamentRound !== null && activeTournament && activeTournament.settings)
-    ? normalizeSettings(activeTournament.settings)
-    : normalizeSettings(gameDefaults);
+  // Match rounds use the match's frozen conditions; tournament rounds use the
+  // tournament's; otherwise the global defaults. Apply before setHole so
+  // wind/auto-club pick them up.
+  activeSettings = matchLive()
+    ? normalizeSettings(activeMatch.settings)
+    : (activeTournamentRound !== null && activeTournament && activeTournament.settings)
+      ? normalizeSettings(activeTournament.settings)
+      : normalizeSettings(gameDefaults);
   applySettings(activeSettings);
   elMenu.classList.add("hidden");
   elCourseSelect.classList.add("hidden");
@@ -3444,14 +3509,19 @@ function startCourse() {
   elHudBtn.classList.remove("hidden");
   elHmClubRow.classList.remove("hidden");
   elHmCourseItems.classList.remove("hidden");
+  // Match standings toggle lives in the HUD menu; only relevant in a match.
+  const hmMatch = document.getElementById("hm-match");
+  if (hmMatch) hmMatch.classList.toggle("hidden", !matchLive());
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
-  // Tournament pins are frozen per (tournament, round) so every entrant gets the
-  // same pins; casual rounds get fresh pins each time.
-  round.pinSeed = (activeTournamentRound !== null && activeTournament)
-    ? strSeed((activeTournament.id || "t") + ":" + activeTournamentRound)
-    : (Math.random() * 0xffffffff) | 0;
+  // Match + tournament pins are frozen per game so every entrant gets the same
+  // pins; casual rounds get fresh pins each time.
+  round.pinSeed = matchLive()
+    ? strSeed("m:" + activeMatch.id)
+    : (activeTournamentRound !== null && activeTournament)
+      ? strSeed((activeTournament.id || "t") + ":" + activeTournamentRound)
+      : (Math.random() * 0xffffffff) | 0;
   if (course && course.id === selectedCourseId) {
     setYardsPerUnit(course.yardsPerUnit);   // already loaded: restore scale (range may have changed it)
     holeIndex = 0;
@@ -5080,6 +5150,414 @@ function startTournamentRound(roundNum) {
     closeHud();
     elScorecard.style.display = "none";
   });
+})();
+
+// =====================================================================
+//  Multiplayer matches — live, code-based games against friends.
+//  Flow: host "Start a match" → gets a 6-char code → friends "Join" with it
+//  → everyone watches the lobby roster fill → host presses Begin, picks a
+//  course + settings + length (9/18) → match goes live → all players race
+//  the same course while a standings panel polls scores. Conditions freeze
+//  at Begin. Sync is REST polling (no Realtime), mirroring tournaments.
+//  Backed by the `matches` + `match_players` tables (see schema.sql).
+// =====================================================================
+let _matchPoll = null;   // lobby roster/status poll (2s)
+let _boardPoll = null;   // in-round standings poll (5s)
+let _matchIsHost = false;
+let _matchSetupSettings = null;   // settings draft while host configures a match
+
+// 6-char join code from an unambiguous alphabet (no 0/O/1/I/l).
+function genMatchCode() {
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 6; i++) s += A[(Math.random() * A.length) | 0];
+  return s;
+}
+
+// --- REST helpers (mirror the tournament helpers' shape) ---
+async function createMatch() {
+  if (!LB_ON()) return null;
+  const body = {
+    code: genMatchCode(),
+    host_name: getPlayerName() || "Host",
+    host_user_id: (currentUser() || {}).id || null,
+    status: "lobby",
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(LB_URL + "/rest/v1/matches", {
+        method: "POST",
+        headers: authHeaders({ Prefer: "return=representation" }),
+        body: JSON.stringify(body),
+      });
+      if (res.ok) { const rows = await res.json(); return rows[0] || null; }
+      if (res.status === 409) { body.code = genMatchCode(); continue; }  // code collision
+      return null;
+    } catch (e) { console.warn("createMatch failed:", e); return null; }
+  }
+  return null;
+}
+
+async function fetchMatchByCode(code) {
+  if (!LB_ON()) return null;
+  try {
+    const q = "/rest/v1/matches?code=eq." + encodeURIComponent(code) + "&limit=1";
+    const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  } catch (e) { return null; }
+}
+
+async function fetchMatchById(id) {
+  if (!LB_ON() || !id) return null;
+  try {
+    const q = "/rest/v1/matches?id=eq." + encodeURIComponent(id) + "&limit=1";
+    const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  } catch (e) { return null; }
+}
+
+// Insert (or re-affirm, on rejoin) the current player's row in a match.
+async function addMatchPlayer(matchId) {
+  if (!LB_ON() || !matchId) return false;
+  const body = {
+    match_id: matchId,
+    user_id: (currentUser() || {}).id || null,
+    player_name: getPlayerName() || "Player",
+  };
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/match_players", {
+      method: "POST",
+      // merge-duplicates on the (match_id, player_name) unique key → idempotent rejoin
+      headers: authHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify(body),
+    });
+    return res.ok;
+  } catch (e) { console.warn("addMatchPlayer failed:", e); return false; }
+}
+
+async function fetchMatchPlayers(matchId) {
+  if (!LB_ON() || !matchId) return [];
+  try {
+    const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(matchId) +
+              "&order=score.asc,holes_played.desc,joined_at.asc";
+    const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+    if (!res.ok) return [];
+    return res.json();
+  } catch (e) { return []; }
+}
+
+async function beginMatch(courseId, holeCount, settings) {
+  if (!LB_ON() || !activeMatch) return false;
+  const patch = {
+    course_id: courseId,
+    hole_count: holeCount,
+    settings: normalizeSettings(settings),
+    status: "live",
+    started_at: new Date().toISOString(),
+  };
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/matches?id=eq." + encodeURIComponent(activeMatch.id), {
+      method: "PATCH",
+      headers: authHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) return false;
+    const rows = await res.json();
+    if (rows && rows[0]) activeMatch = rows[0];
+    return true;
+  } catch (e) { console.warn("beginMatch failed:", e); return false; }
+}
+
+// Push my live progress (called every hole + on finish).
+async function updateMyMatchProgress(score, holesPlayed, finished) {
+  if (!LB_ON() || !activeMatch) return;
+  const me = getPlayerName() || "Player";
+  const patch = { score, holes_played: holesPlayed, finished: !!finished,
+                  updated_at: new Date().toISOString() };
+  try {
+    const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(activeMatch.id) +
+              "&player_name=eq." + encodeURIComponent(me);
+    await fetch(LB_URL + q, {
+      method: "PATCH",
+      headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify(patch),
+    });
+  } catch (e) { console.warn("match progress update failed:", e); }
+}
+
+// --- helpers shared with startCourse/play-again ---
+function roundHoleCount() {
+  if (matchLive() && course) return Math.min(matchHoleCount, course.holes.length);
+  return course ? course.holes.length : 18;
+}
+
+// Run cb once a player name exists (guests welcome) — gates start/join.
+function ensureNameThen(cb) {
+  if (getPlayerName()) { cb(); return; }
+  openNameEntry(() => cb());
+}
+
+// --- Match menu (start / join) ---
+function openMatchMenu() {
+  const ov = document.getElementById("match-menu");
+  if (!ov) return;
+  document.getElementById("mm-error").classList.add("hidden");
+  document.getElementById("mm-code").value = "";
+  ov.classList.remove("hidden");
+}
+function closeMatchMenu() {
+  const ov = document.getElementById("match-menu");
+  if (ov) ov.classList.add("hidden");
+}
+function mmError(msg) {
+  const el = document.getElementById("mm-error");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+async function hostStartMatch() {
+  if (!LB_ON()) { mmError("Online play isn't configured."); return; }
+  mmError("");
+  const m = await createMatch();
+  if (!m) { mmError("Couldn't start a match. Try again."); return; }
+  await addMatchPlayer(m.id);   // host is a competitor too → own roster/score row
+  activeMatch = m;
+  _matchIsHost = true;
+  _matchEntered = false;
+  closeMatchMenu();
+  openMatchLobby();
+}
+
+async function joinMatchFlow() {
+  if (!LB_ON()) { mmError("Online play isn't configured."); return; }
+  const code = (document.getElementById("mm-code").value || "").trim().toUpperCase();
+  if (code.length < 4) { mmError("Enter the code from the host."); return; }
+  mmError("");
+  const m = await fetchMatchByCode(code);
+  if (!m) { mmError("No match with that code."); return; }
+  if (m.status !== "lobby") { mmError("That match has already started."); return; }
+  const ok = await addMatchPlayer(m.id);
+  if (!ok) { mmError("Couldn't join. Try again."); return; }
+  activeMatch = m;
+  _matchIsHost = (currentUser() && m.host_user_id === currentUser().id);
+  _matchEntered = false;
+  closeMatchMenu();
+  openMatchLobby();
+}
+
+// --- Match lobby (roster + begin/waiting), polled every 2s ---
+function openMatchLobby() {
+  const ov = document.getElementById("match-lobby");
+  if (!ov) return;
+  ov.classList.remove("hidden");
+  document.getElementById("ml-code").textContent = activeMatch ? activeMatch.code : "——————";
+  renderMatchLobby();
+  stopMatchPoll();
+  _matchPoll = setInterval(renderMatchLobby, 2000);
+}
+function closeMatchLobby() {
+  stopMatchPoll();
+  const ov = document.getElementById("match-lobby");
+  if (ov) ov.classList.add("hidden");
+}
+function stopMatchPoll() {
+  if (_matchPoll) { clearInterval(_matchPoll); _matchPoll = null; }
+}
+
+async function renderMatchLobby() {
+  if (!activeMatch) return;
+  // Refresh the match row so players see when the host presses Begin.
+  const fresh = await fetchMatchById(activeMatch.id);
+  if (fresh) activeMatch = Object.assign(activeMatch, fresh);
+
+  if (matchLive() && !_matchEntered) { enterLiveMatch(); return; }
+
+  const players = await fetchMatchPlayers(activeMatch.id);
+  const list = document.getElementById("ml-players");
+  if (list) {
+    list.innerHTML = players.length
+      ? players.map(p => {
+          const me = isMeEntry(p) ? " ml-me" : "";
+          const host = (p.player_name === activeMatch.host_name) ? '<span class="ml-host">HOST</span>' : "";
+          return `<li class="ml-player${me}">${esc(p.player_name)}${host}</li>`;
+        }).join("")
+      : '<li class="ml-player ml-empty">Waiting for players…</li>';
+  }
+  const field = document.getElementById("ml-field");
+  if (field) field.textContent = players.length + " in the lobby";
+
+  const beginBtn = document.getElementById("ml-begin");
+  const waiting = document.getElementById("ml-waiting");
+  if (_matchIsHost) {
+    if (beginBtn) beginBtn.classList.remove("hidden");
+    if (waiting) waiting.classList.add("hidden");
+  } else {
+    if (beginBtn) beginBtn.classList.add("hidden");
+    if (waiting) waiting.classList.remove("hidden");
+  }
+}
+
+// --- Host: pick course → configure → Begin ---
+// Begin just sends the host into the normal course picker with a flag set; the
+// pick funnels back through startCourse(), which diverts to openMatchSetup().
+function hostBeginPickCourse() {
+  matchSetupMode = true;
+  closeMatchLobby();
+  showCourseSelect();
+}
+
+// Settings + length step shown after the host picks a course (selectedCourseId).
+function openMatchSetup() {
+  const ov = document.getElementById("match-setup");
+  if (!ov) return;
+  hideCourseSelect();
+  _matchSetupSettings = normalizeSettings(gameDefaults);
+  const courseName = (COURSES.find(c => c.id === selectedCourseId) || {}).name || selectedCourseId;
+  document.getElementById("ms-course").textContent = courseName;
+  // length default 18
+  ov.dataset.holes = "18";
+  renderMatchSetupToggles();
+  syncMatchLengthButtons();
+  ov.classList.remove("hidden");
+}
+function renderMatchSetupToggles() {
+  const box = document.getElementById("ms-toggles");
+  if (!box) return;
+  box.innerHTML = "";
+  for (const def of SETTING_DEFS) {
+    const on = !!_matchSetupSettings[def.key];
+    const btn = document.createElement("button");
+    btn.className = "hm-item" + (on ? " active" : "");
+    btn.textContent = def.label;
+    btn.addEventListener("click", () => {
+      _matchSetupSettings[def.key] = !_matchSetupSettings[def.key];
+      btn.classList.toggle("active", _matchSetupSettings[def.key]);
+    });
+    box.appendChild(btn);
+  }
+}
+function syncMatchLengthButtons() {
+  const ov = document.getElementById("match-setup");
+  const holes = ov.dataset.holes;
+  ov.querySelectorAll(".ms-len").forEach(b => b.classList.toggle("active", b.dataset.holes === holes));
+}
+function closeMatchSetup() {
+  const ov = document.getElementById("match-setup");
+  if (ov) ov.classList.add("hidden");
+}
+
+async function confirmMatchSetup() {
+  const ov = document.getElementById("match-setup");
+  const holes = parseInt(ov.dataset.holes, 10) || 18;
+  const status = document.getElementById("ms-status");
+  if (status) status.textContent = "Starting…";
+  const ok = await beginMatch(selectedCourseId, holes, _matchSetupSettings);
+  if (!ok) { if (status) status.textContent = "Couldn't start — try again."; return; }
+  matchSetupMode = false;
+  closeMatchSetup();
+  enterLiveMatch();
+}
+
+// Drop into the live round (host after Begin, players when poll sees 'live').
+function enterLiveMatch() {
+  if (_matchEntered) return;
+  _matchEntered = true;
+  matchSetupMode = false;
+  matchHoleCount = activeMatch.hole_count || 18;
+  selectedCourseId = activeMatch.course_id;
+  closeMatchLobby();
+  closeMatchSetup();
+  closeMatchMenu();
+  startCourse();
+  startBoardPoll();
+}
+
+// --- Live standings panel (toggle from HUD; polls every 5s while live) ---
+function startBoardPoll() {
+  stopBoardPoll();
+  renderMatchBoard();
+  _boardPoll = setInterval(renderMatchBoard, 5000);
+}
+function stopBoardPoll() {
+  if (_boardPoll) { clearInterval(_boardPoll); _boardPoll = null; }
+}
+function toggleMatchBoard(force) {
+  const el = document.getElementById("match-standings");
+  if (!el) return;
+  const show = force != null ? force : el.classList.contains("hidden");
+  el.classList.toggle("hidden", !show);
+  if (show) renderMatchBoard();
+}
+async function renderMatchBoard() {
+  if (!activeMatch) return;
+  const rows = await fetchMatchPlayers(activeMatch.id);
+  const allDone = rows.length && rows.every(r => r.finished);
+  const title = document.getElementById("mb-title");
+  if (title) title.textContent = allDone ? "Final standings" : "Match standings";
+  const body = document.getElementById("mb-list");
+  if (!body) return;
+  body.innerHTML = rows.map((r, i) => {
+    const me = isMeEntry(r) ? " mb-me" : "";
+    const lead = i === 0 ? " mb-lead" : "";
+    const done = r.finished ? '<span class="mb-done">✓</span>' : "";
+    return `<div class="mb-row${me}${lead}">` +
+             `<span class="mb-pos">${i + 1}</span>` +
+             `<span class="mb-name">${esc(r.player_name)}${done}</span>` +
+             `<span class="mb-score">${formatToPar(r.score)}</span>` +
+             `<span class="mb-thru">${r.holes_played}/${matchHoleCount}</span>` +
+           `</div>`;
+  }).join("") || '<div class="mb-row mb-empty">No scores yet</div>';
+}
+
+// Tear down all match state (Home button, leaving a match).
+function leaveMatch() {
+  stopMatchPoll();
+  stopBoardPoll();
+  activeMatch = null;
+  matchSetupMode = false;
+  _matchEntered = false;
+  _matchIsHost = false;
+  matchHoleCount = 18;
+  toggleMatchBoard(false);
+}
+
+// --- Wire-up ---
+(function wireMatch() {
+  const open = document.getElementById("open-match");
+  if (open) open.addEventListener("click", () => openMatchMenu());
+
+  const mmClose = document.getElementById("mm-close");
+  if (mmClose) mmClose.addEventListener("click", closeMatchMenu);
+  const mmStart = document.getElementById("mm-start");
+  if (mmStart) mmStart.addEventListener("click", () => ensureNameThen(hostStartMatch));
+  const mmJoin = document.getElementById("mm-join");
+  if (mmJoin) mmJoin.addEventListener("click", () => ensureNameThen(joinMatchFlow));
+  const mmCode = document.getElementById("mm-code");
+  if (mmCode) mmCode.addEventListener("keydown", (e) => { if (e.key === "Enter") ensureNameThen(joinMatchFlow); });
+
+  const mlBegin = document.getElementById("ml-begin");
+  if (mlBegin) mlBegin.addEventListener("click", hostBeginPickCourse);
+  const mlLeave = document.getElementById("ml-leave");
+  if (mlLeave) mlLeave.addEventListener("click", () => { leaveMatch(); closeMatchLobby(); showMenu(); });
+
+  const ms = document.getElementById("match-setup");
+  if (ms) ms.querySelectorAll(".ms-len").forEach(b => b.addEventListener("click", () => {
+    ms.dataset.holes = b.dataset.holes; syncMatchLengthButtons();
+  }));
+  const msConfirm = document.getElementById("ms-confirm");
+  if (msConfirm) msConfirm.addEventListener("click", confirmMatchSetup);
+  const msBack = document.getElementById("ms-back");
+  if (msBack) msBack.addEventListener("click", () => { closeMatchSetup(); showCourseSelect(); });
+
+  const mbClose = document.getElementById("mb-close");
+  if (mbClose) mbClose.addEventListener("click", () => toggleMatchBoard(false));
+  const hmMatch = document.getElementById("hm-match");
+  if (hmMatch) hmMatch.addEventListener("click", () => { toggleMatchBoard(); closeHud(); });
 })();
 
 // =====================================================================

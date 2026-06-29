@@ -134,3 +134,47 @@ create policy "tournaments admin delete" on tournaments for delete using (
   exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
 create policy "trounds admin delete" on tournament_rounds for delete using (
   exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
+
+-- =====================================================================
+--  MATCHES: live, code-based head-to-head games with friends.
+--  One person starts a match (gets a short code), others join with it,
+--  the host picks course + settings + length and presses Begin. Everyone
+--  then races the same course; standings update by polling (no Realtime).
+--  Casual + ephemeral, so RLS is permissive (anon key is public; the only
+--  gate is knowing the 6-char code). No sensitive data lives here.
+-- =====================================================================
+create table if not exists matches (
+  id           uuid primary key default gen_random_uuid(),
+  code         text unique not null,          -- 6-char join code (ambiguous chars dropped)
+  host_name    text,
+  host_user_id uuid references auth.users(id) on delete set null,
+  course_id    text,                          -- null until host picks at Begin
+  hole_count   int,                           -- 9 or 18, set at Begin
+  settings     jsonb,                         -- aid-toggle snapshot, frozen at Begin
+  status       text not null default 'lobby', -- 'lobby' | 'live' | 'done'
+  created_at   timestamptz default now(),
+  started_at   timestamptz
+);
+alter table matches enable row level security;
+create policy "matches read"   on matches for select using (true);
+create policy "matches write"  on matches for insert with check (true);
+create policy "matches update" on matches for update using (true);
+
+create table if not exists match_players (
+  id           uuid primary key default gen_random_uuid(),
+  match_id     uuid references matches(id) on delete cascade,
+  user_id      uuid references auth.users(id) on delete set null,
+  player_name  text not null,
+  score        int not null default 0,        -- to-par so far
+  holes_played int not null default 0,
+  finished     boolean not null default false,
+  joined_at    timestamptz default now(),
+  updated_at   timestamptz default now(),
+  unique (match_id, player_name)
+);
+alter table match_players enable row level security;
+create policy "mplayers read"   on match_players for select using (true);
+create policy "mplayers write"  on match_players for insert
+  with check (user_id is null or user_id = auth.uid());
+create policy "mplayers update" on match_players for update using (true);
+create index if not exists match_players_match_idx on match_players (match_id);
