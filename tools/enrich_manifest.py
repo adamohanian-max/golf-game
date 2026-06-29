@@ -23,6 +23,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COURSES = os.path.join(ROOT, "courses")
 MANIFEST = os.path.join(COURSES, "manifest.json")
 TAGS = os.path.join(ROOT, "tools", "course_tags.json")
+# Precise "City, ST" labels reverse-geocoded by tools/geocode_manifest.py.
+GEOCODE = os.path.join(COURSES, "geocode.json")
 
 US_STATES = {
     "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
@@ -124,6 +126,10 @@ def main():
         manifest = json.load(f)
     with open(TAGS) as f:
         tags_src = json.load(f)
+    geocode = {}
+    if os.path.exists(GEOCODE):
+        with open(GEOCODE) as f:
+            geocode = json.load(f)
     tag_map = {}
     for tag, ids in tags_src.items():
         if tag.startswith("_"):
@@ -167,6 +173,11 @@ def main():
                 tail = location.rsplit(",", 1)[-1].strip().lower()
                 country = COUNTRY_KEYWORDS.get(tail)
                 region = COUNTRY_REGION.get(country, "Other")
+
+        # Precise reverse-geocoded "City, ST" wins over the coarse country label
+        # (region keeps the value derived above — it drives the filter rail).
+        if geocode.get(cid):
+            location = geocode[cid]
 
         region_counts[region] = region_counts.get(region, 0) + 1
         out.append({

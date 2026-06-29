@@ -82,7 +82,7 @@
     "par": 72,
     "yards": 4854,
     "holes": 18,
-    "location": "USA",
+    "location": "Acton, MA",
     "region": "USA",
     "tags": []
   },
@@ -107,7 +107,7 @@
     "par": 67,
     "yards": 5170,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Dalgety Bay, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -118,7 +118,7 @@
     "par": 75,
     "yards": 6951,
     "holes": 18,
-    "location": "Spain",
+    "location": "La Línea de la Concepción, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -129,7 +129,7 @@
     "par": 73,
     "yards": 6419,
     "holes": 18,
-    "location": "Spain",
+    "location": "Benahavís, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -140,7 +140,7 @@
     "par": 68,
     "yards": 5668,
     "holes": 17,
-    "location": "Spain",
+    "location": "Alhaurín el Grande, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -151,7 +151,7 @@
     "par": 72,
     "yards": 6050,
     "holes": 18,
-    "location": "Spain",
+    "location": "San Roque, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -162,7 +162,7 @@
     "par": 72,
     "yards": 6657,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Amsterdam, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -173,7 +173,7 @@
     "par": 72,
     "yards": 7315,
     "holes": 18,
-    "location": "UAE",
+    "location": "United Arab Emirates",
     "region": "Middle East",
     "tags": []
   },
@@ -184,7 +184,7 @@
     "par": 72,
     "yards": 6915,
     "holes": 18,
-    "location": "Scotland",
+    "location": "North Berwick, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -195,7 +195,7 @@
     "par": 72,
     "yards": 6164,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Stevenston, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -206,7 +206,7 @@
     "par": 70,
     "yards": 6071,
     "holes": 18,
-    "location": "Ireland",
+    "location": "United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -217,7 +217,7 @@
     "par": 70,
     "yards": 5977,
     "holes": 18,
-    "location": "England",
+    "location": "Heswall, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -228,7 +228,7 @@
     "par": 72,
     "yards": 6295,
     "holes": 18,
-    "location": "England",
+    "location": "Spelthorne, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -239,7 +239,7 @@
     "par": 68,
     "yards": 4823,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Monifieth, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -250,7 +250,7 @@
     "par": 74,
     "yards": 6442,
     "holes": 18,
-    "location": "Spain",
+    "location": "Estepona, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -261,7 +261,7 @@
     "par": 72,
     "yards": 5635,
     "holes": 18,
-    "location": "Scotland",
+    "location": "City of Edinburgh, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -272,7 +272,7 @@
     "par": 71,
     "yards": 6097,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Markinch, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -283,7 +283,7 @@
     "par": 69,
     "yards": 5741,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Crail, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -305,7 +305,7 @@
     "par": 68,
     "yards": 5971,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Ballyclare, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -316,7 +316,7 @@
     "par": 70,
     "yards": 5399,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Ballymena, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -327,7 +327,7 @@
     "par": 72,
     "yards": 6131,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Bangor, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -338,7 +338,7 @@
     "par": 72,
     "yards": 6441,
     "holes": 18,
-    "location": "England",
+    "location": "Reigate and Banstead, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -349,7 +349,7 @@
     "par": 72,
     "yards": 6857,
     "holes": 18,
-    "location": "England",
+    "location": "Mole Valley, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -360,7 +360,7 @@
     "par": 71,
     "yards": 6215,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Alloway, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -371,7 +371,7 @@
     "par": 70,
     "yards": 6212,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Belfast, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -382,7 +382,7 @@
     "par": 67,
     "yards": 5585,
     "holes": 17,
-    "location": "England",
+    "location": "Moreton, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -393,7 +393,7 @@
     "par": 72,
     "yards": 5905,
     "holes": 18,
-    "location": "England",
+    "location": "Bracknell Forest, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -404,7 +404,7 @@
     "par": 71,
     "yards": 6347,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Newtownards, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -415,7 +415,7 @@
     "par": 72,
     "yards": 6274,
     "holes": 18,
-    "location": "Portugal",
+    "location": "Lagos, Portugal",
     "region": "Europe",
     "tags": []
   },
@@ -426,7 +426,7 @@
     "par": 70,
     "yards": 6042,
     "holes": 18,
-    "location": "England",
+    "location": "Litherland, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -437,7 +437,7 @@
     "par": 70,
     "yards": 5026,
     "holes": 18,
-    "location": "Scotland",
+    "location": "City of Edinburgh, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -448,7 +448,7 @@
     "par": 67,
     "yards": 5123,
     "holes": 18,
-    "location": "England",
+    "location": "Greater London, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -459,7 +459,7 @@
     "par": 69,
     "yards": 6429,
     "holes": 18,
-    "location": "Scotland",
+    "location": "City of Edinburgh, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -470,7 +470,7 @@
     "par": 70,
     "yards": 6268,
     "holes": 18,
-    "location": "England",
+    "location": "Elmbridge, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -481,7 +481,7 @@
     "par": 62,
     "yards": 5526,
     "holes": 18,
-    "location": "Spain",
+    "location": "Marbella, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -492,7 +492,7 @@
     "par": 70,
     "yards": 5901,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Larne, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -503,7 +503,7 @@
     "par": 72,
     "yards": 6104,
     "holes": 18,
-    "location": "Spain",
+    "location": "Mijas, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -514,7 +514,7 @@
     "par": 72,
     "yards": 6398,
     "holes": 18,
-    "location": "Spain",
+    "location": "Mijas, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -525,7 +525,7 @@
     "par": 72,
     "yards": 6131,
     "holes": 18,
-    "location": "Spain",
+    "location": "Mijas, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -536,7 +536,7 @@
     "par": 72,
     "yards": 6435,
     "holes": 18,
-    "location": "Spain",
+    "location": "Marbella, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -547,7 +547,7 @@
     "par": 71,
     "yards": 6295,
     "holes": 18,
-    "location": "Spain",
+    "location": "Mijas, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -558,7 +558,7 @@
     "par": 72,
     "yards": 6516,
     "holes": 18,
-    "location": "Spain",
+    "location": "Mijas, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -569,7 +569,7 @@
     "par": 72,
     "yards": 5869,
     "holes": 18,
-    "location": "Spain",
+    "location": "Mijas, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -580,7 +580,7 @@
     "par": 72,
     "yards": 4916,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Dunfermline, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -591,7 +591,7 @@
     "par": 69,
     "yards": 5567,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Newtownards, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -602,7 +602,7 @@
     "par": 70,
     "yards": 5132,
     "holes": 18,
-    "location": "Scotland",
+    "location": "City of Edinburgh, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -613,7 +613,7 @@
     "par": 72,
     "yards": 5445,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Carrickfergus, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -624,7 +624,7 @@
     "par": 73,
     "yards": 6245,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Portstewart, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -635,7 +635,7 @@
     "par": 73,
     "yards": 6815,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Limerick, Ireland",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -646,7 +646,7 @@
     "par": 71,
     "yards": 6241,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Fife, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -657,7 +657,7 @@
     "par": 68,
     "yards": 6103,
     "holes": 17,
-    "location": "England",
+    "location": "Knowsley, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -668,7 +668,7 @@
     "par": 72,
     "yards": 6341,
     "holes": 18,
-    "location": "England",
+    "location": "Guildford, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -679,7 +679,7 @@
     "par": 72,
     "yards": 6710,
     "holes": 18,
-    "location": "Spain",
+    "location": "Marbella, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -690,7 +690,7 @@
     "par": 72,
     "yards": 6609,
     "holes": 18,
-    "location": "Spain",
+    "location": "Málaga, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -701,7 +701,7 @@
     "par": 71,
     "yards": 6161,
     "holes": 18,
-    "location": "Spain",
+    "location": "San Roque, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -712,7 +712,7 @@
     "par": 72,
     "yards": 6842,
     "holes": 18,
-    "location": "Spain",
+    "location": "Málaga, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -723,7 +723,7 @@
     "par": 71,
     "yards": 7008,
     "holes": 18,
-    "location": "Spain",
+    "location": "San Roque, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -734,7 +734,7 @@
     "par": 69,
     "yards": 5209,
     "holes": 18,
-    "location": "England",
+    "location": "Maidstone, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -745,7 +745,7 @@
     "par": 71,
     "yards": 6243,
     "holes": 18,
-    "location": "England",
+    "location": "Greater London, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -756,7 +756,7 @@
     "par": 72,
     "yards": 5785,
     "holes": 18,
-    "location": "England",
+    "location": "Epsom and Ewell, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -767,7 +767,7 @@
     "par": 72,
     "yards": 7129,
     "holes": 18,
-    "location": "USA",
+    "location": "Pinehurst, NC",
     "region": "USA",
     "tags": []
   },
@@ -778,7 +778,7 @@
     "par": 72,
     "yards": 6998,
     "holes": 18,
-    "location": "USA",
+    "location": "Pinehurst, NC",
     "region": "USA",
     "tags": []
   },
@@ -789,7 +789,7 @@
     "par": 72,
     "yards": 5792,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Cowdenbeath, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -800,7 +800,7 @@
     "par": 72,
     "yards": 4933,
     "holes": 18,
-    "location": "Scotland",
+    "location": "City of Edinburgh, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -811,7 +811,7 @@
     "par": 72,
     "yards": 6664,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Crail, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -822,7 +822,7 @@
     "par": 71,
     "yards": 6321,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Longniddry, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -833,7 +833,7 @@
     "par": 72,
     "yards": 5237,
     "holes": 18,
-    "location": "Scotland",
+    "location": "City of Edinburgh, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -844,7 +844,7 @@
     "par": 71,
     "yards": 7253,
     "holes": 18,
-    "location": "Scotland",
+    "location": "St Andrews, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -855,7 +855,7 @@
     "par": 72,
     "yards": 6512,
     "holes": 18,
-    "location": "England",
+    "location": "Greater London, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -866,7 +866,7 @@
     "par": 72,
     "yards": 5412,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Prestwick, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -877,7 +877,7 @@
     "par": 73,
     "yards": 6451,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Livingston, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -888,7 +888,7 @@
     "par": 70,
     "yards": 5491,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Kirkcaldy, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -899,7 +899,7 @@
     "par": 74,
     "yards": 6751,
     "holes": 18,
-    "location": "Portugal",
+    "location": "Quarteira, Portugal",
     "region": "Europe",
     "tags": []
   },
@@ -910,7 +910,7 @@
     "par": 72,
     "yards": 6358,
     "holes": 18,
-    "location": "Portugal",
+    "location": "Quarteira, Portugal",
     "region": "Europe",
     "tags": []
   },
@@ -921,7 +921,7 @@
     "par": 73,
     "yards": 6414,
     "holes": 18,
-    "location": "Portugal",
+    "location": "Quarteira, Portugal",
     "region": "Europe",
     "tags": []
   },
@@ -932,7 +932,7 @@
     "par": 72,
     "yards": 6809,
     "holes": 18,
-    "location": "Portugal",
+    "location": "Quarteira, Portugal",
     "region": "Europe",
     "tags": []
   },
@@ -943,7 +943,7 @@
     "par": 71,
     "yards": 6942,
     "holes": 18,
-    "location": "Portugal",
+    "location": "Quarteira, Portugal",
     "region": "Europe",
     "tags": []
   },
@@ -954,7 +954,7 @@
     "par": 71,
     "yards": 5896,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Donaghadee, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -965,7 +965,7 @@
     "par": 61,
     "yards": 5620,
     "holes": 15,
-    "location": "Scotland",
+    "location": "Dundee, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -976,7 +976,7 @@
     "par": 72,
     "yards": 6271,
     "holes": 18,
-    "location": "England",
+    "location": "Sandhurst, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -987,7 +987,7 @@
     "par": 73,
     "yards": 6740,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Leuchars, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -998,7 +998,7 @@
     "par": 73,
     "yards": 6467,
     "holes": 18,
-    "location": "Scotland",
+    "location": "City of Edinburgh, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1009,7 +1009,7 @@
     "par": 72,
     "yards": 7528,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Fife, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1020,7 +1020,7 @@
     "par": 70,
     "yards": 6356,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Dunbar, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1031,7 +1031,7 @@
     "par": 72,
     "yards": 7228,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Irvine, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1042,7 +1042,7 @@
     "par": 72,
     "yards": 7188,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Portrush, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1053,7 +1053,7 @@
     "par": 71,
     "yards": 6010,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Belfast, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1064,7 +1064,7 @@
     "par": 71,
     "yards": 6479,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Kirkcaldy, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1075,7 +1075,7 @@
     "par": 73,
     "yards": 6792,
     "holes": 18,
-    "location": "Scotland",
+    "location": "City of Edinburgh, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1086,7 +1086,7 @@
     "par": 66,
     "yards": 5648,
     "holes": 17,
-    "location": "Scotland",
+    "location": "St Andrews, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1097,7 +1097,7 @@
     "par": 71,
     "yards": 6833,
     "holes": 18,
-    "location": "England",
+    "location": "Guildford, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1108,7 +1108,7 @@
     "par": 71,
     "yards": 6744,
     "holes": 18,
-    "location": "Spain",
+    "location": "Estepona, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -1119,7 +1119,7 @@
     "par": 72,
     "yards": 6184,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Fife, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1130,7 +1130,7 @@
     "par": 72,
     "yards": 6059,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Cupar, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1141,7 +1141,7 @@
     "par": 72,
     "yards": 6487,
     "holes": 18,
-    "location": "Portugal",
+    "location": "Lagos, Portugal",
     "region": "Europe",
     "tags": []
   },
@@ -1152,7 +1152,7 @@
     "par": 73,
     "yards": 7199,
     "holes": 18,
-    "location": "UAE",
+    "location": "United Arab Emirates",
     "region": "Middle East",
     "tags": []
   },
@@ -1163,7 +1163,7 @@
     "par": 71,
     "yards": 6012,
     "holes": 18,
-    "location": "Spain",
+    "location": "Benahavís, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -1174,7 +1174,7 @@
     "par": 72,
     "yards": 7039,
     "holes": 18,
-    "location": "England",
+    "location": "Sefton, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1185,7 +1185,7 @@
     "par": 72,
     "yards": 7010,
     "holes": 18,
-    "location": "England",
+    "location": "Southport, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1196,7 +1196,7 @@
     "par": 68,
     "yards": 5415,
     "holes": 18,
-    "location": "England",
+    "location": "Sefton, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1207,7 +1207,7 @@
     "par": 72,
     "yards": 6665,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Fife, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1218,7 +1218,7 @@
     "par": 73,
     "yards": 6916,
     "holes": 18,
-    "location": "England",
+    "location": "Runnymede, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1229,7 +1229,7 @@
     "par": 70,
     "yards": 6825,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Ballymena, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1240,7 +1240,7 @@
     "par": 71,
     "yards": 6752,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Irvine, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1251,7 +1251,7 @@
     "par": 70,
     "yards": 5949,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Glenrothes, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1262,7 +1262,7 @@
     "par": 72,
     "yards": 5718,
     "holes": 18,
-    "location": "Italy",
+    "location": "Usmate Velate, Italia",
     "region": "Europe",
     "tags": []
   },
@@ -1273,7 +1273,7 @@
     "par": 72,
     "yards": 6534,
     "holes": 18,
-    "location": "Italy",
+    "location": "Monza, Italia",
     "region": "Europe",
     "tags": []
   },
@@ -1284,7 +1284,7 @@
     "par": 72,
     "yards": 6417,
     "holes": 18,
-    "location": "France",
+    "location": "Ableiges, France",
     "region": "Europe",
     "tags": []
   },
@@ -1295,7 +1295,7 @@
     "par": 73,
     "yards": 6151,
     "holes": 18,
-    "location": "France",
+    "location": "Opio, France",
     "region": "Europe",
     "tags": []
   },
@@ -1306,7 +1306,7 @@
     "par": 72,
     "yards": 5990,
     "holes": 18,
-    "location": "France",
+    "location": "Ormesson-sur-Marne, France",
     "region": "Europe",
     "tags": []
   },
@@ -1317,7 +1317,7 @@
     "par": 75,
     "yards": 6841,
     "holes": 18,
-    "location": "France",
+    "location": "Ozoir-la-Ferrière, France",
     "region": "Europe",
     "tags": []
   },
@@ -1328,7 +1328,7 @@
     "par": 73,
     "yards": 6784,
     "holes": 18,
-    "location": "France",
+    "location": "Étiolles, France",
     "region": "Europe",
     "tags": []
   },
@@ -1339,7 +1339,7 @@
     "par": 72,
     "yards": 6345,
     "holes": 18,
-    "location": "France",
+    "location": "Poissy, France",
     "region": "Europe",
     "tags": []
   },
@@ -1350,7 +1350,7 @@
     "par": 72,
     "yards": 6637,
     "holes": 18,
-    "location": "France",
+    "location": "Guermantes, France",
     "region": "Europe",
     "tags": []
   },
@@ -1361,7 +1361,7 @@
     "par": 72,
     "yards": 6200,
     "holes": 18,
-    "location": "France",
+    "location": "Courdimanche, France",
     "region": "Europe",
     "tags": []
   },
@@ -1372,7 +1372,7 @@
     "par": 72,
     "yards": 6074,
     "holes": 18,
-    "location": "France",
+    "location": "Domont, France",
     "region": "Europe",
     "tags": []
   },
@@ -1383,7 +1383,7 @@
     "par": 72,
     "yards": 6812,
     "holes": 18,
-    "location": "France",
+    "location": "Feucherolles, France",
     "region": "Europe",
     "tags": []
   },
@@ -1394,7 +1394,7 @@
     "par": 72,
     "yards": 6485,
     "holes": 18,
-    "location": "France",
+    "location": "Janvry, France",
     "region": "Europe",
     "tags": []
   },
@@ -1405,7 +1405,7 @@
     "par": 72,
     "yards": 4731,
     "holes": 18,
-    "location": "France",
+    "location": "Marolles-en-Brie, France",
     "region": "Europe",
     "tags": []
   },
@@ -1416,7 +1416,7 @@
     "par": 72,
     "yards": 6967,
     "holes": 18,
-    "location": "France",
+    "location": "Roissy-en-France, France",
     "region": "Europe",
     "tags": []
   },
@@ -1427,7 +1427,7 @@
     "par": 71,
     "yards": 6260,
     "holes": 18,
-    "location": "France",
+    "location": "Saint-Pierre-du-Perray, France",
     "region": "Europe",
     "tags": []
   },
@@ -1438,7 +1438,7 @@
     "par": 71,
     "yards": 6946,
     "holes": 18,
-    "location": "France",
+    "location": "Vaucresson, France",
     "region": "Europe",
     "tags": []
   },
@@ -1449,7 +1449,7 @@
     "par": 73,
     "yards": 6738,
     "holes": 18,
-    "location": "France",
+    "location": "Saint-Germain-en-Laye, France",
     "region": "Europe",
     "tags": []
   },
@@ -1460,7 +1460,7 @@
     "par": 70,
     "yards": 5828,
     "holes": 18,
-    "location": "France",
+    "location": "Étiolles, France",
     "region": "Europe",
     "tags": []
   },
@@ -1471,7 +1471,7 @@
     "par": 72,
     "yards": 6654,
     "holes": 18,
-    "location": "France",
+    "location": "Saint-Nom-la-Bretèche, France",
     "region": "Europe",
     "tags": []
   },
@@ -1482,7 +1482,7 @@
     "par": 72,
     "yards": 7573,
     "holes": 18,
-    "location": "France",
+    "location": "Trappes, France",
     "region": "Europe",
     "tags": []
   },
@@ -1493,7 +1493,7 @@
     "par": 68,
     "yards": 5517,
     "holes": 18,
-    "location": "France",
+    "location": "Saint-Raphaël, France",
     "region": "Europe",
     "tags": []
   },
@@ -1504,7 +1504,7 @@
     "par": 72,
     "yards": 6104,
     "holes": 18,
-    "location": "France",
+    "location": "Villennes-sur-Seine, France",
     "region": "Europe",
     "tags": []
   },
@@ -1515,7 +1515,7 @@
     "par": 71,
     "yards": 6070,
     "holes": 18,
-    "location": "France",
+    "location": "Saclay, France",
     "region": "Europe",
     "tags": []
   },
@@ -1526,7 +1526,7 @@
     "par": 73,
     "yards": 8194,
     "holes": 18,
-    "location": "France",
+    "location": "Châteaufort, France",
     "region": "Europe",
     "tags": []
   },
@@ -1537,7 +1537,7 @@
     "par": 72,
     "yards": 6295,
     "holes": 18,
-    "location": "Spain",
+    "location": "Arroyo de la Miel-Benalmádena Costa, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -1548,7 +1548,7 @@
     "par": 72,
     "yards": 6591,
     "holes": 18,
-    "location": "Germany",
+    "location": "Starnberg, Deutschland",
     "region": "Europe",
     "tags": []
   },
@@ -1559,7 +1559,7 @@
     "par": 73,
     "yards": 6602,
     "holes": 18,
-    "location": "Germany",
+    "location": "Mittelstetten, Deutschland",
     "region": "Europe",
     "tags": []
   },
@@ -1570,7 +1570,7 @@
     "par": 73,
     "yards": 6429,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Amsterdam, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1581,7 +1581,7 @@
     "par": 70,
     "yards": 6140,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Vianen, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1592,7 +1592,7 @@
     "par": 71,
     "yards": 6296,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Nieuwerkerk aan den IJssel, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1603,7 +1603,7 @@
     "par": 71,
     "yards": 5389,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Amsterdam, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1614,7 +1614,7 @@
     "par": 68,
     "yards": 5931,
     "holes": 17,
-    "location": "Netherlands",
+    "location": "Vlaardingen, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1625,7 +1625,7 @@
     "par": 71,
     "yards": 5330,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Capelle aan den IJssel, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1636,7 +1636,7 @@
     "par": 71,
     "yards": 5547,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Utrecht, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1647,7 +1647,7 @@
     "par": 72,
     "yards": 6929,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Leusden, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1658,7 +1658,7 @@
     "par": 72,
     "yards": 6632,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Spaarndam, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1669,7 +1669,7 @@
     "par": 72,
     "yards": 6034,
     "holes": 18,
-    "location": "Germany",
+    "location": "Odelzhausen, Deutschland",
     "region": "Europe",
     "tags": []
   },
@@ -1680,7 +1680,7 @@
     "par": 71,
     "yards": 6537,
     "holes": 18,
-    "location": "Germany",
+    "location": "Egmating, Deutschland",
     "region": "Europe",
     "tags": []
   },
@@ -1691,7 +1691,7 @@
     "par": 72,
     "yards": 5651,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Nootdorp, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1702,7 +1702,7 @@
     "par": 72,
     "yards": 6257,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Wilnis, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1713,7 +1713,7 @@
     "par": 71,
     "yards": 6805,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Zeist, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1724,7 +1724,7 @@
     "par": 72,
     "yards": 6104,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Eemnes, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1735,7 +1735,7 @@
     "par": 70,
     "yards": 5515,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Ballyclare, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1746,7 +1746,7 @@
     "par": 69,
     "yards": 5679,
     "holes": 18,
-    "location": "England",
+    "location": "Guildford, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1757,7 +1757,7 @@
     "par": 74,
     "yards": 6697,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Longniddry, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1768,7 +1768,7 @@
     "par": 71,
     "yards": 5595,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Haddington, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1779,7 +1779,7 @@
     "par": 71,
     "yards": 6185,
     "holes": 18,
-    "location": "England",
+    "location": "Greater London, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1790,7 +1790,7 @@
     "par": 72,
     "yards": 6534,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Heemskerk, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1801,7 +1801,7 @@
     "par": 67,
     "yards": 5232,
     "holes": 18,
-    "location": "England",
+    "location": "Elmbridge, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1812,7 +1812,7 @@
     "par": 72,
     "yards": 6444,
     "holes": 18,
-    "location": "England",
+    "location": "Southport, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1823,7 +1823,7 @@
     "par": 72,
     "yards": 6464,
     "holes": 18,
-    "location": "England",
+    "location": "Heswall, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1834,7 +1834,7 @@
     "par": 72,
     "yards": 6559,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Antrim and Newtownabbey District, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1845,7 +1845,7 @@
     "par": 72,
     "yards": 6641,
     "holes": 18,
-    "location": "Netherlands",
+    "location": "Hilversum, Nederland",
     "region": "Europe",
     "tags": []
   },
@@ -1856,7 +1856,7 @@
     "par": 73,
     "yards": 6845,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Irvine, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1867,7 +1867,7 @@
     "par": 70,
     "yards": 5166,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Longniddry, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1878,7 +1878,7 @@
     "par": 72,
     "yards": 5967,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Bridge of Earn, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1889,7 +1889,7 @@
     "par": 72,
     "yards": 4984,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Kirkcaldy, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1900,7 +1900,7 @@
     "par": 72,
     "yards": 7170,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Crail, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1911,7 +1911,7 @@
     "par": 70,
     "yards": 6109,
     "holes": 18,
-    "location": "Ireland",
+    "location": "Ards and North Down District Council, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1922,7 +1922,7 @@
     "par": 71,
     "yards": 6314,
     "holes": 18,
-    "location": "Spain",
+    "location": "Benahavís, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -1933,7 +1933,7 @@
     "par": 73,
     "yards": 7168,
     "holes": 18,
-    "location": "Spain",
+    "location": "San Roque, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -1944,7 +1944,7 @@
     "par": 71,
     "yards": 6586,
     "holes": 18,
-    "location": "Spain",
+    "location": "Benahavís, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -1955,7 +1955,7 @@
     "par": 71,
     "yards": 6766,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Fife, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1966,7 +1966,7 @@
     "par": 72,
     "yards": 6372,
     "holes": 18,
-    "location": "Spain",
+    "location": "Alhaurín de la Torre, Spain",
     "region": "Europe",
     "tags": []
   },
@@ -1977,7 +1977,7 @@
     "par": 72,
     "yards": 6915,
     "holes": 18,
-    "location": "Italy",
+    "location": "Olgiate Olona, Italia",
     "region": "Europe",
     "tags": []
   },
@@ -1988,7 +1988,7 @@
     "par": 71,
     "yards": 6158,
     "holes": 18,
-    "location": "England",
+    "location": "Moreton, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -1999,7 +1999,7 @@
     "par": 66,
     "yards": 5508,
     "holes": 17,
-    "location": "England",
+    "location": "Knowsley, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -2010,7 +2010,7 @@
     "par": 70,
     "yards": 6482,
     "holes": 18,
-    "location": "Scotland",
+    "location": "Leven, United Kingdom",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -2021,7 +2021,7 @@
     "par": 70,
     "yards": 6465,
     "holes": 18,
-    "location": "England",
+    "location": "Folkestone and Hythe, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -2032,7 +2032,7 @@
     "par": 72,
     "yards": 6375,
     "holes": 18,
-    "location": "England",
+    "location": "Knowsley, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -2043,7 +2043,7 @@
     "par": 69,
     "yards": 5234,
     "holes": 18,
-    "location": "England",
+    "location": "Liverpool, England",
     "region": "UK & Ireland",
     "tags": []
   },
@@ -2065,7 +2065,7 @@
     "par": 72,
     "yards": 6560,
     "holes": 18,
-    "location": "USA",
+    "location": "Rye, NH",
     "region": "USA",
     "tags": []
   },
@@ -2076,7 +2076,7 @@
     "par": 72,
     "yards": 6588,
     "holes": 18,
-    "location": "USA",
+    "location": "Andover, MA",
     "region": "USA",
     "tags": []
   },
@@ -2087,7 +2087,7 @@
     "par": 67,
     "yards": 5611,
     "holes": 17,
-    "location": "USA",
+    "location": "East Kingston, NH",
     "region": "USA",
     "tags": []
   },
@@ -2098,7 +2098,7 @@
     "par": 72,
     "yards": 6509,
     "holes": 18,
-    "location": "USA",
+    "location": "Atkinson, NH",
     "region": "USA",
     "tags": []
   },
@@ -2109,7 +2109,7 @@
     "par": 72,
     "yards": 6820,
     "holes": 18,
-    "location": "USA",
+    "location": "Georgetown, MA",
     "region": "USA",
     "tags": []
   },
@@ -2120,7 +2120,7 @@
     "par": 71,
     "yards": 4401,
     "holes": 18,
-    "location": "USA",
+    "location": "Haverhill, MA",
     "region": "USA",
     "tags": []
   },
@@ -2131,7 +2131,7 @@
     "par": 72,
     "yards": 6378,
     "holes": 18,
-    "location": "USA",
+    "location": "Greenland, NH",
     "region": "USA",
     "tags": []
   },
@@ -2142,7 +2142,7 @@
     "par": 71,
     "yards": 6469,
     "holes": 18,
-    "location": "USA",
+    "location": "Candia, NH",
     "region": "USA",
     "tags": []
   },
@@ -2153,7 +2153,7 @@
     "par": 70,
     "yards": 6073,
     "holes": 18,
-    "location": "USA",
+    "location": "Manchester, NH",
     "region": "USA",
     "tags": []
   },
@@ -2164,7 +2164,7 @@
     "par": 71,
     "yards": 6259,
     "holes": 18,
-    "location": "USA",
+    "location": "Methuen, MA",
     "region": "USA",
     "tags": []
   },
@@ -2175,7 +2175,7 @@
     "par": 72,
     "yards": 5983,
     "holes": 18,
-    "location": "USA",
+    "location": "Derry, NH",
     "region": "USA",
     "tags": []
   },
@@ -2186,7 +2186,7 @@
     "par": 72,
     "yards": 6408,
     "holes": 18,
-    "location": "USA",
+    "location": "Andover, MA",
     "region": "USA",
     "tags": []
   },
@@ -2197,7 +2197,7 @@
     "par": 72,
     "yards": 6880,
     "holes": 18,
-    "location": "USA",
+    "location": "Rowley, MA",
     "region": "USA",
     "tags": []
   },
@@ -2208,7 +2208,7 @@
     "par": 62,
     "yards": 3878,
     "holes": 18,
-    "location": "USA",
+    "location": "Londonderry, NH",
     "region": "USA",
     "tags": []
   },
@@ -2219,7 +2219,7 @@
     "par": 70,
     "yards": 6702,
     "holes": 18,
-    "location": "USA",
+    "location": "Bedford, NH",
     "region": "USA",
     "tags": []
   },
@@ -2230,7 +2230,7 @@
     "par": 70,
     "yards": 4350,
     "holes": 18,
-    "location": "USA",
+    "location": "Methuen, MA",
     "region": "USA",
     "tags": []
   },
@@ -2241,7 +2241,7 @@
     "par": 72,
     "yards": 6566,
     "holes": 18,
-    "location": "USA",
+    "location": "Hamilton, MA",
     "region": "USA",
     "tags": []
   },
@@ -2252,7 +2252,7 @@
     "par": 72,
     "yards": 6305,
     "holes": 18,
-    "location": "USA",
+    "location": "Nashua, NH",
     "region": "USA",
     "tags": []
   },
@@ -2263,7 +2263,7 @@
     "par": 71,
     "yards": 6732,
     "holes": 18,
-    "location": "USA",
+    "location": "Litchfield, NH",
     "region": "USA",
     "tags": []
   },
@@ -2274,7 +2274,7 @@
     "par": 71,
     "yards": 5830,
     "holes": 18,
-    "location": "USA",
+    "location": "Newington, NH",
     "region": "USA",
     "tags": []
   },
@@ -2285,7 +2285,7 @@
     "par": 72,
     "yards": 6731,
     "holes": 18,
-    "location": "USA",
+    "location": "Greenland, NH",
     "region": "USA",
     "tags": []
   },
@@ -2296,7 +2296,7 @@
     "par": 71,
     "yards": 6988,
     "holes": 18,
-    "location": "USA",
+    "location": "Haverhill, MA",
     "region": "USA",
     "tags": []
   },
@@ -2307,7 +2307,7 @@
     "par": 71,
     "yards": 5688,
     "holes": 18,
-    "location": "USA",
+    "location": "North Hampton, NH",
     "region": "USA",
     "tags": []
   },
@@ -2318,7 +2318,7 @@
     "par": 71,
     "yards": 5942,
     "holes": 18,
-    "location": "USA",
+    "location": "Salem, NH",
     "region": "USA",
     "tags": []
   },
@@ -2329,7 +2329,7 @@
     "par": 72,
     "yards": 6283,
     "holes": 18,
-    "location": "USA",
+    "location": "Dunstable, MA",
     "region": "USA",
     "tags": []
   },
@@ -2340,7 +2340,7 @@
     "par": 72,
     "yards": 7295,
     "holes": 18,
-    "location": "USA",
+    "location": "Greenland, NH",
     "region": "USA",
     "tags": []
   },
@@ -2351,7 +2351,7 @@
     "par": 72,
     "yards": 5430,
     "holes": 18,
-    "location": "USA",
+    "location": "Tewksbury, MA",
     "region": "USA",
     "tags": []
   },
@@ -2362,7 +2362,7 @@
     "par": 71,
     "yards": 6474,
     "holes": 18,
-    "location": "USA",
+    "location": "Tyngsborough, MA",
     "region": "USA",
     "tags": []
   },
@@ -2373,7 +2373,7 @@
     "par": 72,
     "yards": 6352,
     "holes": 18,
-    "location": "USA",
+    "location": "Windham, NH",
     "region": "USA",
     "tags": []
   },
@@ -2384,7 +2384,7 @@
     "par": 72,
     "yards": 7619,
     "holes": 18,
-    "location": "USA",
+    "location": "Augusta, GA",
     "region": "USA",
     "tags": []
   },
@@ -2395,7 +2395,7 @@
     "par": 72,
     "yards": 7349,
     "holes": 18,
-    "location": "USA",
+    "location": "Springfield, NJ",
     "region": "USA",
     "tags": []
   },
@@ -2406,7 +2406,7 @@
     "par": 73,
     "yards": 6275,
     "holes": 18,
-    "location": "USA",
+    "location": "Coos County, OR",
     "region": "USA",
     "tags": []
   },
@@ -2417,7 +2417,7 @@
     "par": 72,
     "yards": 6710,
     "holes": 18,
-    "location": "USA",
+    "location": "Coos County, OR",
     "region": "USA",
     "tags": []
   },
@@ -2428,7 +2428,7 @@
     "par": 71,
     "yards": 6804,
     "holes": 18,
-    "location": "USA",
+    "location": "Coos County, OR",
     "region": "USA",
     "tags": []
   },
@@ -2439,7 +2439,7 @@
     "par": 75,
     "yards": 8298,
     "holes": 18,
-    "location": "USA",
+    "location": "Old Bethpage, NY",
     "region": "USA",
     "tags": []
   },
@@ -2450,7 +2450,7 @@
     "par": 70,
     "yards": 6934,
     "holes": 18,
-    "location": "USA",
+    "location": "Wheaton, IL",
     "region": "USA",
     "tags": []
   },
@@ -2461,7 +2461,7 @@
     "par": 72,
     "yards": 6541,
     "holes": 18,
-    "location": "USA",
+    "location": "Monterey County, CA",
     "region": "USA",
     "tags": []
   },
@@ -2472,7 +2472,7 @@
     "par": 70,
     "yards": 7115,
     "holes": 18,
-    "location": "USA",
+    "location": "Atlanta, GA",
     "region": "USA",
     "tags": []
   },
@@ -2483,7 +2483,7 @@
     "par": 73,
     "yards": 6911,
     "holes": 18,
-    "location": "USA",
+    "location": "Village of Garden City, NY",
     "region": "USA",
     "tags": []
   },
@@ -2494,7 +2494,7 @@
     "par": 71,
     "yards": 7071,
     "holes": 18,
-    "location": "USA",
+    "location": "Hilton Head Island, SC",
     "region": "USA",
     "tags": []
   },
@@ -2505,7 +2505,7 @@
     "par": 72,
     "yards": 7701,
     "holes": 18,
-    "location": "USA",
+    "location": "Chaska, MN",
     "region": "USA",
     "tags": []
   },
@@ -2516,7 +2516,7 @@
     "par": 72,
     "yards": 6625,
     "holes": 18,
-    "location": "USA",
+    "location": "Inverness, IL",
     "region": "USA",
     "tags": []
   },
@@ -2527,7 +2527,7 @@
     "par": 72,
     "yards": 6865,
     "holes": 18,
-    "location": "USA",
+    "location": "Charleston County, SC",
     "region": "USA",
     "tags": []
   },
@@ -2538,7 +2538,7 @@
     "par": 72,
     "yards": 6913,
     "holes": 18,
-    "location": "USA",
+    "location": "Kiawah Island, SC",
     "region": "USA",
     "tags": []
   },
@@ -2549,7 +2549,7 @@
     "par": 72,
     "yards": 7727,
     "holes": 18,
-    "location": "USA",
+    "location": "Kiawah Island, SC",
     "region": "USA",
     "tags": []
   },
@@ -2560,7 +2560,7 @@
     "par": 71,
     "yards": 7659,
     "holes": 18,
-    "location": "USA",
+    "location": "Los Angeles, CA",
     "region": "USA",
     "tags": []
   },
@@ -2571,7 +2571,7 @@
     "par": 75,
     "yards": 6526,
     "holes": 18,
-    "location": "USA",
+    "location": "Village of East Hampton, NY",
     "region": "USA",
     "tags": []
   },
@@ -2582,7 +2582,7 @@
     "par": 70,
     "yards": 6485,
     "holes": 18,
-    "location": "USA",
+    "location": "Haverford Township, PA",
     "region": "USA",
     "tags": []
   },
@@ -2593,7 +2593,7 @@
     "par": 70,
     "yards": 5914,
     "holes": 18,
-    "location": "USA",
+    "location": "Haverford Township, PA",
     "region": "USA",
     "tags": []
   },
@@ -2604,7 +2604,7 @@
     "par": 71,
     "yards": 6741,
     "holes": 18,
-    "location": "USA",
+    "location": "Monterey County, CA",
     "region": "USA",
     "tags": []
   },
@@ -2615,7 +2615,7 @@
     "par": 72,
     "yards": 6899,
     "holes": 18,
-    "location": "USA",
+    "location": "Monterey County, CA",
     "region": "USA",
     "tags": []
   },
@@ -2626,7 +2626,7 @@
     "par": 72,
     "yards": 7545,
     "holes": 18,
-    "location": "USA",
+    "location": "Dublin, OH",
     "region": "USA",
     "tags": []
   },
@@ -2637,7 +2637,7 @@
     "par": 72,
     "yards": 6981,
     "holes": 18,
-    "location": "USA",
+    "location": "North Sea, NY",
     "region": "USA",
     "tags": []
   },
@@ -2648,7 +2648,7 @@
     "par": 71,
     "yards": 7208,
     "holes": 18,
-    "location": "USA",
+    "location": "Plum, PA",
     "region": "USA",
     "tags": []
   },
@@ -2659,7 +2659,7 @@
     "par": 73,
     "yards": 7424,
     "holes": 18,
-    "location": "USA",
+    "location": "San Francisco, CA",
     "region": "USA",
     "tags": []
   },
@@ -2670,7 +2670,7 @@
     "par": 70,
     "yards": 7298,
     "holes": 18,
-    "location": "USA",
+    "location": "San Francisco, CA",
     "region": "USA",
     "tags": []
   },
@@ -2681,7 +2681,7 @@
     "par": 70,
     "yards": 7279,
     "holes": 18,
-    "location": "USA",
+    "location": "Pine Hill, NJ",
     "region": "USA",
     "tags": []
   },
@@ -2692,7 +2692,7 @@
     "par": 72,
     "yards": 6904,
     "holes": 18,
-    "location": "USA",
+    "location": "Edison, NJ",
     "region": "USA",
     "tags": []
   },
@@ -2703,7 +2703,7 @@
     "par": 70,
     "yards": 6821,
     "holes": 18,
-    "location": "USA",
+    "location": "Reno County, KS",
     "region": "USA",
     "tags": []
   },
@@ -2714,7 +2714,7 @@
     "par": 70,
     "yards": 6992,
     "holes": 18,
-    "location": "USA",
+    "location": "Village of Scarsdale, NY",
     "region": "USA",
     "tags": []
   },
@@ -2725,7 +2725,7 @@
     "par": 71,
     "yards": 7359,
     "holes": 18,
-    "location": "USA",
+    "location": "Los Angeles, CA",
     "region": "USA",
     "tags": []
   },
@@ -2736,7 +2736,7 @@
     "par": 71,
     "yards": 5667,
     "holes": 18,
-    "location": "France",
+    "location": "Mandelieu-la-Napoule, France",
     "region": "Europe",
     "tags": []
   },
@@ -2747,7 +2747,7 @@
     "par": 72,
     "yards": 6880,
     "holes": 18,
-    "location": "USA",
+    "location": "Concord Township, OH",
     "region": "USA",
     "tags": []
   },
@@ -2758,7 +2758,7 @@
     "par": 71,
     "yards": 7332,
     "holes": 18,
-    "location": "USA",
+    "location": "North Sea, NY",
     "region": "USA",
     "tags": []
   },
@@ -2769,7 +2769,7 @@
     "par": 71,
     "yards": 7262,
     "holes": 18,
-    "location": "USA",
+    "location": "Tulsa, OK",
     "region": "USA",
     "tags": []
   },
@@ -2780,7 +2780,7 @@
     "par": 72,
     "yards": 6890,
     "holes": 18,
-    "location": "USA",
+    "location": "Monterey County, CA",
     "region": "USA",
     "tags": []
   },
@@ -2791,7 +2791,7 @@
     "par": 72,
     "yards": 6857,
     "holes": 18,
-    "location": "USA",
+    "location": "Dublin, OH",
     "region": "USA",
     "tags": []
   },
@@ -2802,7 +2802,7 @@
     "par": 72,
     "yards": 7026,
     "holes": 18,
-    "location": "USA",
+    "location": "San Diego, CA",
     "region": "USA",
     "tags": []
   },
@@ -2813,7 +2813,7 @@
     "par": 72,
     "yards": 7786,
     "holes": 18,
-    "location": "USA",
+    "location": "San Diego, CA",
     "region": "USA",
     "tags": []
   },
@@ -2824,7 +2824,7 @@
     "par": 73,
     "yards": 7425,
     "holes": 18,
-    "location": "USA",
+    "location": "Louisville, KY",
     "region": "USA",
     "tags": []
   },
@@ -2835,7 +2835,7 @@
     "par": 72,
     "yards": 7541,
     "holes": 18,
-    "location": "USA",
+    "location": "Town of Mosel, WI",
     "region": "USA",
     "tags": []
   },
@@ -2846,7 +2846,7 @@
     "par": 71,
     "yards": 7444,
     "holes": 18,
-    "location": "USA",
+    "location": "Town of Mamaroneck, NY",
     "region": "USA",
     "tags": []
   },
@@ -2857,7 +2857,7 @@
     "par": 72,
     "yards": 7304,
     "holes": 18,
-    "location": "USA",
+    "location": "Tangelo Park, FL",
     "region": "USA",
     "tags": []
   },
@@ -2868,7 +2868,7 @@
     "par": 70,
     "yards": 7119,
     "holes": 18,
-    "location": "USA",
+    "location": "Fort Worth, TX",
     "region": "USA",
     "tags": []
   },
@@ -2879,7 +2879,7 @@
     "par": 73,
     "yards": 7217,
     "holes": 18,
-    "location": "USA",
+    "location": "Detroit, MI",
     "region": "USA",
     "tags": []
   },
@@ -2890,7 +2890,7 @@
     "par": 72,
     "yards": 7294,
     "holes": 18,
-    "location": "USA",
+    "location": "Jersey City, NJ",
     "region": "USA",
     "tags": []
   },
@@ -2901,7 +2901,7 @@
     "par": 72,
     "yards": 7344,
     "holes": 18,
-    "location": "USA",
+    "location": "Houston, TX",
     "region": "USA",
     "tags": []
   },
@@ -2912,7 +2912,7 @@
     "par": 71,
     "yards": 7341,
     "holes": 18,
-    "location": "USA",
+    "location": "Charlotte, NC",
     "region": "USA",
     "tags": []
   },
@@ -2923,7 +2923,7 @@
     "par": 70,
     "yards": 6105,
     "holes": 18,
-    "location": "USA",
+    "location": "Scottsdale, AZ",
     "region": "USA",
     "tags": []
   },
@@ -2934,7 +2934,7 @@
     "par": 70,
     "yards": 7107,
     "holes": 18,
-    "location": "USA",
+    "location": "Napa County, CA",
     "region": "USA",
     "tags": []
   },
@@ -2945,7 +2945,7 @@
     "par": 72,
     "yards": 7261,
     "holes": 18,
-    "location": "USA",
+    "location": "Douglas County, CO",
     "region": "USA",
     "tags": []
   },
@@ -2956,7 +2956,7 @@
     "par": 71,
     "yards": 6913,
     "holes": 18,
-    "location": "USA",
+    "location": "Scottsdale, AZ",
     "region": "USA",
     "tags": []
   },
@@ -2967,7 +2967,7 @@
     "par": 71,
     "yards": 7340,
     "holes": 18,
-    "location": "USA",
+    "location": "Scottsdale, AZ",
     "region": "USA",
     "tags": []
   },
@@ -2978,7 +2978,7 @@
     "par": 71,
     "yards": 7129,
     "holes": 18,
-    "location": "USA",
+    "location": "Memphis, TN",
     "region": "USA",
     "tags": []
   },
@@ -2989,7 +2989,7 @@
     "par": 71,
     "yards": 7168,
     "holes": 18,
-    "location": "USA",
+    "location": "Blaine, MN",
     "region": "USA",
     "tags": []
   },
