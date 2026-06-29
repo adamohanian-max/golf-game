@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/hud.css?v=55">
   <link rel="stylesheet" href="css/menu.css?v=58">
   <link rel="stylesheet" href="css/courses.css?v=3">
-  <link rel="stylesheet" href="css/modals.css?v=55">
+  <link rel="stylesheet" href="css/modals.css?v=57">
   <link rel="stylesheet" href="css/tournament.css?v=54">
 </head>
 <body>
@@ -179,6 +179,7 @@
         <button id="re-home" class="menu-btn secondary">Home</button>
         <button id="re-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>View leaderboard</button>
         <button id="re-replay" class="menu-btn">Play Again</button>
+        <button id="re-confirm-match" class="menu-btn hidden">Confirm scorecard</button>
       </div>
     </div>
   </div>
@@ -360,6 +361,11 @@
       <h2><span class="ic ic-gear"></span>Match settings</h2>
       <p class="ne-sub">Course: <b id="ms-course">—</b>. Locked once the match begins.</p>
       <div class="ms-len-row">
+        <button class="menu-btn secondary ms-fmt" data-format="stroke">Stroke race</button>
+        <button class="menu-btn secondary ms-fmt" data-format="match">Match play</button>
+      </div>
+      <div id="ms-fmt-note" class="ne-sub ms-note"></div>
+      <div class="ms-len-row">
         <button class="menu-btn secondary ms-len" data-holes="9">9 holes</button>
         <button class="menu-btn secondary ms-len" data-holes="18">18 holes</button>
       </div>
@@ -381,6 +387,18 @@
     <div id="mb-list" class="mb-list"></div>
   </div>
 
-  <script src="game.js?v=78"></script>
+  <div id="match-results" class="hidden">
+    <div class="mr-box">
+      <div class="mr-head">
+        <h2 id="mr-title">Match standings</h2>
+        <p id="mr-sub"></p>
+      </div>
+      <div id="mr-banner" class="mr-banner"></div>
+      <div id="mr-list" class="mr-list"></div>
+      <button id="mr-home" class="menu-btn">Home</button>
+    </div>
+  </div>
+
+  <script src="game.js?v=80"></script>
 </body>
 </html>

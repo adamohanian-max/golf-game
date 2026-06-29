@@ -178,3 +178,18 @@ create policy "mplayers write"  on match_players for insert
   with check (user_id is null or user_id = auth.uid());
 create policy "mplayers update" on match_players for update using (true);
 create index if not exists match_players_match_idx on match_players (match_id);
+
+-- ---------- MATCH PLAY: 1v1 format + live per-shot opponent state ----------
+-- format=stroke is the original score race; format=match is hole-by-hole 1v1
+-- (holes won/halved, closeout). The cur_* columns carry each player's live
+-- shot state so the opponent panel can show hole/strokes/distance/lie, and so
+-- advisory "honors" (who's farthest from the pin) can be displayed.
+alter table matches add column if not exists format text not null default 'stroke'; -- 'stroke' | 'match'
+
+alter table match_players add column if not exists hole_scores jsonb not null default '{}'::jsonb; -- {holeNum: strokes}
+alter table match_players add column if not exists cur_hole    int;
+alter table match_players add column if not exists cur_strokes int not null default 0;
+alter table match_players add column if not exists cur_to_pin  int;     -- yards ball->pin at rest; -1 when holed/NA
+alter table match_players add column if not exists cur_lie     text;
+alter table match_players add column if not exists cur_at_rest boolean not null default true; -- false while ball moving
+alter table match_players add column if not exists cur_updated timestamptz;
