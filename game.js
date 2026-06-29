@@ -1379,6 +1379,20 @@ function visibleRect() {
            y: camera.focus.y - window.innerHeight / (2 * s), h: window.innerHeight / s };
 }
 
+// Safe-area insets (notch / Dynamic Island / home indicator). The DOM HUD uses
+// env(safe-area-inset-*) directly; canvas-drawn HUD reads these cached px so it
+// doesn't land under the notch. Re-read on resize (rotation changes them).
+let safeInset = { t: 0, r: 0, b: 0, l: 0 };
+function readSafeInsets() {
+  const cs = getComputedStyle(document.documentElement);
+  safeInset = {
+    t: parseFloat(cs.getPropertyValue("--sat")) || 0,
+    r: parseFloat(cs.getPropertyValue("--sar")) || 0,
+    b: parseFloat(cs.getPropertyValue("--sab")) || 0,
+    l: parseFloat(cs.getPropertyValue("--sal")) || 0,
+  };
+}
+
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const cssW = window.innerWidth;
@@ -1386,6 +1400,7 @@ function resize() {
   canvas.width = cssW * dpr;
   canvas.height = cssH * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  readSafeInsets();
   // fixed swing sensitivity: full-hole fit, independent of the camera zoom
   refScale = Math.min(cssW / holeFitW, cssH / holeFitH);
   applyView();
@@ -2000,7 +2015,8 @@ function drawWindIndicator() {
   const svy = view.d * pwx + view.e * pwy;
   const screenAngle = Math.atan2(svy, svx);
 
-  const cx = cssW / 2, cy = 36;
+  // Below the notch / Dynamic Island (which sits top-center, right where this pill draws).
+  const cx = cssW / 2, cy = safeInset.t + 22;
   const spd = Math.round(wind.speed);
   const label = spd + " mph";
 

@@ -1,0 +1,540 @@
+12:18:47 === rebake_ob start: 263 stale, 258 in index, 5 NOT in index ===
+12:18:47 NOT IN INDEX (handle by hand): bethpage-black, butter-brook-golf-club, crystal-lake-haverhill, overlook-golf-club, tpc-river-highlands
+12:18:47 [1/258] abenaqui-country-club -> --boundary-way 320111052
+12:19:20     PASS abenaqui-country-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+12:19:26 [2/258] aberdour-golf-club -> --boundary-way 95090549
+12:20:45     PASS aberdour-golf-club ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+12:20:52 [3/258] alcaidesa-links-golf-resort -> --boundary-rel 3873410
+12:21:13     FAIL alcaidesa-links-golf-resort rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:21:19 [4/258] alferini-golf -> --boundary-rel 3300452
+12:21:43     PASS alferini-golf ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+12:21:50 [5/258] alhaurin-golf -> --boundary-rel 3308783
+12:22:17     PASS alhaurin-golf ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+12:22:24 [6/258] almenara-golf-resort -> --boundary-rel 3198971
+12:24:14     PASS almenara-golf-resort ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:24:20 [7/258] amsterdamse-golf-club -> --boundary-way 50845326
+12:25:42     PASS amsterdamse-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+12:25:48 [8/258] andover-country-club -> --boundary-way 264546240
+12:26:04     FAIL andover-country-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:26:10 [9/258] apple-hill-golf-club -> --boundary-way 320123435
+12:26:27     PASS apple-hill-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+12:26:33 [10/258] arabian-ranches-golf-club -> --boundary-way 149551902
+12:26:45     FAIL arabian-ranches-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:26:51 [11/258] archerfield-links -> --boundary-way 161228170
+12:27:02     FAIL archerfield-links rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:27:08 [12/258] ardeer-golf-club -> --boundary-way 483958112
+12:27:39     PASS ardeer-golf-club ::   (6 synth fairway(s) carved; mask=yes; JSON re-written)
+12:27:45 [13/258] ardglass-golf-club -> --boundary-way 793224207
+12:28:42     PASS ardglass-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:28:48 [14/258] arrowe-park-golf-course -> --boundary-rel 4047638
+12:30:26     PASS arrowe-park-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:30:32 [15/258] ashford-manor-golf-club -> --boundary-way 250363948
+12:30:50     FAIL ashford-manor-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:30:56 [16/258] ashludie-course -> --boundary-way 1245335146
+12:31:39     PASS ashludie-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:31:45 [17/258] atalaya-golf-country-club -> --boundary-rel 3300476
+12:32:23     PASS atalaya-golf-country-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:32:29 [18/258] augusta-national-golf-club -> --boundary-way 871993734
+12:33:29     PASS augusta-national-golf-club ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+12:33:35 [19/258] baberton-golf-course -> --boundary-way 4891768
+12:33:57     PASS baberton-golf-course ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+12:34:03 [20/258] balbirnie-park-golf-club -> --boundary-rel 3350963
+12:34:14     FAIL balbirnie-park-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:34:20 [21/258] balcomie-links -> --boundary-way 1432609851
+12:35:42     PASS balcomie-links ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:35:48 [22/258] ballybunion-golf-club -> --boundary-rel 19920899
+12:36:28     PASS ballybunion-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+12:36:34 [23/258] ballyclare-golf-course -> --boundary-way 139316211
+12:37:08     PASS ballyclare-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:37:14 [24/258] ballymena-golf-course -> --boundary-way 195646009
+12:38:52     PASS ballymena-golf-course ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+12:38:58 [25/258] baltusrol-golf-course -> --boundary-way 39835869
+12:40:34     PASS baltusrol-golf-course ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+12:40:40 [26/258] bandon-dunes-golf-resort -> --boundary-way 362513477
+12:41:15     PASS bandon-dunes-golf-resort ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+12:41:21 [27/258] bandon-sheep-ranch -> --boundary-way 823626858
+12:41:53     PASS bandon-sheep-ranch ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+12:42:00 [28/258] bandon-trails -> --boundary-way 362513476
+12:42:12     FAIL bandon-trails rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:42:18 [29/258] bangor-golf-club -> --boundary-rel 4621702
+12:42:53     PASS bangor-golf-club ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+12:42:59 [30/258] banstead-downs-golf-club -> --boundary-rel 19445952
+12:43:23     PASS banstead-downs-golf-club ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+12:43:29 [31/258] bay-hill-golf-club -> --boundary-rel 5462405
+12:44:31     PASS bay-hill-golf-club ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+12:44:37 [32/258] beaverbrook-golf-club -> --boundary-rel 13481658
+12:46:22     PASS beaverbrook-golf-club ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/beaverbrook-golf-club/course.jpg
+12:46:28 [33/258] belleisle-seafield-golf-courses -> --boundary-way 117940581
+12:46:36     FAIL belleisle-seafield-golf-courses rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:46:42 [34/258] belvoir-golf-course -> --boundary-way 40069675
+12:46:55     FAIL belvoir-golf-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:47:01 [35/258] bethpage-state-park-golf-courses -> --boundary-way 29468839
+12:47:13     FAIL bethpage-state-park-golf-courses rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:47:19 [36/258] bidston-golf-club -> --boundary-rel 3996638
+12:47:44     PASS bidston-golf-club ::   (9 synth fairway(s) carved; mask=yes; JSON re-written)
+12:47:51 [37/258] bird-hills-golf-centre -> --boundary-way 164702085
+12:48:17     PASS bird-hills-golf-centre ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:48:23 [38/258] black-swan-country-club -> --boundary-way 29830594
+12:49:22     PASS black-swan-country-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+12:49:28 [39/258] blackwood-golf-centre -> --boundary-way 1411403912
+12:49:57     PASS blackwood-golf-centre ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:50:03 [40/258] boavista-golf-resort -> --boundary-rel 2168122
+12:50:35     PASS boavista-golf-resort ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+12:50:41 [41/258] bootle-golf-club -> --boundary-way 38615412
+12:51:20     PASS bootle-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:51:26 [42/258] bradford-country-club -> --boundary-rel 4135994
+12:52:15     PASS bradford-country-club ::   (10 synth fairway(s) carved; mask=yes; JSON re-written)
+12:52:21 [43/258] braid-hills-golf-course -> --boundary-way 26208798
+12:53:02     PASS braid-hills-golf-course ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+12:53:08 [44/258] breakfast-hill-golf-club -> --boundary-way 320123438
+12:53:44     PASS breakfast-hill-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+12:53:50 [45/258] brent-valley-public-golf-course -> --boundary-way 221122455
+12:54:35     PASS brent-valley-public-golf-course ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+12:54:41 [46/258] bruntsfield-links -> --boundary-way 6136782
+12:54:49     FAIL bruntsfield-links rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:54:55 [47/258] burhill-golf-club -> --boundary-way 249653314
+12:55:45     PASS burhill-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:55:51 [48/258] cabopino-golf -> --boundary-way 172434912
+12:56:23     PASS cabopino-golf ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:56:29 [49/258] cairndhu-golf-course -> --boundary-way 779088387
+12:56:37     FAIL cairndhu-golf-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+12:56:43 [50/258] calanova-golf-club -> --boundary-rel 16378288
+12:57:31     PASS calanova-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:57:37 [51/258] campo-am-rica -> --boundary-way 170984725
+12:58:09     PASS campo-am-rica ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:58:15 [52/258] campo-asia -> --boundary-way 343672934
+12:58:34     PASS campo-asia ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:58:40 [53/258] campo-de-golf-r-o-real -> --boundary-rel 3299743
+12:59:04     PASS campo-de-golf-r-o-real ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+12:59:10 [54/258] campo-europa -> --boundary-way 170989070
+12:59:33     PASS campo-europa ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+12:59:39 [55/258] campo-los-lagos -> --boundary-way 172222354
+13:01:18     PASS campo-los-lagos ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/campo-los-lagos/course.jpg
+13:01:24 [56/258] campo-los-olivos -> --boundary-way 244709315
+13:01:53     PASS campo-los-olivos ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:01:59 [57/258] candia-woods -> --boundary-way 882067093
+13:02:22     PASS candia-woods ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:02:28 [58/258] canmore-golf-club -> --boundary-way 117916474
+13:02:35     FAIL canmore-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:02:41 [59/258] carnalea-golf-club -> --boundary-way 38625616
+13:03:17     PASS carnalea-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:03:23 [60/258] carrick-knowe-golf-club -> --boundary-way 5776767
+13:03:33     FAIL carrick-knowe-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:03:39 [61/258] carrickfergus-golf-course -> --boundary-way 38178440
+13:03:51     PASS carrickfergus-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:03:57 [62/258] castlerock-golf-club -> --boundary-way 284407631
+13:05:31     PASS castlerock-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:05:37 [63/258] castletroy-golf-club -> --boundary-way 38003791
+13:07:24     PASS castletroy-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:07:30 [64/258] charleton-golf-club -> --boundary-way 621843735
+13:07:56     PASS charleton-golf-club ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+13:08:02 [65/258] chicago-golf-club -> --boundary-way 281979769
+13:09:37     PASS chicago-golf-club ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/chicago-golf-club/course.jpg
+13:09:43 [66/258] childwall-golf-club -> --boundary-way 30800778
+13:10:16     PASS childwall-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:10:22 [67/258] clandon-regis-golf-club -> --boundary-way 9653591
+13:10:41     PASS clandon-regis-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:10:47 [68/258] club-de-golf-aloha -> --boundary-rel 1402560
+13:10:55     FAIL club-de-golf-aloha rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:11:01 [69/258] club-de-golf-de-guadalhorce -> --boundary-way 175483665
+13:11:37     PASS club-de-golf-de-guadalhorce ::   (6 synth fairway(s) carved; mask=yes; JSON re-written)
+13:11:43 [70/258] club-de-golf-la-ca-ada -> --boundary-way 105294806
+13:12:32     PASS club-de-golf-la-ca-ada ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:12:39 [71/258] club-de-golf-m-laga-parador -> --boundary-way 60046149
+13:13:03     PASS club-de-golf-m-laga-parador ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:13:09 [72/258] club-de-golf-valderrama -> --boundary-way 237391513
+13:13:40     PASS club-de-golf-valderrama ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:13:46 [73/258] cobtree-manor-park-golf-club -> --boundary-way 28303055
+13:14:04     PASS cobtree-manor-park-golf-club ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+13:14:11 [74/258] colonial-country-club -> --boundary-way 27865544
+13:15:29     PASS colonial-country-club ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+13:15:35 [75/258] coombe-hill-golf-club -> --boundary-way 4782157
+13:16:00     PASS coombe-hill-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:16:06 [76/258] coronation-course -> --boundary-way 1455505070
+13:16:24     PASS coronation-course ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+13:16:30 [77/258] country-club-of-north-carolina-cardinal -> --boundary-rel 6388538
+13:16:39     FAIL country-club-of-north-carolina-cardinal rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:16:45 [78/258] country-club-of-north-carolina-dogwood -> --boundary-rel 6388539
+13:17:36     PASS country-club-of-north-carolina-dogwood ::   (12 synth fairway(s) carved; mask=yes; JSON re-written)
+13:17:42 [79/258] cowdenbeath-golf-course -> --boundary-way 115966547
+13:18:13     PASS cowdenbeath-golf-course ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+13:18:19 [80/258] craigentinny-golf-course -> --boundary-way 6175914
+13:19:26     PASS craigentinny-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:19:32 [81/258] craighead-links -> --boundary-way 1432609850
+13:19:43     FAIL craighead-links rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:19:49 [82/258] craigielaw-golf-club -> --boundary-way 249130496
+13:20:20     PASS craigielaw-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:20:26 [83/258] craigmillar-park-golf-club -> --boundary-rel 945815
+13:21:04     PASS craigmillar-park-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:21:10 [84/258] craigtoun-course -> --boundary-way 411433333
+13:21:18     FAIL craigtoun-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:21:24 [85/258] cuddington-golf-course -> --boundary-way 17750111
+13:22:06     PASS cuddington-golf-course ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+13:22:12 [86/258] cypress-point-golf-course -> --boundary-way 36435651
+13:22:52     PASS cypress-point-golf-course ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+13:22:58 [87/258] dalmilling-golf-course -> --boundary-way 43476940
+13:23:18     PASS dalmilling-golf-course ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+13:23:25 [88/258] deer-park -> --boundary-rel 4632947
+13:23:34     FAIL deer-park rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:23:40 [89/258] derryfield-country-club -> --boundary-way 343126670
+13:25:16     PASS derryfield-country-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:25:22 [90/258] detroit-golf-club -> --boundary-rel 909401
+13:26:32     PASS detroit-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+13:26:38 [91/258] dodhead-golf-course -> --boundary-way 117636564
+13:27:19     PASS dodhead-golf-course ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+13:27:25 [92/258] dom-pedro-laguna-golf-course -> --boundary-rel 3209452
+13:27:38     FAIL dom-pedro-laguna-golf-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:27:44 [93/258] dom-pedro-millennium-golf-course -> --boundary-rel 3238919
+13:28:13     PASS dom-pedro-millennium-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:28:19 [94/258] dom-pedro-old-course -> --boundary-way 107196460
+13:28:59     PASS dom-pedro-old-course ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+13:29:05 [95/258] dom-pedro-pinhal-golf-course -> --boundary-rel 3209386
+13:29:32     PASS dom-pedro-pinhal-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:29:38 [96/258] dom-pedro-victoria-golf-course -> --boundary-rel 1506063
+13:29:48     FAIL dom-pedro-victoria-golf-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:29:54 [97/258] donaghadee-golf-club -> --boundary-rel 4601406
+13:30:20     PASS donaghadee-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:30:26 [98/258] downfield -> --boundary-rel 10616520
+13:30:35     FAIL downfield rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:30:41 [99/258] downshire-golf-complex -> --boundary-rel 12769689
+13:31:00     PASS downshire-golf-complex ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:31:06 [100/258] drumoig-golf-course -> --boundary-rel 3366723
+13:31:44     PASS drumoig-golf-course ::   (6 synth fairway(s) carved; mask=yes; JSON re-written)
+13:31:50 [101/258] duddingston-golf-course -> --boundary-way 6175767
+13:32:21     PASS duddingston-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:32:27 [102/258] dumbarnie-links -> --boundary-way 735220025
+13:32:35     FAIL dumbarnie-links rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:32:41 [103/258] dunbar-golf-club -> --boundary-rel 2833655
+13:32:52     FAIL dunbar-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:32:58 [104/258] dundonald-links -> --boundary-way 41275226
+13:34:34     PASS dundonald-links ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:34:40 [105/258] dunluce-links -> --boundary-way 1413316756
+13:34:48     FAIL dunluce-links rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:34:54 [106/258] dunmurry-golf-course -> --boundary-rel 6118831
+13:35:20     PASS dunmurry-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:35:26 [107/258] dunnikier-park-golf-course -> --boundary-way 128633952
+13:35:34     FAIL dunnikier-park-golf-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+13:35:40 [108/258] east-course -> --boundary-rel 20059744
+13:36:10     PASS east-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:36:16 [109/258] east-lake-golf-club -> --boundary-way 25587469
+13:36:39     PASS east-lake-golf-club ::   (7 synth fairway(s) carved; mask=yes; JSON re-written)
+13:36:45 [110/258] eden-course -> --boundary-way 158718157
+13:37:20     PASS eden-course ::   (9 synth fairway(s) carved; mask=yes; JSON re-written)
+13:37:26 [111/258] effingham-golf-club -> --boundary-rel 7605715
+13:38:39     PASS effingham-golf-club ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+13:38:45 [112/258] el-para-so-golf-club -> --boundary-way 147409088
+13:39:17     PASS el-para-so-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:39:24 [113/258] elie-golf-course -> --boundary-way 112530297
+13:40:28     PASS elie-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:40:34 [114/258] elmwood-golf-course -> --boundary-way 232421617
+13:42:28     PASS elmwood-golf-course ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:42:34 [115/258] espiche-golf -> --boundary-way 107214912
+13:43:05     PASS espiche-golf ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+13:43:11 [116/258] faldo-course -> --boundary-way 359502857
+13:43:46     PASS faldo-course ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+13:43:52 [117/258] flamingos-golf -> --boundary-way 139728265
+13:45:30     PASS flamingos-golf ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/flamingos-golf/course.jpg
+13:45:36 [118/258] formby-golf-club -> --boundary-rel 19802085
+13:46:22     PASS formby-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:46:28 [119/258] formby-hall-golf-course -> --boundary-rel 20778325
+13:48:17     PASS formby-hall-golf-course ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/formby-hall-golf-course/course.jpg
+13:48:23 [120/258] formby-ladies-golf-club -> --boundary-way 1448188285
+13:48:57     PASS formby-ladies-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:49:03 [121/258] forrester-park-golf-course -> --boundary-way 94453954
+13:49:26     PASS forrester-park-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:49:32 [122/258] foxhills -> --boundary-way 157488856
+13:49:53     PASS foxhills ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:49:59 [123/258] galgorm-castle-golf-club -> --boundary-way 1062734778
+13:50:30     PASS galgorm-castle-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:50:37 [124/258] garden-city-golf-club -> --boundary-way 60925271
+13:51:07     PASS garden-city-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:51:13 [125/258] glasgow-golf-club-gailes-links -> --boundary-way 41275225
+13:51:48     PASS glasgow-golf-club-gailes-links ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:51:54 [126/258] glenrothes-golf-course -> --boundary-rel 3350929
+13:52:19     PASS glenrothes-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:52:25 [127/258] golf-brianza-country-club -> --boundary-rel 2418613
+13:52:40     PASS golf-brianza-country-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:52:46 [128/258] golf-club-milano -> --boundary-rel 3301965
+13:53:08     PASS golf-club-milano ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:53:14 [129/258] golf-d-ableiges -> --boundary-rel 20324338
+13:54:17     PASS golf-d-ableiges ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+13:54:23 [130/258] golf-d-opio-valbonne -> --boundary-rel 7428915
+13:54:49     PASS golf-d-opio-valbonne ::   (7 synth fairway(s) carved; mask=yes; JSON re-written)
+13:54:55 [131/258] golf-d-ormesson -> --boundary-way 27486869
+13:55:12     PASS golf-d-ormesson ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:55:18 [132/258] golf-d-ozoir-la-ferri-re -> --boundary-way 28684357
+13:55:53     PASS golf-d-ozoir-la-ferri-re ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+13:55:59 [133/258] golf-d-tiolles -> --boundary-way 194844502
+13:56:32     PASS golf-d-tiolles ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+13:56:38 [134/258] golf-de-b-themont -> --boundary-rel 1310109
+13:57:16     PASS golf-de-b-themont ::   (6 synth fairway(s) carved; mask=yes; JSON re-written)
+13:57:22 [135/258] golf-de-bussy-guermantes -> --boundary-rel 375467
+13:57:45     PASS golf-de-bussy-guermantes ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+13:57:51 [136/258] golf-de-cergy-vaur-al -> --boundary-rel 17130632
+13:58:30     PASS golf-de-cergy-vaur-al ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:58:36 [137/258] golf-de-domont-montmorency -> --boundary-way 111797453
+13:58:53     PASS golf-de-domont-montmorency ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+13:58:59 [138/258] golf-de-feucherolles -> --boundary-way 47473272
+13:59:34     PASS golf-de-feucherolles ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+13:59:40 [139/258] golf-de-marivaux -> --boundary-way 166326788
+14:00:09     PASS golf-de-marivaux ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+14:00:15 [140/258] golf-de-marolles -> --boundary-rel 19211100
+14:00:24     FAIL golf-de-marolles rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:00:30 [141/258] golf-de-roissy -> --boundary-way 87256088
+14:00:38     FAIL golf-de-roissy rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:00:44 [142/258] golf-de-s-nart -> --boundary-rel 2849080
+14:00:52     FAIL golf-de-s-nart rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:00:58 [143/258] golf-de-saint-cloud -> --boundary-way 22752042
+14:02:00     PASS golf-de-saint-cloud ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+14:02:06 [144/258] golf-de-saint-germain-en-laye -> --boundary-way 1350321773
+14:02:14     FAIL golf-de-saint-germain-en-laye rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:02:20 [145/258] golf-de-saint-germain-l-s-corbeil -> --boundary-rel 19218935
+14:02:54     PASS golf-de-saint-germain-l-s-corbeil ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+14:03:00 [146/258] golf-de-saint-nom-la-bret-che -> --boundary-way 22604082
+14:03:35     PASS golf-de-saint-nom-la-bret-che ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+14:03:41 [147/258] golf-de-saint-quentin-en-yvelines -> --boundary-way 22673458
+14:04:09     PASS golf-de-saint-quentin-en-yvelines ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+14:04:15 [148/258] golf-de-valescure -> --boundary-rel 19947427
+14:04:34     PASS golf-de-valescure ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:04:40 [149/258] golf-de-villennes -> --boundary-way 85447354
+14:05:00     PASS golf-de-villennes ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:05:06 [150/258] golf-de-viltain-saint-marc -> --boundary-rel 14180078
+14:05:20     FAIL golf-de-viltain-saint-marc rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:05:26 [151/258] golf-national -> --boundary-way 290619725
+14:06:03     PASS golf-national ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:06:09 [152/258] golf-torrequebrada -> --boundary-rel 1170115
+14:06:42     PASS golf-torrequebrada ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+14:06:48 [153/258] golfanlage-gut-rieden -> --boundary-way 162097909
+14:07:57     PASS golfanlage-gut-rieden ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+14:08:03 [154/258] golfanlage-tegernbach -> --boundary-way 96185578
+14:08:29     PASS golfanlage-tegernbach ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:08:35 [155/258] golfbaan-de-hoge-dijk -> --boundary-way 27377987
+14:09:20     PASS golfbaan-de-hoge-dijk ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+14:09:26 [156/258] golfbaan-de-kroonprins -> --boundary-way 628242979
+14:10:23     PASS golfbaan-de-kroonprins ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:10:29 [157/258] golfbaan-hitland -> --boundary-way 6320852
+14:11:41     PASS golfbaan-hitland ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:11:47 [158/258] golfbaan-waterland-amsterdam -> --boundary-rel 1153503
+14:11:57     FAIL golfbaan-waterland-amsterdam rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:12:03 [159/258] golfclub-broekpolder -> --boundary-way 6320849
+14:12:40     PASS golfclub-broekpolder ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+14:12:46 [160/258] golfclub-capelle -> --boundary-way 6320851
+14:13:18     PASS golfclub-capelle ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:13:24 [161/258] golfclub-de-haar -> --boundary-rel 12525170
+14:13:49     PASS golfclub-de-haar ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+14:13:55 [162/258] golfclub-de-hoge-kleij -> --boundary-way 6320890
+14:14:58     PASS golfclub-de-hoge-kleij ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:15:04 [163/258] golfclub-houtrak -> --boundary-way 50845327
+14:16:53     PASS golfclub-houtrak ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/golfclub-houtrak/course.jpg
+14:16:59 [164/258] golfclub-m-nchen-west-odelzhausen -> --boundary-way 172436226
+14:17:34     PASS golfclub-m-nchen-west-odelzhausen ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+14:17:40 [165/258] golfclub-schlo-egmating-e-v -> --boundary-way 24684203
+14:17:58     PASS golfclub-schlo-egmating-e-v ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:18:04 [166/258] golfclub-westerpark -> --boundary-rel 4435286
+14:18:43     PASS golfclub-westerpark ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:18:49 [167/258] golfpark-wilnis -> --boundary-rel 4463831
+14:19:40     PASS golfpark-wilnis ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:19:46 [168/258] golfsoci-teit-de-lage-vuursche -> --boundary-way 6320898
+14:20:07     PASS golfsoci-teit-de-lage-vuursche ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:20:13 [169/258] goyer-golf-country-club -> --boundary-way 6320919
+14:20:27     FAIL goyer-golf-country-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:20:33 [170/258] greenacres-golf-course -> --boundary-way 39524604
+14:21:09     PASS greenacres-golf-course ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+14:21:15 [171/258] guildford-golf-club -> --boundary-way 6174650
+14:21:31     PASS guildford-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:21:37 [172/258] gullane-golf-club -> --boundary-way 1083233390
+14:22:05     PASS gullane-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:22:11 [173/258] haddington-golf-course -> --boundary-way 56451887
+14:22:44     PASS haddington-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:22:50 [174/258] hampton-court-palace-golf-club -> --boundary-way 293556109
+14:23:13     PASS hampton-court-palace-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:23:19 [175/258] harbour-town-golf-links -> --boundary-rel 4813858
+14:23:40     PASS harbour-town-golf-links ::   (6 synth fairway(s) carved; mask=yes; JSON re-written)
+14:23:46 [176/258] hazeltine-national-golf-course -> --boundary-rel 9892305
+14:24:06     PASS hazeltine-national-golf-course ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+14:24:12 [177/258] heemskerkse-golfclub -> --boundary-way 6320970
+14:25:53     PASS heemskerkse-golfclub ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/heemskerkse-golfclub/course.jpg
+14:25:59 [178/258] hersham-golf-club -> --boundary-way 212549661
+14:26:25     PASS hersham-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:26:31 [179/258] hesketh-golf-club -> --boundary-way 24415869
+14:26:52     PASS hesketh-golf-club ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+14:26:58 [180/258] heswall-golf-course -> --boundary-way 25630303
+14:27:25     PASS heswall-golf-course ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+14:27:31 [181/258] hickory-hill-golf-course -> --boundary-way 29745459
+14:27:54     PASS hickory-hill-golf-course ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+14:28:00 [182/258] hidden-valley-championship-course -> --boundary-way 88981692
+14:28:18     PASS hidden-valley-championship-course ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+14:28:24 [183/258] hilton-templepatrick-golf-course -> --boundary-way 133434501
+14:29:11     PASS hilton-templepatrick-golf-course ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+14:29:17 [184/258] hilversumsche-golf-club -> --boundary-way 6320907
+14:29:54     PASS hilversumsche-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+14:30:00 [185/258] indian-ridge-golf-club -> --boundary-way 264546248
+14:30:20     PASS indian-ridge-golf-club ::   (10 synth fairway(s) carved; mask=yes; JSON re-written)
+14:30:26 [186/258] inverness-golf-club -> --boundary-way 188430959
+14:31:23     PASS inverness-golf-club ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+14:31:29 [187/258] ipswich-country-club -> --boundary-rel 4143635
+14:32:00     PASS ipswich-country-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:32:06 [188/258] kiawah-island-club-cassique -> --boundary-way 1288431702
+14:32:34     PASS kiawah-island-club-cassique ::   (7 synth fairway(s) carved; mask=yes; JSON re-written)
+14:32:40 [189/258] kiawah-island-club-river-course -> --boundary-rel 17702344
+14:32:49     FAIL kiawah-island-club-river-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:32:55 [190/258] kiawah-island-golf-resort-the-ocean-course -> --boundary-rel 17647608
+14:33:05     FAIL kiawah-island-golf-resort-the-ocean-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:33:11 [191/258] kilmarnock-golf-club-barassie-links -> --boundary-way 248434900
+14:33:48     PASS kilmarnock-golf-club-barassie-links ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+14:33:55 [192/258] kilspindie-golf-club -> --boundary-way 939545275
+14:34:22     PASS kilspindie-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:34:28 [193/258] king-james-vi-golf-club -> --boundary-way 44014848
+14:34:46     PASS king-james-vi-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+14:34:52 [194/258] kinghorn-golf-course -> --boundary-way 161947849
+14:35:59     PASS kinghorn-golf-course ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+14:36:05 [195/258] kingsbarns-golf-links -> --boundary-way 636044440
+14:36:30     PASS kingsbarns-golf-links ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+14:36:36 [196/258] kirkiston-castle-golf-club -> --boundary-way 404946483
+14:37:08     PASS kirkiston-castle-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:37:14 [197/258] la-quinta-golf-country-club -> --boundary-rel 3301126
+14:37:32     PASS la-quinta-golf-country-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:37:38 [198/258] la-reserva-golf-club -> --boundary-way 237391514
+14:38:12     PASS la-reserva-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+14:38:18 [199/258] la-zagaleta-country-club-la-zagaleta-course -> --boundary-way 244158078
+14:39:29     PASS la-zagaleta-country-club-la-zagaleta-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:39:35 [200/258] ladybank-golf-club -> --boundary-rel 19698190
+14:40:00     PASS ladybank-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+14:40:06 [201/258] lauro-golf -> --boundary-way 213412144
+14:40:47     PASS lauro-golf ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:40:53 [202/258] le-robinie-golf-club -> --boundary-way 123203543
+14:41:32     PASS le-robinie-golf-club ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+14:41:38 [203/258] leasowe-golf-club -> --boundary-way 105929002
+14:42:02     PASS leasowe-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:42:08 [204/258] lee-park-golf-club -> --boundary-way 30930039
+14:42:18     FAIL lee-park-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+14:42:24 [205/258] leven-links-golf-course -> --boundary-way 134223324
+14:42:52     PASS leven-links-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:42:58 [206/258] liberty-national-golf-club -> --boundary-way 27459421
+14:43:35     PASS liberty-national-golf-club ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+14:43:41 [207/258] littlestone-golf-club -> --boundary-way 91903411
+14:44:05     PASS littlestone-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+14:44:11 [208/258] liverpool-municipal-north-golf-course -> --boundary-way 316443546
+14:44:47     PASS liverpool-municipal-north-golf-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+14:44:53 [209/258] liverpool-municipal-south-allerton-golf-course -> --boundary-way 4525505
+14:45:14     PASS liverpool-municipal-south-allerton-golf-course ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+14:45:20 [210/258] londonderry-country-club -> --boundary-way 86495884
+14:45:52     PASS londonderry-country-club ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+14:45:58 [211/258] los-angeles-country-club -> --boundary-way 56135439
+14:46:28     PASS los-angeles-country-club ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+14:46:34 [212/258] maidstone-club -> --boundary-way 967422877
+14:47:09     PASS maidstone-club ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+14:47:15 [213/258] manchester-country-club -> --boundary-way 71365982
+14:47:41     PASS manchester-country-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+14:47:47 [214/258] memorial-park-golf-course -> --boundary-rel 13729803
+14:48:18     PASS memorial-park-golf-course ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+14:48:24 [215/258] merion-golf-club-east -> --boundary-way 225722010
+14:49:00     PASS merion-golf-club-east ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+14:49:06 [216/258] merion-golf-club-west -> --boundary-way 225722011
+14:49:25     PASS merion-golf-club-west ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+14:49:31 [217/258] merrimack-valley-golf-club -> --boundary-way 844843860
+14:49:57     PASS merrimack-valley-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+14:50:03 [218/258] monterey-peninsula-country-club-dunes-course -> --boundary-way 238036734
+14:51:44     PASS monterey-peninsula-country-club-dunes-course ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/monterey-peninsula-country-club-dunes-course/course.jpg
+14:51:50 [219/258] monterey-peninsula-country-club-shore-course -> --boundary-way 397895551
+14:52:33     PASS monterey-peninsula-country-club-shore-course ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+14:52:39 [220/258] muirfield-village-golf-club -> --boundary-rel 337418
+14:54:29     PASS muirfield-village-golf-club ::   ! aerial download failed (The read operation timed out); curl AERIAL_URL -> courses/img/muirfield-village-golf-club/course.jpg
+14:54:35 [221/258] myopia-hunt-club -> --boundary-way 29689937
+14:55:10     PASS myopia-hunt-club ::   (10 synth fairway(s) carved; mask=yes; JSON re-written)
+14:55:16 [222/258] nashua-country-club -> --boundary-way 149509096
+14:56:18     PASS nashua-country-club ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+14:56:24 [223/258] national-golf-links-of-america -> --boundary-way 28989103
+14:56:46     PASS national-golf-links-of-america ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+14:56:52 [224/258] oakmont-country-club -> --boundary-rel 6174192
+14:57:16     PASS oakmont-country-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+14:57:22 [225/258] olympic-club-golf-course -> --boundary-rel 3573537
+14:57:39     PASS olympic-club-golf-course ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+14:57:45 [226/258] olympic-club-lake-course -> --boundary-way 1417078425
+14:58:10     PASS olympic-club-lake-course ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+14:58:16 [227/258] passaconaway-country-club -> --boundary-way 32835942
+14:58:32     PASS passaconaway-country-club ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+14:58:38 [228/258] pease-golf-course -> --boundary-way 320123444
+14:59:00     PASS pease-golf-course ::   (11 synth fairway(s) carved; mask=yes; JSON re-written)
+14:59:06 [229/258] pebble-beach-golf-course -> --boundary-rel 3741806
+15:00:13     PASS pebble-beach-golf-course ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+15:00:19 [230/258] pine-valley-country-club -> --boundary-way 820204638
+15:00:52     PASS pine-valley-country-club ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+15:00:58 [231/258] plainfield-country-club -> --boundary-way 39847755
+15:01:34     PASS plainfield-country-club ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+15:01:40 [232/258] portsmouth-country-club -> --boundary-way 320123445
+15:02:01     PASS portsmouth-country-club ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+15:02:07 [233/258] prairie-dunes -> --boundary-way 778336759
+15:02:36     PASS prairie-dunes ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+15:02:42 [234/258] quail-hollow-club -> --boundary-way 877659537
+15:03:34     PASS quail-hollow-club ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+15:03:40 [235/258] quaker-ridge-golf-club -> --boundary-way 122734578
+15:04:05     PASS quaker-ridge-golf-club ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+15:04:11 [236/258] renaissance-golf-club -> --boundary-way 251858105
+15:04:30     PASS renaissance-golf-club ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+15:04:36 [237/258] riviera-country-club -> --boundary-way 44652700
+15:05:07     PASS riviera-country-club ::   (11 synth fairway(s) carved; mask=yes; JSON re-written)
+15:05:13 [238/258] riviera-golf-club -> --boundary-way 95304161
+15:05:31     PASS riviera-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+15:05:37 [239/258] sagamore-hampton-golf-club -> --boundary-way 791025659
+15:06:06     PASS sagamore-hampton-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+15:06:13 [240/258] scioto-reserve-country-club -> --boundary-way 560536597
+15:06:49     PASS scioto-reserve-country-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+15:06:55 [241/258] scottish-highlands -> --boundary-way 500715840
+15:07:14     PASS scottish-highlands ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+15:07:20 [242/258] shinnecock-hills-golf-club -> --boundary-way 689056680
+15:07:42     PASS shinnecock-hills-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+15:07:48 [243/258] silverado-golf-club -> --boundary-way 61414903
+15:08:58     PASS silverado-golf-club ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+15:09:04 [244/258] silverado-resort -> --boundary-way 35828614
+15:09:23     PASS silverado-resort ::   (9 synth fairway(s) carved; mask=yes; JSON re-written)
+15:09:29 [245/258] sky-meadow-country-club -> --boundary-rel 3562967
+15:09:49     PASS sky-meadow-country-club ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+15:09:55 [246/258] southern-hills-country-club -> --boundary-rel 19140582
+15:10:35     PASS southern-hills-country-club ::   (7 synth fairway(s) carved; mask=yes; JSON re-written)
+15:10:41 [247/258] spyglass-hill-golf-course -> --boundary-way 281477606
+15:11:18     PASS spyglass-hill-golf-course ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+15:11:24 [248/258] the-country-club-at-castle-pines -> --boundary-way 1481663617
+15:11:53     PASS the-country-club-at-castle-pines ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+15:11:59 [249/258] the-country-club-at-muirfield-village -> --boundary-rel 337417
+15:12:58     PASS the-country-club-at-muirfield-village ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+15:13:04 [250/258] the-golf-club-of-new-england -> --boundary-way 320123446
+15:13:48     PASS the-golf-club-of-new-england ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+15:13:54 [251/258] torrey-pines-north-course -> --boundary-way 35679009
+15:14:21     PASS torrey-pines-north-course ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+15:14:27 [252/258] torrey-pines-south-course -> --boundary-way 35679036
+15:14:48     PASS torrey-pines-south-course ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+15:14:54 [253/258] trull-brook-golf-course -> --boundary-way 29859779
+15:15:35     PASS trull-brook-golf-course ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+15:15:41 [254/258] valhalla-golf-club -> --boundary-way 59737644
+15:16:53     PASS valhalla-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+15:16:59 [255/258] vesper-country-club -> --boundary-rel 3537891
+15:17:37     PASS vesper-country-club ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+15:17:43 [256/258] whistling-straits -> --boundary-way 205111637
+15:18:07     PASS whistling-straits ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+15:18:13 [257/258] windham-country-club -> --boundary-way 107936574
+15:18:41     PASS windham-country-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+15:18:47 [258/258] winged-foot-golf-club -> --boundary-way 122734591
+15:19:56     PASS winged-foot-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+15:20:02 === done: 222 PASS, 36 FAIL, 5 skipped(no-index) ===
+21:12:18 === rebake_ob start: 41 stale, 36 in index, 5 NOT in index ===
+21:12:18 NOT IN INDEX (handle by hand): bethpage-black, butter-brook-golf-club, crystal-lake-haverhill, overlook-golf-club, tpc-river-highlands
+21:12:18 [1/36] alcaidesa-links-golf-resort -> --boundary-rel 3873410
+21:13:13     PASS alcaidesa-links-golf-resort ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+21:13:24 [2/36] andover-country-club -> --boundary-way 264546240
+21:14:01     PASS andover-country-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+21:14:11 [3/36] arabian-ranches-golf-club -> --boundary-way 149551902
+21:14:20     FAIL arabian-ranches-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+21:14:30 [4/36] archerfield-links -> --boundary-way 161228170
+21:14:42     FAIL archerfield-links rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+21:14:52 [5/36] ashford-manor-golf-club -> --boundary-way 250363948
+21:15:25     PASS ashford-manor-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+21:15:35 [6/36] balbirnie-park-golf-club -> --boundary-rel 3350963
+21:16:19     PASS balbirnie-park-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+21:16:29 [7/36] bandon-trails -> --boundary-way 362513476
+21:17:37     PASS bandon-trails ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+21:17:47 [8/36] belleisle-seafield-golf-courses -> --boundary-way 117940581
+21:19:20     PASS belleisle-seafield-golf-courses ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+21:19:30 [9/36] belvoir-golf-course -> --boundary-way 40069675
+21:20:09     PASS belvoir-golf-course ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+21:20:19 [10/36] bethpage-state-park-golf-courses -> --boundary-way 29468839
