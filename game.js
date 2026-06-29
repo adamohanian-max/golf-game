@@ -5479,13 +5479,14 @@ async function openMatchSetup() {
   const ov = document.getElementById("match-setup");
   if (!ov) return;
   hideCourseSelect();
+  // Matches always use the admin-set global settings (gameDefaults) — the host
+  // only picks course/length/format, not the aids.
   _matchSetupSettings = normalizeSettings(gameDefaults);
   const courseName = (COURSES.find(c => c.id === selectedCourseId) || {}).name || selectedCourseId;
   document.getElementById("ms-course").textContent = courseName;
   // length default 18, format default stroke
   ov.dataset.holes = "18";
   ov.dataset.format = "stroke";
-  renderMatchSetupToggles();
   syncMatchLengthButtons();
   syncMatchFormatButtons();
   ov.classList.remove("hidden");
@@ -5497,22 +5498,6 @@ async function openMatchSetup() {
   if (fmtBtn) fmtBtn.disabled = !twoUp;
   if (!twoUp) { ov.dataset.format = "stroke"; syncMatchFormatButtons(); }
   if (note) note.textContent = twoUp ? "" : "Match play needs exactly 2 players";
-}
-function renderMatchSetupToggles() {
-  const box = document.getElementById("ms-toggles");
-  if (!box) return;
-  box.innerHTML = "";
-  for (const def of SETTING_DEFS) {
-    const on = !!_matchSetupSettings[def.key];
-    const btn = document.createElement("button");
-    btn.className = "hm-item" + (on ? " active" : "");
-    btn.textContent = def.label;
-    btn.addEventListener("click", () => {
-      _matchSetupSettings[def.key] = !_matchSetupSettings[def.key];
-      btn.classList.toggle("active", _matchSetupSettings[def.key]);
-    });
-    box.appendChild(btn);
-  }
 }
 function syncMatchLengthButtons() {
   const ov = document.getElementById("match-setup");
