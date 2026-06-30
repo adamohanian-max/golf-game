@@ -3167,6 +3167,8 @@ const stCarry = document.getElementById("st-carry");
 const stTotal = document.getElementById("st-total");
 const stSpeed = document.getElementById("st-speed");
 const stPin = document.getElementById("st-pin");
+const stPlays = document.getElementById("st-plays");
+const rowPlays = document.getElementById("st-plays-row");
 const stLieFx = document.getElementById("st-lie-fx");
 const rowLieFx = document.getElementById("st-lie-fx-row");
 const rowCarry = stCarry.parentElement;
@@ -3228,19 +3230,22 @@ function updateStats() {
     stTotal.textContent = shot.total != null ? Math.round(shot.total * 3) + " ft" : "—";
     stSpeed.textContent = spd;
     stPin.textContent = Math.round(toPin * 3) + " ft";
+    rowPlays.style.display = "none";                        // no elevation play on the green
   } else {
     rowCarry.style.display = "";
     stCarry.textContent = shot.carry != null ? Math.round(shot.carry) + " yds" : "—";
     stTotal.textContent = shot.total != null ? Math.round(shot.total) + " yds" : "—";
     stSpeed.textContent = spd;
-    // Caddie number: flat yards, plus the elevation "plays like" when the climb to
-    // the pin is meaningful (≥3 ft). Uphill plays longer, downhill shorter.
+    // To pin = straight-line yards. Plays = the elevation-adjusted caddie number,
+    // shown on its own row only when the climb to the pin is meaningful (≥3 ft).
+    stPin.textContent = Math.round(toPin) + " yds";
     const pl = playsLikeYards(b.x, b.y);
     if (pl.dz != null && Math.abs(pl.dz) >= 3) {
+      rowPlays.style.display = "";
       const ft = Math.round(pl.dz);
-      stPin.textContent = `${Math.round(pl.flat)} yds · plays ${Math.round(pl.plays)} (${ft > 0 ? "+" : ""}${ft} ft)`;
+      stPlays.textContent = `${Math.round(pl.plays)} yds (${ft > 0 ? "+" : ""}${ft} ft)`;
     } else {
-      stPin.textContent = Math.round(toPin) + " yds";
+      rowPlays.style.display = "none";
     }
   }
 }
