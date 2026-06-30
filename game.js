@@ -2604,7 +2604,7 @@ document.getElementById("play-again").addEventListener("click", () => {
   // finished this hole yet, hold and let the poll advance once they do (the
   // camera meanwhile follows them holing out).
   if (liveMatch() && !oppFinishedHole(HOLE.num)) {
-    _awaitLive = { hole: HOLE.num, advance: doAdvance };
+    _awaitLive = { hole: HOLE.num, advance: doAdvance, since: performance.now() };
     showToast("Waiting for " + oppName() + " to finish the hole…", 1600);
     updateLiveTurnUI();
     return;
@@ -5599,19 +5599,25 @@ async function beginMatch(courseId, holeCount, settings, format, live) {
   } catch (e) { console.warn("beginMatch failed:", e); return false; }
 }
 
-// PATCH my row in match_players with an arbitrary field set (fire-and-forget).
+// PATCH my row in match_players with an arbitrary field set. Retries a couple of
+// times on failure so a transient blip doesn't drop a turn-critical write (a lost
+// write is what deadlocks the live turn gate).
 async function patchMyMatchRow(fields) {
   if (!LB_ON() || !activeMatch) return;
   const me = getPlayerName() || "Player";
-  try {
-    const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(activeMatch.id) +
-              "&player_name=eq." + encodeURIComponent(me);
-    await fetch(LB_URL + q, {
-      method: "PATCH",
-      headers: authHeaders({ Prefer: "return=minimal" }),
-      body: JSON.stringify(Object.assign({ cur_updated: new Date().toISOString() }, fields)),
-    });
-  } catch (e) { console.warn("match row update failed:", e); }
+  const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(activeMatch.id) +
+            "&player_name=eq." + encodeURIComponent(me);
+  const body = JSON.stringify(Object.assign({ cur_updated: new Date().toISOString() }, fields));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(LB_URL + q, {
+        method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }), body,
+      });
+      if (res.ok) return;
+    } catch (e) { /* network blip → retry */ }
+    await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
+  }
+  console.warn("match row update failed after retries");
 }
 
 // Push my running score/progress (called every hole + on finish).
@@ -5851,23 +5857,51 @@ function enterLiveMatch() {
   // reset live-match runtime state for a fresh match
   lastOpp = null; lastMe = null; oppShot = null; _shotFrom = null;
   _lastOppSeq = -1; _matchSeq = 0; _spectating = false; _awaitLive = null;
+  _oppUpdatedSeen = null; _oppFreshAt = 0; _liveStartAt = performance.now();  // watchdog clocks
   closeMatchLobby();
   closeMatchSetup();
   closeMatchMenu();
   startCourse();
   startBoardPoll();
+  subscribeMatchRealtime(activeMatch.id);   // push updates (latency); poll is the fallback
   toggleMatchBoard(true);   // auto-show the standings during a match
 }
 
-// --- Live standings panel (toggle from HUD; polls every 5s while live) ---
+// --- Live standings panel (toggle from HUD) ---
+// Realtime pushes most updates; the interval is a heartbeat fallback that also
+// drives the re-assert/watchdog, so it stays modest even in a live match.
 function startBoardPoll() {
   stopBoardPoll();
   renderMatchBoard();
-  // Live match needs snappy turn handoff + ghost shots → 400ms; match 2s; stroke 5s.
-  _boardPoll = setInterval(renderMatchBoard, liveMatch() ? 400 : (matchPlay() ? 2000 : 5000));
+  _boardPoll = setInterval(renderMatchBoard, matchLive() ? 3000 : 5000);
 }
 function stopBoardPoll() {
   if (_boardPoll) { clearInterval(_boardPoll); _boardPoll = null; }
+}
+
+// --- Supabase Realtime: push row changes instead of waiting on the poll ---
+let _sbClient = null, _rtChannel = null;
+function ensureSbClient() {
+  if (_sbClient) return _sbClient;
+  if (!window.supabase || !window.supabase.createClient) return null;  // CDN not loaded
+  try { _sbClient = window.supabase.createClient(LB_URL, LB_KEY); } catch (e) { _sbClient = null; }
+  return _sbClient;
+}
+function subscribeMatchRealtime(matchId) {
+  unsubscribeMatchRealtime();
+  const c = ensureSbClient();
+  if (!c || !matchId) return;   // no client → silently rely on the 3s poll
+  try {
+    const onChange = () => renderMatchBoard();
+    _rtChannel = c.channel("match-" + matchId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_players", filter: "match_id=eq." + matchId }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches", filter: "id=eq." + matchId }, onChange)
+      .subscribe((status) => { if (status === "SUBSCRIBED") renderMatchBoard(); });  // catch up on (re)subscribe
+  } catch (e) { console.warn("realtime subscribe failed:", e); }
+}
+function unsubscribeMatchRealtime() {
+  if (_rtChannel && _sbClient) { try { _sbClient.removeChannel(_rtChannel); } catch (e) {} }
+  _rtChannel = null;
 }
 function toggleMatchBoard(force) {
   const el = document.getElementById("match-standings");
@@ -5925,7 +5959,25 @@ let lastMe = null;     // my last polled row
 let oppShot = null;    // active opponent arc tween, or null
 let _lastOppSeq = -1;  // last opponent cur_shot.seq I started animating
 let _spectating = false;     // camera is following the opponent's ball
-let _awaitLive = null;       // {hole, advance} while waiting for opp to finish a hole
+let _awaitLive = null;       // {hole, advance, since} while waiting for opp to finish a hole
+
+// --- Disconnect/deadlock watchdog -------------------------------------------
+// The turn gate must NEVER lock both players forever. We track how recently the
+// opponent's row actually changed; if they go quiet (slept phone, dropped wifi,
+// closed tab) past LIVE_STALE_MS, we release the lock so the game stays playable.
+const LIVE_STALE_MS = 15000;     // opponent silent this long → treat as idle, free input
+let _oppUpdatedSeen = null;      // last opp cur_updated string we observed
+let _oppFreshAt = 0;             // performance.now() when opp last changed
+let _liveStartAt = 0;            // performance.now() when we entered the live round
+
+// Is the opponent actively syncing (so turn-gating should be respected)? While
+// no opp row exists yet we grant a startup grace window; after that, or once
+// their row goes stale, they count as unresponsive and locks are released.
+function oppResponsive() {
+  const now = performance.now();
+  if (!lastOpp) return (now - _liveStartAt) < LIVE_STALE_MS;
+  return (now - _oppFreshAt) < LIVE_STALE_MS;
+}
 
 function sameName(a, b) { return (a || "").toLowerCase() === (b || "").toLowerCase(); }
 function oppName() { return (lastOpp && lastOpp.player_name) || "opponent"; }
@@ -5980,9 +6032,16 @@ function liveTurnHolder(me, opp) {
 // May I swing right now? Always yes outside a live match.
 function myTurn() {
   if (!liveMatch()) return true;
+  // Fail-safe: if the opponent has gone quiet, never stay locked — let me play on.
+  if (!oppResponsive()) return true;
   const me = meSnapshot();
+  if (!me) return true;
+  // Cross-hole (desync/recovery): honors/away only apply on the same hole — if we're
+  // on different holes, don't gate my own hole.
+  if (lastOpp && lastOpp.cur_hole !== me.cur_hole) return true;
   const t = liveTurnHolder(me, lastOpp);
-  return t != null && me != null && sameName(t, me.player_name);
+  if (t == null) return false;     // transient unresolved, but opp is live → brief hold
+  return sameName(t, me.player_name);
 }
 
 // Opponent's current ball position (tween while a shot is in flight, else its
@@ -6070,7 +6129,8 @@ function updateLiveTurnUI() {
   else {
     const me = meSnapshot();
     const t = liveTurnHolder(me, lastOpp);
-    if (_awaitLive) { txt = "Waiting for " + oppName() + " to finish the hole…"; cls = "lt-wait"; }
+    if (!oppResponsive()) { txt = oppName() + " idle — play on"; cls = "lt-mine"; }
+    else if (_awaitLive) { txt = "Waiting for " + oppName() + " to finish the hole…"; cls = "lt-wait"; }
     else if (t == null) { txt = "Syncing with " + oppName() + "…"; cls = "lt-wait"; }
     else if (me && sameName(t, me.player_name)) { txt = "Your turn — you're away. Swing!"; cls = "lt-mine"; }
     else { txt = "Watch " + oppName() + " play…"; cls = "lt-wait"; }
@@ -6104,21 +6164,47 @@ function onLivePoll(rows) {
   if (!liveMatch()) return;
   const meRow = rows.find(isMeEntry), oppRow = rows.find(r => !isMeEntry(r));
   if (meRow) lastMe = meRow;
-  if (oppRow) { lastOpp = oppRow; startOppGhost(oppRow); }
+  if (oppRow) {
+    lastOpp = oppRow;
+    startOppGhost(oppRow);
+    // watchdog: note when the opponent's row actually changed (freshness clock)
+    if (oppRow.cur_updated !== _oppUpdatedSeen) { _oppUpdatedSeen = oppRow.cur_updated; _oppFreshAt = performance.now(); }
+  }
+  reassertMyState();   // re-push my at-rest state so a dropped write self-heals
   pumpLiveAdvance();
   updateLiveTurnUI();
   positionLiveTurn();   // standings size may have changed → keep banner anchored under it
 }
 
 // When I've holed and tapped "Next hole" but the opponent hasn't finished, hold;
-// the poll calls this each tick and advances once they're done.
+// the poll calls this each tick and advances once they're done — OR once they've
+// gone unresponsive past the timeout, so a lost write can't strand me on the hole.
 function pumpLiveAdvance() {
   if (!_awaitLive) return;
-  if (oppFinishedHole(_awaitLive.hole)) {
+  const timedOut = !oppResponsive() && (performance.now() - _awaitLive.since) > LIVE_STALE_MS;
+  if (oppFinishedHole(_awaitLive.hole) || timedOut) {
     const adv = _awaitLive.advance;
     _awaitLive = null;
     adv();
   }
+}
+
+// Re-broadcast my current at-rest state (idempotent) so a single dropped write
+// recovers instead of deadlocking the turn. Throttled (min REASSERT_MS apart) so
+// Realtime events — which also call onLivePoll — can't trigger a write ping-pong.
+const REASSERT_MS = 2500;
+let _lastReassertAt = 0;
+function reassertMyState(force) {
+  if (!liveMatch() || !HOLE || HOLE.isRange) return;
+  if (state.moving || state.inHole) return;   // mid-shot/holed states are pushed by their own hooks
+  const now = performance.now();
+  if (!force && now - _lastReassertAt < REASSERT_MS) return;
+  _lastReassertAt = now;
+  const me = meSnapshot();
+  if (!me) return;
+  patchMyMatchRow({ cur_hole: me.cur_hole, cur_strokes: me.cur_strokes,
+                    cur_to_pin: me.cur_to_pin, cur_at_rest: true,
+                    cur_x: state.ball.x, cur_y: state.ball.y });
 }
 
 // On a hole-out, see if the match is mathematically decided (closeout).
@@ -6276,6 +6362,7 @@ async function renderMatchResults() {
 function leaveMatch() {
   stopMatchPoll();
   stopBoardPoll();
+  unsubscribeMatchRealtime();
   closeMatchResults();
   activeMatch = null;
   matchSetupMode = false;
@@ -6341,7 +6428,27 @@ function leaveMatch() {
     closeHud();
     elScorecard.style.display = "none";
   });
+
+  const msResync = document.getElementById("mb-resync");
+  if (msResync) msResync.addEventListener("click", () => liveResync());
+
+  // Reconnect/return-to-foreground: phones throttle timers + halt rAF when the tab
+  // is hidden, so on return we force an immediate resync and re-broadcast my state
+  // (and don't let myself be flagged idle on the first frame back).
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) liveResync();
+  });
+  window.addEventListener("online", () => liveResync());
 })();
+
+// Force a full live-match resync: refetch the board now and re-push my state so
+// the opponent's view of me corrects immediately. Safe to call any time.
+function liveResync() {
+  if (!liveMatch()) return;
+  _liveStartAt = performance.now();   // restart the startup grace so I'm not instantly "idle"
+  reassertMyState(true);
+  renderMatchBoard();
+}
 
 // =====================================================================
 //  Admin tournament management screen (list + per-tournament detail).

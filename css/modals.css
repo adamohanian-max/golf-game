@@ -292,11 +292,14 @@
 /* Mobile: confine to the left 25vw side band (see hud.css side bands). */
 body.is-mobile #match-standings { width: calc(25vw - var(--s-3)); min-width: 0; box-sizing: border-box; }
 .mb-head {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 4px;
   padding: 8px 12px; font-weight: var(--fw-bold); color: var(--text);
   background: var(--accent-soft); font-size: 14px;
 }
+.mb-head #mb-title { flex: 1; }
 .mb-x { background: none; border: none; color: var(--text-dim); font-size: 14px; cursor: pointer; padding: 0 4px; }
+#mb-resync { font-size: 15px; line-height: 1; }
+#mb-resync:active { color: var(--accent); }
 .mb-list { padding: 6px; max-height: 50vh; overflow-y: auto; }
 .mb-row {
   display: grid; grid-template-columns: 38px 1fr auto auto; gap: 8px; align-items: center;

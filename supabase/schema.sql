@@ -203,3 +203,9 @@ alter table matches add column if not exists live boolean not null default false
 alter table match_players add column if not exists cur_x    double precision; -- ball world x at rest
 alter table match_players add column if not exists cur_y    double precision; -- ball world y at rest
 alter table match_players add column if not exists cur_shot jsonb;            -- {seq,hole,fromX,fromY,toX,toY,durMs,peak,lie}
+
+-- ---------- Realtime: push row changes to the live-match clients ----------
+-- The game subscribes to postgres_changes on these tables; enable replication so
+-- those events fire. (Safe to re-run; "already member" just errors harmlessly.)
+alter publication supabase_realtime add table public.match_players;
+alter publication supabase_realtime add table public.matches;

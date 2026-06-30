@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/hud.css?v=63">
   <link rel="stylesheet" href="css/menu.css?v=60">
   <link rel="stylesheet" href="css/courses.css?v=3">
-  <link rel="stylesheet" href="css/modals.css?v=60">
+  <link rel="stylesheet" href="css/modals.css?v=61">
   <link rel="stylesheet" href="css/tournament.css?v=54">
 </head>
 <body>
@@ -386,6 +386,7 @@
   <div id="match-standings" class="hidden">
     <div class="mb-head">
       <span id="mb-title">Match standings</span>
+      <button id="mb-resync" class="mb-x" aria-label="Resync" title="Resync">⟳</button>
       <button id="mb-close" class="mb-x" aria-label="Close">✕</button>
     </div>
     <div id="mb-list" class="mb-list"></div>
@@ -403,6 +404,7 @@
     </div>
   </div>
 
-  <script src="game.js?v=94"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="game.js?v=95"></script>
 </body>
 </html>
