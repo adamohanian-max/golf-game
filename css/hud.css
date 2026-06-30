@@ -46,6 +46,29 @@
 }
 #hint.hidden { opacity: 0; }
 
+/* ---- Live match: whose-turn banner (top-center) ----------- */
+#live-turn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + var(--s-3));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80vw;
+  text-align: center;
+  white-space: nowrap;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: var(--fw-bold);
+  pointer-events: none;
+  z-index: 40;
+  transition: opacity 0.25s;
+}
+#live-turn.hidden { opacity: 0; pointer-events: none; }
+#live-turn.lt-mine { background: rgba(34, 139, 64, 0.92); }   /* your turn — go */
+#live-turn.lt-wait { background: rgba(0, 0, 0, 0.6); }        /* watching opponent */
+
 /* ---- Transient toast (milestones, near-miss, daily, share) -------- */
 #toast {
   position: fixed;

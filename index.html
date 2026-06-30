@@ -12,10 +12,10 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
   <link rel="stylesheet" href="css/tokens.css?v=55">
   <link rel="stylesheet" href="css/base.css?v=54">
-  <link rel="stylesheet" href="css/hud.css?v=61">
+  <link rel="stylesheet" href="css/hud.css?v=62">
   <link rel="stylesheet" href="css/menu.css?v=60">
   <link rel="stylesheet" href="css/courses.css?v=3">
-  <link rel="stylesheet" href="css/modals.css?v=59">
+  <link rel="stylesheet" href="css/modals.css?v=60">
   <link rel="stylesheet" href="css/tournament.css?v=54">
 </head>
 <body>
@@ -85,6 +85,7 @@
   </div>
 
   <div id="hint">Swipe to swing · ← → to aim · ↑ ↓ club</div>
+  <div id="live-turn" class="hidden"></div>
   <div id="hud-edit-bar" class="hidden">Drag to move · pinch or <button id="hud-zoom-out" class="hud-zoom">−</button><button id="hud-zoom-in" class="hud-zoom">+</button> to resize · <button id="hud-edit-done">Done</button></div>
   <div id="chip-ind" class="hidden"><span class="ic ic-chip"></span>Chip · ease off for the flag</div>
   <div id="toast" class="hidden"></div>
@@ -373,6 +374,7 @@
         <button class="menu-btn secondary ms-len" data-holes="9">9 holes</button>
         <button class="menu-btn secondary ms-len" data-holes="18">18 holes</button>
       </div>
+      <button id="ms-live" class="menu-btn secondary ms-live hidden">⚡ Live — take turns, watch each shot</button>
       <div id="ms-status" class="ne-sub"></div>
       <div class="ne-actions">
         <button id="ms-back" class="menu-btn secondary">Back</button>
@@ -401,6 +403,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=92"></script>
+  <script src="game.js?v=93"></script>
 </body>
 </html>

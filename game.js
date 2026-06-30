@@ -251,6 +251,9 @@ let _matchEntered = false;   // guard so we only drop into the live round once
 let matchDecided = false;    // 1v1 match-play closeout reached → stop advancing holes
 function matchLive() { return !!(activeMatch && activeMatch.status === "live"); }
 function matchPlay() { return matchLive() && activeMatch.format === "match"; }
+// Live (synchronous) match: 1v1 match play with the "Live" toggle on — enforce
+// honors/away turn order, render the opponent's ball, watch each shot live.
+function liveMatch() { return matchPlay() && !!activeMatch.live; }
 let holeTransition = null; // active hole-change animation (fade + zoom-in), or null
 let holeDrop = null;       // active ball-into-cup drop animation, or null
 const HOLE_DROP_MS = 520;  // drop animation length; result modal opens when it ends
@@ -766,7 +769,8 @@ let refScale = 1;
 const canvas = document.getElementById("game");
 
 function canSwing() {
-  return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition;
+  return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition
+    && myTurn();   // live match: only the "away" / honors player may swing
 }
 
 // =====================================================================
@@ -1342,9 +1346,11 @@ const AIM_NUDGE = 3 * Math.PI / 180;   // fixed step for a single arrow tap
 
 // Target framing (focus = ball↔pin midpoint; scale = fit ball↔pin + pad at the
 // target angle). Tight near the cup (putts), wide off the tee.
-function frameTarget() {
+function frameTarget(fx, fy) {
+  // Focus point defaults to my ball; live spectating passes the opponent's ball.
+  const ox = (fx == null) ? state.ball.x : fx, oy = (fy == null) ? state.ball.y : fy;
   const a = camera.tAngle, cos = Math.cos(a), sin = Math.sin(a);
-  const bx = cos * state.ball.x - sin * state.ball.y, by = sin * state.ball.x + cos * state.ball.y;
+  const bx = cos * ox - sin * oy, by = sin * ox + cos * oy;
   const px = cos * HOLE.holePos.x - sin * HOLE.holePos.y, py = sin * HOLE.holePos.x + cos * HOLE.holePos.y;
   const span = Math.max(Math.abs(bx - px), Math.abs(by - py));
   const pad = Math.max(VIEW_PAD_MIN, span * VIEW_PAD_FRAC);
@@ -1356,8 +1362,8 @@ function frameTarget() {
   const availW = Math.max(120, window.innerWidth - rsv.left - rsv.right);
   const availH = Math.max(120, window.innerHeight - rsv.top - rsv.bot);
   camera.tScale = Math.min(availW / w, availH / h);
-  camera.tFocus.x = (state.ball.x + HOLE.holePos.x) / 2;
-  camera.tFocus.y = (state.ball.y + HOLE.holePos.y) / 2;
+  camera.tFocus.x = (ox + HOLE.holePos.x) / 2;
+  camera.tFocus.y = (oy + HOLE.holePos.y) / 2;
 }
 function frameRemaining() { frameTarget(); }
 // Jump the camera straight to its target (no easing).
@@ -2341,6 +2347,9 @@ function draw() {
     }
   }
 
+  // live match: the opponent's ball (arc tween while their shot flies, else at rest)
+  if (liveMatch()) drawOppGhost();
+
   // celebration / impact particles (above the play surface + ball)
   updateParticles();
   drawParticles();
@@ -2507,12 +2516,24 @@ function showResult() {
     const finished = round.holesPlayed >= roundHoleCount();
     const holeScores = {};
     for (const h of round.holeStats) holeScores[h.hole] = h.strokes;
-    patchMyMatchRow({
+    const patch = {
       score: round.score, holes_played: round.holesPlayed, finished,
       updated_at: new Date().toISOString(),
       hole_scores: holeScores, cur_hole: HOLE.num, cur_strokes: state.strokes,
       cur_to_pin: -1, cur_at_rest: true,
-    });
+      cur_x: HOLE.holePos.x, cur_y: HOLE.holePos.y,
+    };
+    // Live match: broadcast the holing shot as an arc into the cup (the capture
+    // path skips the normal at-rest push), then clear the pending-shot marker.
+    if (liveMatch() && _shotFrom) {
+      const distU = dist(_shotFrom.x, _shotFrom.y, HOLE.holePos.x, HOLE.holePos.y);
+      const durMs = Math.max(450, Math.min(4000, performance.now() - _shotT0));
+      patch.cur_shot = { seq: _matchSeq, hole: HOLE.num,
+        fromX: _shotFrom.x, fromY: _shotFrom.y, toX: HOLE.holePos.x, toY: HOLE.holePos.y,
+        durMs: Math.round(durMs), peak: distU * 0.16, lie: "green" };
+    }
+    _shotFrom = null;
+    patchMyMatchRow(patch);
     if (matchPlay()) checkMatchCloseout();
   }
   const names = { "-3": "Albatross!", "-2": "Eagle!", "-1": "Birdie!",
@@ -2570,7 +2591,7 @@ document.getElementById("play-again").addEventListener("click", () => {
     showRoundSummary();
     return;
   }
-  advanceHole(() => {
+  const doAdvance = () => advanceHole(() => {
     if (course) {
       holeIndex = (holeIndex + 1) % course.holes.length;
       setHole(course.holes[holeIndex]);
@@ -2579,6 +2600,16 @@ document.getElementById("play-again").addEventListener("click", () => {
     }
     elHint.classList.remove("hidden");
   });
+  // Live match: both players tee the next hole together. If the opponent hasn't
+  // finished this hole yet, hold and let the poll advance once they do (the
+  // camera meanwhile follows them holing out).
+  if (liveMatch() && !oppFinishedHole(HOLE.num)) {
+    _awaitLive = { hole: HOLE.num, advance: doAdvance };
+    showToast("Waiting for " + oppName() + " to finish the hole…", 1600);
+    updateLiveTurnUI();
+    return;
+  }
+  doAdvance();
 });
 
 // =====================================================================
@@ -2790,6 +2821,8 @@ function pickPin(rec) {
 }
 
 function setHole(rec) {
+  // live match: drop any in-flight shot marker / opponent tween from the last hole
+  _shotFrom = null; oppShot = null; _spectating = false;
   const glob = !!(course && course.global && !rec.world);
   const src = glob ? course : rec; // where world/surfaces/aerial come from
   const pin = pickPin(rec);
@@ -5541,13 +5574,15 @@ async function fetchMatchPlayers(matchId) {
   } catch (e) { return []; }
 }
 
-async function beginMatch(courseId, holeCount, settings, format) {
+async function beginMatch(courseId, holeCount, settings, format, live) {
   if (!LB_ON() || !activeMatch) return false;
+  const isMatch = format === "match";
   const patch = {
     course_id: courseId,
     hole_count: holeCount,
     settings: normalizeSettings(settings),
-    format: format === "match" ? "match" : "stroke",
+    format: isMatch ? "match" : "stroke",
+    live: isMatch && !!live,   // Live is match-play only
     status: "live",
     started_at: new Date().toISOString(),
   };
@@ -5591,10 +5626,29 @@ function pushMatchShot(extra) {
   if (!matchLive() || !HOLE || HOLE.isRange) return;
   const b = state.ball;
   const toPin = Math.round(dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
-  patchMyMatchRow(Object.assign({
+  const fields = {
     cur_hole: HOLE.num, cur_strokes: state.strokes,
     cur_to_pin: toPin, cur_lie: lieLabel(), cur_at_rest: true,
-  }, extra || {}));
+    cur_x: b.x, cur_y: b.y,
+  };
+  // Live match: remember where my shot started so the at-rest push can describe
+  // the full arc (start → rest), which the opponent replays as a tween.
+  if (extra && extra.cur_at_rest === false) {
+    _shotFrom = { x: b.x, y: b.y };   // ball hasn't moved yet → this is the launch point
+    _shotT0 = performance.now();
+    _matchSeq++;
+  } else if (liveMatch() && _shotFrom) {
+    const distU = dist(_shotFrom.x, _shotFrom.y, b.x, b.y);
+    const durMs = Math.max(450, Math.min(4000, performance.now() - _shotT0));
+    fields.cur_shot = {
+      seq: _matchSeq, hole: HOLE.num,
+      fromX: _shotFrom.x, fromY: _shotFrom.y, toX: b.x, toY: b.y,
+      durMs: Math.round(durMs), peak: distU * 0.16, lie: lieLabel(),
+    };
+    _shotFrom = null;
+  }
+  patchMyMatchRow(Object.assign(fields, extra || {}));
+  updateLiveTurnUI();
 }
 
 // --- helpers shared with startCourse/play-again ---
@@ -5729,11 +5783,13 @@ async function openMatchSetup() {
   _matchSetupSettings = normalizeSettings(gameDefaults);
   const courseName = (COURSES.find(c => c.id === selectedCourseId) || {}).name || selectedCourseId;
   document.getElementById("ms-course").textContent = courseName;
-  // length default 18, format default stroke
+  // length default 18, format default stroke, Live off
   ov.dataset.holes = "18";
   ov.dataset.format = "stroke";
+  ov.dataset.live = "0";
   syncMatchLengthButtons();
   syncMatchFormatButtons();
+  syncMatchLiveButton();
   ov.classList.remove("hidden");
   // Match play is 1v1 only — enable it only when exactly 2 players are present.
   const players = await fetchMatchPlayers(activeMatch ? activeMatch.id : null);
@@ -5741,8 +5797,9 @@ async function openMatchSetup() {
   const fmtBtn = ov.querySelector('.ms-fmt[data-format="match"]');
   const note = document.getElementById("ms-fmt-note");
   if (fmtBtn) fmtBtn.disabled = !twoUp;
-  if (!twoUp) { ov.dataset.format = "stroke"; syncMatchFormatButtons(); }
+  if (!twoUp) { ov.dataset.format = "stroke"; ov.dataset.live = "0"; syncMatchFormatButtons(); }
   if (note) note.textContent = twoUp ? "" : "Match play needs exactly 2 players";
+  syncMatchLiveButton();
 }
 function syncMatchLengthButtons() {
   const ov = document.getElementById("match-setup");
@@ -5754,6 +5811,16 @@ function syncMatchFormatButtons() {
   const fmt = ov.dataset.format;
   ov.querySelectorAll(".ms-fmt").forEach(b => b.classList.toggle("active", b.dataset.format === fmt));
 }
+// "Live" toggle — shown/enabled only for match play (1v1), forced off otherwise.
+function syncMatchLiveButton() {
+  const ov = document.getElementById("match-setup");
+  const btn = document.getElementById("ms-live");
+  if (!btn) return;
+  const isMatch = ov.dataset.format === "match";
+  if (!isMatch) ov.dataset.live = "0";
+  btn.classList.toggle("hidden", !isMatch);
+  btn.classList.toggle("active", isMatch && ov.dataset.live === "1");
+}
 function closeMatchSetup() {
   const ov = document.getElementById("match-setup");
   if (ov) ov.classList.add("hidden");
@@ -5763,9 +5830,10 @@ async function confirmMatchSetup() {
   const ov = document.getElementById("match-setup");
   const holes = parseInt(ov.dataset.holes, 10) || 18;
   const format = ov.dataset.format === "match" ? "match" : "stroke";
+  const live = format === "match" && ov.dataset.live === "1";
   const status = document.getElementById("ms-status");
   if (status) status.textContent = "Starting…";
-  const ok = await beginMatch(selectedCourseId, holes, _matchSetupSettings, format);
+  const ok = await beginMatch(selectedCourseId, holes, _matchSetupSettings, format, live);
   if (!ok) { if (status) status.textContent = "Couldn't start — try again."; return; }
   matchSetupMode = false;
   closeMatchSetup();
@@ -5780,6 +5848,9 @@ function enterLiveMatch() {
   matchDecided = false;
   matchHoleCount = activeMatch.hole_count || 18;
   selectedCourseId = activeMatch.course_id;
+  // reset live-match runtime state for a fresh match
+  lastOpp = null; lastMe = null; oppShot = null; _shotFrom = null;
+  _lastOppSeq = -1; _matchSeq = 0; _spectating = false; _awaitLive = null;
   closeMatchLobby();
   closeMatchSetup();
   closeMatchMenu();
@@ -5792,8 +5863,8 @@ function enterLiveMatch() {
 function startBoardPoll() {
   stopBoardPoll();
   renderMatchBoard();
-  // Match play shows live shot detail → poll faster than the stroke race.
-  _boardPoll = setInterval(renderMatchBoard, matchPlay() ? 2000 : 5000);
+  // Live match needs snappy turn handoff + ghost shots → 1s; match 2s; stroke 5s.
+  _boardPoll = setInterval(renderMatchBoard, liveMatch() ? 1000 : (matchPlay() ? 2000 : 5000));
 }
 function stopBoardPoll() {
   if (_boardPoll) { clearInterval(_boardPoll); _boardPoll = null; }
@@ -5840,6 +5911,198 @@ function whoseHonors(me, opp) {
   return me.cur_to_pin > opp.cur_to_pin ? "Your turn — you're away" : (opp.player_name + " to play (away)");
 }
 
+// =====================================================================
+//  LIVE (synchronous) match play — turn order, opponent ghost, banner.
+//  Both devices derive "whose turn" from the same synced rows, so they agree.
+//  Input is gated so only the player who is "away" (farthest from the pin, or
+//  the honors-holder on the tee) may swing; the other watches the shot live.
+// =====================================================================
+let _matchSeq = 0;     // my monotonic shot counter (broadcast in cur_shot.seq)
+let _shotFrom = null;  // {x,y} where my in-flight shot started (for the arc)
+let _shotT0 = 0;       // performance.now() at launch → real flight duration
+let lastOpp = null;    // opponent's last polled match_players row
+let lastMe = null;     // my last polled row
+let oppShot = null;    // active opponent arc tween, or null
+let _lastOppSeq = -1;  // last opponent cur_shot.seq I started animating
+let _spectating = false;     // camera is following the opponent's ball
+let _awaitLive = null;       // {hole, advance} while waiting for opp to finish a hole
+
+function sameName(a, b) { return (a || "").toLowerCase() === (b || "").toLowerCase(); }
+function oppName() { return (lastOpp && lastOpp.player_name) || "opponent"; }
+
+// My live shot state from the LOCAL game (no poll lag → input locks instantly
+// after I swing, without waiting for my own row to round-trip).
+function meSnapshot() {
+  if (!HOLE || HOLE.isRange) return null;
+  const b = state.ball;
+  const hs = {};
+  for (const h of round.holeStats) hs[h.hole] = h.strokes;
+  return {
+    player_name: getPlayerName(),
+    cur_hole: HOLE.num,
+    cur_strokes: state.strokes,
+    cur_to_pin: state.inHole ? -1 : Math.round(dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT),
+    cur_at_rest: !state.moving,
+    hole_scores: hs,
+  };
+}
+
+// Who tees first this hole: hole 1 → match starter (host); else the winner of the
+// most recent decided prior hole (honors carry through halved holes); default host.
+function honorsHolder(me, opp, hole) {
+  const host = activeMatch && activeMatch.host_name;
+  if (hole <= 1) return host;
+  const ms = me.hole_scores || {}, os = opp.hole_scores || {};
+  for (let h = hole - 1; h >= 1; h--) {
+    if (ms[h] == null || os[h] == null) continue;
+    if (ms[h] === os[h]) continue;                       // halved → honors carry
+    return ms[h] < os[h] ? me.player_name : opp.player_name;
+  }
+  return host;
+}
+
+// Name of the player whose turn it is now, or null while unsynced / hole done.
+function liveTurnHolder(me, opp) {
+  if (!me || !opp || me.cur_hole == null || opp.cur_hole == null) return null;
+  if (me.cur_hole !== opp.cur_hole) return null;          // out of sync → hold
+  const hole = me.cur_hole;
+  if (opp.cur_at_rest === false) return opp.player_name;  // mid-shot owns the turn
+  if (me.cur_at_rest === false) return me.player_name;
+  const meHoled = (me.cur_to_pin | 0) < 0, oppHoled = (opp.cur_to_pin | 0) < 0;
+  if (meHoled && oppHoled) return null;                   // hole done
+  if (meHoled) return opp.player_name;
+  if (oppHoled) return me.player_name;
+  const teed = (me.cur_strokes | 0) > 0 || (opp.cur_strokes | 0) > 0;
+  if (!teed || me.cur_to_pin === opp.cur_to_pin) return honorsHolder(me, opp, hole);
+  return me.cur_to_pin > opp.cur_to_pin ? me.player_name : opp.player_name;  // away plays
+}
+
+// May I swing right now? Always yes outside a live match.
+function myTurn() {
+  if (!liveMatch()) return true;
+  const me = meSnapshot();
+  const t = liveTurnHolder(me, lastOpp);
+  return t != null && me != null && sameName(t, me.player_name);
+}
+
+// Opponent's current ball position (tween while a shot is in flight, else its
+// resting spot), in world units. null when nothing to show on this hole.
+function oppGhostPos() {
+  if (!lastOpp || !HOLE || lastOpp.cur_hole !== HOLE.num) return null;
+  const s = oppShot;
+  if (s && s.hole === HOLE.num) {
+    const u = Math.min(1, (performance.now() - s.t0) / s.durMs);
+    return { x: s.fromX + (s.toX - s.fromX) * u, y: s.fromY + (s.toY - s.fromY) * u,
+             z: s.peak * 4 * u * (1 - u), moving: u < 1 };
+  }
+  if (lastOpp.cur_x != null && (lastOpp.cur_to_pin | 0) >= 0)
+    return { x: lastOpp.cur_x, y: lastOpp.cur_y, z: 0, moving: false };
+  return null;
+}
+
+// Draw the opponent's ball on my canvas (gold, with a name tag). Mirrors the
+// player ball+shadow style; lifted by the tween height while their shot flies.
+function drawOppGhost() {
+  const g = oppGhostPos();
+  if (!g) return;
+  const gx = wx(g.x, g.y), gy = wy(g.x, g.y);
+  const lift = ws(g.z || 0);
+  const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
+  // shadow on the ground
+  ctx.beginPath();
+  ctx.ellipse(gx, gy, baseR * 0.95, baseR * 0.55, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.fill();
+  const bx = gx, by = gy - lift;
+  const r = baseR * (1 + (g.z || 0) * 0.012);
+  const rg = ctx.createRadialGradient(bx - r * 0.35, by - r * 0.35, r * 0.1, bx, by, r);
+  rg.addColorStop(0, "#ffe9a8");
+  rg.addColorStop(0.6, "#f6c453");
+  rg.addColorStop(1, "#c98a1e");
+  ctx.beginPath();
+  ctx.arc(bx, by, r, 0, Math.PI * 2);
+  ctx.fillStyle = rg;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(90,60,10,0.8)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // name tag above the ball
+  drawLabel(bx, by - r - 9, oppName(), "#ffd65a");
+}
+
+// Start an arc tween when the opponent broadcasts a new shot on this hole.
+function startOppGhost(oppRow) {
+  const cs = oppRow && oppRow.cur_shot;
+  if (!cs || cs.seq === _lastOppSeq) return;
+  _lastOppSeq = cs.seq;
+  if (!HOLE || cs.hole !== HOLE.num) return;              // shot is for another hole
+  oppShot = { hole: cs.hole, fromX: cs.fromX, fromY: cs.fromY, toX: cs.toX, toY: cs.toY,
+              peak: cs.peak || 0, durMs: Math.max(300, cs.durMs || 600), t0: performance.now() };
+}
+
+// Has the opponent completed (holed out) the given hole number?
+function oppFinishedHole(h) { return !!(lastOpp && (lastOpp.hole_scores || {})[h] != null); }
+
+// Per-frame: follow the opponent's ball while it's their turn; snap back to my
+// ball framing when the turn returns to me.
+function liveCameraTick() {
+  if (!liveMatch() || mode !== "course") { _spectating = false; return; }
+  const watch = !myTurn() && lastOpp && lastOpp.cur_hole === (HOLE && HOLE.num);
+  if (watch) {
+    const g = oppGhostPos();
+    if (g) { frameTarget(g.x, g.y); _spectating = true; return; }
+  }
+  if (_spectating) {
+    _spectating = false;
+    frameRemaining();
+    if (autoAimEnabled) aimAtHole();
+  }
+}
+
+// Update the whose-turn banner (top-center). Called every frame; only touches the
+// DOM when the text/state actually changes.
+let _lastTurnKey = "";
+function updateLiveTurnUI() {
+  const el = document.getElementById("live-turn");
+  if (!el) return;
+  let txt, cls;
+  if (!liveMatch() || mode !== "course") { txt = ""; cls = "hidden"; }
+  else {
+    const me = meSnapshot();
+    const t = liveTurnHolder(me, lastOpp);
+    if (_awaitLive) { txt = "Waiting for " + oppName() + " to finish the hole…"; cls = "lt-wait"; }
+    else if (t == null) { txt = "Syncing with " + oppName() + "…"; cls = "lt-wait"; }
+    else if (me && sameName(t, me.player_name)) { txt = "Your turn — you're away. Swing!"; cls = "lt-mine"; }
+    else { txt = "Watch " + oppName() + " play…"; cls = "lt-wait"; }
+  }
+  const key = cls + "|" + txt;
+  if (key === _lastTurnKey) return;
+  _lastTurnKey = key;
+  el.textContent = txt;
+  el.className = cls;
+}
+
+// Drive the live features from a fresh poll of the players' rows.
+function onLivePoll(rows) {
+  if (!liveMatch()) return;
+  const meRow = rows.find(isMeEntry), oppRow = rows.find(r => !isMeEntry(r));
+  if (meRow) lastMe = meRow;
+  if (oppRow) { lastOpp = oppRow; startOppGhost(oppRow); }
+  pumpLiveAdvance();
+  updateLiveTurnUI();
+}
+
+// When I've holed and tapped "Next hole" but the opponent hasn't finished, hold;
+// the poll calls this each tick and advances once they're done.
+function pumpLiveAdvance() {
+  if (!_awaitLive) return;
+  if (oppFinishedHole(_awaitLive.hole)) {
+    const adv = _awaitLive.advance;
+    _awaitLive = null;
+    adv();
+  }
+}
+
 // On a hole-out, see if the match is mathematically decided (closeout).
 async function checkMatchCloseout() {
   if (!matchPlay()) return;
@@ -5855,6 +6118,7 @@ async function checkMatchCloseout() {
 async function renderMatchBoard() {
   if (!activeMatch) return;
   const rows = await fetchMatchPlayers(activeMatch.id);
+  onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync
   const title = document.getElementById("mb-title");
   const body = document.getElementById("mb-list");
   if (!body) return;
@@ -6029,8 +6293,14 @@ function leaveMatch() {
   }));
   if (ms) ms.querySelectorAll(".ms-fmt").forEach(b => b.addEventListener("click", () => {
     if (b.disabled) return;
-    ms.dataset.format = b.dataset.format; syncMatchFormatButtons();
+    ms.dataset.format = b.dataset.format; syncMatchFormatButtons(); syncMatchLiveButton();
   }));
+  const msLive = document.getElementById("ms-live");
+  if (msLive) msLive.addEventListener("click", () => {
+    if (ms.dataset.format !== "match") return;   // match-play only
+    ms.dataset.live = ms.dataset.live === "1" ? "0" : "1";
+    syncMatchLiveButton();
+  });
   const msConfirm = document.getElementById("ms-confirm");
   if (msConfirm) msConfirm.addEventListener("click", confirmMatchSetup);
   const msBack = document.getElementById("ms-back");
@@ -6278,6 +6548,8 @@ function updateChipIndicator() {
 function loop() {
   update();
   tickHoleDrop();
+  liveCameraTick();   // follow the opponent's ball while it's their turn
+  updateLiveTurnUI(); // keep the whose-turn banner in sync (cheap; cached)
   updateCamera();
   updateStats();
   updateChipIndicator();

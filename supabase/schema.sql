@@ -193,3 +193,13 @@ alter table match_players add column if not exists cur_to_pin  int;     -- yards
 alter table match_players add column if not exists cur_lie     text;
 alter table match_players add column if not exists cur_at_rest boolean not null default true; -- false while ball moving
 alter table match_players add column if not exists cur_updated timestamptz;
+
+-- ---------- LIVE (synchronous) match play ----------
+-- Opt-in per match: enforce honors/away turn order, render the opponent's ball,
+-- and replay each shot as an arc on the watcher's screen. cur_x/cur_y carry the
+-- ball's world coords at rest; cur_shot is the last shot broadcast (arc tween).
+alter table matches add column if not exists live boolean not null default false; -- synchronous turn-based match
+
+alter table match_players add column if not exists cur_x    double precision; -- ball world x at rest
+alter table match_players add column if not exists cur_y    double precision; -- ball world y at rest
+alter table match_players add column if not exists cur_shot jsonb;            -- {seq,hole,fromX,fromY,toX,toY,durMs,peak,lie}

@@ -354,6 +354,8 @@ body.is-mobile #match-standings { width: calc(25vw - var(--s-3)); min-width: 0; 
 .ms-len-row .ms-fmt.active { background: var(--accent); color: #fff; }
 .ms-len-row .ms-fmt:disabled { opacity: 0.45; cursor: not-allowed; }
 .ms-note { min-height: 14px; color: var(--text-dim); font-size: 12px; margin: 4px 0; }
+.ms-live { width: 100%; margin-top: var(--s-2); }
+.ms-live.active { background: var(--accent); color: #fff; }
 
 .mb-status {
   padding: 8px 10px; font-weight: var(--fw-black); font-size: 18px; color: var(--text);
