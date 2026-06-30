@@ -1,0 +1,25 @@
+{
+  "name": "Elmwood Golf Course",
+  "tee": "championship (Black)",
+  "_source": "stymie.golf Black tees, championship 18 (West + North nines); par 72, 7214 yds. Matches OSM hole order 1-18.",
+  "holes": {
+    "1":  { "par": 4, "yards": 400 },
+    "2":  { "par": 5, "yards": 544 },
+    "3":  { "par": 4, "yards": 417 },
+    "4":  { "par": 3, "yards": 197 },
+    "5":  { "par": 4, "yards": 428 },
+    "6":  { "par": 5, "yards": 513 },
+    "7":  { "par": 4, "yards": 463 },
+    "8":  { "par": 3, "yards": 175 },
+    "9":  { "par": 4, "yards": 407 },
+    "10": { "par": 5, "yards": 513 },
+    "11": { "par": 4, "yards": 470 },
+    "12": { "par": 3, "yards": 208 },
+    "13": { "par": 4, "yards": 414 },
+    "14": { "par": 4, "yards": 425 },
+    "15": { "par": 3, "yards": 215 },
+    "16": { "par": 4, "yards": 423 },
+    "17": { "par": 4, "yards": 468 },
+    "18": { "par": 5, "yards": 534 }
+  }
+}

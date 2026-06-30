@@ -1,0 +1,25 @@
+{
+  "name": "Prairie Green Golf Course",
+  "tee": "championship (Black)",
+  "_source": "golflink.com Black tees; par 72, 7179 yds",
+  "holes": {
+    "1":  { "par": 4, "yards": 449 },
+    "2":  { "par": 3, "yards": 175 },
+    "3":  { "par": 5, "yards": 575 },
+    "4":  { "par": 4, "yards": 419 },
+    "5":  { "par": 4, "yards": 380 },
+    "6":  { "par": 5, "yards": 547 },
+    "7":  { "par": 4, "yards": 402 },
+    "8":  { "par": 3, "yards": 204 },
+    "9":  { "par": 4, "yards": 443 },
+    "10": { "par": 4, "yards": 457 },
+    "11": { "par": 3, "yards": 163 },
+    "12": { "par": 4, "yards": 417 },
+    "13": { "par": 5, "yards": 580 },
+    "14": { "par": 4, "yards": 364 },
+    "15": { "par": 5, "yards": 566 },
+    "16": { "par": 3, "yards": 193 },
+    "17": { "par": 4, "yards": 394 },
+    "18": { "par": 4, "yards": 451 }
+  }
+}
