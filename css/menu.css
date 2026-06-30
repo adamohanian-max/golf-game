@@ -169,7 +169,8 @@
 
 /* ---- Name-entry / auth / add-course / admin / account: scrim */
 #name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer,
-#match-menu, #match-lobby, #match-setup {
+#match-menu, #match-lobby, #match-setup,
+#friends-modal, #friend-profile, #username-modal {
   position: fixed;
   inset: 0;
   display: flex;
@@ -181,11 +182,50 @@
   backdrop-filter: blur(var(--blur-sm));
 }
 #name-entry { z-index: 60; }   /* name gate: above match/auth/tournament overlays (z-index 40) */
+#username-modal { z-index: 55; }   /* above friends, below the name gate */
 #add-course { z-index: 30; }
 #auth-modal, #admin-settings, #account-viewer { z-index: 40; }
 #match-menu, #match-lobby, #match-setup { z-index: 40; }
+#friends-modal { z-index: 42; }
+#friend-profile { z-index: 44; }   /* above the friends list it opens from */
 #name-entry.hidden, #add-course.hidden, #auth-modal.hidden, #admin-settings.hidden, #account-viewer.hidden,
-#match-menu.hidden, #match-lobby.hidden, #match-setup.hidden { display: none; }
+#match-menu.hidden, #match-lobby.hidden, #match-setup.hidden,
+#friends-modal.hidden, #friend-profile.hidden, #username-modal.hidden { display: none; }
+
+/* Friends */
+.av-uname { color: var(--text-dim); font-size: var(--t-cap); margin-top: 2px; }
+.fr-box { width: min(420px, 92vw); }
+.fr-tabs { display: flex; gap: 4px; margin-bottom: var(--s-2); }
+.fr-tab {
+  flex: 1; background: var(--w-05); border: none; color: var(--text-dim);
+  font-size: 13px; font-weight: var(--fw-bold); padding: 8px 4px;
+  border-radius: var(--r-md); cursor: pointer;
+}
+.fr-tab.active { background: var(--w-08); color: var(--text); }
+.fr-badge, .fr-dot {
+  display: inline-block; background: var(--accent-bright); color: #07210f;
+  font-size: 10px; font-weight: var(--fw-black); border-radius: 999px;
+  min-width: 16px; padding: 0 4px; line-height: 16px; text-align: center; margin-left: 5px;
+}
+.fr-dot { min-width: 9px; width: 9px; height: 9px; padding: 0; margin-left: 6px; vertical-align: middle; }
+.fr-badge.hidden, .fr-dot.hidden { display: none; }
+.fr-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 4px; border-bottom: 1px solid var(--w-05);
+}
+.fr-row-name { color: var(--text); font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+.fr-handle { color: var(--text-dim); font-size: 12px; }
+.fr-row-act { display: flex; gap: 6px; flex: none; }
+.fr-mini {
+  background: var(--accent-bright); color: #07210f; border: none;
+  font-size: 12px; font-weight: var(--fw-bold); padding: 6px 10px;
+  border-radius: var(--r-sm); cursor: pointer; white-space: nowrap;
+}
+.fr-mini.secondary { background: var(--w-08); color: var(--text-dim); }
+.fr-h2h { text-align: center; color: var(--text); font-size: 14px; margin: 6px 0 var(--s-3); }
+.fr-h2h small { color: var(--text-faint); }
+.fr-err { color: var(--status-over); font-size: 13px; text-align: center; padding: 8px 0; }
+.fr-ok { color: var(--accent-bright); font-size: 13px; text-align: center; padding: 8px 0; }
 
 /* Account viewer internals */
 .av-box { width: min(420px, 92vw); max-height: 88vh; display: flex; flex-direction: column; text-align: left; }
