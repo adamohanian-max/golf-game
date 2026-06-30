@@ -3303,14 +3303,23 @@ document.addEventListener("click", closeHud);
 function buildHoleGrid() {
   if (!course) return;
   elHoleGrid.innerHTML = "";
+  // In a live match, holes you've already finished are locked — no going back to
+  // re-play a completed hole. The current hole stays selectable.
+  const finished = matchLive() ? new Set(round.holeStats.map((h) => h.hole)) : null;
   course.holes.forEach((h, i) => {
+    const num = h.num || i + 1;
+    const locked = finished && finished.has(num) && i !== holeIndex;
     const cell = document.createElement("button");
-    cell.className = "hole-cell" + (i === holeIndex ? " current" : "");
-    cell.innerHTML = `<span class="hn">${h.num || i + 1}</span><span class="hp">Par ${h.par}</span>`;
-    cell.addEventListener("click", () => {
-      closeCourseMenu();
-      advanceHole(() => { holeIndex = i; setHole(course.holes[i]); });
-    });
+    cell.className = "hole-cell" + (i === holeIndex ? " current" : "") + (locked ? " done" : "");
+    cell.innerHTML = `<span class="hn">${num}</span><span class="hp">${locked ? "Done" : "Par " + h.par}</span>`;
+    if (locked) {
+      cell.disabled = true;
+    } else {
+      cell.addEventListener("click", () => {
+        closeCourseMenu();
+        advanceHole(() => { holeIndex = i; setHole(course.holes[i]); });
+      });
+    }
     elHoleGrid.appendChild(cell);
   });
 }

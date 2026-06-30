@@ -160,6 +160,10 @@
 .hole-cell .hp { font-size: 10px; color: var(--text-dim); }
 .hole-cell.current { background: var(--accent); border-color: var(--accent); }
 .hole-cell:active { transform: scale(0.96); }
+/* Finished holes in a match are locked (no going back). */
+.hole-cell.done { opacity: 0.4; cursor: not-allowed; }
+.hole-cell.done:active { transform: none; }
+.hole-cell.done .hp { color: var(--accent); }
 .cm-actions { display: flex; gap: var(--s-3); margin-top: var(--s-5); }
 .cm-actions .menu-btn { width: auto; flex: 1; margin: 0; padding: var(--s-3); font-size: var(--t-body); }
 
