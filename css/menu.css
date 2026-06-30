@@ -180,7 +180,7 @@
   -webkit-backdrop-filter: blur(var(--blur-sm));
   backdrop-filter: blur(var(--blur-sm));
 }
-#name-entry { z-index: 40; }
+#name-entry { z-index: 60; }   /* name gate: above match/auth/tournament overlays (z-index 40) */
 #add-course { z-index: 30; }
 #auth-modal, #admin-settings, #account-viewer { z-index: 40; }
 #match-menu, #match-lobby, #match-setup { z-index: 40; }
