@@ -264,7 +264,7 @@ def _classify_px(r, g, b, edge, fw_cut, inside):
 
 
 def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path,
-                       boundary=None):
+                       boundary=None, bunker_world=None):
     """Classify the baked aerial into a coarse fairway/rough/woods/OOB raster.
     Returns {file,w,h,toWorld:[...]} (mask px -> world affine) or None to skip.
 
@@ -348,6 +348,18 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
                         id_ * p["x"] + ie * p["y"] + if_) for p in poly]
                 if len(pts) >= 3:
                     draw.polygon(pts, fill=MASK_WOODS)
+
+        # union the OSM bunkers in as ROUGH so sand never classifies OB (the
+        # game samples the real bunker polygon first; this only stops the mask
+        # painting a fairway/greenside bunker red just because it's not turf).
+        if bunker_world and w2p is not None:
+            ia, ib, ic, id_, ie, if_ = w2p
+            draw = ImageDraw.Draw(lab)
+            for poly in bunker_world:
+                pts = [(ia * p["x"] + ib * p["y"] + ic,
+                        id_ * p["x"] + ie * p["y"] + if_) for p in poly]
+                if len(pts) >= 3:
+                    draw.polygon(pts, fill=MASK_ROUGH)
 
         lab.putpalette(MASK_PALETTE)
         lab.save(out_path)

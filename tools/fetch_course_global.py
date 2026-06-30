@@ -499,7 +499,8 @@ def main():
                 mask = fc.build_surface_mask(os.path.join(out_dir, rel), aerial, world,
                                              surfaces["woods"], corridors,
                                              os.path.join(out_dir, mrel),
-                                             boundary=boundary_world)
+                                             boundary=boundary_world,
+                                             bunker_world=surfaces["bunker"])
                 if mask:
                     mask["file"] = mrel
                     course["surfaceMask"] = mask
