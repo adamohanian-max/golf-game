@@ -3383,6 +3383,7 @@ if (elChipBtn) elChipBtn.addEventListener("click", () => setChip(!chipEnabled));
 // =====================================================================
 const HUD_MOVABLE_IDS = ["scorecard", "stats", "hint", "hm-club-row", "hud-btn"];
 const HUD_POS_KEY = "golf.hudPos";
+const HUD_SCALE_MIN = 0.6, HUD_SCALE_MAX = 2.2, HUD_SCALE_STEP = 0.1;
 let hudEditOn = false;
 
 function loadHudPos() {
@@ -3392,8 +3393,19 @@ function loadHudPos() {
 function saveHudPos(pos) {
   try { localStorage.setItem(HUD_POS_KEY, JSON.stringify(pos)); } catch (_) {}
 }
+function clampHudScale(s) { return Math.min(HUD_SCALE_MAX, Math.max(HUD_SCALE_MIN, s)); }
+function curHudScale(el) { return parseFloat(el.dataset.hudScale) || 1; }
+// Scale a panel about its top-left (so its left/top anchor stays put). Stashes
+// the factor on the element so drag/clamp/save can read it back.
+function applyHudScale(el, s) {
+  s = clampHudScale(s || 1);
+  el.dataset.hudScale = s;
+  el.style.transformOrigin = "top left";
+  el.style.transform = s !== 1 ? "scale(" + s + ")" : "";
+  return s;
+}
 // Pin an element to absolute left/top px (clearing its right/bottom anchor),
-// clamped so it stays on-screen.
+// clamped so it stays on-screen (rect already reflects any scale).
 function placeHudEl(el, x, y) {
   const r = el.getBoundingClientRect();
   const maxX = Math.max(0, window.innerWidth - r.width);
@@ -3406,13 +3418,18 @@ function placeHudEl(el, x, y) {
   el.style.bottom = "auto";
   return { x, y };
 }
-// Apply saved positions (mobile only — desktop keeps the CSS layout).
+// Apply a saved {x,y,s} record to one panel (scale first, then place/clamp).
+function applyHudRec(el, rec) {
+  applyHudScale(el, rec.s || 1);
+  return placeHudEl(el, rec.x, rec.y);
+}
+// Apply saved positions+scales (mobile only — desktop keeps the CSS layout).
 function applyHudPositions() {
   if (!IS_DESKTOP) {
     const pos = loadHudPos();
     HUD_MOVABLE_IDS.forEach((id) => {
       const el = document.getElementById(id);
-      if (el && pos[id]) placeHudEl(el, pos[id].x, pos[id].y);
+      if (el && pos[id]) applyHudRec(el, pos[id]);
     });
   }
 }
@@ -3424,8 +3441,8 @@ function clampHudPositions() {
   HUD_MOVABLE_IDS.forEach((id) => {
     const el = document.getElementById(id);
     if (!el || !pos[id]) return;
-    const p = placeHudEl(el, pos[id].x, pos[id].y);
-    if (p.x !== pos[id].x || p.y !== pos[id].y) { pos[id] = p; changed = true; }
+    const p = applyHudRec(el, pos[id]);
+    if (p.x !== pos[id].x || p.y !== pos[id].y) { pos[id] = { x: p.x, y: p.y, s: pos[id].s }; changed = true; }
   });
   if (changed) saveHudPos(pos);
 }
@@ -3433,35 +3450,84 @@ function resetHudPositions() {
   saveHudPos({});
   HUD_MOVABLE_IDS.forEach((id) => {
     const el = document.getElementById(id);
-    if (el) { el.style.left = el.style.top = el.style.right = el.style.bottom = ""; }
+    if (el) {
+      el.style.left = el.style.top = el.style.right = el.style.bottom = "";
+      el.style.transform = el.style.transformOrigin = "";
+      delete el.dataset.hudScale;
+    }
   });
 }
 
-// One delegated pointer drag for whichever movable panel is grabbed.
-let hudDrag = null;
+// One gesture at a time on whichever movable panel is grabbed: 1 finger drags,
+// 2 fingers pinch-zoom (and pan by the midpoint). lastHudEl powers the +/-
+// zoom buttons so phones can resize without a pinch.
+let hudGesture = null;
+let lastHudEl = null;
+function gMid(pts) {
+  let x = 0, y = 0;
+  pts.forEach((p) => { x += p.x; y += p.y; });
+  return { x: x / pts.length, y: y / pts.length };
+}
+function gDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+// Re-baseline the gesture against the panel's current rect/scale (on a pointer
+// going down or up, so adding/removing a finger doesn't jump).
+function rebaseGesture() {
+  const g = hudGesture, pts = [...g.pointers.values()];
+  const r = g.el.getBoundingClientRect();
+  g.startLeft = r.left; g.startTop = r.top;
+  g.startScale = curHudScale(g.el);
+  g.startMid = gMid(pts);
+  g.startDist = pts.length >= 2 ? gDist(pts[0], pts[1]) : 0;
+}
 function hudPointerDown(e) {
   if (!hudEditOn) return;
   const el = e.currentTarget;
-  const r = el.getBoundingClientRect();
-  hudDrag = { el, dx: e.clientX - r.left, dy: e.clientY - r.top, pos: loadHudPos() };
+  if (hudGesture && hudGesture.el !== el) return; // one panel at a time
+  lastHudEl = el;
+  if (!hudGesture) hudGesture = { el, pointers: new Map(), pos: loadHudPos() };
+  hudGesture.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   el.classList.add("hud-dragging");
-  el.setPointerCapture && el.setPointerCapture(e.pointerId);
+  try { el.setPointerCapture && el.setPointerCapture(e.pointerId); } catch (_) {}
+  rebaseGesture();
   e.preventDefault();
   e.stopPropagation();
 }
 function hudPointerMove(e) {
-  if (!hudDrag) return;
-  placeHudEl(hudDrag.el, e.clientX - hudDrag.dx, e.clientY - hudDrag.dy);
+  const g = hudGesture;
+  if (!g || !g.pointers.has(e.pointerId)) return;
+  g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const pts = [...g.pointers.values()];
+  if (pts.length >= 2 && g.startDist > 0) {
+    applyHudScale(g.el, g.startScale * gDist(pts[0], pts[1]) / g.startDist);
+  }
+  const mid = gMid(pts);
+  placeHudEl(g.el, g.startLeft + (mid.x - g.startMid.x), g.startTop + (mid.y - g.startMid.y));
   e.preventDefault();
 }
 function hudPointerUp(e) {
-  if (!hudDrag) return;
-  const el = hudDrag.el;
+  const g = hudGesture;
+  if (!g) return;
+  g.pointers.delete(e.pointerId);
+  if (g.pointers.size > 0) { rebaseGesture(); return; } // lifted one of two -> keep going
+  saveHudEl(g.el, g.pos);
+  g.el.classList.remove("hud-dragging");
+  hudGesture = null;
+}
+// Persist a panel's current left/top/scale into the pos map and store it.
+function saveHudEl(el, pos) {
+  pos = pos || loadHudPos();
   const r = el.getBoundingClientRect();
-  hudDrag.pos[el.id] = { x: r.left, y: r.top };
-  saveHudPos(hudDrag.pos);
-  el.classList.remove("hud-dragging");
-  hudDrag = null;
+  pos[el.id] = { x: r.left, y: r.top, s: curHudScale(el) };
+  saveHudPos(pos);
+}
+// +/- zoom buttons: step the scale of the last-touched panel about its top-left.
+function zoomHud(dir) {
+  const el = lastHudEl || document.getElementById(HUD_MOVABLE_IDS[0]);
+  if (!el) return;
+  applyHudScale(el, curHudScale(el) + dir * HUD_SCALE_STEP);
+  placeHudEl(el, parseFloat(el.style.left) || el.getBoundingClientRect().left,
+                 parseFloat(el.style.top) || el.getBoundingClientRect().top); // re-clamp
+  saveHudEl(el);
 }
 function wireHudDrag() {
   HUD_MOVABLE_IDS.forEach((id) => {
@@ -3497,6 +3563,10 @@ document.getElementById("hm-resethud").addEventListener("click", () => {
 });
 const elHudEditDone = document.getElementById("hud-edit-done");
 if (elHudEditDone) elHudEditDone.addEventListener("click", () => setHudEdit(false));
+const elHudZoomIn = document.getElementById("hud-zoom-in");
+const elHudZoomOut = document.getElementById("hud-zoom-out");
+if (elHudZoomIn) elHudZoomIn.addEventListener("click", () => zoomHud(1));
+if (elHudZoomOut) elHudZoomOut.addEventListener("click", () => zoomHud(-1));
 
 // =====================================================================
 //  Game settings — toggleable aids. Defaults are GLOBAL (admin-set via

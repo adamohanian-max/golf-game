@@ -365,3 +365,17 @@ body.hud-edit .hud-dragging { cursor: grabbing; opacity: 0.85; }
   padding: 6px var(--s-4);
   cursor: pointer;
 }
+.hud-zoom {
+  width: 28px;
+  height: 28px;
+  margin: 0 1px;
+  border: var(--border-edge);
+  border-radius: var(--r-sm);
+  background: var(--w-14);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+.hud-zoom:active { background: rgba(74, 222, 128, 0.3); }
