@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
   <link rel="stylesheet" href="css/tokens.css?v=55">
   <link rel="stylesheet" href="css/base.css?v=54">
-  <link rel="stylesheet" href="css/hud.css?v=56">
+  <link rel="stylesheet" href="css/hud.css?v=57">
   <link rel="stylesheet" href="css/menu.css?v=59">
   <link rel="stylesheet" href="css/courses.css?v=3">
   <link rel="stylesheet" href="css/modals.css?v=57">
@@ -75,6 +75,8 @@
       <button class="hm-item" id="hm-card"><span class="ic ic-clipboard"></span>Scorecard</button>
       <button class="hm-item hidden" id="hm-match"><span class="ic ic-trophy"></span>Match board</button>
       <button class="hm-item active" id="hm-sound"><span class="ic ic-flag"></span>Sound</button>
+      <button class="hm-item hud-mobile-only" id="hm-movehud"><span class="ic ic-menu"></span>Move HUD</button>
+      <button class="hm-item hud-mobile-only" id="hm-resethud"><span class="ic ic-home"></span>Reset HUD</button>
       <div class="hm-sep"></div>
       <button class="hm-item" id="hm-holes"><span class="ic ic-menu"></span>Select hole</button>
       <button class="hm-item" id="hm-home"><span class="ic ic-home"></span>Home</button>
@@ -82,6 +84,7 @@
   </div>
 
   <div id="hint">Swipe to swing · ← → to aim · ↑ ↓ club</div>
+  <div id="hud-edit-bar" class="hidden">Drag panels to reposition · <button id="hud-edit-done">Done</button></div>
   <div id="chip-ind" class="hidden"><span class="ic ic-chip"></span>Chip · ease off for the flag</div>
   <div id="toast" class="hidden"></div>
 
@@ -397,6 +400,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=86"></script>
+  <script src="game.js?v=87"></script>
 </body>
 </html>

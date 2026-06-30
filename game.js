@@ -1465,6 +1465,7 @@ function resize() {
   // fixed swing sensitivity: full-hole fit, independent of the camera zoom
   refScale = Math.min(cssW / holeFitW, cssH / holeFitH);
   applyView();
+  if (typeof clampHudPositions === "function") clampHudPositions(); // keep moved panels on-screen
 }
 window.addEventListener("resize", resize);
 
@@ -2878,6 +2879,7 @@ function setHole(rec) {
   camera.scale = camera.tScale;
   applyDeviceMode(); // set body class + IS_DESKTOP before first framing
   resize();
+  applyHudPositions(); // restore any player-dragged HUD panels (mobile)
   updateScorecard();
   if (matchLive() && !HOLE.isRange) pushMatchShot({ cur_strokes: 0 });  // new hole, ball on tee
   elResult.classList.add("hidden");
@@ -3372,6 +3374,129 @@ const elAutoAimBtn = document.getElementById("hm-autoaim");
 if (elAutoAimBtn) elAutoAimBtn.addEventListener("click", () => setAutoAim(!autoAimEnabled));
 const elChipBtn = document.getElementById("hm-chip");
 if (elChipBtn) elChipBtn.addEventListener("click", () => setChip(!chipEnabled));
+
+// =====================================================================
+//  Movable HUD (mobile) — let players drag corner panels out of the way.
+//  An edit mode (body.hud-edit, toggled from the HUD menu) makes the
+//  normally pass-through panels grabbable; positions persist per-id in
+//  localStorage as inline left/top px and are re-clamped on resize.
+// =====================================================================
+const HUD_MOVABLE_IDS = ["scorecard", "stats", "hint", "hm-club-row", "hud-btn"];
+const HUD_POS_KEY = "golf.hudPos";
+let hudEditOn = false;
+
+function loadHudPos() {
+  try { return JSON.parse(localStorage.getItem(HUD_POS_KEY)) || {}; }
+  catch (_) { return {}; }
+}
+function saveHudPos(pos) {
+  try { localStorage.setItem(HUD_POS_KEY, JSON.stringify(pos)); } catch (_) {}
+}
+// Pin an element to absolute left/top px (clearing its right/bottom anchor),
+// clamped so it stays on-screen.
+function placeHudEl(el, x, y) {
+  const r = el.getBoundingClientRect();
+  const maxX = Math.max(0, window.innerWidth - r.width);
+  const maxY = Math.max(0, window.innerHeight - r.height);
+  x = Math.min(Math.max(0, x), maxX);
+  y = Math.min(Math.max(0, y), maxY);
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+  el.style.right = "auto";
+  el.style.bottom = "auto";
+  return { x, y };
+}
+// Apply saved positions (mobile only — desktop keeps the CSS layout).
+function applyHudPositions() {
+  if (!IS_DESKTOP) {
+    const pos = loadHudPos();
+    HUD_MOVABLE_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && pos[id]) placeHudEl(el, pos[id].x, pos[id].y);
+    });
+  }
+}
+// Keep moved panels on-screen after a resize/rotation.
+function clampHudPositions() {
+  if (IS_DESKTOP) return;
+  const pos = loadHudPos();
+  let changed = false;
+  HUD_MOVABLE_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || !pos[id]) return;
+    const p = placeHudEl(el, pos[id].x, pos[id].y);
+    if (p.x !== pos[id].x || p.y !== pos[id].y) { pos[id] = p; changed = true; }
+  });
+  if (changed) saveHudPos(pos);
+}
+function resetHudPositions() {
+  saveHudPos({});
+  HUD_MOVABLE_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) { el.style.left = el.style.top = el.style.right = el.style.bottom = ""; }
+  });
+}
+
+// One delegated pointer drag for whichever movable panel is grabbed.
+let hudDrag = null;
+function hudPointerDown(e) {
+  if (!hudEditOn) return;
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  hudDrag = { el, dx: e.clientX - r.left, dy: e.clientY - r.top, pos: loadHudPos() };
+  el.classList.add("hud-dragging");
+  el.setPointerCapture && el.setPointerCapture(e.pointerId);
+  e.preventDefault();
+  e.stopPropagation();
+}
+function hudPointerMove(e) {
+  if (!hudDrag) return;
+  placeHudEl(hudDrag.el, e.clientX - hudDrag.dx, e.clientY - hudDrag.dy);
+  e.preventDefault();
+}
+function hudPointerUp(e) {
+  if (!hudDrag) return;
+  const el = hudDrag.el;
+  const r = el.getBoundingClientRect();
+  hudDrag.pos[el.id] = { x: r.left, y: r.top };
+  saveHudPos(hudDrag.pos);
+  el.classList.remove("hud-dragging");
+  hudDrag = null;
+}
+function wireHudDrag() {
+  HUD_MOVABLE_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("pointerdown", hudPointerDown);
+    el.addEventListener("pointermove", hudPointerMove);
+    el.addEventListener("pointerup", hudPointerUp);
+    el.addEventListener("pointercancel", hudPointerUp);
+    // While editing, swallow clicks so a tap repositions instead of firing
+    // the panel's own action (open menu / change club).
+    el.addEventListener("click", (e) => {
+      if (hudEditOn) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+  });
+}
+function setHudEdit(on) {
+  hudEditOn = on;
+  document.body.classList.toggle("hud-edit", on);
+  const bar = document.getElementById("hud-edit-bar");
+  if (bar) bar.classList.toggle("hidden", !on);
+  const btn = document.getElementById("hm-movehud");
+  if (btn) btn.classList.toggle("active", on);
+}
+wireHudDrag();
+document.getElementById("hm-movehud").addEventListener("click", () => {
+  setHudEdit(!hudEditOn);
+  closeHud(); // get the dropdown out of the way so panels are draggable
+});
+document.getElementById("hm-resethud").addEventListener("click", () => {
+  resetHudPositions();
+  closeHud();
+});
+const elHudEditDone = document.getElementById("hud-edit-done");
+if (elHudEditDone) elHudEditDone.addEventListener("click", () => setHudEdit(false));
 
 // =====================================================================
 //  Game settings — toggleable aids. Defaults are GLOBAL (admin-set via

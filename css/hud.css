@@ -310,3 +310,58 @@ body.is-desktop #hint { max-width: none; font-size: 13px; }
 
 body.is-desktop #hud-menu { min-width: 224px; }
 body.is-desktop .hm-item { font-size: 15px; }
+
+/* ============================================================
+   Movable HUD (mobile) — drag panels out of the way. Driven by
+   body.hud-edit (toggled from the HUD menu). Positions persist in
+   localStorage; see the HUD-move block in game.js.
+   ============================================================ */
+.hud-mobile-only { display: none; }          /* the Move/Reset menu items */
+body.is-mobile .hud-mobile-only { display: flex; }
+
+/* In edit mode the otherwise pass-through panels become grabbable. */
+body.hud-edit #scorecard,
+body.hud-edit #stats,
+body.hud-edit #hint,
+body.hud-edit #hm-club-row,
+body.hud-edit #hud-btn {
+  pointer-events: auto;
+  cursor: grab;
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+  opacity: 0.96;
+  touch-action: none;          /* let us own the drag, no scroll hijack */
+  transition: none;
+}
+body.hud-edit .hud-dragging { cursor: grabbing; opacity: 0.85; }
+
+#hud-edit-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  white-space: nowrap;
+  padding: 10px var(--s-4);
+  background: var(--glass-solid);
+  border: var(--border-edge);
+  border-radius: var(--r-pill);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--fw-med);
+  box-shadow: var(--shadow-2);
+  z-index: 60;
+}
+#hud-edit-bar.hidden { display: none; }
+#hud-edit-done {
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: #fff;
+  font-weight: var(--fw-bold);
+  font-size: 13px;
+  padding: 6px var(--s-4);
+  cursor: pointer;
+}
