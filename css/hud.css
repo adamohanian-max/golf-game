@@ -46,25 +46,27 @@
 }
 #hint.hidden { opacity: 0; }
 
-/* ---- Live match: whose-turn banner (top-center) ----------- */
+/* ---- Live match: whose-turn banner (under the standings panel) ----------- */
+/* Default = same left column as #match-standings (clear of the center wind pill);
+   JS anchors top/left/width directly under the standings panel when it's shown. */
 #live-turn {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + var(--s-3));
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 80vw;
+  top: calc(env(safe-area-inset-top, 0px) + 178px);
+  left: var(--s-3);
+  width: min(240px, 60vw);
+  box-sizing: border-box;
   text-align: center;
-  white-space: nowrap;
   color: #fff;
-  background: rgba(0, 0, 0, 0.55);
-  padding: var(--s-2) var(--s-4);
-  border-radius: var(--r-pill);
-  font-size: 13px;
+  background: rgba(0, 0, 0, 0.6);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-lg);
+  font-size: 12px;
   font-weight: var(--fw-bold);
   pointer-events: none;
   z-index: 40;
   transition: opacity 0.25s;
 }
+body.is-mobile #live-turn { width: calc(25vw - var(--s-3)); }
 #live-turn.hidden { opacity: 0; pointer-events: none; }
 #live-turn.lt-mine { background: rgba(34, 139, 64, 0.92); }   /* your turn — go */
 #live-turn.lt-wait { background: rgba(0, 0, 0, 0.6); }        /* watching opponent */

@@ -5863,8 +5863,8 @@ function enterLiveMatch() {
 function startBoardPoll() {
   stopBoardPoll();
   renderMatchBoard();
-  // Live match needs snappy turn handoff + ghost shots → 1s; match 2s; stroke 5s.
-  _boardPoll = setInterval(renderMatchBoard, liveMatch() ? 1000 : (matchPlay() ? 2000 : 5000));
+  // Live match needs snappy turn handoff + ghost shots → 400ms; match 2s; stroke 5s.
+  _boardPoll = setInterval(renderMatchBoard, liveMatch() ? 400 : (matchPlay() ? 2000 : 5000));
 }
 function stopBoardPoll() {
   if (_boardPoll) { clearInterval(_boardPoll); _boardPoll = null; }
@@ -6080,6 +6080,23 @@ function updateLiveTurnUI() {
   _lastTurnKey = key;
   el.textContent = txt;
   el.className = cls;
+  if (cls !== "hidden") positionLiveTurn();
+}
+
+// Anchor the turn banner directly under the live standings panel (so it doesn't
+// cover the wind pill at top-center). Falls back to the CSS default if hidden.
+function positionLiveTurn() {
+  const el = document.getElementById("live-turn");
+  const sb = document.getElementById("match-standings");
+  if (!el) return;
+  if (sb && !sb.classList.contains("hidden")) {
+    const rc = sb.getBoundingClientRect();
+    el.style.top = (rc.bottom + 6) + "px";
+    el.style.left = rc.left + "px";
+    el.style.width = rc.width + "px";
+  } else {
+    el.style.top = ""; el.style.left = ""; el.style.width = "";  // CSS default
+  }
 }
 
 // Drive the live features from a fresh poll of the players' rows.
@@ -6090,6 +6107,7 @@ function onLivePoll(rows) {
   if (oppRow) { lastOpp = oppRow; startOppGhost(oppRow); }
   pumpLiveAdvance();
   updateLiveTurnUI();
+  positionLiveTurn();   // standings size may have changed → keep banner anchored under it
 }
 
 // When I've holed and tapped "Next hole" but the opponent hasn't finished, hold;
