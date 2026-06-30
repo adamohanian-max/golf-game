@@ -216,7 +216,15 @@ def main():
                     help="Keep only holes whose name contains this substring (e.g. "
                          "'Black') and crop surfaces to that routing — for multi-course "
                          "parks like Bethpage where one boundary holds several courses")
+    ap.add_argument("--keep-holes", metavar="LO-HI",
+                    help="Keep only holes whose number is in the inclusive range LO-HI "
+                         "(e.g. '1-18') and crop surfaces to that routing — for "
+                         "facilities mapped with extra nines (e.g. Elmwood's 27 holes)")
     args = ap.parse_args()
+
+    keep_lo = keep_hi = None
+    if args.keep_holes:
+        keep_lo, keep_hi = (int(x) for x in args.keep_holes.split("-", 1))
 
     if args.boundary_rel:
         data = fc.fetch_overpass(args.boundary_rel, args.cache, kind="rel")
@@ -244,6 +252,8 @@ def main():
         n = fc.hole_num(h)
         if n is None:
             continue
+        if keep_lo is not None and not (keep_lo <= n <= keep_hi):
+            continue                      # drop holes outside the kept number range
         if n not in best or len(h["geometry"]) > len(best[n]["geometry"]):
             best[n] = h
     holes_sorted = [best[n] for n in sorted(best)]
@@ -260,9 +270,9 @@ def main():
     # --- global bbox (meters) from play features: hole lines, greens, fairways, tees
     hole_lines = [(fc.hole_num(h), projall(h["geometry"])) for h in holes_sorted]
 
-    # Multi-course park: crop every surface to the filtered routing so we don't
-    # pull in the neighbouring courses' greens/bunkers/fairways.
-    if hf:
+    # Multi-course park / extra-nine facility: crop every surface to the filtered
+    # routing so we don't pull in the dropped holes' greens/bunkers/fairways.
+    if hf or keep_lo is not None:
         CROP = 70 * MPY   # yards -> meters; a feature kept if within CROP of a kept hole-line
         def _near(el):
             c = fc.centroid(projall(el["geometry"]))
@@ -277,8 +287,9 @@ def main():
         woods    = [e for e in woods    if _near(e)]
         grass    = [e for e in grass    if _near(e)]
         if not greens:
-            sys.exit("hole-filter cropped away all greens — loosen CROP or check the filter.")
-        print(f"hole-filter '{args.hole_filter}': {len(holes_sorted)} holes; "
+            sys.exit("crop removed all greens — loosen CROP or check the filter/range.")
+        _lbl = f"hole-filter '{args.hole_filter}'" if hf else f"keep-holes '{args.keep_holes}'"
+        print(f"{_lbl}: {len(holes_sorted)} holes; "
               f"surfaces cropped to {CROP/MPY:.0f}y of the routing "
               f"(greens={len(greens)} fairways={len(fairways)} bunkers={len(bunkers)})")
 

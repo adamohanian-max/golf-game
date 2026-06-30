@@ -98,6 +98,7 @@ var clearTimeout = __noop;
 var setInterval = function(){ return 0; };
 var clearInterval = __noop;
 var performance = { now: function(){ return Date.now(); } };
+var getComputedStyle = function(){ return { getPropertyValue: function(){ return ""; } }; };
 var fetch = function(){ return new Promise(function(){}); };          // never resolves
 var localStorage = { getItem: function(){ return null; }, setItem: __noop, removeItem: __noop, clear: __noop };
 var sessionStorage = localStorage;
