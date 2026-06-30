@@ -260,11 +260,20 @@
 /* Lobby */
 .ml-code-wrap { text-align: center; margin: var(--s-3) 0; }
 .ml-code-label { display: block; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+.ml-code-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; }
 .ml-code {
-  display: inline-block; margin-top: 4px; font-weight: var(--fw-black);
+  display: inline-block; font-weight: var(--fw-black);
   font-size: 32px; letter-spacing: 6px; color: var(--accent);
   background: var(--accent-soft); border-radius: var(--r-md); padding: 6px 16px;
 }
+.ml-copy {
+  font: inherit; font-size: 13px; font-weight: var(--fw-med); cursor: pointer;
+  color: var(--text); background: var(--surface-panel);
+  border: 1px solid var(--border, rgba(255,255,255,0.14));
+  border-radius: var(--r-md); padding: 8px 12px; white-space: nowrap;
+}
+.ml-copy:active { transform: scale(0.94); }
+.ml-copy.copied { color: var(--accent); border-color: var(--accent); }
 .ml-players { list-style: none; margin: var(--s-3) 0; padding: 0; max-height: 220px; overflow-y: auto; }
 .ml-player {
   display: flex; align-items: center; justify-content: space-between;

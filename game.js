@@ -6391,6 +6391,19 @@ function leaveMatch() {
   if (mlBegin) mlBegin.addEventListener("click", hostBeginPickCourse);
   const mlLeave = document.getElementById("ml-leave");
   if (mlLeave) mlLeave.addEventListener("click", () => { leaveMatch(); closeMatchLobby(); showMenu(); });
+  const mlCopy = document.getElementById("ml-copy");
+  if (mlCopy) mlCopy.addEventListener("click", () => {
+    const code = activeMatch ? activeMatch.code : "";
+    if (!code) return;
+    const done = () => {
+      mlCopy.textContent = "Copied!";
+      mlCopy.classList.add("copied");
+      showToast("Code copied 📋", 1400);
+      setTimeout(() => { mlCopy.textContent = "Copy"; mlCopy.classList.remove("copied"); }, 1600);
+    };
+    if (navigator.clipboard) navigator.clipboard.writeText(code).then(done).catch(done);
+    else done();
+  });
 
   const ms = document.getElementById("match-setup");
   if (ms) ms.querySelectorAll(".ms-len").forEach(b => b.addEventListener("click", () => {

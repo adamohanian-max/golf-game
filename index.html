@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/hud.css?v=63">
   <link rel="stylesheet" href="css/menu.css?v=61">
   <link rel="stylesheet" href="css/courses.css?v=3">
-  <link rel="stylesheet" href="css/modals.css?v=61">
+  <link rel="stylesheet" href="css/modals.css?v=62">
   <link rel="stylesheet" href="css/tournament.css?v=54">
 </head>
 <body>
@@ -351,7 +351,10 @@
       <h2><span class="ic ic-user"></span>Match Lobby</h2>
       <div class="ml-code-wrap">
         <span class="ml-code-label">Share this code</span>
-        <span id="ml-code" class="ml-code">——————</span>
+        <span class="ml-code-row">
+          <span id="ml-code" class="ml-code">——————</span>
+          <button id="ml-copy" class="ml-copy" type="button" title="Copy code" aria-label="Copy code">Copy</button>
+        </span>
       </div>
       <div id="ml-field" class="tl-field"></div>
       <ul id="ml-players" class="ml-players"></ul>
@@ -405,6 +408,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=95"></script>
+  <script src="game.js?v=96"></script>
 </body>
 </html>
