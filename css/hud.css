@@ -406,7 +406,6 @@ body.is-mobile #hud-edit-bar {
 body.is-mobile #hint,
 body.is-mobile #chip-ind,
 body.is-mobile #toast { white-space: normal; }
-body.is-mobile #stats { min-width: 0; }
 body.is-mobile #hud-menu .hm-item { white-space: normal; }
 body.is-mobile #hm-club-cur { min-width: 0; padding: var(--s-2) var(--s-3); }
 body.is-mobile #range-ui { width: calc(25vw - var(--s-3)); }
@@ -431,3 +430,27 @@ body.is-mobile #hud-edit-bar {
   white-space: normal;
   gap: var(--s-2);
 }
+
+/* ---- Mobile shot-stats: move to the LEFT band, lower so it sits clear of the
+   (tall, wrapped) scorecard, and stack each row label-over-value so the narrow
+   25vw column reads as a clean stat rail instead of ragged space-between rows. */
+body.is-mobile #stats {
+  left: var(--s-3);
+  right: auto;
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  text-align: left;
+  font-size: 12px;
+  padding: 9px 11px;
+  line-height: 1.25;
+}
+body.is-mobile #stats .srow {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  margin-bottom: 6px;
+}
+body.is-mobile #stats .srow:last-child { margin-bottom: 0; }
+body.is-mobile #stats .slabel { font-size: 9px; letter-spacing: 0.6px; }
+body.is-mobile #stats .sval { font-size: 14px; line-height: 1.2; }
+body.is-mobile #stats .snote { text-align: left; max-width: 100%; }
