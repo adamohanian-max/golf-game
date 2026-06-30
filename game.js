@@ -1317,11 +1317,12 @@ const VIEW_MIN = 7;         // smallest framed dimension (caps how far we zoom i
 // HUD bands kept clear of the framed hole (css px, added on top of safe-area
 // insets). The camera fits the ball↔pin into the area BETWEEN these bands and
 // centers it there, so the pin/ball don't sit under the scorecard/stats/club UI.
-// Per-device reserve bands. Desktop panels sit in the screen corners with more
-// room, so they need less vertical reserve than phone-stacked HUD. Picked by
-// IS_DESKTOP in hudReserve(); tune after seeing it on each form factor.
+// Per-device reserve bands. On MOBILE the whole HUD lives in the outer left/right
+// 25% columns (see the side-band CSS), so we reserve those side bands and frame
+// the hole into the clear center 50%. On DESKTOP the HUD sits in the corners, so
+// we reserve top/bottom instead. Picked by IS_DESKTOP in hudReserve().
 const HUD_RESERVE = {
-  mobile:  { top: 50, bot: 76 }, // scorecard/stats/wind/notch ; club + hint
+  mobile:  { side: 0.25 },        // each side band = 25% of viewport width
   desktop: { top: 56, bot: 64 },
 };
 let holeFitW = 100, holeFitH = 100; // full-hole framing dims -> refScale
@@ -1445,7 +1446,17 @@ mqMobile.addEventListener("change", () => { applyDeviceMode(); resize(); });
 // HUD bands (px) the camera keeps the framed hole clear of: safe-area inset + the
 // per-device reserve on each edge. Top/bottom hold the scorecard/stats and club UI.
 function hudReserve() {
-  const r = HUD_RESERVE[IS_DESKTOP ? "desktop" : "mobile"];
+  if (!IS_DESKTOP) {
+    // Mobile: HUD is in the side columns -> reserve them, frame hole in the center.
+    const s = HUD_RESERVE.mobile.side * window.innerWidth;
+    return {
+      top: safeInset.t + 8,
+      bot: safeInset.b + 8,
+      left: safeInset.l + s,
+      right: safeInset.r + s,
+    };
+  }
+  const r = HUD_RESERVE.desktop;
   return {
     top: safeInset.t + r.top,
     bot: safeInset.b + r.bot,

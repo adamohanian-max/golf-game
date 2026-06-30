@@ -379,3 +379,55 @@ body.hud-edit .hud-dragging { cursor: grabbing; opacity: 0.85; }
   cursor: pointer;
 }
 .hud-zoom:active { background: rgba(74, 222, 128, 0.3); }
+
+/* ============================================================
+   Mobile side bands (body.is-mobile)
+   Confine every in-play HUD element to the outer left/right 25vw
+   columns so the center 50% of the screen stays unobscured. The
+   camera reserves the same side bands (HUD_RESERVE.mobile in
+   game.js) and frames the hole into the clear center.
+   (The canvas wind pill stays top-center by design.)
+   ============================================================ */
+body.is-mobile #scorecard,
+body.is-mobile #stats,
+body.is-mobile #hint,
+body.is-mobile #chip-ind,
+body.is-mobile #toast,
+body.is-mobile #hud-menu,
+body.is-mobile #hm-club-row,
+body.is-mobile #range-ui,
+body.is-mobile #hud-edit-bar {
+  /* 25vw band minus the outer edge gutter, so gutter + panel stays within 25% */
+  max-width: calc(25vw - var(--s-3));
+  min-width: 0;
+  box-sizing: border-box;
+}
+/* let cramped panels wrap rather than overflow the 25vw column */
+body.is-mobile #hint,
+body.is-mobile #chip-ind,
+body.is-mobile #toast { white-space: normal; }
+body.is-mobile #stats { min-width: 0; }
+body.is-mobile #hud-menu .hm-item { white-space: normal; }
+body.is-mobile #hm-club-cur { min-width: 0; padding: var(--s-2) var(--s-3); }
+body.is-mobile #range-ui { width: calc(25vw - var(--s-3)); }
+
+/* #toast: was center-anchored -> pin into the left band */
+body.is-mobile #toast {
+  left: var(--s-3);
+  right: auto;
+  text-align: left;
+  transform: translateY(-8px);
+}
+body.is-mobile #toast.show { transform: translateY(0); }
+
+/* #hud-edit-bar: was bottom-center -> compact vertical pill in the right band */
+body.is-mobile #hud-edit-bar {
+  left: auto;
+  right: var(--s-3);
+  transform: none;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+  white-space: normal;
+  gap: var(--s-2);
+}

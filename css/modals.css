@@ -289,6 +289,8 @@
   box-shadow: var(--shadow-3); overflow: hidden;
 }
 #match-standings.hidden { display: none; }
+/* Mobile: confine to the left 25vw side band (see hud.css side bands). */
+body.is-mobile #match-standings { width: calc(25vw - var(--s-3)); min-width: 0; box-sizing: border-box; }
 .mb-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 12px; font-weight: var(--fw-bold); color: var(--text);
