@@ -4164,6 +4164,7 @@ async function ensureProfile() {
   _profile = prof;
   if (prof.display_name) { try { localStorage.setItem("golf.playerName", prof.display_name); } catch (e) {} }
   updateMenuPlayerLine();
+  refreshFriendBadges();   // light up the Friends menu dot if requests/invites wait
   // first run with no name → prompt (reuses the name-entry overlay)
   if (!prof.display_name) openNameEntry(null);
 }
@@ -4178,6 +4179,28 @@ async function saveDisplayName(name) {
     });
     if (_profile) _profile.display_name = name;
   } catch (e) { console.warn("Save name failed:", e); }
+}
+
+// --- username: unique searchable handle (separate from the free-text name) ---
+function validUsername(name) { return /^[a-z0-9_]{3,16}$/.test(name); }
+function myUsername() { return (_profile && _profile.username) || ""; }
+
+// Save a unique handle. Returns { ok:true } or { error:"…" }.
+async function saveUsername(raw) {
+  const u = currentUser();
+  if (!u || !LB_ON()) return { error: "Sign in first." };
+  const name = (raw || "").trim().toLowerCase();
+  if (!validUsername(name)) return { error: "3–16 chars: a–z, 0–9, underscore." };
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/profiles?id=eq." + encodeURIComponent(u.id), {
+      method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ username: name }),
+    });
+    if (res.status === 409) return { error: "That username is taken." };
+    if (!res.ok) return { error: "Couldn't save. Try again." };
+    if (_profile) _profile.username = name;
+    return { ok: true };
+  } catch (e) { return { error: "Network error." }; }
 }
 
 function isTournamentAdmin() { return !!(_profile && _profile.is_admin); }
@@ -4210,6 +4233,8 @@ function updateAuthUI() {
   account.classList.toggle("hidden", !on);
   const acctBtn = document.getElementById("open-account");
   if (acctBtn) acctBtn.classList.toggle("hidden", !on);
+  const friendsBtn = document.getElementById("menu-friends");
+  if (friendsBtn) friendsBtn.classList.toggle("hidden", !on);
   const adminBtn = document.getElementById("menu-admin");
   if (adminBtn) adminBtn.classList.toggle("hidden", !isTournamentAdmin());
   const manageBtn = document.getElementById("menu-manage");
@@ -4680,9 +4705,11 @@ function renderAccount(stats, trounds) {
   const joined = _profile && _profile.created_at ? dateShort(_profile.created_at) : "";
   const adminBadge = isTournamentAdmin() ? ` <span class="av-badge">ADMIN</span>` : "";
 
+  const uname = myUsername() ? "@" + myUsername() : "Set username";
   const idHtml = `
     <div class="av-id">
       <div class="av-name">${escapeHTML(name)} <button id="av-editname" class="av-edit" title="Edit name"><span class="ic ic-pencil"></span></button>${adminBadge}</div>
+      <div class="av-uname">${escapeHTML(uname)} <button id="av-edituname" class="av-edit" title="Set username"><span class="ic ic-pencil"></span></button></div>
       ${email ? `<div class="av-email">${escapeHTML(email)}</div>` : ""}
       ${joined ? `<div class="av-joined">Member since ${joined}</div>` : ""}
     </div>`;
@@ -4756,6 +4783,8 @@ function renderAccount(stats, trounds) {
 function wireAvEditName() {
   const e = document.getElementById("av-editname");
   if (e) e.addEventListener("click", () => openNameEntry(() => openAccountViewer()));
+  const eu = document.getElementById("av-edituname");
+  if (eu) eu.addEventListener("click", () => openUsernamePrompt(() => openAccountViewer()));
 }
 
 async function openAccountViewer() {
@@ -4786,6 +4815,459 @@ function closeAccountViewer() {
   if (close) close.addEventListener("click", closeAccountViewer);
   const out = document.getElementById("av-signout");
   if (out) out.addEventListener("click", async () => { await signOut(); closeAccountViewer(); updateMenuPlayerLine(); });
+})();
+
+// =====================================================================
+//  Friends — unique-handle friend graph (request → accept), friend
+//  profiles with head-to-head W/L, and direct match invites. Backed by the
+//  `friendships` + `match_invites` tables (see schema.sql). All reads/writes
+//  carry the user token (authHeaders) so per-row RLS scopes them to me.
+// =====================================================================
+let _friends = { accepted: [], incoming: [], outgoing: [] };  // last fetch
+let _friendsPoll = null;
+let _frTab = "list";
+let _frProfileUid = null;   // friend currently viewed
+let _frProfileFid = null;   // their friendship row id (for unfriend)
+
+function myUid() { return (currentUser() || {}).id || null; }
+
+// Resolve a handle → { id, username, display_name } (or null).
+async function findUserByUsername(name) {
+  const clean = (name || "").trim().toLowerCase();
+  if (!LB_ON() || !validUsername(clean)) return null;
+  try {
+    const q = "/rest/v1/profiles?username=eq." + encodeURIComponent(clean) +
+              "&select=id,username,display_name";
+    const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  } catch (e) { return null; }
+}
+
+// Resolve user ids → { id: {username, display_name} }.
+async function fetchProfilesByIds(ids) {
+  const uniq = [...new Set((ids || []).filter(Boolean))];
+  if (!LB_ON() || !uniq.length) return {};
+  try {
+    const list = uniq.map(encodeURIComponent).join(",");
+    const q = "/rest/v1/profiles?id=in.(" + list + ")&select=id,username,display_name";
+    const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+    if (!res.ok) return {};
+    const m = {};
+    for (const r of await res.json()) m[r.id] = r;
+    return m;
+  } catch (e) { return {}; }
+}
+
+// Every friendship touching me, split by status/direction, names resolved.
+async function fetchFriendships() {
+  const uid = myUid();
+  const empty = { accepted: [], incoming: [], outgoing: [] };
+  if (!LB_ON() || !uid) return empty;
+  try {
+    const q = "/rest/v1/friendships?or=(requester.eq." + encodeURIComponent(uid) +
+              ",addressee.eq." + encodeURIComponent(uid) + ")";
+    const res = await fetch(LB_URL + q, { headers: authHeaders() });
+    if (!res.ok) return empty;
+    const rows = await res.json();
+    const profs = await fetchProfilesByIds(rows.map(r => r.requester === uid ? r.addressee : r.requester));
+    const out = { accepted: [], incoming: [], outgoing: [] };
+    for (const r of rows) {
+      const otherId = r.requester === uid ? r.addressee : r.requester;
+      const p = profs[otherId] || {};
+      const entry = { id: r.id, uid: otherId, status: r.status,
+                      username: p.username || "", display_name: p.display_name || "" };
+      if (r.status === "accepted") out.accepted.push(entry);
+      else if (r.addressee === uid) out.incoming.push(entry);
+      else out.outgoing.push(entry);
+    }
+    _friends = out;
+    return out;
+  } catch (e) { return empty; }
+}
+
+// Send a friend request to a resolved profile id. Dedupes either direction.
+async function sendFriendRequest(addresseeId) {
+  const uid = myUid();
+  if (!LB_ON() || !uid) return { error: "Sign in first." };
+  if (addresseeId === uid) return { error: "That's you." };
+  await fetchFriendships();   // refresh cache so dedupe is accurate
+  const all = [..._friends.accepted, ..._friends.incoming, ..._friends.outgoing];
+  if (all.some(f => f.uid === addresseeId)) return { error: "Already connected or pending." };
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/friendships", {
+      method: "POST", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ requester: uid, addressee: addresseeId, status: "pending" }),
+    });
+    if (res.status === 409) return { error: "Already requested." };
+    if (!res.ok) return { error: "Couldn't send. Try again." };
+    return { ok: true };
+  } catch (e) { return { error: "Network error." }; }
+}
+
+async function acceptRequest(id) {
+  if (!LB_ON() || !id) return false;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/friendships?id=eq." + encodeURIComponent(id), {
+      method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ status: "accepted", updated_at: new Date().toISOString() }),
+    });
+    return res.ok;
+  } catch (e) { return false; }
+}
+
+async function removeFriendship(id) {   // covers decline / cancel / unfriend
+  if (!LB_ON() || !id) return false;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/friendships?id=eq." + encodeURIComponent(id),
+                            { method: "DELETE", headers: authHeaders({ Prefer: "return=minimal" }) });
+    return res.ok;
+  } catch (e) { return false; }
+}
+
+// Head-to-head record vs a friend across finished matches we both played.
+async function computeHeadToHead(friendUid) {
+  const uid = myUid();
+  const rec = { wins: 0, losses: 0, halves: 0, played: 0 };
+  if (!LB_ON() || !uid || !friendUid) return rec;
+  const sel = "&select=match_id,score,hole_scores,finished,match:matches(format,hole_count,status)";
+  async function rowsFor(id) {
+    const q = "/rest/v1/match_players?user_id=eq." + encodeURIComponent(id) + sel;
+    const res = await fetch(LB_URL + q, { headers: authHeaders() });
+    return res.ok ? res.json() : [];
+  }
+  let meRows, themRows;
+  try { [meRows, themRows] = await Promise.all([rowsFor(uid), rowsFor(friendUid)]); }
+  catch (e) { return rec; }
+  const themByMatch = {};
+  for (const r of themRows) themByMatch[r.match_id] = r;
+  for (const me of meRows) {
+    const opp = themByMatch[me.match_id];
+    if (!opp) continue;
+    const m = me.match || {};
+    if (m.status !== "done") continue;
+    rec.played++;
+    let r;   // +1 I win, -1 I lose, 0 halve
+    if (m.format === "match") r = Math.sign(computeMatchPlay(me, opp, m.hole_count || 18).diff);
+    else r = Math.sign((opp.score | 0) - (me.score | 0));   // stroke: lower wins
+    if (r > 0) rec.wins++; else if (r < 0) rec.losses++; else rec.halves++;
+  }
+  return rec;
+}
+
+// Rounds for an arbitrary account (friend profiles reuse the stat pipeline).
+async function fetchRoundsFor(uid) {
+  if (!LB_ON() || !uid) return [];
+  const q = "/rest/v1/rounds?user_id=eq." + encodeURIComponent(uid) + "&order=created_at.desc&limit=500";
+  const res = await fetch(LB_URL + q, { headers: lbHeaders() });
+  return res.ok ? res.json() : [];
+}
+
+// ---- match invites ----
+async function fetchMyInvites() {
+  const uid = myUid();
+  if (!LB_ON() || !uid) return [];
+  try {
+    const q = "/rest/v1/match_invites?to_user=eq." + encodeURIComponent(uid) +
+              "&status=eq.pending&order=created_at.desc";
+    const res = await fetch(LB_URL + q, { headers: authHeaders() });
+    if (!res.ok) return [];
+    const rows = await res.json();
+    const profs = await fetchProfilesByIds(rows.map(r => r.from_user));
+    return rows.map(r => Object.assign({}, r, {
+      from_name: (profs[r.from_user] || {}).display_name || (profs[r.from_user] || {}).username || "A friend" }));
+  } catch (e) { return []; }
+}
+
+async function inviteFriendToMatch(friendUid) {
+  if (!friendUid || !LB_ON()) return;
+  const btn = document.getElementById("fp-invite");
+  if (btn) { btn.disabled = true; btn.textContent = "Creating…"; }
+  const m = await createMatch();          // reuse the normal host flow
+  if (!m) { if (btn) { btn.disabled = false; btn.textContent = "Invite to match"; } return; }
+  await addMatchPlayer(m.id);
+  activeMatch = m; _matchIsHost = true; _matchEntered = false;
+  try {
+    await fetch(LB_URL + "/rest/v1/match_invites", {
+      method: "POST", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ match_id: m.id, code: m.code, from_user: myUid(), to_user: friendUid, status: "pending" }),
+    });
+  } catch (e) {}
+  if (btn) { btn.disabled = false; btn.textContent = "Invite to match"; }
+  closeFriendProfile(); closeFriends();
+  openMatchLobby();                        // host waits in the lobby
+}
+
+async function acceptInvite(inviteId, code) {
+  if (!LB_ON() || !code) return;
+  if (inviteId) {
+    try { await fetch(LB_URL + "/rest/v1/match_invites?id=eq." + encodeURIComponent(inviteId), {
+      method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ status: "accepted" }) }); } catch (e) {}
+  }
+  const m = await fetchMatchByCode((code || "").toUpperCase());   // join by code
+  if (!m || m.status !== "lobby") { renderFriends(); return; }
+  if (!(await addMatchPlayer(m.id))) return;
+  activeMatch = m;
+  _matchIsHost = (currentUser() && m.host_user_id === currentUser().id);
+  _matchEntered = false;
+  closeFriends();
+  openMatchLobby();
+}
+
+async function declineInvite(inviteId) {
+  if (!LB_ON() || !inviteId) return;
+  try { await fetch(LB_URL + "/rest/v1/match_invites?id=eq." + encodeURIComponent(inviteId), {
+    method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+    body: JSON.stringify({ status: "declined" }) }); } catch (e) {}
+}
+
+// ---- Friends UI ----
+function frLabel(e) {
+  const h = e.username ? "@" + esc(e.username) : "";
+  const dn = e.display_name ? esc(e.display_name) : "";
+  if (dn && h) return `${dn} <span class="fr-handle">${h}</span>`;
+  return dn || h || "player";
+}
+
+function openFriends() {
+  if (!isLoggedIn()) { openAuthModal(); return; }
+  if (!myUsername()) { openUsernamePrompt(() => openFriends()); return; }   // need a handle first
+  const ov = document.getElementById("friends-modal");
+  if (!ov) return;
+  ov.classList.remove("hidden");
+  _frTab = "list";
+  renderFriends();
+  stopFriendsPoll();
+  _friendsPoll = setInterval(() => { if (_frTab !== "add") renderFriends(); }, 4000);
+}
+function closeFriends() {
+  stopFriendsPoll();
+  const ov = document.getElementById("friends-modal");
+  if (ov) ov.classList.add("hidden");
+  refreshFriendBadges();
+}
+function stopFriendsPoll() { if (_friendsPoll) { clearInterval(_friendsPoll); _friendsPoll = null; } }
+
+async function renderFriends() {
+  const body = document.getElementById("fr-body");
+  if (!body) return;
+  document.querySelectorAll("#friends-modal .fr-tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.tab === _frTab));
+  if (_frTab === "add") { renderFriendAdd(body); return; }
+  const f = await fetchFriendships();
+  updateReqBadge(f.incoming.length);
+  if (_frTab === "requests") { renderFriendRequests(body, f); return; }
+  const invites = await fetchMyInvites();
+  renderFriendList(body, f, invites);
+}
+
+function renderFriendList(body, f, invites) {
+  let html = "";
+  if (invites && invites.length) {
+    html += `<div class="av-section">Match invites</div>` + invites.map(iv =>
+      `<div class="fr-row"><span class="fr-row-name">${esc(iv.from_name)} invited you</span>
+        <span class="fr-row-act">
+          <button class="fr-mini fr-join" data-inv="${iv.id}" data-code="${esc(iv.code)}">Join</button>
+          <button class="fr-mini secondary fr-decline-inv" data-inv="${iv.id}">✕</button>
+        </span></div>`).join("");
+  }
+  html += `<div class="av-section">Friends (${f.accepted.length})</div>`;
+  html += f.accepted.length
+    ? f.accepted.map(e =>
+        `<div class="fr-row"><span class="fr-row-name">${frLabel(e)}</span>
+          <span class="fr-row-act"><button class="fr-mini fr-view" data-uid="${e.uid}" data-fid="${e.id}">View</button></span>
+        </div>`).join("")
+    : `<div class="av-empty">No friends yet. Use the Add tab to find people by username.</div>`;
+  body.innerHTML = html;
+}
+
+function renderFriendRequests(body, f) {
+  let html = `<div class="av-section">Incoming</div>`;
+  html += f.incoming.length
+    ? f.incoming.map(e =>
+        `<div class="fr-row"><span class="fr-row-name">${frLabel(e)}</span>
+          <span class="fr-row-act">
+            <button class="fr-mini fr-accept" data-fid="${e.id}">Accept</button>
+            <button class="fr-mini secondary fr-decline" data-fid="${e.id}">Decline</button>
+          </span></div>`).join("")
+    : `<div class="av-empty">No incoming requests.</div>`;
+  html += `<div class="av-section">Sent</div>`;
+  html += f.outgoing.length
+    ? f.outgoing.map(e =>
+        `<div class="fr-row"><span class="fr-row-name">${frLabel(e)}</span>
+          <span class="fr-row-act"><button class="fr-mini secondary fr-cancel" data-fid="${e.id}">Cancel</button></span>
+        </div>`).join("")
+    : `<div class="av-empty">No pending sent requests.</div>`;
+  body.innerHTML = html;
+}
+
+function renderFriendAdd(body) {
+  body.innerHTML = `
+    <p class="ne-sub" style="margin:8px 0">Find a player by their username.</p>
+    <input id="fr-search" type="text" placeholder="username" maxlength="16" autocomplete="off" autocapitalize="off" autocorrect="off">
+    <button id="fr-search-btn" class="menu-btn" style="margin-top:8px">Search</button>
+    <div id="fr-search-result"></div>`;
+  const inp = document.getElementById("fr-search");
+  const out = document.getElementById("fr-search-result");
+  async function doSearch() {
+    const v = (inp.value || "").trim().toLowerCase();
+    out.innerHTML = "";
+    if (!validUsername(v)) { out.innerHTML = `<div class="fr-err">3–16 chars: a–z, 0–9, underscore.</div>`; return; }
+    out.innerHTML = `<div class="av-empty">Searching…</div>`;
+    const p = await findUserByUsername(v);
+    if (!p) { out.innerHTML = `<div class="av-empty">No player @${esc(v)}.</div>`; return; }
+    if (p.id === myUid()) { out.innerHTML = `<div class="av-empty">That's you!</div>`; return; }
+    out.innerHTML =
+      `<div class="fr-row"><span class="fr-row-name">${p.display_name ? esc(p.display_name) + " " : ""}<span class="fr-handle">@${esc(p.username)}</span></span>
+        <span class="fr-row-act"><button id="fr-send" class="fr-mini">Add friend</button></span></div>
+       <div id="fr-send-msg"></div>`;
+    document.getElementById("fr-send").addEventListener("click", async () => {
+      const msg = document.getElementById("fr-send-msg");
+      msg.innerHTML = `<div class="av-empty">Sending…</div>`;
+      const r = await sendFriendRequest(p.id);
+      msg.innerHTML = r.ok ? `<div class="fr-ok">Request sent.</div>` : `<div class="fr-err">${esc(r.error)}</div>`;
+    });
+  }
+  const btn = document.getElementById("fr-search-btn");
+  if (btn) btn.addEventListener("click", doSearch);
+  if (inp) { inp.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); }); setTimeout(() => inp.focus(), 30); }
+}
+
+function updateReqBadge(n) {
+  const b = document.getElementById("fr-req-badge");
+  if (!b) return;
+  b.textContent = n; b.classList.toggle("hidden", !n);
+}
+// Light the menu dot when requests or invites are waiting (called on login + close).
+async function refreshFriendBadges() {
+  const dot = document.getElementById("fr-menu-dot");
+  if (!LB_ON() || !myUid()) { if (dot) dot.classList.add("hidden"); return; }
+  try {
+    const [f, inv] = await Promise.all([fetchFriendships(), fetchMyInvites()]);
+    const n = f.incoming.length + inv.length;
+    if (dot) dot.classList.toggle("hidden", !n);
+  } catch (e) {}
+}
+
+// ---- Friend profile (reuses computeMyStats + the account-stat layout) ----
+async function openFriendProfile(uid, fid) {
+  _frProfileUid = uid; _frProfileFid = fid;
+  const ov = document.getElementById("friend-profile");
+  const body = document.getElementById("fp-body");
+  const title = document.getElementById("fp-name");
+  if (!ov || !body) return;
+  const f = _friends.accepted.find(e => e.uid === uid) || {};
+  if (title) title.innerHTML = `<span class="ic ic-user"></span>${esc(f.display_name || ("@" + (f.username || "player")))}`;
+  ov.classList.remove("hidden");
+  body.innerHTML = `<div class="av-empty">Loading…</div>`;
+  try {
+    const [rounds, h2h] = await Promise.all([fetchRoundsFor(uid), computeHeadToHead(uid)]);
+    const stats = computeMyStats(rounds);
+    stats._recent = rounds.slice(0, 8);
+    renderFriendProfile(body, stats, h2h, f);
+  } catch (e) {
+    body.innerHTML = `<div class="av-empty">Couldn't load this profile.</div>`;
+  }
+}
+function closeFriendProfile() {
+  const ov = document.getElementById("friend-profile");
+  if (ov) ov.classList.add("hidden");
+}
+
+function renderFriendProfile(body, stats, h2h, f) {
+  const cell = (label, val) => `<div class="av-cell"><div class="av-val">${val}</div><div class="av-lbl">${label}</div></div>`;
+  const handleLine = f.username ? `<div class="av-email">@${esc(f.username)}</div>` : "";
+  let h2hLine;
+  if (!h2h.played) h2hLine = `<div class="fr-h2h">No matches played together yet.</div>`;
+  else {
+    const lead = h2h.wins > h2h.losses ? "You lead" : h2h.wins < h2h.losses ? "You trail" : "All square";
+    const halves = h2h.halves ? ` · ${h2h.halves} halved` : "";
+    h2hLine = `<div class="fr-h2h"><b>${lead}</b> ${h2h.wins}–${h2h.losses}${halves}` +
+              ` <small>(${h2h.played} match${h2h.played === 1 ? "" : "es"})</small></div>`;
+  }
+  const totals = `<div class="av-grid">
+    ${cell("Rounds", stats.rounds)}
+    ${cell("Courses", stats.courses)}
+    ${cell("Avg score", fmtSignedAvg(stats.avgToPar))}
+    ${cell("Handicap", "<span class='av-hcp'>" + fmtSignedAvg(stats.handicap) + "</span><small> est.</small>")}
+  </div>`;
+  const best = stats.best
+    ? `<div class="av-best">Best round: <b>${toparCell(stats.best.to_par)}</b> · ${stats.best.strokes} strokes · ${escapeHTML(courseName(stats.best.course_id))}</div>`
+    : "";
+  const recent = (stats._recent && stats._recent.length) ? `
+    <div class="av-section">Recent rounds</div>
+    <table class="lb-table av-table">
+      <thead><tr><th>Date</th><th>Course</th><th>Score</th><th>Strk</th></tr></thead>
+      <tbody>${stats._recent.map(r => `<tr><td class="av-date">${dateShort(r.created_at)}</td>
+        <td>${escapeHTML(courseName(r.course_id))}</td>
+        <td class="lb-topar">${toparCell(r.to_par)}</td>
+        <td class="lb-strk">${r.strokes}</td></tr>`).join("")}</tbody></table>` : "";
+  body.innerHTML = `<div class="av-id">${handleLine}</div>` + h2hLine +
+    (stats.rounds ? (totals + best + recent) : `<div class="av-empty">No rounds played yet.</div>`);
+}
+
+(function wireFriends() {
+  const menuBtn = document.getElementById("menu-friends");
+  if (menuBtn) menuBtn.addEventListener("click", openFriends);
+  const close = document.getElementById("fr-close");
+  if (close) close.addEventListener("click", closeFriends);
+  document.querySelectorAll("#friends-modal .fr-tab").forEach(t =>
+    t.addEventListener("click", () => { _frTab = t.dataset.tab; renderFriends(); }));
+  const body = document.getElementById("fr-body");
+  if (body) body.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    const fid = btn.dataset.fid, uid = btn.dataset.uid, inv = btn.dataset.inv, code = btn.dataset.code;
+    if (btn.classList.contains("fr-accept")) { await acceptRequest(fid); renderFriends(); }
+    else if (btn.classList.contains("fr-decline") || btn.classList.contains("fr-cancel")) { await removeFriendship(fid); renderFriends(); }
+    else if (btn.classList.contains("fr-view")) { openFriendProfile(uid, fid); }
+    else if (btn.classList.contains("fr-join")) { await acceptInvite(inv, code); }
+    else if (btn.classList.contains("fr-decline-inv")) { await declineInvite(inv); renderFriends(); }
+  });
+  const back = document.getElementById("fp-back");
+  if (back) back.addEventListener("click", closeFriendProfile);
+  const unf = document.getElementById("fp-unfriend");
+  if (unf) unf.addEventListener("click", async () => {
+    if (_frProfileFid && confirm("Remove this friend?")) { await removeFriendship(_frProfileFid); closeFriendProfile(); renderFriends(); }
+  });
+  const inviteBtn = document.getElementById("fp-invite");
+  if (inviteBtn) inviteBtn.addEventListener("click", () => inviteFriendToMatch(_frProfileUid));
+})();
+
+// ---- username prompt (shared by account viewer + first Friends open) ----
+let _unCb = null;
+function openUsernamePrompt(cb) {
+  _unCb = cb || null;
+  const ov = document.getElementById("username-modal");
+  if (!ov) return;
+  const inp = document.getElementById("un-input");
+  const err = document.getElementById("un-error");
+  if (err) err.classList.add("hidden");
+  if (inp) inp.value = myUsername();
+  ov.classList.remove("hidden");
+  if (inp) setTimeout(() => inp.focus(), 30);
+}
+function closeUsernamePrompt() {
+  const ov = document.getElementById("username-modal");
+  if (ov) ov.classList.add("hidden");
+}
+(function wireUsername() {
+  const cancel = document.getElementById("un-cancel");
+  if (cancel) cancel.addEventListener("click", closeUsernamePrompt);
+  const save = document.getElementById("un-save");
+  const inp = document.getElementById("un-input");
+  const err = document.getElementById("un-error");
+  async function doSave() {
+    const r = await saveUsername(inp ? inp.value : "");
+    if (r.error) { if (err) { err.textContent = r.error; err.classList.remove("hidden"); } return; }
+    closeUsernamePrompt();
+    const cb = _unCb; _unCb = null;
+    if (cb) cb();
+  }
+  if (save) save.addEventListener("click", doSave);
+  if (inp) inp.addEventListener("keydown", e => { if (e.key === "Enter") doSave(); });
 })();
 
 // --- wiring ---

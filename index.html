@@ -112,6 +112,7 @@
       <button id="open-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>Leaderboard</button>
       <button id="open-tournaments" class="menu-btn secondary"><span class="ic ic-flag-checkered"></span>Tournaments</button>
       <button id="open-account" class="menu-btn secondary hidden"><span class="ic ic-user"></span>My Account</button>
+      <button id="menu-friends" class="menu-btn secondary hidden"><span class="ic ic-user"></span>Friends<span id="fr-menu-dot" class="fr-dot hidden"></span></button>
       <button id="menu-add-course" class="menu-btn secondary hidden"><span class="ic ic-plus"></span>Add course</button>
       <button id="menu-manage" class="menu-btn secondary hidden"><span class="ic ic-flag-checkered"></span>Manage tournaments</button>
       <button id="menu-admin" class="menu-btn secondary hidden"><span class="ic ic-gear"></span>Admin settings</button>
@@ -211,6 +212,48 @@
       <div class="ne-actions">
         <button id="av-signout" class="menu-btn secondary">Sign out</button>
         <button id="av-close" class="menu-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="friends-modal" class="hidden">
+    <div class="ne-box av-box fr-box">
+      <h2><span class="ic ic-user"></span>Friends</h2>
+      <div class="fr-tabs">
+        <button class="fr-tab active" data-tab="list">Friends</button>
+        <button class="fr-tab" data-tab="requests">Requests<span id="fr-req-badge" class="fr-badge hidden">0</span></button>
+        <button class="fr-tab" data-tab="add">Add</button>
+      </div>
+      <div id="fr-body"></div>
+      <div class="ne-actions">
+        <button id="fr-close" class="menu-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="friend-profile" class="hidden">
+    <div class="ne-box av-box">
+      <h2 id="fp-name"><span class="ic ic-user"></span>Friend</h2>
+      <div id="fp-body"></div>
+      <div class="ne-actions">
+        <button id="fp-invite" class="menu-btn">Invite to match</button>
+        <button id="fp-back" class="menu-btn secondary">Back</button>
+      </div>
+      <div class="ne-actions">
+        <button id="fp-unfriend" class="menu-btn secondary">Unfriend</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="username-modal" class="hidden">
+    <div class="ne-box">
+      <h2>Choose a username</h2>
+      <p class="ne-sub">Lowercase letters, numbers, underscore (3–16). Friends use this to find you.</p>
+      <input id="un-input" type="text" maxlength="16" placeholder="username" autocomplete="off" autocapitalize="off" autocorrect="off">
+      <div id="un-error" class="auth-error hidden"></div>
+      <div class="ne-actions">
+        <button id="un-cancel" class="menu-btn secondary">Cancel</button>
+        <button id="un-save" class="menu-btn">Save</button>
       </div>
     </div>
   </div>

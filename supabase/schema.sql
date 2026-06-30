@@ -209,3 +209,65 @@ alter table match_players add column if not exists cur_shot jsonb;            --
 -- those events fire. (Safe to re-run; "already member" just errors harmlessly.)
 alter publication supabase_realtime add table public.match_players;
 alter publication supabase_realtime add table public.matches;
+
+-- =====================================================================
+--  FRIENDS: unique-handle friend graph (request -> accept), plus direct
+--  match invites. profiles.username is the searchable handle (display_name
+--  stays a non-unique label). Each friendship/invite is visible only to the
+--  two parties (unlike the world-readable leaderboard tables above).
+-- =====================================================================
+
+-- searchable, unique handle. App lowercases before write; format enforced here.
+alter table profiles add column if not exists username text unique;
+do $$ begin
+  alter table profiles add constraint username_fmt
+    check (username is null or username ~ '^[a-z0-9_]{3,16}$');
+exception when duplicate_object then null; end $$;
+
+-- ---------- FRIENDSHIPS: one row per relationship (requester -> addressee) ----------
+create table if not exists friendships (
+  id         uuid primary key default gen_random_uuid(),
+  requester  uuid not null references auth.users(id) on delete cascade,
+  addressee  uuid not null references auth.users(id) on delete cascade,
+  status     text not null default 'pending',   -- 'pending' | 'accepted'
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (requester, addressee),
+  check (requester <> addressee)
+);
+alter table friendships enable row level security;
+-- only the two parties can see the row
+create policy "fr select" on friendships for select
+  using (auth.uid() = requester or auth.uid() = addressee);
+-- only the requester creates, and only as a pending request
+create policy "fr insert" on friendships for insert
+  with check (auth.uid() = requester and status = 'pending');
+-- addressee accepts (pending -> accepted); requester may also edit their own row
+create policy "fr update" on friendships for update
+  using (auth.uid() = addressee or auth.uid() = requester);
+-- either party can unfriend / decline / cancel
+create policy "fr delete" on friendships for delete
+  using (auth.uid() = requester or auth.uid() = addressee);
+create index if not exists friendships_addressee_idx on friendships (addressee);
+create index if not exists friendships_requester_idx on friendships (requester);
+
+-- ---------- MATCH_INVITES: direct match invites between friends ----------
+-- No realtime/push: the Friends screen polls for pending invites and joins by
+-- the 6-char code (reusing the normal match-join flow).
+create table if not exists match_invites (
+  id         uuid primary key default gen_random_uuid(),
+  match_id   uuid references matches(id) on delete cascade,
+  code       text not null,                       -- the match's 6-char join code
+  from_user  uuid not null references auth.users(id) on delete cascade,
+  to_user    uuid not null references auth.users(id) on delete cascade,
+  status     text not null default 'pending',     -- 'pending' | 'accepted' | 'declined'
+  created_at timestamptz default now()
+);
+alter table match_invites enable row level security;
+create policy "mi select" on match_invites for select
+  using (auth.uid() = from_user or auth.uid() = to_user);
+create policy "mi insert" on match_invites for insert
+  with check (auth.uid() = from_user);
+create policy "mi update" on match_invites for update
+  using (auth.uid() = to_user or auth.uid() = from_user);
+create index if not exists match_invites_to_idx on match_invites (to_user, status);
