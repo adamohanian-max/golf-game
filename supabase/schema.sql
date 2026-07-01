@@ -308,15 +308,20 @@ alter table profiles add column if not exists handicap numeric;
 -- (so two simultaneous callers can't grab the same partner), spin up the match
 -- + both player rows, mark the partner's queue row matched, return the match id.
 -- Returns null when no partner in band → caller enqueues itself and polls.
+-- p_exclude = the caller's own queue-row id (once enqueued) so a GUEST (no
+-- user_id to key off) can't be paired with itself → duplicate-name insert 409.
+-- Re-run this block in the SQL editor if you baked the original 6-arg version.
+drop function if exists find_quick_match(uuid, text, numeric, text, int, numeric);
 create or replace function find_quick_match(
   p_user uuid, p_name text, p_hcp numeric,
-  p_format text, p_holes int, p_band numeric
+  p_format text, p_holes int, p_band numeric, p_exclude uuid default null
 ) returns uuid language plpgsql security definer as $$
 declare v_partner match_queue; v_match uuid; v_code text;
 begin
   select * into v_partner from match_queue
    where status = 'waiting' and format = p_format and hole_count = p_holes
      and (p_user is null or user_id is distinct from p_user)
+     and (p_exclude is null or id <> p_exclude)
      and abs(handicap - p_hcp) <= p_band
    order by enqueued_at asc
    for update skip locked limit 1;
@@ -336,5 +341,5 @@ begin
   return v_match;
 end $$;
 
-grant execute on function find_quick_match(uuid, text, numeric, text, int, numeric)
+grant execute on function find_quick_match(uuid, text, numeric, text, int, numeric, uuid)
   to anon, authenticated;

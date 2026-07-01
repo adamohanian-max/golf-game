@@ -2530,9 +2530,10 @@ function showResult() {
   round.score += d;
   round.holesPlayed += 1;
   updateScorecard();
-  // CPU match: the bot plays this same hole (locally) right after I finish it,
-  // so the board + closeout below see its score.
-  if (cpuMatch) cpuPlayHole(holeNum, HOLE.par);
+  // CPU match: in the async STROKE path the bot's score for this hole is filled
+  // right after I finish it. In a LIVE match the bot plays the hole itself,
+  // shot-by-shot (cpuDriverTick), so we don't fill it here.
+  if (cpuMatch && !liveMatch()) cpuPlayHole(holeNum, HOLE.par);
   // Live match: push my score/progress + per-hole scores so the opponent's
   // standings (and match-play status) update.
   if (matchLive()) {
@@ -6951,7 +6952,7 @@ function markMatchDone() {
 }
 
 // --- RPC + queue REST ---
-async function rpcFindMatch(hcp, format, holes, band) {
+async function rpcFindMatch(hcp, format, holes, band, excludeId) {
   if (!LB_ON()) return null;
   try {
     const res = await fetch(LB_URL + "/rest/v1/rpc/find_quick_match", {
@@ -6960,6 +6961,7 @@ async function rpcFindMatch(hcp, format, holes, band) {
         p_user: (currentUser() || {}).id || null,
         p_name: getPlayerName() || "Player",
         p_hcp: hcp, p_format: format, p_holes: holes, p_band: band,
+        p_exclude: excludeId || null,   // my own queue row → never self-pair (guests)
       }),
     });
     if (!res.ok) return null;
@@ -7023,8 +7025,9 @@ async function qmTick() {
   if (elapsed >= QM_CPU_MS) {           // give up on humans → CPU
     q.paired = true; await cancelQueue(); startCpuMatch(q.format, q.holes); return;
   }
-  // Try to grab a waiting opponent (I become the joiner).
-  const id = await rpcFindMatch(_qmHcp, q.format, q.holes, q.band);
+  // Try to grab a waiting opponent (I become the joiner). Exclude my own queue
+  // row so a guest (no user_id) can't be paired with itself.
+  const id = await rpcFindMatch(_qmHcp, q.format, q.holes, q.band, q.queueRowId);
   if (!_qm || q.cancelled) return;
   if (id) { q.paired = true; await cancelQueue(); joinPairedMatch(id, true); return; }
   // No partner: make sure I'm in the pool, then see if someone picked me.
@@ -7046,11 +7049,14 @@ async function joinPairedMatch(matchId, iAmJoiner) {
   const holes = (_qm && _qm.holes) || m.hole_count || 18;
   if (iAmJoiner) {
     // I created the match via the RPC → set course/settings + flip it live.
-    await beginMatch(qmPickCourse(), holes, gameDefaults, format, format === "match");
-    closeQuickMatch();
-    enterLiveMatch();
+    qmMatchFound(m.host_name || "your opponent", null, async () => {
+      await beginMatch(qmPickCourse(), holes, gameDefaults, format, format === "match");
+      closeQuickMatch();
+      enterLiveMatch();
+    });
   } else {
-    waitForLiveThenEnter(matchId, format, holes);   // waiter: enter once joiner goes live
+    qmMatchFound("your opponent", null, () =>
+      waitForLiveThenEnter(matchId, format, holes));   // enter once joiner goes live
   }
 }
 function waitForLiveThenEnter(matchId, format, holes) {
@@ -7100,7 +7106,28 @@ function cpuHoleScore(par, hcp) {
   const lo = par >= 5 ? par - 2 : par - 1;
   return Math.max(1, Math.min(par + 4, Math.max(lo, s)));
 }
-function cpuName(hcp) { return "CPU · hcp " + Math.round(hcp); }
+// Believable opponent identity (never revealed as a bot). Handle from a pool +
+// an optional number; handicap within a few strokes of the player's.
+const QM_NAMES = ["Jordan","Rory","Phil","Bryson","Collin","Justin","Xander",
+  "Scottie","Viktor","Dustin","Rickie","Cam","Tommy","Hideki","Shane","Max",
+  "Ludvig","Sepp","Wyndham","Keegan","Sungjae","Tony","Webb","Marcus","Harris",
+  "Sahith","Akshay","Nico","Davis","Taylor","Sam","Chris","Ben","Luke"];
+function genOppName() {
+  const n = QM_NAMES[(Math.random() * QM_NAMES.length) | 0];
+  return n + (Math.random() < 0.6 ? String((Math.random() * 90 + 10) | 0) : "");
+}
+function genOppHandicap(myHcp) {
+  const base = (typeof myHcp === "number") ? myHcp : QM_DEFAULT_HCP;
+  return Math.round(base + (Math.random() * 6 - 3));   // ±3 of the player
+}
+// Recompute the bot's running to-par + progress from its filled hole scores.
+function cpuRecomputeScore() {
+  if (!cpuOpp) return;
+  let s = 0, n = 0;
+  for (const k in cpuOpp.hole_scores) { s += cpuOpp.hole_scores[k] - (cpuOpp.pars[k] || 0); n++; }
+  cpuOpp.score = s; cpuOpp.holes_played = n;
+  cpuOpp.finished = n >= roundHoleCount();
+}
 // Synthesize the two match_players rows for a CPU match from local state.
 function cpuMatchRows() {
   const hs = {};
@@ -7131,26 +7158,134 @@ function cpuPlayHole(holeNum, par) {
 function startCpuMatch(format, holes) {
   stopQuickMatch();
   _qm = null;
+  const isMatch = format === "match";
   cpuMatch = true; matchDecided = false; _matchEntered = false;
   matchHoleCount = holes;
   selectedCourseId = qmPickCourse();
-  const hcp = (typeof _qmHcp === "number") ? _qmHcp : QM_DEFAULT_HCP;
+  const myH = (typeof _qmHcp === "number") ? _qmHcp : QM_DEFAULT_HCP;
+  const oppH = genOppHandicap(myH);
+  const name = genOppName();
   cpuOpp = {
-    user_id: null, player_name: cpuName(hcp), handicap: hcp,
+    user_id: null, player_name: name, handicap: oppH,
     hole_scores: {}, pars: {}, score: 0, holes_played: 0, finished: false,
-    cur_hole: null, cur_to_pin: -1, cur_at_rest: true,
+    cur_hole: null, cur_strokes: 0, cur_to_pin: -1, cur_at_rest: true,
+    cur_x: null, cur_y: null, cur_shot: null, cur_updated: null,
+    _plan: null, _i: 0, _phase: "idle", _flyUntil: 0, _nextAt: 0, _seq: 0,
   };
   activeMatch = {
-    id: null, status: "live", format: format === "match" ? "match" : "stroke",
-    live: false, hole_count: holes, course_id: selectedCourseId,
-    host_name: getPlayerName() || "You",
+    id: null, status: "live", format: isMatch ? "match" : "stroke",
+    live: isMatch,                       // match play → full live/turn-based bot
+    hole_count: holes, course_id: selectedCourseId,
+    host_name: getPlayerName() || "You", // player tees first on hole 1
     settings: normalizeSettings(gameDefaults), _cpu: true,
   };
-  closeQuickMatch();
-  startCourse();
-  startBoardPoll();
-  toggleMatchBoard(true);
-  showToast("No opponent found — playing a CPU (" + Math.round(hcp) + " hcp)", 2600);
+  // Live-runtime init (mirrors enterLiveMatch); no realtime — there's no DB row.
+  lastOpp = cpuOpp; lastMe = null; oppShot = null; _shotFrom = null;
+  _lastOppSeq = -1; _matchSeq = 0; _spectating = false; _awaitLive = null;
+  _oppUpdatedSeen = null; _oppFreshAt = performance.now(); _liveStartAt = performance.now();
+  qmMatchFound(name, oppH, () => {
+    closeQuickMatch();
+    startCourse();
+    startBoardPoll();
+    toggleMatchBoard(true);
+  });
+}
+
+// "Match found" beat in the searching overlay before dropping into the round.
+function qmMatchFound(name, hcp, then) {
+  const ov = document.getElementById("quick-match");
+  const spin = ov && ov.querySelector(".qm-spinner");
+  const hint = ov && ov.querySelector(".qm-hint");
+  const s = document.getElementById("qm-search-status");
+  if (spin) spin.style.display = "none";
+  if (hint) hint.style.display = "none";
+  if (s) s.textContent = "Match found — " + name + (typeof hcp === "number" ? " · hcp " + hcp : "");
+  setTimeout(then, 1200);
+}
+
+// =====================================================================
+//  Live CPU driver — makes the bot play the hole shot-by-shot so it shows up
+//  exactly like a real live opponent (gold ghost ball + arc tweens + turn
+//  order + follow-cam), all via the existing cur_* fields on cpuOpp. Called
+//  every frame from loop() while a live CPU match is on the course.
+// =====================================================================
+const CPU_THINK_MS = 750;   // pause between the bot's shots (feels human)
+// Plan the current hole: N shots (N = its hole score) as waypoints marching from
+// the tee toward the pin, with mild lateral spread that tightens near the green.
+function cpuPlanHole() {
+  if (!cpuOpp || !HOLE) return;
+  const total = cpuHoleScore(HOLE.par, cpuOpp.handicap);
+  const tee = HOLE.teePos, pin = HOLE.holePos;
+  const dx = pin.x - tee.x, dy = pin.y - tee.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;   // along + perpendicular
+  const pts = [];
+  for (let k = 1; k <= total; k++) {
+    if (k === total) { pts.push({ x: pin.x, y: pin.y }); break; }   // last shot → cup
+    const f = k / total;
+    const lat = gaussRand() * 0.05 * len * (1 - f);       // spread shrinks near pin
+    const fwd = (Math.random() * 0.06 - 0.03) * len;
+    pts.push({ x: tee.x + dx * f + nx * lat + ux * fwd,
+               y: tee.y + dy * f + ny * lat + uy * fwd });
+  }
+  cpuOpp._plan = pts; cpuOpp._i = 0; cpuOpp._phase = "idle";
+  cpuOpp.cur_hole = HOLE.num; cpuOpp.cur_strokes = 0;
+  cpuOpp.cur_x = tee.x; cpuOpp.cur_y = tee.y;
+  cpuOpp.cur_to_pin = Math.round(len * YARDS_PER_UNIT);
+  cpuOpp.cur_at_rest = true; cpuOpp.cur_shot = null;
+  cpuOpp._nextAt = performance.now() + CPU_THINK_MS;
+}
+function cpuDriverTick() {
+  if (!cpuMatch || !liveMatch() || mode !== "course" || holeTransition) return;
+  if (!cpuOpp || !HOLE || HOLE.isRange) return;
+  const now = performance.now();
+  lastOpp = cpuOpp; _oppFreshAt = now;   // bot is always "responsive" → turn-gate honored
+  if (cpuOpp.cur_hole !== HOLE.num) cpuPlanHole();
+  pumpLiveAdvance();                      // snappy hole-advance once the bot holes out
+
+  // Resolve an in-flight bot shot → land the ball.
+  if (cpuOpp._phase === "flying") {
+    if (now < cpuOpp._flyUntil) return;
+    const target = cpuOpp._plan[cpuOpp._i];
+    cpuOpp.cur_x = target.x; cpuOpp.cur_y = target.y;
+    cpuOpp.cur_strokes++;
+    cpuOpp.cur_at_rest = true;
+    cpuOpp.cur_updated = new Date().toISOString();
+    const holed = cpuOpp._i >= cpuOpp._plan.length - 1;
+    cpuOpp._i++;
+    if (holed) {
+      cpuOpp.cur_to_pin = -1;
+      cpuOpp.hole_scores[HOLE.num] = cpuOpp.cur_strokes;
+      cpuOpp.pars[HOLE.num] = HOLE.par;
+      cpuRecomputeScore();
+      checkMatchCloseout();
+    } else {
+      cpuOpp.cur_to_pin = Math.round(dist(target.x, target.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
+    }
+    cpuOpp._phase = "idle";
+    cpuOpp._nextAt = now + CPU_THINK_MS;
+    return;
+  }
+
+  // Idle: fire the next shot only when it's the bot's turn (away/honors).
+  if ((cpuOpp.cur_to_pin | 0) < 0) return;   // already holed this hole
+  if (now < cpuOpp._nextAt) return;
+  const t = liveTurnHolder(meSnapshot(), cpuOpp);
+  if (!t || !sameName(t, cpuOpp.player_name)) return;   // not the bot's turn
+  const from = { x: cpuOpp.cur_x, y: cpuOpp.cur_y };
+  const target = cpuOpp._plan[cpuOpp._i];
+  if (!target) return;
+  const d = dist(from.x, from.y, target.x, target.y);
+  const durMs = Math.max(500, Math.min(2600, d * YARDS_PER_UNIT * 6));
+  cpuOpp._seq++;
+  cpuOpp.cur_shot = { seq: cpuOpp._seq, hole: HOLE.num,
+    fromX: from.x, fromY: from.y, toX: target.x, toY: target.y,
+    peak: d * 0.16, durMs, lie: "fairway" };
+  cpuOpp.cur_at_rest = false;
+  cpuOpp.cur_updated = new Date().toISOString();
+  startOppGhost(cpuOpp);                   // launch the arc tween on my screen
+  cpuOpp._phase = "flying";
+  cpuOpp._flyUntil = now + durMs;
 }
 
 // --- Quick Match overlay UI ---
@@ -7188,6 +7323,9 @@ function quickFind() {
   ensureNameThen(() => {
     document.getElementById("qm-setup").classList.add("hidden");
     document.getElementById("qm-searching").classList.remove("hidden");
+    const sp = ov.querySelector(".qm-spinner"), hint = ov.querySelector(".qm-hint");
+    if (sp) sp.style.display = "";       // restore (qmMatchFound hides them)
+    if (hint) hint.style.display = "";
     updateQuickSearchUI(0, 5);
     runQuickMatch(format, holes);
   });
@@ -7525,6 +7663,7 @@ function updateChipIndicator() {
 function loop() {
   update();
   tickHoleDrop();
+  cpuDriverTick();    // drive the live CPU opponent's shots (no-op unless in one)
   liveCameraTick();   // follow the opponent's ball while it's their turn
   updateLiveTurnUI(); // keep the whose-turn banner in sync (cheap; cached)
   updateCamera();
