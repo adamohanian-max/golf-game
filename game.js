@@ -3359,9 +3359,9 @@ document.addEventListener("click", closeHud);
 function buildHoleGrid() {
   if (!course) return;
   elHoleGrid.innerHTML = "";
-  // In a live match, holes you've already finished are locked — no going back to
-  // re-play a completed hole. The current hole stays selectable.
-  const finished = matchLive() ? new Set(round.holeStats.map((h) => h.hole)) : null;
+  // In a match (online or CPU), holes you've already finished are locked — no
+  // going back to re-play a completed hole. The current hole stays selectable.
+  const finished = inMatch() ? new Set(round.holeStats.map((h) => h.hole)) : null;
   course.holes.forEach((h, i) => {
     const num = h.num || i + 1;
     const locked = finished && finished.has(num) && i !== holeIndex;
