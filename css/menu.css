@@ -169,7 +169,7 @@
 
 /* ---- Name-entry / auth / add-course / admin / account: scrim */
 #name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer,
-#match-menu, #match-lobby, #match-setup,
+#match-menu, #match-lobby, #match-setup, #quick-match,
 #friends-modal, #friend-profile, #username-modal {
   position: fixed;
   inset: 0;
@@ -185,11 +185,11 @@
 #username-modal { z-index: 55; }   /* above friends, below the name gate */
 #add-course { z-index: 30; }
 #auth-modal, #admin-settings, #account-viewer { z-index: 40; }
-#match-menu, #match-lobby, #match-setup { z-index: 40; }
+#match-menu, #match-lobby, #match-setup, #quick-match { z-index: 40; }
 #friends-modal { z-index: 42; }
 #friend-profile { z-index: 44; }   /* above the friends list it opens from */
 #name-entry.hidden, #add-course.hidden, #auth-modal.hidden, #admin-settings.hidden, #account-viewer.hidden,
-#match-menu.hidden, #match-lobby.hidden, #match-setup.hidden,
+#match-menu.hidden, #match-lobby.hidden, #match-setup.hidden, #quick-match.hidden,
 #friends-modal.hidden, #friend-profile.hidden, #username-modal.hidden { display: none; }
 
 /* Friends */

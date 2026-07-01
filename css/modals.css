@@ -289,6 +289,19 @@
 .ms-len-row .ms-len { flex: 1; margin: 0; }
 .ms-len-row .ms-len.active { background: var(--accent); color: #fff; }
 
+/* Quick Match — reuse the ms-len-row layout; own active + searching styles */
+.ms-len-row .qm-fmt, .ms-len-row .qm-len { flex: 1; margin: 0; }
+.ms-len-row .qm-fmt.active, .ms-len-row .qm-len.active { background: var(--accent); color: #fff; }
+#qm-searching { text-align: center; }
+#qm-setup.hidden, #qm-searching.hidden { display: none; }
+.qm-hint { opacity: 0.7; }
+.qm-spinner {
+  width: 34px; height: 34px; margin: var(--s-3) auto var(--s-2);
+  border: 3px solid var(--w-08); border-top-color: var(--accent);
+  border-radius: 50%; animation: qm-spin 0.8s linear infinite;
+}
+@keyframes qm-spin { to { transform: rotate(360deg); } }
+
 /* Live standings — auto-shown during a match, top-left under the scorecard */
 #match-standings {
   position: fixed; top: calc(env(safe-area-inset-top, 0px) + 178px); left: var(--s-3); right: auto;

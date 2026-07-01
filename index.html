@@ -13,9 +13,9 @@
   <link rel="stylesheet" href="css/tokens.css?v=55">
   <link rel="stylesheet" href="css/base.css?v=54">
   <link rel="stylesheet" href="css/hud.css?v=63">
-  <link rel="stylesheet" href="css/menu.css?v=63">
+  <link rel="stylesheet" href="css/menu.css?v=64">
   <link rel="stylesheet" href="css/courses.css?v=3">
-  <link rel="stylesheet" href="css/modals.css?v=62">
+  <link rel="stylesheet" href="css/modals.css?v=64">
   <link rel="stylesheet" href="css/tournament.css?v=54">
 </head>
 <body>
@@ -106,6 +106,7 @@
       <h1>GOLF</h1>
       <div class="menu-divider"></div>
       <button id="play-course" class="menu-btn menu-btn-play">▸ Play</button>
+      <button id="open-quickmatch" class="menu-btn menu-btn-play">⚡ Quick Match</button>
       <button id="open-match" class="menu-btn menu-btn-play"><span class="ic ic-user"></span>Match vs Friends</button>
       <button id="play-daily" class="menu-btn secondary"><span class="ic ic-flag"></span>Daily Challenge</button>
       <button id="play-range" class="menu-btn secondary">Driving Range</button>
@@ -374,6 +375,37 @@
   </div>
 
   <!-- ===== Multiplayer matches: menu, lobby, host setup, live standings ===== -->
+  <div id="quick-match" class="hidden" data-holes="18" data-format="match">
+    <div class="ne-box">
+      <h2>⚡ Quick Match</h2>
+      <!-- Setup: pick format + length, then queue -->
+      <div id="qm-setup">
+        <p class="ne-sub">Find a live opponent near your handicap. No one waiting? You'll play a CPU.</p>
+        <div class="ms-len-row">
+          <button class="menu-btn secondary qm-fmt" data-format="match">Match play</button>
+          <button class="menu-btn secondary qm-fmt" data-format="stroke">Stroke play</button>
+        </div>
+        <div class="ms-len-row">
+          <button class="menu-btn secondary qm-len" data-holes="9">9 holes</button>
+          <button class="menu-btn secondary qm-len" data-holes="18">18 holes</button>
+        </div>
+        <div class="ne-actions">
+          <button id="qm-close" class="menu-btn secondary">Cancel</button>
+          <button id="qm-find" class="menu-btn menu-btn-play">Find opponent</button>
+        </div>
+      </div>
+      <!-- Searching: spinner + widening band + CPU fallback -->
+      <div id="qm-searching" class="hidden">
+        <div class="qm-spinner" aria-hidden="true"></div>
+        <p id="qm-search-status" class="ne-sub">Searching…</p>
+        <p class="ne-sub qm-hint">Pairing by handicap — the search widens, then falls back to a CPU.</p>
+        <div class="ne-actions">
+          <button id="qm-cancel" class="menu-btn secondary">Cancel search</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="match-menu" class="hidden">
     <div class="ne-box">
       <h2><span class="ic ic-user"></span>Match vs Friends</h2>
@@ -451,6 +483,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=97"></script>
+  <script src="game.js?v=98"></script>
 </body>
 </html>

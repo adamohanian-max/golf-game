@@ -249,8 +249,15 @@ let matchHoleCount = 18;     // holes this match plays (9 or 18), set at Begin
 let matchSetupMode = false;  // host is picking course/settings for a match
 let _matchEntered = false;   // guard so we only drop into the live round once
 let matchDecided = false;    // 1v1 match-play closeout reached → stop advancing holes
+// Quick Match (open matchmaking) — CPU fallback plays a purely local opponent
+// (no Supabase row); cpuOpp is a synthetic match_players row filled hole-by-hole.
+let cpuMatch = false;        // true → the "opponent" is a local bot, not a DB player
+let cpuOpp = null;           // synthetic match_players-shaped row for the bot
 function matchLive() { return !!(activeMatch && activeMatch.status === "live"); }
 function matchPlay() { return matchLive() && activeMatch.format === "match"; }
+// Any match context (online/live match or a local CPU match) — used to lock a
+// match to a single scored pass: a hole recorded here can't be replayed.
+function inMatch() { return matchLive() || cpuMatch; }
 // Live (synchronous) match: 1v1 match play with the "Live" toggle on — enforce
 // honors/away turn order, render the opponent's ball, watch each shot live.
 function liveMatch() { return matchPlay() && !!activeMatch.live; }
@@ -2496,6 +2503,19 @@ function earnMilestone(id) {
 function showResult() {
   const d = state.strokes - HOLE.par;
   const holeNum = HOLE.num || round.holesPlayed + 1;
+  // Matches are a single locked pass. If this hole was already recorded, a
+  // replay must NOT count: skip the score fold + the match-row push (either
+  // would corrupt the shared standings). Show the result, flagged as void.
+  if (inMatch() && round.holeStats.some(s => s.hole === holeNum)) {
+    const titleEl = document.getElementById("result-title");
+    titleEl.textContent = "Hole already played";
+    titleEl.className = "rt-l0";
+    document.getElementById("result-detail").textContent =
+      `Hole ${holeNum} is already recorded in this match — replays don't count. ` +
+      `Score stays ${formatToPar(round.score)}.`;
+    elResult.classList.remove("hidden");
+    return;
+  }
   // Record per-hole stats
   round.holeStats.push({
     hole: holeNum,
@@ -2510,6 +2530,9 @@ function showResult() {
   round.score += d;
   round.holesPlayed += 1;
   updateScorecard();
+  // CPU match: the bot plays this same hole (locally) right after I finish it,
+  // so the board + closeout below see its score.
+  if (cpuMatch) cpuPlayHole(holeNum, HOLE.par);
   // Live match: push my score/progress + per-hole scores so the opponent's
   // standings (and match-play status) update.
   if (matchLive()) {
@@ -4521,7 +4544,10 @@ function submitFinishedRound() {
   const btn = document.getElementById("re-leaderboard");
   const post = () => {
     payload.name = getPlayerName();   // pick up a name set just now
-    submitRound(payload).then(ok => { if (btn && ok) btn.textContent = "View leaderboard ✓"; });
+    submitRound(payload).then(ok => {
+      if (btn && ok) btn.textContent = "View leaderboard ✓";
+      if (ok) refreshMyHandicap();    // keep the Quick Match pairing rating fresh
+    });
   };
   if (payload.name) post();
   else openNameEntry(post);           // no name yet → prompt, then post
@@ -6046,6 +6072,7 @@ async function addMatchPlayer(matchId) {
 }
 
 async function fetchMatchPlayers(matchId) {
+  if (cpuMatch) return cpuMatchRows();   // local bot match → no DB, synthesize rows
   if (!LB_ON() || !matchId) return [];
   try {
     const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(matchId) +
@@ -6085,6 +6112,7 @@ async function beginMatch(courseId, holeCount, settings, format, live) {
 // times on failure so a transient blip doesn't drop a turn-critical write (a lost
 // write is what deadlocks the live turn gate).
 async function patchMyMatchRow(fields) {
+  if (cpuMatch) return;              // local bot match → nothing to persist
   if (!LB_ON() || !activeMatch) return;
   const me = getPlayerName() || "Player";
   const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(activeMatch.id) +
@@ -6770,6 +6798,7 @@ let _resultsPoll = null;
 function stopResultsPoll() { if (_resultsPoll) { clearInterval(_resultsPoll); _resultsPoll = null; } }
 
 function openMatchResults() {
+  markMatchDone();   // I've confirmed my card → flag the match finished (H2H, cleanup)
   stopBoardPoll();
   toggleMatchBoard(false);
   document.getElementById("round-end").classList.add("hidden");
@@ -6846,14 +6875,342 @@ function leaveMatch() {
   stopBoardPoll();
   unsubscribeMatchRealtime();
   closeMatchResults();
+  stopQuickMatch();
   activeMatch = null;
   matchSetupMode = false;
   _matchEntered = false;
   _matchIsHost = false;
   matchDecided = false;
   matchHoleCount = 18;
+  cpuMatch = false;
+  cpuOpp = null;
   toggleMatchBoard(false);
 }
+
+// =====================================================================
+//  QUICK MATCH — chess.com-style open matchmaking.
+//  Pick format (match/stroke) + length (9/18), then queue. The find_quick_match
+//  RPC atomically pairs the oldest waiter within a handicap band (the "Elo");
+//  the band widens over ~7s, and with no human by ~10s we drop into a local CPU
+//  opponent. Handicap = best-8-of-20 to-par (guests get a default). Pairing
+//  handshake: the caller whose RPC returns a match is the "joiner" and drives
+//  beginMatch (course/settings); the waiter, seeing its queue row flip to
+//  'matched', waits for the match to go live and enters. Both land in the same
+//  live-match runtime already used by friend matches.
+// =====================================================================
+const QM_DEFAULT_HCP = 18;   // guests / no-history players
+const QM_POLL_MS   = 1500;   // matchmaking tick + live-wait poll
+const QM_CPU_MS    = 10000;  // no human within this → CPU fallback
+const QM_LIVE_TRIES = 8;     // waiter polls ~12s for the joiner to go live, else self-begins
+let _qm = null;              // active matchmaking session, or null
+let _qmHcp = QM_DEFAULT_HCP; // my resolved pairing handicap for this session
+
+// Handicap band widens the longer you wait (tight → any).
+function qmBandFor(elapsed) {
+  if (elapsed < 4000) return 5;
+  if (elapsed < 7000) return 15;
+  return 999;   // any handicap
+}
+function qmPickCourse() {
+  const list = COURSES.length ? COURSES : FALLBACK_COURSES;
+  return list[(Math.random() * list.length) | 0].id;
+}
+
+// My pairing rating: stored profile handicap → computed from rounds → default.
+async function resolveMyHandicap() {
+  if (!isLoggedIn() || !currentUser()) return QM_DEFAULT_HCP;
+  if (_profile && typeof _profile.handicap === "number") return _profile.handicap;
+  try {
+    const rounds = await fetchRoundsFor(currentUser().id);
+    const h = computeMyStats(rounds || []).handicap;
+    return typeof h === "number" ? h : QM_DEFAULT_HCP;
+  } catch (e) { return QM_DEFAULT_HCP; }
+}
+// After a logged-in round: recompute + persist handicap so pairing stays fresh.
+async function refreshMyHandicap() {
+  if (!LB_ON() || !isLoggedIn() || !currentUser()) return;
+  try {
+    const rounds = await fetchRoundsFor(currentUser().id);
+    const h = computeMyStats(rounds || []).handicap;
+    if (typeof h !== "number") return;
+    await fetch(LB_URL + "/rest/v1/profiles?id=eq." + encodeURIComponent(currentUser().id), {
+      method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ handicap: h }),
+    });
+    if (_profile) _profile.handicap = h;
+  } catch (e) { /* best-effort */ }
+}
+
+// Flag a finished match 'done' (best-effort) → H2H counts it, queue ignores it.
+function markMatchDone() {
+  if (cpuMatch || !activeMatch || !activeMatch.id || !LB_ON()) return;
+  fetch(LB_URL + "/rest/v1/matches?id=eq." + encodeURIComponent(activeMatch.id), {
+    method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+    body: JSON.stringify({ status: "done" }),
+  }).catch(() => {});
+}
+
+// --- RPC + queue REST ---
+async function rpcFindMatch(hcp, format, holes, band) {
+  if (!LB_ON()) return null;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/rpc/find_quick_match", {
+      method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        p_user: (currentUser() || {}).id || null,
+        p_name: getPlayerName() || "Player",
+        p_hcp: hcp, p_format: format, p_holes: holes, p_band: band,
+      }),
+    });
+    if (!res.ok) return null;
+    const out = await res.json();   // scalar uuid or null
+    return (out && typeof out === "string") ? out : null;
+  } catch (e) { return null; }
+}
+async function enqueueMe(hcp, format, holes) {
+  if (!LB_ON()) return null;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/match_queue", {
+      method: "POST", headers: authHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify({
+        user_id: (currentUser() || {}).id || null,
+        player_name: getPlayerName() || "Player",
+        handicap: hcp, format, hole_count: holes, status: "waiting",
+      }),
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] ? rows[0].id : null;
+  } catch (e) { return null; }
+}
+async function fetchMyQueueRow(id) {
+  if (!LB_ON() || !id) return null;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/match_queue?id=eq." + encodeURIComponent(id) + "&limit=1",
+                            { headers: lbHeaders() });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  } catch (e) { return null; }
+}
+async function cancelQueue() {
+  const id = _qm && _qm.queueRowId;
+  if (!id || !LB_ON()) return;
+  try {
+    await fetch(LB_URL + "/rest/v1/match_queue?id=eq." + encodeURIComponent(id), {
+      method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ status: "cancelled" }),
+    });
+  } catch (e) { /* best-effort */ }
+}
+
+// --- Matchmaking loop ---
+function runQuickMatch(format, holes) {
+  stopQuickMatch();
+  _qm = { format, holes, band: 5, startedAt: Date.now(),
+          queueRowId: null, paired: false, cancelled: false, timer: null, liveWait: null };
+  resolveMyHandicap().then(h => { _qmHcp = h; });
+  if (!LB_ON()) { startCpuMatch(format, holes); return; }   // offline → straight to CPU
+  qmTick();
+  _qm.timer = setInterval(qmTick, QM_POLL_MS);
+}
+async function qmTick() {
+  const q = _qm;
+  if (!q || q.cancelled || q.paired) return;
+  const elapsed = Date.now() - q.startedAt;
+  q.band = qmBandFor(elapsed);
+  updateQuickSearchUI(elapsed, q.band);
+  if (elapsed >= QM_CPU_MS) {           // give up on humans → CPU
+    q.paired = true; await cancelQueue(); startCpuMatch(q.format, q.holes); return;
+  }
+  // Try to grab a waiting opponent (I become the joiner).
+  const id = await rpcFindMatch(_qmHcp, q.format, q.holes, q.band);
+  if (!_qm || q.cancelled) return;
+  if (id) { q.paired = true; await cancelQueue(); joinPairedMatch(id, true); return; }
+  // No partner: make sure I'm in the pool, then see if someone picked me.
+  if (!q.queueRowId) { q.queueRowId = await enqueueMe(_qmHcp, q.format, q.holes); return; }
+  const row = await fetchMyQueueRow(q.queueRowId);
+  if (!_qm || q.cancelled) return;
+  if (row && row.status === "matched" && row.matched_match_id) {
+    q.paired = true; joinPairedMatch(row.matched_match_id, false);
+  }
+}
+async function joinPairedMatch(matchId, iAmJoiner) {
+  stopQmTimers();
+  const m = await fetchMatchById(matchId);
+  if (!m) { startCpuMatch(_qm ? _qm.format : "match", _qm ? _qm.holes : 18); return; }
+  activeMatch = m;
+  _matchIsHost = !iAmJoiner;
+  _matchEntered = false;
+  const format = (_qm && _qm.format) || m.format || "match";
+  const holes = (_qm && _qm.holes) || m.hole_count || 18;
+  if (iAmJoiner) {
+    // I created the match via the RPC → set course/settings + flip it live.
+    await beginMatch(qmPickCourse(), holes, gameDefaults, format, format === "match");
+    closeQuickMatch();
+    enterLiveMatch();
+  } else {
+    waitForLiveThenEnter(matchId, format, holes);   // waiter: enter once joiner goes live
+  }
+}
+function waitForLiveThenEnter(matchId, format, holes) {
+  let tries = 0;
+  stopQmTimers();
+  const iv = setInterval(async () => {
+    tries++;
+    const m = await fetchMatchById(matchId);
+    if (m) activeMatch = m;
+    if (m && m.status === "live" && m.course_id) {
+      clearInterval(iv); closeQuickMatch(); enterLiveMatch(); return;
+    }
+    if (tries >= QM_LIVE_TRIES) {   // joiner never began → drive it myself
+      clearInterval(iv);
+      await beginMatch(qmPickCourse(), holes, gameDefaults, format, format === "match");
+      closeQuickMatch(); enterLiveMatch();
+    }
+  }, QM_POLL_MS);
+  if (_qm) _qm.liveWait = iv;
+}
+function stopQmTimers() {
+  if (_qm) {
+    if (_qm.timer) { clearInterval(_qm.timer); _qm.timer = null; }
+    if (_qm.liveWait) { clearInterval(_qm.liveWait); _qm.liveWait = null; }
+  }
+}
+function stopQuickMatch() { if (_qm) { _qm.cancelled = true; stopQmTimers(); } }
+async function cancelQuickMatch() {
+  await cancelQueue();
+  stopQuickMatch();
+  _qm = null;
+  closeQuickMatch();
+}
+
+// --- Local CPU opponent (no DB) ---
+function gaussRand() {
+  let u = 0, v = 0;
+  while (!u) u = Math.random();
+  while (!v) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+// A hole score for a bot of the given handicap: mean = par + hcp/18, jittered,
+// clamped to a sane band (eagle floor on par-5s, birdie floor otherwise).
+function cpuHoleScore(par, hcp) {
+  const mean = par + (hcp || 0) / 18;
+  const s = Math.round(mean + gaussRand() * 1.0);
+  const lo = par >= 5 ? par - 2 : par - 1;
+  return Math.max(1, Math.min(par + 4, Math.max(lo, s)));
+}
+function cpuName(hcp) { return "CPU · hcp " + Math.round(hcp); }
+// Synthesize the two match_players rows for a CPU match from local state.
+function cpuMatchRows() {
+  const hs = {};
+  for (const h of round.holeStats) hs[h.hole] = h.strokes;
+  const me = {
+    user_id: (currentUser() || {}).id || null,
+    player_name: getPlayerName() || "You",
+    score: round.score, holes_played: round.holesPlayed,
+    finished: round.holesPlayed >= roundHoleCount(),
+    hole_scores: hs,
+    cur_hole: (typeof HOLE !== "undefined" && HOLE && HOLE.num) || null,
+    cur_to_pin: -1, cur_at_rest: true,
+  };
+  return [me, cpuOpp];
+}
+// The bot plays a hole right after I finish it.
+function cpuPlayHole(holeNum, par) {
+  if (!cpuOpp) return;
+  cpuOpp.hole_scores[holeNum] = cpuHoleScore(par, cpuOpp.handicap);
+  cpuOpp.pars[holeNum] = par;
+  let score = 0, n = 0;
+  for (const k in cpuOpp.hole_scores) { score += cpuOpp.hole_scores[k] - (cpuOpp.pars[k] || par); n++; }
+  cpuOpp.score = score;
+  cpuOpp.holes_played = n;
+  cpuOpp.cur_hole = holeNum;
+  cpuOpp.finished = n >= roundHoleCount();
+}
+function startCpuMatch(format, holes) {
+  stopQuickMatch();
+  _qm = null;
+  cpuMatch = true; matchDecided = false; _matchEntered = false;
+  matchHoleCount = holes;
+  selectedCourseId = qmPickCourse();
+  const hcp = (typeof _qmHcp === "number") ? _qmHcp : QM_DEFAULT_HCP;
+  cpuOpp = {
+    user_id: null, player_name: cpuName(hcp), handicap: hcp,
+    hole_scores: {}, pars: {}, score: 0, holes_played: 0, finished: false,
+    cur_hole: null, cur_to_pin: -1, cur_at_rest: true,
+  };
+  activeMatch = {
+    id: null, status: "live", format: format === "match" ? "match" : "stroke",
+    live: false, hole_count: holes, course_id: selectedCourseId,
+    host_name: getPlayerName() || "You",
+    settings: normalizeSettings(gameDefaults), _cpu: true,
+  };
+  closeQuickMatch();
+  startCourse();
+  startBoardPoll();
+  toggleMatchBoard(true);
+  showToast("No opponent found — playing a CPU (" + Math.round(hcp) + " hcp)", 2600);
+}
+
+// --- Quick Match overlay UI ---
+function openQuickMatch() {
+  const ov = document.getElementById("quick-match");
+  if (!ov) return;
+  ov.dataset.holes = ov.dataset.holes || "18";
+  ov.dataset.format = ov.dataset.format || "match";
+  syncQuickToggles();
+  document.getElementById("qm-setup").classList.remove("hidden");
+  document.getElementById("qm-searching").classList.add("hidden");
+  ov.classList.remove("hidden");
+}
+function closeQuickMatch() {
+  const ov = document.getElementById("quick-match");
+  if (ov) ov.classList.add("hidden");
+}
+function syncQuickToggles() {
+  const ov = document.getElementById("quick-match");
+  if (!ov) return;
+  ov.querySelectorAll(".qm-len").forEach(b => b.classList.toggle("active", b.dataset.holes === ov.dataset.holes));
+  ov.querySelectorAll(".qm-fmt").forEach(b => b.classList.toggle("active", b.dataset.format === ov.dataset.format));
+}
+function updateQuickSearchUI(elapsed, band) {
+  const s = document.getElementById("qm-search-status");
+  if (!s) return;
+  const secs = Math.floor(elapsed / 1000);
+  const bandTxt = band >= 999 ? "any handicap" : "±" + band + " hcp";
+  s.textContent = "Searching (" + bandTxt + ") · " + secs + "s";
+}
+function quickFind() {
+  const ov = document.getElementById("quick-match");
+  const holes = parseInt(ov.dataset.holes, 10) || 18;
+  const format = ov.dataset.format === "stroke" ? "stroke" : "match";
+  ensureNameThen(() => {
+    document.getElementById("qm-setup").classList.add("hidden");
+    document.getElementById("qm-searching").classList.remove("hidden");
+    updateQuickSearchUI(0, 5);
+    runQuickMatch(format, holes);
+  });
+}
+
+(function wireQuickMatch() {
+  const open = document.getElementById("open-quickmatch");
+  if (open) open.addEventListener("click", () => ensureNameThen(openQuickMatch));
+  const ov = document.getElementById("quick-match");
+  if (!ov) return;
+  ov.querySelectorAll(".qm-len").forEach(b => b.addEventListener("click", () => {
+    ov.dataset.holes = b.dataset.holes; syncQuickToggles();
+  }));
+  ov.querySelectorAll(".qm-fmt").forEach(b => b.addEventListener("click", () => {
+    ov.dataset.format = b.dataset.format; syncQuickToggles();
+  }));
+  const find = document.getElementById("qm-find");
+  if (find) find.addEventListener("click", quickFind);
+  const cancel = document.getElementById("qm-cancel");
+  if (cancel) cancel.addEventListener("click", cancelQuickMatch);
+  const close = document.getElementById("qm-close");
+  if (close) close.addEventListener("click", cancelQuickMatch);
+})();
 
 // --- Wire-up ---
 (function wireMatch() {

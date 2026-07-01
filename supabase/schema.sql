@@ -271,3 +271,70 @@ create policy "mi insert" on match_invites for insert
 create policy "mi update" on match_invites for update
   using (auth.uid() = to_user or auth.uid() = from_user);
 create index if not exists match_invites_to_idx on match_invites (to_user, status);
+
+-- =====================================================================
+--  QUICK MATCH: chess.com-style open matchmaking. A player enqueues with a
+--  format (match/stroke) + length (9/18) + their handicap (the pairing rating,
+--  like Elo). The find_quick_match RPC atomically pairs the oldest compatible
+--  waiter within a handicap band, creating a `matches` row + both player rows.
+--  If nobody's waiting the client widens the band, then falls back to a local
+--  CPU (no DB row). Guests allowed (default handicap); RLS permissive like
+--  `matches` — the pool is public, nothing sensitive lives here.
+-- =====================================================================
+create table if not exists match_queue (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid references auth.users(id) on delete cascade,  -- null for guests
+  player_name      text not null,
+  handicap         numeric not null default 18,
+  format           text not null default 'match',   -- 'match' | 'stroke'
+  hole_count       int  not null default 18,         -- 9 | 18
+  status           text not null default 'waiting',  -- 'waiting' | 'matched' | 'cancelled'
+  matched_match_id uuid references matches(id) on delete set null,
+  enqueued_at      timestamptz default now()
+);
+alter table match_queue enable row level security;
+create policy "mq read"   on match_queue for select using (true);
+create policy "mq write"  on match_queue for insert with check (true);
+create policy "mq update" on match_queue for update using (true);
+create index if not exists match_queue_wait_idx
+  on match_queue (format, hole_count, status, enqueued_at);
+alter publication supabase_realtime add table public.match_queue;
+
+-- handicap = the pairing rating (best-8-of-20 to-par), refreshed client-side
+-- after each logged-in round.
+alter table profiles add column if not exists handicap numeric;
+
+-- Atomic pairing: lock the oldest compatible waiter with FOR UPDATE SKIP LOCKED
+-- (so two simultaneous callers can't grab the same partner), spin up the match
+-- + both player rows, mark the partner's queue row matched, return the match id.
+-- Returns null when no partner in band → caller enqueues itself and polls.
+create or replace function find_quick_match(
+  p_user uuid, p_name text, p_hcp numeric,
+  p_format text, p_holes int, p_band numeric
+) returns uuid language plpgsql security definer as $$
+declare v_partner match_queue; v_match uuid; v_code text;
+begin
+  select * into v_partner from match_queue
+   where status = 'waiting' and format = p_format and hole_count = p_holes
+     and (p_user is null or user_id is distinct from p_user)
+     and abs(handicap - p_hcp) <= p_band
+   order by enqueued_at asc
+   for update skip locked limit 1;
+
+  if v_partner.id is null then return null; end if;
+
+  v_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6));
+  insert into matches(code, host_name, host_user_id, status, format, live)
+    values (v_code, v_partner.player_name, v_partner.user_id,
+            'lobby', p_format, p_format = 'match')
+    returning id into v_match;
+  insert into match_players(match_id, user_id, player_name)
+    values (v_match, v_partner.user_id, v_partner.player_name),
+           (v_match, p_user, p_name);
+  update match_queue set status = 'matched', matched_match_id = v_match
+    where id = v_partner.id;
+  return v_match;
+end $$;
+
+grant execute on function find_quick_match(uuid, text, numeric, text, int, numeric)
+  to anon, authenticated;
