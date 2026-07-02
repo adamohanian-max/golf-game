@@ -28,7 +28,7 @@ Multiple agents can work this repo at once. Two independent isolations — **nei
 ## File structure
 
 - `index.html` — canvas element, scorecard overlay (HTML, updated by JS), result modal
-- `style.css` — full-screen canvas, `touch-action: none` to block browser scroll hijack, safe-area insets for notched phones
+- `css/*.css` — modular stylesheets: `tokens.css` (design tokens — "clubhouse heritage" palette: pine/cream/brass/turf, Fraunces display serif from `fonts/`), `base.css` (reset, full-screen canvas + `touch-action: none`, buttons, `.ic-*` icon system), `hud.css`, `menu.css`, `courses.css`, `modals.css`, `tournament.css`. Bump each file's `?v=` in `index.html` on change.
 - `courses/<id>.json` — baked real-course geometry the game loads at runtime (Phase 2)
 - `tools/fetch_course.py` — dev-only data-prep: pulls a course from OpenStreetMap (Overpass API) and writes `courses/<id>.json`. NOT part of the game build.
 - `game.js` — all game logic, organized in sections:

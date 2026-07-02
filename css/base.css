@@ -124,7 +124,7 @@ html, body {
   box-shadow: var(--accent-glow);
   transition: transform var(--dur-fast), box-shadow var(--dur-fast);
 }
-.menu-btn:active { transform: scale(0.97); box-shadow: 0 2px 10px rgba(47, 158, 68, 0.18); }
+.menu-btn:active { transform: scale(0.97); box-shadow: 0 2px 10px rgba(46, 125, 79, 0.18); }
 .menu-btn.hidden { display: none; }   /* admin-only buttons stay hidden for non-admins */
 .menu-btn.secondary {
   background: var(--surface-raised);
@@ -160,7 +160,8 @@ html, body {
 .panel h2 {
   color: var(--text);
   text-align: center;
+  font-family: var(--font-display);
   font-size: var(--t-h2);
-  font-weight: var(--fw-black);
+  font-weight: var(--fw-bold);
   letter-spacing: 0.3px;
 }

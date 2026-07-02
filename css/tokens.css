@@ -1,8 +1,25 @@
 /* ============================================================
    Design tokens — single source of truth for the UI system.
    3 tiers: primitives → semantic → component.
-   Keep the dark-green glassmorphism identity; kill magic numbers.
+   Identity: "clubhouse heritage" — deep pine, warm cream,
+   muted brass, turf green. Serif display face for titles and
+   big numbers; system sans for body/UI/tabular data.
    ============================================================ */
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("../fonts/fraunces-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("../fonts/fraunces-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* ---- Safe-area insets (exposed to JS for canvas HUD) ---- */
@@ -13,40 +30,44 @@
 
   /* ---- Primitives ---------------------------------------- */
   /* green ramp */
-  --green-900: #0a3d1f;   /* app background */
-  --green-700: #11271a;   /* solid panel base */
-  --green-500: #2f9e44;   /* primary accent */
-  --green-300: #4ade80;   /* bright accent (active/links) */
+  --green-900: #0e1f16;   /* deep pine app background */
+  --green-700: #16291d;   /* solid panel base */
+  --green-500: #2e7d4f;   /* turf primary accent */
+  --green-300: #63b98b;   /* active/links */
 
-  /* neutral / white-alpha ramp (dark-mode tuned) */
-  --white: #f4f6f3;
-  --w-85: rgba(255, 255, 255, 0.85);
-  --w-70: rgba(255, 255, 255, 0.70);
-  --w-55: rgba(255, 255, 255, 0.55);
-  --w-45: rgba(255, 255, 255, 0.45);
-  --w-32: rgba(255, 255, 255, 0.32);
-  --w-14: rgba(255, 255, 255, 0.14);
-  --w-12: rgba(255, 255, 255, 0.12);
-  --w-08: rgba(255, 255, 255, 0.08);
-  --w-05: rgba(255, 255, 255, 0.05);
+  /* brass ramp */
+  --brass-600: #b08d4a;   /* muted brass */
+  --brass-400: #cfa85e;   /* bright brass */
+
+  /* neutral / cream-alpha ramp (dark-mode tuned) */
+  --white: #ece5d3;
+  --w-85: rgba(236, 229, 211, 0.87);
+  --w-70: rgba(236, 229, 211, 0.72);
+  --w-55: rgba(236, 229, 211, 0.56);
+  --w-45: rgba(236, 229, 211, 0.46);
+  --w-32: rgba(236, 229, 211, 0.34);
+  --w-14: rgba(236, 229, 211, 0.15);
+  --w-12: rgba(236, 229, 211, 0.13);
+  --w-08: rgba(236, 229, 211, 0.09);
+  --w-05: rgba(236, 229, 211, 0.06);
 
   /* status */
-  --status-under:  #ff5a52;   /* under par / red */
-  --status-over:   #ffd24a;   /* over par / yellow */
-  --status-birdie: #2f9e44;
-  --status-eagle:  #ffd700;
-  --status-error:  #ff5a52;
-  --status-hazard: #ff8c5a;
+  --status-under:  #e0655c;   /* under par / red (golf convention) */
+  --status-over:   #d9b96a;   /* over par */
+  --status-birdie: #2e7d4f;
+  --status-eagle:  #cfa85e;   /* brass, not pure gold */
+  --status-error:  #e0655c;
+  --status-hazard: #d98a5f;
 
-  /* glass tints (dark green, varying alpha) */
-  --glass-faint: rgba(8, 22, 14, 0.50);
-  --glass-solid: rgba(10, 26, 16, 0.94);
+  /* glass tints (pine, varying alpha) */
+  --glass-faint: rgba(10, 22, 15, 0.55);
+  --glass-solid: rgba(13, 26, 18, 0.94);
 
   /* ---- Semantic surfaces --------------------------------- */
   --surface-hud:    var(--glass-faint);   /* HUD chips */
   --surface-panel:  var(--glass-solid);   /* modal bodies */
   --surface-raised: var(--w-08);          /* inputs, secondary btn, list items */
-  --surface-scrim:  rgba(2, 10, 5, 0.72); /* full-screen overlay backdrop */
+  --surface-scrim:  rgba(6, 14, 9, 0.74); /* full-screen overlay backdrop */
 
   --border-hair: 1px solid var(--w-12);
   --border-edge: 1px solid var(--w-14);
@@ -58,8 +79,12 @@
   /* ---- Accent -------------------------------------------- */
   --accent: var(--green-500);
   --accent-bright: var(--green-300);
-  --accent-soft: rgba(47, 158, 68, 0.16);
-  --accent-glow: 0 4px 24px rgba(47, 158, 68, 0.28);
+  --accent-soft: rgba(46, 125, 79, 0.18);
+  --accent-glow: 0 4px 24px rgba(46, 125, 79, 0.30);
+
+  --brass: var(--brass-600);
+  --brass-bright: var(--brass-400);
+  --brass-soft: rgba(176, 141, 74, 0.14);
 
   /* ---- Text ---------------------------------------------- */
   --text: var(--white);
@@ -67,7 +92,7 @@
   --text-dim: var(--w-55);
   --text-faint: var(--w-32);
 
-  /* ---- Radius scale (collapse the old 9–20px sprawl) ----- */
+  /* ---- Radius scale --------------------------------------- */
   --r-sm: 10px;
   --r-md: 14px;
   --r-lg: 18px;
@@ -88,6 +113,7 @@
 
   /* ---- Type scale ---------------------------------------- */
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --t-display: 76px;
   --t-h1: 22px;
