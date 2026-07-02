@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
   <link rel="stylesheet" href="css/tokens.css?v=55">
   <link rel="stylesheet" href="css/base.css?v=54">
-  <link rel="stylesheet" href="css/hud.css?v=63">
+  <link rel="stylesheet" href="css/hud.css?v=64">
   <link rel="stylesheet" href="css/menu.css?v=64">
   <link rel="stylesheet" href="css/courses.css?v=3">
   <link rel="stylesheet" href="css/modals.css?v=64">
@@ -380,7 +380,7 @@
       <h2>⚡ Quick Match</h2>
       <!-- Setup: pick format + length, then queue -->
       <div id="qm-setup">
-        <p class="ne-sub">Find a live opponent near your handicap. No one waiting? You'll play a CPU.</p>
+        <p class="ne-sub">Get matched live with an opponent near your handicap.</p>
         <div class="ms-len-row">
           <button class="menu-btn secondary qm-fmt" data-format="match">Match play</button>
           <button class="menu-btn secondary qm-fmt" data-format="stroke">Stroke play</button>
@@ -398,7 +398,7 @@
       <div id="qm-searching" class="hidden">
         <div class="qm-spinner" aria-hidden="true"></div>
         <p id="qm-search-status" class="ne-sub">Searching…</p>
-        <p class="ne-sub qm-hint">Pairing by handicap — the search widens, then falls back to a CPU.</p>
+        <p class="ne-sub qm-hint">Pairing by handicap — the search widens the longer you wait.</p>
         <div class="ne-actions">
           <button id="qm-cancel" class="menu-btn secondary">Cancel search</button>
         </div>
@@ -483,6 +483,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=101"></script>
+  <script src="game.js?v=103"></script>
 </body>
 </html>

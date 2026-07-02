@@ -258,9 +258,10 @@ function matchPlay() { return matchLive() && activeMatch.format === "match"; }
 // Any match context (online/live match or a local CPU match) — used to lock a
 // match to a single scored pass: a hole recorded here can't be replayed.
 function inMatch() { return matchLive() || cpuMatch; }
-// Live (synchronous) match: 1v1 match play with the "Live" toggle on — enforce
-// honors/away turn order, render the opponent's ball, watch each shot live.
-function liveMatch() { return matchPlay() && !!activeMatch.live; }
+// Live (synchronous) match — enforce honors/away turn order, render the
+// opponent's ball, watch each shot live. Online matches only set live=true for
+// match play (beginMatch); local Quick Match opponents are live in both formats.
+function liveMatch() { return matchLive() && !!activeMatch.live; }
 let holeTransition = null; // active hole-change animation (fade + zoom-in), or null
 let holeDrop = null;       // active ball-into-cup drop animation, or null
 const HOLE_DROP_MS = 520;  // drop animation length; result modal opens when it ends
@@ -907,11 +908,26 @@ function playCelebrate(level) {
   notes.forEach((f, i) => tone(ac, t + i * 0.085, f, 0.28, 0.15, "triangle"));
 }
 
-// Light haptic. navigator.vibrate is Android-only (iOS Safari has NO web vibration
-// API), so we also toggle a hidden <input switch> — the one trick that emits a system
-// haptic tick on iOS 17.4+. Best-effort: iOS may ignore it outside a direct tap.
+// Light haptic. Native app (Capacitor) gets the real haptic engine via the
+// Haptics plugin. On the web, navigator.vibrate is Android-only (iOS Safari has
+// NO web vibration API), so we also toggle a hidden <input switch> — the one
+// trick that emits a system haptic tick on iOS 17.4+. Best-effort everywhere.
 const hapticSwitch = document.querySelector("#haptic-switch input");
+function capHaptics() {
+  const C = window.Capacitor;   // injected by the native shell, absent on web
+  return (C && C.isNativePlatform && C.isNativePlatform() && C.Plugins) ? C.Plugins.Haptics : null;
+}
 function haptic(pattern) {
+  const H = capHaptics();
+  if (H) {
+    try {
+      // Arrays are celebration patterns (hole-out) -> success notification;
+      // single numbers map by intensity to impact strength.
+      if (Array.isArray(pattern)) H.notification({ type: "SUCCESS" });
+      else H.impact({ style: pattern <= 4 ? "LIGHT" : pattern <= 12 ? "MEDIUM" : "HEAVY" });
+    } catch (e) { /* ignore */ }
+    return;
+  }
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* ignore */ }
   if (hapticSwitch) { try { hapticSwitch.checked = !hapticSwitch.checked; } catch (e) { /* ignore */ } }
 }
@@ -1328,12 +1344,12 @@ const VIEW_MIN = 7;         // smallest framed dimension (caps how far we zoom i
 // HUD bands kept clear of the framed hole (css px, added on top of safe-area
 // insets). The camera fits the ball↔pin into the area BETWEEN these bands and
 // centers it there, so the pin/ball don't sit under the scorecard/stats/club UI.
-// Per-device reserve bands. On MOBILE the whole HUD lives in the outer left/right
-// 25% columns (see the side-band CSS), so we reserve those side bands and frame
-// the hole into the clear center 50%. On DESKTOP the HUD sits in the corners, so
-// we reserve top/bottom instead. Picked by IS_DESKTOP in hudReserve().
+// Per-device reserve bands. On MOBILE the HUD is a slim top scorecard bar + a
+// bottom stat strip (see the mobile-bars CSS in hud.css), so we reserve those
+// horizontal bands and give the hole the full screen width. On DESKTOP the HUD
+// sits in the corners, so we reserve top/bottom too. Picked in hudReserve().
 const HUD_RESERVE = {
-  mobile:  { side: 0.25 },        // each side band = 25% of viewport width
+  mobile:  { top: 48, bot: 96, side: 10 }, // px: top bar / stat strip / edge gutters
   desktop: { top: 56, bot: 64 },
 };
 let holeFitW = 100, holeFitH = 100; // full-hole framing dims -> refScale
@@ -1453,6 +1469,11 @@ function applyDeviceMode() {
   IS_DESKTOP = !mobile;
   document.body.classList.toggle("is-mobile", mobile);
   document.body.classList.toggle("is-desktop", !mobile);
+  // Touch players never see the keyboard half of the swing hint.
+  const hint = document.getElementById("hint");
+  if (hint) hint.textContent = mobile
+    ? "Swipe to swing"
+    : "Swipe to swing · ← → to aim · ↑ ↓ club";
 }
 mqMobile.addEventListener("change", () => { applyDeviceMode(); resize(); });
 
@@ -1460,13 +1481,13 @@ mqMobile.addEventListener("change", () => { applyDeviceMode(); resize(); });
 // per-device reserve on each edge. Top/bottom hold the scorecard/stats and club UI.
 function hudReserve() {
   if (!IS_DESKTOP) {
-    // Mobile: HUD is in the side columns -> reserve them, frame hole in the center.
-    const s = HUD_RESERVE.mobile.side * window.innerWidth;
+    // Mobile: HUD is a top bar + bottom strip -> reserve those, use full width.
+    const m = HUD_RESERVE.mobile;
     return {
-      top: safeInset.t + 8,
-      bot: safeInset.b + 8,
-      left: safeInset.l + s,
-      right: safeInset.r + s,
+      top: safeInset.t + m.top,
+      bot: safeInset.b + m.bot,
+      left: safeInset.l + m.side,
+      right: safeInset.r + m.side,
     };
   }
   const r = HUD_RESERVE.desktop;
@@ -2101,8 +2122,9 @@ function drawWindIndicator() {
   const svy = view.d * pwx + view.e * pwy;
   const screenAngle = Math.atan2(svy, svx);
 
-  // Below the notch / Dynamic Island (which sits top-center, right where this pill draws).
-  const cx = cssW / 2, cy = safeInset.t + 22;
+  // Below the notch / Dynamic Island — and on mobile, below the scorecard top
+  // bar (which now spans the top of the screen).
+  const cx = cssW / 2, cy = safeInset.t + (IS_DESKTOP ? 22 : 63);
   const spd = Math.round(wind.speed);
   const label = spd + " mph";
 
@@ -2530,10 +2552,6 @@ function showResult() {
   round.score += d;
   round.holesPlayed += 1;
   updateScorecard();
-  // CPU match: in the async STROKE path the bot's score for this hole is filled
-  // right after I finish it. In a LIVE match the bot plays the hole itself,
-  // shot-by-shot (cpuDriverTick), so we don't fill it here.
-  if (cpuMatch && !liveMatch()) cpuPlayHole(holeNum, HOLE.par);
   // Live match: push my score/progress + per-hole scores so the opponent's
   // standings (and match-play status) update.
   if (matchLive()) {
@@ -6901,7 +6919,8 @@ function leaveMatch() {
 // =====================================================================
 const QM_DEFAULT_HCP = 18;   // guests / no-history players
 const QM_POLL_MS   = 1500;   // matchmaking tick + live-wait poll
-const QM_CPU_MS    = 10000;  // no human within this → CPU fallback
+const QM_CPU_MIN_MS = 6000;  // CPU fallback threshold is rolled per search
+const QM_CPU_MAX_MS = 18000; //   (6-18s) so the wait length never repeats
 const QM_LIVE_TRIES = 8;     // waiter polls ~12s for the joiner to go live, else self-begins
 let _qm = null;              // active matchmaking session, or null
 let _qmHcp = QM_DEFAULT_HCP; // my resolved pairing handicap for this session
@@ -7010,9 +7029,21 @@ async function cancelQueue() {
 function runQuickMatch(format, holes) {
   stopQuickMatch();
   _qm = { format, holes, band: 5, startedAt: Date.now(),
+          cpuAt: QM_CPU_MIN_MS + Math.random() * (QM_CPU_MAX_MS - QM_CPU_MIN_MS),
           queueRowId: null, paired: false, cancelled: false, timer: null, liveWait: null };
   resolveMyHandicap().then(h => { _qmHcp = h; });
-  if (!LB_ON()) { startCpuMatch(format, holes); return; }   // offline → straight to CPU
+  if (!LB_ON()) {
+    // Offline: no queue to poll, but still run a believable search beat.
+    _qm.cpuAt = 3000 + Math.random() * 6000;
+    _qm.timer = setInterval(() => {
+      const q = _qm;
+      if (!q || q.cancelled || q.paired) return;
+      const elapsed = Date.now() - q.startedAt;
+      updateQuickSearchUI(elapsed, qmBandFor(elapsed));
+      if (elapsed >= q.cpuAt) { q.paired = true; startCpuMatch(q.format, q.holes); }
+    }, QM_POLL_MS);
+    return;
+  }
   qmTick();
   _qm.timer = setInterval(qmTick, QM_POLL_MS);
 }
@@ -7022,7 +7053,7 @@ async function qmTick() {
   const elapsed = Date.now() - q.startedAt;
   q.band = qmBandFor(elapsed);
   updateQuickSearchUI(elapsed, q.band);
-  if (elapsed >= QM_CPU_MS) {           // give up on humans → CPU
+  if (elapsed >= q.cpuAt) {             // give up on humans → CPU
     q.paired = true; await cancelQueue(); startCpuMatch(q.format, q.holes); return;
   }
   // Try to grab a waiting opponent (I become the joiner). Exclude my own queue
@@ -7106,15 +7137,25 @@ function cpuHoleScore(par, hcp) {
   const lo = par >= 5 ? par - 2 : par - 1;
   return Math.max(1, Math.min(par + 4, Math.max(lo, s)));
 }
-// Believable opponent identity (never revealed as a bot). Handle from a pool +
-// an optional number; handicap within a few strokes of the player's.
-const QM_NAMES = ["Jordan","Rory","Phil","Bryson","Collin","Justin","Xander",
-  "Scottie","Viktor","Dustin","Rickie","Cam","Tommy","Hideki","Shane","Max",
-  "Ludvig","Sepp","Wyndham","Keegan","Sungjae","Tony","Webb","Marcus","Harris",
-  "Sahith","Akshay","Nico","Davis","Taylor","Sam","Chris","Ben","Luke"];
+// Believable opponent identity (never revealed as a bot). Three name styles —
+// plain first names, golfy handles, name+number — mixed so no pattern shows.
+const QM_NAMES = ["Mike","Dave","Sarah","Greg","Kevin","Emma","Dan","Josh",
+  "Nate","Kyle","Sara","Paulo","Matt","Erik","Jill","Tom","Pete","Andy","Raj",
+  "Carlos","Jordan","Justin","Cam","Tommy","Shane","Max","Tony","Marcus",
+  "Davis","Taylor","Sam","Chris","Ben","Luke","Brian","Jen","Omar","Lena"];
+const QM_HANDLES = ["TeeTimeTom","birdie_hunt3r","FairwayFrank","3PuttTony",
+  "shankopotamus","GreensInReg","mulligan_mike","BogeyBill","chip_n_run",
+  "DivotDan","sandsave22","LagPutter","draw_bias","pin_seeker9","WeekendWedge",
+  "double_cross","toe_hook","up_n_down","short_sided","BreakfastBall"];
 function genOppName() {
+  const r = Math.random();
+  if (r < 0.3) return QM_HANDLES[(Math.random() * QM_HANDLES.length) | 0];
   const n = QM_NAMES[(Math.random() * QM_NAMES.length) | 0];
-  return n + (Math.random() < 0.6 ? String((Math.random() * 90 + 10) | 0) : "");
+  if (r < 0.55) return n + String((Math.random() * 90 + 10) | 0);   // name+number
+  // plain name, sometimes with a last initial
+  return Math.random() < 0.35
+    ? n + " " + String.fromCharCode(65 + ((Math.random() * 26) | 0))
+    : n;
 }
 function genOppHandicap(myHcp) {
   const base = (typeof myHcp === "number") ? myHcp : QM_DEFAULT_HCP;
@@ -7143,18 +7184,6 @@ function cpuMatchRows() {
   };
   return [me, cpuOpp];
 }
-// The bot plays a hole right after I finish it.
-function cpuPlayHole(holeNum, par) {
-  if (!cpuOpp) return;
-  cpuOpp.hole_scores[holeNum] = cpuHoleScore(par, cpuOpp.handicap);
-  cpuOpp.pars[holeNum] = par;
-  let score = 0, n = 0;
-  for (const k in cpuOpp.hole_scores) { score += cpuOpp.hole_scores[k] - (cpuOpp.pars[k] || par); n++; }
-  cpuOpp.score = score;
-  cpuOpp.holes_played = n;
-  cpuOpp.cur_hole = holeNum;
-  cpuOpp.finished = n >= roundHoleCount();
-}
 function startCpuMatch(format, holes) {
   stopQuickMatch();
   _qm = null;
@@ -7174,16 +7203,17 @@ function startCpuMatch(format, holes) {
   };
   activeMatch = {
     id: null, status: "live", format: isMatch ? "match" : "stroke",
-    live: isMatch,                       // match play → full live/turn-based bot
+    live: true,                          // bot plays live shot-by-shot in both formats
     hole_count: holes, course_id: selectedCourseId,
-    host_name: getPlayerName() || "You", // player tees first on hole 1
+    // Coin-flip hole-1 honors — a real pairing has no fixed teeing order.
+    host_name: Math.random() < 0.5 ? (getPlayerName() || "You") : name,
     settings: normalizeSettings(gameDefaults), _cpu: true,
   };
   // Live-runtime init (mirrors enterLiveMatch); no realtime — there's no DB row.
   lastOpp = cpuOpp; lastMe = null; oppShot = null; _shotFrom = null;
   _lastOppSeq = -1; _matchSeq = 0; _spectating = false; _awaitLive = null;
   _oppUpdatedSeen = null; _oppFreshAt = performance.now(); _liveStartAt = performance.now();
-  qmMatchFound(name, oppH, () => {
+  qmMatchFound(name, null, () => {   // no hcp shown — human pairings don't show one
     closeQuickMatch();
     startCourse();
     startBoardPoll();
@@ -7200,7 +7230,7 @@ function qmMatchFound(name, hcp, then) {
   if (spin) spin.style.display = "none";
   if (hint) hint.style.display = "none";
   if (s) s.textContent = "Match found — " + name + (typeof hcp === "number" ? " · hcp " + hcp : "");
-  setTimeout(then, 1200);
+  setTimeout(then, 900 + Math.random() * 1300);
 }
 
 // =====================================================================
@@ -7209,38 +7239,143 @@ function qmMatchFound(name, hcp, then) {
 //  order + follow-cam), all via the existing cur_* fields on cpuOpp. Called
 //  every frame from loop() while a live CPU match is on the course.
 // =====================================================================
-const CPU_THINK_MS = 750;   // pause between the bot's shots (feels human)
-// Plan the current hole: N shots (N = its hole score) as waypoints marching from
-// the tee toward the pin, with mild lateral spread that tightens near the green.
+// Bot's lie label at a point, matching the human lieLabel() vocabulary.
+function cpuLie(x, y) { return LIE_NAMES[surfaceAt(x, y)] || "Rough"; }
+// Green polygon containing the pin (null on fallback holes with no green poly).
+function cpuGreenPoly() {
+  const gs = (HOLE.surfaces && HOLE.surfaces.green) || [];
+  for (const p of gs) if (pointInPoly(HOLE.holePos.x, HOLE.holePos.y, p)) return p;
+  return gs[0] || null;
+}
+// A point ON the green within ~rFt feet of the pin (rejection-sampled).
+function cpuPointNearPin(rFt) {
+  const pin = HOLE.holePos, g = cpuGreenPoly();
+  const rU = rFt / (YARDS_PER_UNIT * 3);           // feet → world units
+  for (let t = 0; t < 25; t++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = rU * (0.3 + Math.random() * 0.7);
+    const x = pin.x + Math.cos(a) * d, y = pin.y + Math.sin(a) * d;
+    if (g ? pointInPoly(x, y, g) : dist(x, y, pin.x, pin.y) <= rU) return { x, y };
+  }
+  return { x: pin.x + (Math.random() - 0.5) * rU * 0.4,
+           y: pin.y + (Math.random() - 0.5) * rU * 0.4 };
+}
+// Keep a landing point out of water/OB/trees: try lateral nudges off the shot
+// line, then shorter carries; the score is predetermined, so a hazard would
+// desync the stroke count from the story the ghost ball tells.
+function cpuSafePoint(pt, from) {
+  const bad = s => s === "water" || s === "ob" || s === "woods";
+  if (!bad(surfaceAt(pt.x, pt.y))) return pt;
+  const dx = pt.x - from.x, dy = pt.y - from.y, len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  for (const o of [2, -2, 4, -4, 7, -7, 10, -10, 14, -14]) {
+    const q = { x: pt.x + nx * o, y: pt.y + ny * o };
+    if (!bad(surfaceAt(q.x, q.y))) return q;
+  }
+  for (const f of [0.92, 0.85, 0.7]) {
+    const q = { x: from.x + dx * f, y: from.y + dy * f };
+    if (!bad(surfaceAt(q.x, q.y))) return q;
+  }
+  return { x: (from.x + HOLE.holePos.x) / 2, y: (from.y + HOLE.holePos.y) / 2 };
+}
+// Human-feeling pause before a shot: 2-6s, longer sometimes on the tee, on
+// green reads, or just because — never metronome-regular.
+function cpuThinkMs(kind, firstOfHole) {
+  let ms = 2000 + Math.random() * 4000;
+  if (firstOfHole && Math.random() < 0.5) ms += Math.random() * 2500;
+  if (kind === "putt" && Math.random() < 0.25) ms += 2000 + Math.random() * 2500;
+  if (Math.random() < 0.07) ms += 3000 + Math.random() * 2000;
+  return ms;
+}
+// Plan the current hole as real golf: drive sized to the bot's handicap, full
+// shots marching to an approach that lands on the green, then 1-3 putts. Extra
+// strokes over a clean route show up as visible mistakes (duffs / offline).
 function cpuPlanHole() {
   if (!cpuOpp || !HOLE) return;
   const total = cpuHoleScore(HOLE.par, cpuOpp.handicap);
   const tee = HOLE.teePos, pin = HOLE.holePos;
-  const dx = pin.x - tee.x, dy = pin.y - tee.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;   // along + perpendicular
+  const holeYds = dist(tee.x, tee.y, pin.x, pin.y) * YARDS_PER_UNIT;
+  const hcp = cpuOpp.handicap || 0;
+  const driveYds = Math.max(175, Math.min(295, 272 - 3.1 * hcp + gaussRand() * 9));
+  const woodYds = driveYds * 0.86;
+  const latFrac = 0.035 + hcp * 0.0022;   // dispersion as a fraction of carry
   const pts = [];
-  for (let k = 1; k <= total; k++) {
-    if (k === total) { pts.push({ x: pin.x, y: pin.y }); break; }   // last shot → cup
-    const f = k / total;
-    const lat = gaussRand() * 0.05 * len * (1 - f);       // spread shrinks near pin
-    const fwd = (Math.random() * 0.06 - 0.03) * len;
-    pts.push({ x: tee.x + dx * f + nx * lat + ux * fwd,
-               y: tee.y + dy * f + ny * lat + uy * fwd });
+  if (total === 1) {
+    pts.push({ x: pin.x, y: pin.y, kind: "long" });      // holed from the tee
+  } else {
+    // Putts: 1 (20%) / 2 (usual) / 3 (only when over par); field legs get the rest.
+    let P = Math.random() < 0.2 ? 1
+          : (total > HOLE.par && Math.random() < 0.31 ? 3 : 2);
+    P = Math.max(1, Math.min(P, total - 1));
+    const neededClean = Math.max(1, Math.ceil(Math.max(0, holeYds - 15) / driveYds));
+    while (total - P < neededClean && P > 1) P--;   // don't demand impossible carries
+    const L = total - P;
+    let extra = Math.max(0, L - neededClean);       // legs to burn as mistakes
+    let cur = tee;
+    for (let i = 1; i <= L; i++) {
+      const remainU = dist(cur.x, cur.y, pin.x, pin.y) || 0.001;
+      const remainYds = remainU * YARDS_PER_UNIT;
+      let pt;
+      if (i === L) {
+        // Approach → on the green; proximity worsens with distance + handicap.
+        let proxFt = Math.max(2, Math.min(45, 6 + remainYds * 0.11 + hcp * 0.7 + gaussRand() * 7));
+        if (P === 1) proxFt = Math.min(proxFt, 12);
+        if (P === 3) proxFt = Math.max(proxFt, 25);
+        pt = cpuPointNearPin(proxFt);
+      } else {
+        const cap = (i === 1) ? driveYds : woodYds;
+        const legsLeft = L - i;   // field legs after this one (incl. the approach)
+        // Reserve a real approach distance for later legs — otherwise this leg
+        // eats ~all the hole and the "approach" fires from a few yards out.
+        const reserve = legsLeft * (45 + Math.random() * 65);
+        let carryYds = Math.min(cap, remainYds - reserve);
+        // Feasibility: leave no more than ~250yds per remaining leg.
+        carryYds = Math.max(carryYds, remainYds - 250 * legsLeft, 15);
+        let latMult = 1;
+        if (extra > 0 && (Math.random() < 0.5 || extra >= L - i)) {
+          extra--;
+          if (Math.random() < 0.5) carryYds *= 0.35 + Math.random() * 0.2; // duff
+          else latMult = 2.5;                                              // offline
+        }
+        const carryU = carryYds / YARDS_PER_UNIT;
+        const ux = (pin.x - cur.x) / remainU, uy = (pin.y - cur.y) / remainU;
+        const lat = gaussRand() * carryU * latFrac * latMult;
+        const fwd = carryU * (1 + (Math.random() * 0.06 - 0.03));
+        pt = cpuSafePoint({ x: cur.x + ux * fwd - uy * lat,
+                            y: cur.y + uy * fwd + ux * lat }, cur);
+      }
+      pt.kind = "long";
+      pts.push(pt); cur = pt;
+    }
+    if (P === 1) {
+      pts.push({ x: pin.x, y: pin.y, kind: "putt" });
+    } else if (P === 2) {
+      const lag = cpuPointNearPin(1.5 + Math.abs(gaussRand()) * 2.5);
+      pts.push({ x: lag.x, y: lag.y, kind: "putt" },
+               { x: pin.x, y: pin.y, kind: "putt" });
+    } else {
+      const p1 = cpuPointNearPin(8 + Math.abs(gaussRand()) * 3);
+      const p2 = cpuPointNearPin(1 + Math.random() * 1.5);
+      pts.push({ x: p1.x, y: p1.y, kind: "putt" },
+               { x: p2.x, y: p2.y, kind: "putt" },
+               { x: pin.x, y: pin.y, kind: "putt" });
+    }
   }
   cpuOpp._plan = pts; cpuOpp._i = 0; cpuOpp._phase = "idle";
   cpuOpp.cur_hole = HOLE.num; cpuOpp.cur_strokes = 0;
   cpuOpp.cur_x = tee.x; cpuOpp.cur_y = tee.y;
-  cpuOpp.cur_to_pin = Math.round(len * YARDS_PER_UNIT);
-  cpuOpp.cur_at_rest = true; cpuOpp.cur_shot = null;
-  cpuOpp._nextAt = performance.now() + CPU_THINK_MS;
+  cpuOpp.cur_to_pin = Math.round(dist(tee.x, tee.y, pin.x, pin.y) * YARDS_PER_UNIT);
+  cpuOpp.cur_at_rest = true; cpuOpp.cur_shot = null; cpuOpp.cur_lie = "Tee";
+  cpuOpp._planPin = { x: pin.x, y: pin.y };   // replan key: hole num alone can collide across courses
+  cpuOpp._nextAt = performance.now() + cpuThinkMs(pts[0].kind, true);
 }
 function cpuDriverTick() {
   if (!cpuMatch || !liveMatch() || mode !== "course" || holeTransition) return;
   if (!cpuOpp || !HOLE || HOLE.isRange) return;
   const now = performance.now();
   lastOpp = cpuOpp; _oppFreshAt = now;   // bot is always "responsive" → turn-gate honored
-  if (cpuOpp.cur_hole !== HOLE.num) cpuPlanHole();
+  if (cpuOpp.cur_hole !== HOLE.num || !cpuOpp._planPin ||
+      cpuOpp._planPin.x !== HOLE.holePos.x || cpuOpp._planPin.y !== HOLE.holePos.y) cpuPlanHole();
   pumpLiveAdvance();                      // snappy hole-advance once the bot holes out
 
   // Resolve an in-flight bot shot → land the ball.
@@ -7261,9 +7396,11 @@ function cpuDriverTick() {
       checkMatchCloseout();
     } else {
       cpuOpp.cur_to_pin = Math.round(dist(target.x, target.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
+      cpuOpp.cur_lie = cpuLie(target.x, target.y);
     }
     cpuOpp._phase = "idle";
-    cpuOpp._nextAt = now + CPU_THINK_MS;
+    const next = cpuOpp._plan[cpuOpp._i];
+    cpuOpp._nextAt = now + cpuThinkMs(next ? next.kind : "long", false);
     return;
   }
 
@@ -7276,11 +7413,16 @@ function cpuDriverTick() {
   const target = cpuOpp._plan[cpuOpp._i];
   if (!target) return;
   const d = dist(from.x, from.y, target.x, target.y);
-  const durMs = Math.max(500, Math.min(2600, d * YARDS_PER_UNIT * 6));
+  const dYds = d * YARDS_PER_UNIT;
+  // Putts roll slow and flat; full shots hang in the air like a real swing.
+  const durMs = target.kind === "putt"
+    ? Math.max(900, Math.min(2600, 900 + dYds * 3 * 45))
+    : Math.max(700, Math.min(3400, dYds * 10 * (0.9 + Math.random() * 0.25)));
+  const lie = cpuOpp.cur_strokes === 0 ? "Tee" : cpuLie(from.x, from.y);
   cpuOpp._seq++;
   cpuOpp.cur_shot = { seq: cpuOpp._seq, hole: HOLE.num,
     fromX: from.x, fromY: from.y, toX: target.x, toY: target.y,
-    peak: d * 0.16, durMs, lie: "fairway" };
+    peak: d * 0.16, durMs: Math.round(durMs), lie };
   cpuOpp.cur_at_rest = false;
   cpuOpp.cur_updated = new Date().toISOString();
   startOppGhost(cpuOpp);                   // launch the arc tween on my screen
