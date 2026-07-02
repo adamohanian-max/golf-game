@@ -1349,7 +1349,7 @@ const VIEW_MIN = 7;         // smallest framed dimension (caps how far we zoom i
 // horizontal bands and give the hole the full screen width. On DESKTOP the HUD
 // sits in the corners, so we reserve top/bottom too. Picked in hudReserve().
 const HUD_RESERVE = {
-  mobile:  { top: 48, bot: 96, side: 10 }, // px: top bar / stat strip / edge gutters
+  mobile:  { top: 78, bot: 124, side: 10 }, // px: top bar + wind pill / stat strip / gutters
   desktop: { top: 56, bot: 64 },
 };
 let holeFitW = 100, holeFitH = 100; // full-hole framing dims -> refScale

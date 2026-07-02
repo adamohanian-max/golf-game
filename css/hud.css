@@ -66,7 +66,7 @@
   z-index: 40;
   transition: opacity 0.25s;
 }
-body.is-mobile #live-turn { width: calc(25vw - var(--s-3)); }
+body.is-mobile #live-turn { width: min(240px, 60vw); }
 #live-turn.hidden { opacity: 0; pointer-events: none; }
 #live-turn.lt-mine { background: rgba(34, 139, 64, 0.92); }   /* your turn — go */
 #live-turn.lt-wait { background: rgba(0, 0, 0, 0.6); }        /* watching opponent */
@@ -406,45 +406,103 @@ body.hud-edit .hud-dragging { cursor: grabbing; opacity: 0.85; }
 .hud-zoom:active { background: rgba(74, 222, 128, 0.3); }
 
 /* ============================================================
-   Mobile side bands (body.is-mobile)
-   Confine every in-play HUD element to the outer left/right 25vw
-   columns so the center 50% of the screen stays unobscured. The
-   camera reserves the same side bands (HUD_RESERVE.mobile in
-   game.js) and frames the hole into the clear center.
-   (The canvas wind pill stays top-center by design.)
+   Mobile bars (body.is-mobile)
+   HUD lives in a slim TOP scorecard bar + a BOTTOM stat strip
+   (club selector stays bottom-right), leaving the full screen
+   width for the hole. The camera reserves the same top/bottom
+   bands (HUD_RESERVE.mobile in game.js) and frames the hole
+   into the clear middle. (Canvas wind pill stays top-center.)
    ============================================================ */
-body.is-mobile #scorecard,
-body.is-mobile #stats,
-body.is-mobile #hint,
-body.is-mobile #chip-ind,
-body.is-mobile #toast,
 body.is-mobile #hud-menu,
 body.is-mobile #hm-club-row,
 body.is-mobile #range-ui,
 body.is-mobile #hud-edit-bar {
-  /* 25vw band minus the outer edge gutter, so gutter + panel stays within 25% */
-  max-width: calc(25vw - var(--s-3));
+  max-width: min(260px, 70vw);
   min-width: 0;
   box-sizing: border-box;
 }
-/* let cramped panels wrap rather than overflow the 25vw column */
-body.is-mobile #hint,
-body.is-mobile #chip-ind,
-body.is-mobile #toast { white-space: normal; }
 body.is-mobile #hud-menu .hm-item { white-space: normal; }
 body.is-mobile #hm-club-cur { min-width: 0; padding: var(--s-2) var(--s-3); }
-body.is-mobile #range-ui { width: calc(25vw - var(--s-3)); }
+body.is-mobile #range-ui { width: min(300px, calc(100vw - 24px)); }
 
-/* #toast: was center-anchored -> pin into the left band */
-body.is-mobile #toast {
+/* ---- Top bar: scorecard as one slim wrapping strip --------- */
+body.is-mobile #scorecard {
   left: var(--s-3);
-  right: auto;
-  text-align: left;
-  transform: translateY(-8px);
+  /* stop short of the HUD button so the bar never slides under it */
+  right: calc(env(safe-area-inset-right, 0px) + 60px);
+  max-width: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 1px;
+  padding: 7px 11px;
+  font-size: 12px;
+  line-height: 1.35;
 }
-body.is-mobile #toast.show { transform: translateY(0); }
+/* inline-block, NOT inline-flex — flex strips the spaces between inner spans */
+body.is-mobile #scorecard .line { display: inline-block; white-space: nowrap; }
+body.is-mobile #scorecard b { font-size: 14px; }
+body.is-mobile #scorecard #course { display: none; } /* name lives in the hole picker */
 
-/* #hud-edit-bar: was bottom-center -> compact vertical pill in the right band */
+/* ---- Bottom strip: shot stats as label-over-value chips ---- */
+body.is-mobile #stats {
+  top: auto;
+  left: var(--s-3);
+  /* stop short of the club selector column */
+  right: calc(env(safe-area-inset-right, 0px) + 118px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-3));
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  column-gap: 14px;
+  row-gap: 4px;
+  text-align: left;
+  font-size: 12px;
+  padding: 7px 11px;
+  line-height: 1.25;
+}
+body.is-mobile #stats.hidden { display: none; }
+body.is-mobile #stats .srow {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  justify-content: flex-end;
+}
+body.is-mobile #stats .slabel { font-size: 9px; letter-spacing: 0.6px; }
+body.is-mobile #stats .sval { font-size: 14px; line-height: 1.15; }
+body.is-mobile #stats .snote {
+  flex-basis: 100%;
+  order: 10;              /* full-width footnote under the chips */
+  text-align: left;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
+}
+
+/* ---- Hint + chip cue: centered pills above the stat strip -- */
+body.is-mobile #hint {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 142px); /* clear of the tallest stat strip */
+  max-width: 86vw;
+}
+body.is-mobile #chip-ind {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 178px);
+  max-width: 86vw;
+  white-space: normal;
+}
+/* ball speed is a desktop nerd stat — keep the mobile strip tight */
+body.is-mobile #st-speed-row { display: none; }
+
+/* #hud-edit-bar: compact vertical pill in the right column */
 body.is-mobile #hud-edit-bar {
   left: auto;
   right: var(--s-3);
@@ -455,27 +513,3 @@ body.is-mobile #hud-edit-bar {
   white-space: normal;
   gap: var(--s-2);
 }
-
-/* ---- Mobile shot-stats: move to the LEFT band, lower so it sits clear of the
-   (tall, wrapped) scorecard, and stack each row label-over-value so the narrow
-   25vw column reads as a clean stat rail instead of ragged space-between rows. */
-body.is-mobile #stats {
-  left: var(--s-3);
-  right: auto;
-  top: auto;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
-  text-align: left;
-  font-size: 12px;
-  padding: 9px 11px;
-  line-height: 1.25;
-}
-body.is-mobile #stats .srow {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  margin-bottom: 6px;
-}
-body.is-mobile #stats .srow:last-child { margin-bottom: 0; }
-body.is-mobile #stats .slabel { font-size: 9px; letter-spacing: 0.6px; }
-body.is-mobile #stats .sval { font-size: 14px; line-height: 1.2; }
-body.is-mobile #stats .snote { text-align: left; max-width: 100%; }
