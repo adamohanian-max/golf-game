@@ -1594,6 +1594,76 @@ function withClip(poly, fn) {
   fn();
   ctx.restore();
 }
+// Chaikin corner-cutting — rounds an angular polygon into an organic curve.
+// Closed ring: each pass replaces every vertex with points at 1/4 and 3/4 of
+// each edge. Two passes turn OSM's straight-edged greens smooth.
+function chaikinClosed(poly, iters = 2) {
+  let p = poly;
+  for (let k = 0; k < iters; k++) {
+    const q = [];
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length];
+      q.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 },
+             { x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    p = q;
+  }
+  return p;
+}
+// Open-polyline variant (endpoints stay pinned) — for contour lines.
+function chaikinOpen(pts, iters = 2) {
+  let p = pts;
+  for (let k = 0; k < iters; k++) {
+    if (p.length < 3) return p;
+    const q = [p[0]];
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i], b = p[i + 1];
+      q.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 },
+             { x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    q.push(p[p.length - 1]);
+    p = q;
+  }
+  return p;
+}
+// Round the green polygons once per surfaces object. Render AND physics share
+// the result, so the smoothed edge is also the edge the ball putts from.
+function roundGreens(surfaces) {
+  if (!surfaces || surfaces._greensRounded) return;
+  surfaces._greensRounded = true;
+  if (surfaces.green)
+    surfaces.green = surfaces.green.map((p) => (p.length >= 3 ? chaikinClosed(p) : p));
+}
+// Link marching-squares segments into polylines so contours can be smoothed
+// (raw per-cell segments draw as kinked chains of tiny straights).
+function chainSegs(segs) {
+  const key = (x, y) => Math.round(x * 1024) + "," + Math.round(y * 1024);
+  const ends = new Map(); // endpoint key -> [{i, rev}]
+  const add = (k, v) => { const a = ends.get(k); if (a) a.push(v); else ends.set(k, [v]); };
+  segs.forEach((s, i) => { add(key(s.ax, s.ay), { i, rev: false }); add(key(s.bx, s.by), { i, rev: true }); });
+  const used = new Array(segs.length).fill(false);
+  const takeFrom = (k) => {
+    const cands = ends.get(k);
+    if (cands) for (const c of cands) {
+      if (used[c.i]) continue;
+      used[c.i] = true;
+      const s = segs[c.i];
+      return c.rev ? { x: s.ax, y: s.ay } : { x: s.bx, y: s.by };
+    }
+    return null;
+  };
+  const paths = [];
+  for (let i = 0; i < segs.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    const s = segs[i];
+    const path = [{ x: s.ax, y: s.ay }, { x: s.bx, y: s.by }];
+    for (;;) { const e = path[path.length - 1], n = takeFrom(key(e.x, e.y)); if (!n) break; path.push(n); }
+    for (;;) { const e = path[0], n = takeFrom(key(e.x, e.y)); if (!n) break; path.unshift(n); }
+    paths.push(path);
+  }
+  return paths;
+}
 function polyBBox(poly) {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity, cx = 0, cy = 0;
   for (const p of poly) {
@@ -1742,7 +1812,19 @@ function buildGreenTopo(polys, dem) {
     }
     const nL = 7, levels = [];
     for (let kk = 1; kk <= nL; kk++) levels.push(hmin + (hmax - hmin) * kk / (nL + 1));
-    const contours = contourSegments(h, bb.minx, bb.miny, bb.maxx, bb.maxy, levels, 30, 30);
+    // Chain each level's marching-squares segments into polylines and round
+    // them (Chaikin) so contours draw as flowing curves, not kinked cells.
+    const contours = [];
+    for (const L of levels) {
+      const segs = contourSegments(h, bb.minx, bb.miny, bb.maxx, bb.maxy, [L], 30, 30);
+      for (const path of chainSegs(segs)) {
+        const a = path[0], b = path[path.length - 1];
+        const closed = path.length > 3 && Math.hypot(a.x - b.x, a.y - b.y) < 1e-4;
+        contours.push(closed
+          ? { pts: chaikinClosed(path.slice(0, -1)), closed: true }
+          : { pts: chaikinOpen(path), closed: false });
+      }
+    }
     out.push({ poly, contours, h, grad, gmax, hmin, hmax, hi, lo });
   }
   return out;
@@ -1844,10 +1926,14 @@ function drawGreen(photo) {
       }
       ctx.strokeStyle = photo ? "rgba(30,60,35,0.32)" : "rgba(32,74,38,0.40)";
       ctx.lineWidth = 1;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
       ctx.beginPath();
-      for (const seg of g.contours) {
-        ctx.moveTo(wx(seg.ax, seg.ay), wy(seg.ax, seg.ay));
-        ctx.lineTo(wx(seg.bx, seg.by), wy(seg.bx, seg.by));
+      for (const c of g.contours) {
+        const p = c.pts;
+        ctx.moveTo(wx(p[0].x, p[0].y), wy(p[0].x, p[0].y));
+        for (let i = 1; i < p.length; i++) ctx.lineTo(wx(p[i].x, p[i].y), wy(p[i].x, p[i].y));
+        if (c.closed) ctx.closePath();
       }
       ctx.stroke();
     });
@@ -2887,6 +2973,7 @@ function setHole(rec) {
     isGlobal: glob,
     _boundary: (src.boundary && src.boundary.length) ? src.boundary : null, // real OB line
   };
+  roundGreens(HOLE.surfaces); // organic green edges (once per surfaces object)
   if (glob) {
     // share precomputed DEM + topo + aerial across every hole (load once)
     if (!course._dem && course.dem) course._dem = buildDEM(course.dem);
