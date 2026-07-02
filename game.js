@@ -7423,8 +7423,12 @@ function startCpuMatch(format, holes) {
   const myH = (typeof _qmHcp === "number") ? _qmHcp : QM_DEFAULT_HCP;
   const oppH = genOppHandicap(myH);
   const name = genOppName();
+  // Day form: a real round scatters around the handicap (usually a bit above
+  // it — handicap is potential, not average). Rolled once per match so the
+  // bot can have a career day or a blow-up round, not always shoot its number.
+  const dayH = Math.max(-4, oppH + 1 + gaussRand() * 4);
   cpuOpp = {
-    user_id: null, player_name: name, handicap: oppH,
+    user_id: null, player_name: name, handicap: oppH, _dayHcp: dayH,
     hole_scores: {}, pars: {}, score: 0, holes_played: 0, finished: false,
     cur_hole: null, cur_strokes: 0, cur_to_pin: -1, cur_at_rest: true,
     cur_x: null, cur_y: null, cur_shot: null, cur_updated: null,
@@ -7507,6 +7511,26 @@ function cpuSafePoint(pt, from) {
   }
   return { x: (from.x + HOLE.holePos.x) / 2, y: (from.y + HOLE.holePos.y) / 2 };
 }
+// A hazard point a blown shot from `from` could actually find: scan growing
+// lateral offsets both sides of the pin line (plus short/long variance) for
+// water/OB/trees. Null when the hole has no trouble in range — then the
+// mistake falls back to a duff instead.
+function cpuHazardPoint(from, carryU) {
+  const pin = HOLE.holePos;
+  const remainU = dist(from.x, from.y, pin.x, pin.y) || 0.001;
+  const ux = (pin.x - from.x) / remainU, uy = (pin.y - from.y) / remainU;
+  const bad = s => s === "water" || s === "ob" || s === "woods";
+  const side = Math.random() < 0.5 ? 1 : -1;
+  for (const sgn of [side, -side]) {
+    for (let lat = 0; lat <= 20; lat += 3) {
+      const fwd = carryU * (0.55 + Math.random() * 0.45);
+      const x = from.x + ux * fwd - uy * lat * sgn;
+      const y = from.y + uy * fwd + ux * lat * sgn;
+      if (bad(surfaceAt(x, y))) return { x, y };
+    }
+  }
+  return null;
+}
 // Human-feeling pause before a shot: 1-4s, leaning longer sometimes on the
 // tee or on green reads — never metronome-regular.
 function cpuThinkMs(kind, firstOfHole) {
@@ -7522,10 +7546,11 @@ function cpuThinkMs(kind, firstOfHole) {
 // route show up as visible mistakes (duffs / offline).
 function cpuPlanHole() {
   if (!cpuOpp || !HOLE) return;
-  const total = cpuHoleScore(HOLE.par, cpuOpp.handicap);
+  // Score off the rolled day form, not the raw handicap — see startCpuMatch.
+  const hcp = (typeof cpuOpp._dayHcp === "number") ? cpuOpp._dayHcp : (cpuOpp.handicap || 0);
+  const total = cpuHoleScore(HOLE.par, hcp);
   const tee = HOLE.teePos, pin = HOLE.holePos;
   const holeYds = dist(tee.x, tee.y, pin.x, pin.y) * YARDS_PER_UNIT;
-  const hcp = cpuOpp.handicap || 0;
   // Skill = fraction of a club's rated carry this bot actually gets (hcp 0 →
   // full number, hcp 18 → ~88%), with a small per-shot jitter.
   const eff = Math.max(0.75, Math.min(1.02, 1 - hcp * 0.007));
@@ -7544,13 +7569,30 @@ function cpuPlanHole() {
     const neededClean = Math.max(1, Math.ceil(Math.max(0, holeYds - 15) / drvC));
     while (total - P < neededClean && P > 1) P--;   // don't demand impossible carries
     const L = total - P;
-    let extra = Math.max(0, L - neededClean);       // legs to burn as mistakes
-    let cur = tee;
-    for (let i = 1; i <= L; i++) {
+    let extra = Math.max(0, L - neededClean);       // strokes to burn as mistakes
+    let cur = tee, left = L;
+    while (left > 0) {
+      const atTee = cur === tee;
       const remainU = dist(cur.x, cur.y, pin.x, pin.y) || 0.001;
       const remainYds = remainU * YARDS_PER_UNIT;
+      // Blow-up strokes come from penalties, not duff chains: a blown shot
+      // finds water/OB/trees → stroke + penalty, replay from the same spot
+      // (stroke-and-distance, 2 strokes, no progress). Only when the strokes
+      // left after the penalty still cover the hole, and only on holes that
+      // actually have trouble in range.
+      const needAfterOB = Math.max(1, Math.ceil(Math.max(0, remainYds - 15) / drvC));
+      if (extra >= 2 && left - 2 >= needAfterOB && Math.random() < 0.65) {
+        const hz = cpuHazardPoint(cur, Math.min(drvC, remainYds + 15) / YARDS_PER_UNIT);
+        if (hz) {
+          hz.kind = "long"; hz.penalty = true;
+          hz.club = atTee ? "driver" : clubForYards(Math.min(remainYds, drvC));
+          pts.push(hz);
+          extra -= 2; left -= 2;
+          continue;                       // cur unchanged → replay from here
+        }
+      }
       let pt;
-      if (i === L) {
+      if (left === 1) {
         // Approach → on the green; proximity worsens with distance + handicap.
         let proxFt = Math.max(2, Math.min(45, 6 + remainYds * 0.11 + hcp * 0.7 + gaussRand() * 7));
         if (P === 1) proxFt = Math.min(proxFt, 12);
@@ -7564,10 +7606,10 @@ function cpuPlanHole() {
         // usually still go for it (mishit short burns the leg); a genuine
         // wedge-range layup is the rare choice, and only from real layup
         // distance — a human never "lays up" a par-3 tee shot.
-        const longest = (i === 1) ? "driver" : "3w";
+        const longest = atTee ? "driver" : "3w";
         let club = longest, carryYds = carryOf(longest);
         if (remainYds <= carryYds + 20) {
-          if (i > 1 && remainYds >= 200 && Math.random() < 0.2) {
+          if (!atTee && remainYds >= 200 && Math.random() < 0.2) {
             const leave = 80 + Math.random() * 30;
             club = clubForYards(remainYds - leave);
             carryYds = Math.min(carryOf(club), remainYds - 30);
@@ -7576,11 +7618,11 @@ function cpuPlanHole() {
             carryYds = Math.min(carryOf(club), remainYds) * (0.65 + Math.random() * 0.3);
           }
         }
-        const legsLeft = L - i;   // field legs after this one (incl. the approach)
+        const legsLeft = left - 1;   // field legs after this one (incl. the approach)
         // Feasibility: the remaining legs must still be able to cover the hole.
         carryYds = Math.max(carryYds, remainYds - drvC * legsLeft, 15);
         let latMult = 1;
-        if (extra > 0 && (Math.random() < 0.5 || extra >= L - i)) {
+        if (extra > 0 && (Math.random() < 0.5 || extra >= left - 1)) {
           extra--;
           if (Math.random() < 0.5) carryYds *= 0.35 + Math.random() * 0.2; // duff
           else latMult = 2.5;                                              // offline
@@ -7594,7 +7636,7 @@ function cpuPlanHole() {
         pt.club = club;
       }
       pt.kind = "long";
-      pts.push(pt); cur = pt;
+      pts.push(pt); cur = pt; left--;
     }
     if (P === 1) {
       pts.push({ x: pin.x, y: pin.y, kind: "putt", club: "putter" });
@@ -7631,11 +7673,17 @@ function cpuDriverTick() {
   if (cpuOpp._phase === "flying") {
     if (now < cpuOpp._flyUntil) return;
     const target = cpuOpp._plan[cpuOpp._i];
-    cpuOpp.cur_x = target.x; cpuOpp.cur_y = target.y;
-    cpuOpp.cur_strokes++;
+    if (target.penalty) {
+      // Ball found water/OB: stroke + penalty, replay from where he played
+      // (stroke-and-distance) — cur_x/cur_y stay put.
+      cpuOpp.cur_strokes += 2;
+    } else {
+      cpuOpp.cur_x = target.x; cpuOpp.cur_y = target.y;
+      cpuOpp.cur_strokes++;
+    }
     cpuOpp.cur_at_rest = true;
     cpuOpp.cur_updated = new Date().toISOString();
-    const holed = cpuOpp._i >= cpuOpp._plan.length - 1;
+    const holed = !target.penalty && cpuOpp._i >= cpuOpp._plan.length - 1;
     cpuOpp._i++;
     if (holed) {
       cpuOpp.cur_to_pin = -1;
@@ -7644,8 +7692,8 @@ function cpuDriverTick() {
       cpuRecomputeScore();
       checkMatchCloseout();
     } else {
-      cpuOpp.cur_to_pin = Math.round(dist(target.x, target.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
-      cpuOpp.cur_lie = cpuLie(target.x, target.y);
+      cpuOpp.cur_to_pin = Math.round(dist(cpuOpp.cur_x, cpuOpp.cur_y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
+      cpuOpp.cur_lie = cpuLie(cpuOpp.cur_x, cpuOpp.cur_y);
     }
     cpuOpp._phase = "idle";
     const next = cpuOpp._plan[cpuOpp._i];
