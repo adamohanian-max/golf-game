@@ -2456,10 +2456,6 @@ function draw() {
     ctx.strokeStyle = "rgba(120,15,12,0.6)";
     ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.beginPath();                         // finial
-    ctx.arc(topX, topY, Math.max(ws(1), 1.5) * fs, 0, Math.PI * 2);
-    ctx.fillStyle = "#f4f4f0";
-    ctx.fill();
   }
   }
 
