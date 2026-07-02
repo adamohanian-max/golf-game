@@ -719,7 +719,7 @@ function rollStep(b) {
           state._lippedThisShot = true;
           playNearMiss();
           cameraPunch(0.018);
-          showToast("So close! 😣");
+          showToast("So close!");
         }
         const spd = Math.hypot(b.vx, b.vy) || 0.01;
         const dx = b.vx / spd, dy = b.vy / spd;
@@ -2214,10 +2214,11 @@ function cameraPunch(amt) { camPunch = Math.max(camPunch, amt || 0.03); }
 
 // Lightweight transient toast (reuses a single DOM node).
 let _toastTimer = null;
-function showToast(text, ms) {
+function showToast(text, ms, tone) {
   const el = document.getElementById("toast");
   if (!el) return;
   el.textContent = text;
+  el.classList.toggle("toast-gold", tone === "gold");
   el.classList.remove("hidden");
   el.classList.add("show");
   clearTimeout(_toastTimer);
@@ -2739,8 +2740,8 @@ function showResult() {
   titleEl.className = "rt-l" + level + (hb.isBest ? " rt-best" : "");
 
   let detail = `${state.strokes} stroke${state.strokes === 1 ? "" : "s"} · ${formatToPar(d)} this hole · ${formatToPar(round.score)} total`;
-  if (hb.isBest && hb.prev != null) detail += `\n🏆 New best on this hole! (was ${hb.prev})`;
-  else if (hb.isBest && hb.prev == null && !HOLE.isRange) detail += `\n⛳ First time on this hole — best set`;
+  if (hb.isBest && hb.prev != null) detail += `\nNew best on this hole! (was ${hb.prev})`;
+  else if (hb.isBest && hb.prev == null && !HOLE.isRange) detail += `\nFirst time on this hole — best set`;
   else if (hb.prev != null) detail += `\nYour best: ${hb.prev}` + (state.strokes > hb.prev ? ` — ${state.strokes - hb.prev} to beat` : "");
   document.getElementById("result-detail").textContent = detail;
   elResult.classList.remove("hidden");
@@ -2756,10 +2757,10 @@ function showResult() {
 
   // First-time milestone toasts (once ever, per device)
   let ms = null;
-  if (level === 4 && earnMilestone("first-ace")) ms = "🏆 First hole-in-one!";
-  else if (level >= 2 && earnMilestone("first-eagle")) ms = "🦅 First eagle!";
-  else if (level === 1 && earnMilestone("first-birdie")) ms = "🐦 First birdie!";
-  if (ms) setTimeout(() => showToast(ms, 2200), 400);
+  if (level === 4 && earnMilestone("first-ace")) ms = "First hole-in-one!";
+  else if (level >= 2 && earnMilestone("first-eagle")) ms = "First eagle!";
+  else if (level === 1 && earnMilestone("first-birdie")) ms = "First birdie!";
+  if (ms) setTimeout(() => showToast(ms, 2200, "gold"), 400);
 }
 
 document.getElementById("play-again").addEventListener("click", () => {
@@ -2929,11 +2930,11 @@ function showRoundSummary(midRound = false) {
       const cb = recordCourseBest(round.score, totStrk);
       const sub = document.getElementById("re-subtitle");
       if (cb.isBest && cb.prev) {
-        sub.textContent += ` · 🏆 New best! (was ${formatToPar(cb.prev.toPar)})`;
+        sub.textContent += ` · New best! (was ${formatToPar(cb.prev.toPar)})`;
         spawnBurst(HOLE.holePos.x, HOLE.holePos.y, "confetti");
-        setTimeout(() => showToast("🏆 New course record!", 2400), 300);
+        setTimeout(() => showToast("New course record!", 2400, "gold"), 300);
       } else if (cb.isBest) {
-        sub.textContent += " · 🏆 First record set";
+        sub.textContent += " · First record set";
       } else if (cb.prev) {
         const diff = round.score - cb.prev.toPar;
         sub.textContent += ` · Best ${formatToPar(cb.prev.toPar)}` + (diff > 0 ? ` (${diff} to beat)` : "");
@@ -3253,7 +3254,7 @@ function renderCourseCards() {
     const card = document.createElement("div");
     card.className = "cs-card";
     const best = courseBest(c.id);
-    const bestBadge = best ? `<span class="cs-card-best">🏆 ${formatToPar(best.toPar)}</span>` : "";
+    const bestBadge = best ? `<span class="cs-card-best">Best ${formatToPar(best.toPar)}</span>` : "";
     const tags = c.tags || [];
     let badges = "";
     if (tags.includes("pgaTour")) badges += `<span class="cs-badge pga">PGA Tour</span>`;
@@ -4079,7 +4080,7 @@ async function startDaily() {
     holeIndex = idx;
     dailyInfo = { date: dateStr, courseId: c.id, holeNum: course.holes[idx].num || idx + 1 };
     setHole(course.holes[idx]);
-    showToast(`⛳ Daily: ${c.name}, hole ${dailyInfo.holeNum}`, 2400);
+    showToast(`Daily: ${c.name}, hole ${dailyInfo.holeNum}`, 2400);
   } catch (e) {
     console.warn("daily load failed", e);
     dailyInfo = { date: dateStr, courseId: c.id, holeNum: 1 };
@@ -4104,11 +4105,11 @@ function finishDaily(totStrk) {
   }
   spawnBurst(HOLE.holePos.x, HOLE.holePos.y, "confetti");
   const sub = document.getElementById("re-subtitle");
-  sub.textContent += ` · 🔥 Streak ${st.streak}`;
+  sub.textContent += ` · Streak ${st.streak}`;
   const text = `Golf Daily ${dateStr} · ${totStrk} strokes (${formatToPar(round.score)}) · ⛳️🔥${st.streak}`;
   try {
     if (navigator.clipboard && navigator.clipboard.writeText)
-      navigator.clipboard.writeText(text).then(() => showToast("Daily result copied 📋", 2000)).catch(() => {});
+      navigator.clipboard.writeText(text).then(() => showToast("Daily result copied", 2000)).catch(() => {});
   } catch (e) {}
 }
 
@@ -4798,7 +4799,7 @@ function populateLbCourses() {
   const sel = document.getElementById("lb-course");
   if (!sel) return;
   const today = todayStr();
-  const daily = `<option value="daily_${today}">🔥 Daily Challenge (${today})</option>`;
+  const daily = `<option value="daily_${today}">Daily Challenge (${today})</option>`;
   sel.innerHTML = daily + COURSES.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
 }
 
@@ -5958,11 +5959,11 @@ async function showTournamentFinal() {
     if (tfEmpty) { tfEmpty.textContent = "No finishers yet."; tfEmpty.classList.remove("hidden"); }
   } else {
     if (tfEmpty) tfEmpty.classList.add("hidden");
-    const medals = ["🥇", "🥈", "🥉"];
     list.innerHTML = standings.map((p, i) => {
       const isMe = isMeEntry(p);
+      const rank = i < 3 ? `<b class="tf-medal">${ordinal(i + 1)}</b>` : ordinal(i + 1);
       return "<tr" + (isMe ? " class=\"tc-me\"" : "") + ">" +
-        "<td class=\"lb-rank\">" + (medals[i] || (i + 1)) + "</td>" +
+        "<td class=\"lb-rank\">" + rank + "</td>" +
         "<td class=\"lb-name\">" + escapeHTML(p.name) + "</td>" +
         "<td class=\"lb-topar\">" + formatToPar(p.total) + "</td></tr>";
     }).join("");
@@ -6959,7 +6960,7 @@ async function renderMatchBoard() {
         `<div class="mb-opp-name">${esc(opp.player_name)}</div>` +
         `<div class="mb-opp-line">${esc(oppLine)}</div>` +
       `</div>` +
-      (honors ? `<div class="mb-honors">⛳ ${esc(honors)}</div>` : "");
+      (honors ? `<div class="mb-honors">${esc(honors)}</div>` : "");
     return;
   }
 
@@ -7043,7 +7044,7 @@ async function renderMatchResults() {
   if (bannerEl) {
     if (!meRow) bannerEl.textContent = "";
     else if (allDone) bannerEl.textContent = `You finished ${posLabel(meRow)}` +
-      (meRow.pos === 1 && !meRow.tied ? " 🏆" : "");
+      (meRow.pos === 1 && !meRow.tied ? " — winner!" : "");
     else if (meRow.finished) bannerEl.textContent = `In the clubhouse — currently ${posLabel(meRow)}`;
     else bannerEl.textContent = `You're ${posLabel(meRow)}`;
   }
@@ -7053,7 +7054,7 @@ async function renderMatchResults() {
     const thru = r.finished ? '<span class="mr-fin">F</span>' : `${r.holes_played}/${matchHoleCount}`;
     return `<div class="mr-row${meCls}${win ? " mr-win" : ""}">` +
              `<span class="mr-pos">${posLabel(r)}</span>` +
-             `<span class="mr-name">${esc(r.player_name)}${win ? " 🏆" : ""}</span>` +
+             `<span class="mr-name">${esc(r.player_name)}${win ? ' <span class="ic ic-trophy mr-trophy"></span>' : ""}</span>` +
              `<span class="mr-score">${formatToPar(r.score)}</span>` +
              `<span class="mr-thru">${thru}</span>` +
            `</div>`;
@@ -7715,7 +7716,7 @@ function quickFind() {
     const done = () => {
       mlCopy.textContent = "Copied!";
       mlCopy.classList.add("copied");
-      showToast("Code copied 📋", 1400);
+      showToast("Code copied", 1400);
       setTimeout(() => { mlCopy.textContent = "Copy"; mlCopy.classList.remove("copied"); }, 1600);
     };
     if (navigator.clipboard) navigator.clipboard.writeText(code).then(done).catch(done);

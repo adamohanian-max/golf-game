@@ -96,6 +96,12 @@ body.is-mobile #live-turn { width: min(240px, 60vw); }
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 #toast.hidden { display: none; }
+/* milestone celebration: brass instead of emoji */
+#toast.toast-gold {
+  color: var(--brass-bright);
+  border-color: rgba(207, 168, 94, 0.55);
+  font-family: var(--font-display);
+}
 
 /* greenside chip-mode cue — pill above the hint */
 #chip-ind {

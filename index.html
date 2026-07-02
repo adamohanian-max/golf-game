@@ -10,15 +10,14 @@
   <meta name="apple-mobile-web-app-title" content="Golf">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
-  <link rel="preload" href="fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=56">
-  <link rel="stylesheet" href="css/base.css?v=55">
-  <link rel="stylesheet" href="css/hud.css?v=65">
-  <link rel="stylesheet" href="css/menu.css?v=65">
+  <link rel="stylesheet" href="css/base.css?v=56">
+  <link rel="stylesheet" href="css/hud.css?v=66">
+  <link rel="stylesheet" href="css/menu.css?v=66">
   <link rel="stylesheet" href="css/courses.css?v=4">
-  <link rel="stylesheet" href="css/modals.css?v=65">
-  <link rel="stylesheet" href="css/tournament.css?v=54">
+  <link rel="stylesheet" href="css/modals.css?v=66">
+  <link rel="stylesheet" href="css/tournament.css?v=55">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -60,9 +59,9 @@
 
   <button id="hud-btn" class="hidden" aria-label="Controls"><span class="ic ic-menu"></span></button>
   <div id="hm-club-row" class="hidden">
-    <button id="hm-club-up" class="hm-club-arrow" aria-label="Longer club">▲</button>
+    <button id="hm-club-up" class="hm-club-arrow" aria-label="Longer club"><span class="ic ic-chev-up"></span></button>
     <div id="hm-club-cur"><b id="hm-club-name">Driver</b><small id="hm-club-yds">282y</small></div>
-    <button id="hm-club-down" class="hm-club-arrow" aria-label="Shorter club">▼</button>
+    <button id="hm-club-down" class="hm-club-arrow" aria-label="Shorter club"><span class="ic ic-chev-down"></span></button>
   </div>
   <div id="hud-menu" class="hidden">
     <div id="hm-course-items">
@@ -107,18 +106,26 @@
       <p class="menu-eyebrow">Tee it up</p>
       <h1>GOLF</h1>
       <div class="menu-divider"></div>
-      <button id="play-course" class="menu-btn menu-btn-play">▸ Play</button>
-      <button id="open-quickmatch" class="menu-btn menu-btn-play">⚡ Quick Match</button>
-      <button id="open-match" class="menu-btn menu-btn-play"><span class="ic ic-user"></span>Match vs Friends</button>
-      <button id="play-daily" class="menu-btn secondary"><span class="ic ic-flag"></span>Daily Challenge</button>
-      <button id="play-range" class="menu-btn secondary">Driving Range</button>
-      <button id="open-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>Leaderboard</button>
-      <button id="open-tournaments" class="menu-btn secondary"><span class="ic ic-flag-checkered"></span>Tournaments</button>
-      <button id="open-account" class="menu-btn secondary hidden"><span class="ic ic-user"></span>My Account</button>
-      <button id="menu-friends" class="menu-btn secondary hidden"><span class="ic ic-user"></span>Friends<span id="fr-menu-dot" class="fr-dot hidden"></span></button>
-      <button id="menu-add-course" class="menu-btn secondary hidden"><span class="ic ic-plus"></span>Add course</button>
-      <button id="menu-manage" class="menu-btn secondary hidden"><span class="ic ic-flag-checkered"></span>Manage tournaments</button>
-      <button id="menu-admin" class="menu-btn secondary hidden"><span class="ic ic-gear"></span>Admin settings</button>
+      <button id="play-course" class="menu-btn menu-btn-play">Play</button>
+      <div class="menu-row">
+        <button id="open-quickmatch" class="menu-btn">Quick Match</button>
+        <button id="open-match" class="menu-btn">Vs Friends</button>
+      </div>
+      <div class="menu-grid">
+        <button id="play-daily" class="menu-btn secondary">Daily Challenge</button>
+        <button id="play-range" class="menu-btn secondary">Driving Range</button>
+        <button id="open-leaderboard" class="menu-btn secondary">Leaderboard</button>
+        <button id="open-tournaments" class="menu-btn secondary">Tournaments</button>
+      </div>
+      <div class="menu-links">
+        <button id="open-account" class="menu-link hidden">My Account</button>
+        <button id="menu-friends" class="menu-link hidden">Friends<span id="fr-menu-dot" class="fr-dot hidden"></span></button>
+      </div>
+      <div class="menu-links menu-links-admin">
+        <button id="menu-add-course" class="menu-link hidden">Add course</button>
+        <button id="menu-manage" class="menu-link hidden">Manage tournaments</button>
+        <button id="menu-admin" class="menu-link hidden">Admin settings</button>
+      </div>
       <button id="menu-player" class="menu-player">Player: <b id="menu-player-name">Set name</b> <span class="ic ic-pencil"></span></button>
       <div id="menu-auth" class="menu-auth">
         <button id="menu-signin" class="menu-auth-link">Sign in / Create account</button>
@@ -130,7 +137,7 @@
   <!-- Course selection page: search + filter rail + card grid -->
   <div id="course-select" class="hidden">
     <header id="cs-top">
-      <button id="cs-back" class="cs-back" aria-label="Back">‹</button>
+      <button id="cs-back" class="cs-back" aria-label="Back"><span class="ic ic-chev-left"></span></button>
       <input id="cs-search" type="search" placeholder="Search courses, locations…" autocomplete="off">
       <span id="cs-count" class="cs-count"></span>
     </header>
@@ -143,17 +150,17 @@
   <!-- Hole-by-hole preview (Trackman/EA-style flyover over the live canvas) -->
   <div id="preview" class="hidden">
     <header id="pv-top">
-      <button id="pv-close" class="pv-close" aria-label="Close preview">✕</button>
+      <button id="pv-close" class="pv-close" aria-label="Close preview"><span class="ic ic-x"></span></button>
       <div class="pv-title"><span id="pv-course"></span><span id="pv-hole"></span></div>
     </header>
     <footer id="pv-bottom">
       <div id="pv-stats" class="pv-stats"></div>
       <div class="pv-nav">
-        <button id="pv-prev" class="pv-arrow" aria-label="Previous hole">◀</button>
+        <button id="pv-prev" class="pv-arrow" aria-label="Previous hole"><span class="ic ic-chev-left"></span></button>
         <div id="pv-dots" class="pv-dots"></div>
-        <button id="pv-next" class="pv-arrow" aria-label="Next hole">▶</button>
+        <button id="pv-next" class="pv-arrow" aria-label="Next hole"><span class="ic ic-chev-right"></span></button>
       </div>
-      <button id="pv-play" class="menu-btn menu-btn-play">▸ Play this course</button>
+      <button id="pv-play" class="menu-btn menu-btn-play">Play this course</button>
     </footer>
   </div>
 
@@ -379,7 +386,7 @@
   <!-- ===== Multiplayer matches: menu, lobby, host setup, live standings ===== -->
   <div id="quick-match" class="hidden" data-holes="18" data-format="match">
     <div class="ne-box">
-      <h2>⚡ Quick Match</h2>
+      <h2>Quick Match</h2>
       <!-- Setup: pick format + length, then queue -->
       <div id="qm-setup">
         <p class="ne-sub">Get matched live with an opponent near your handicap.</p>
@@ -454,7 +461,7 @@
         <button class="menu-btn secondary ms-len" data-holes="9">9 holes</button>
         <button class="menu-btn secondary ms-len" data-holes="18">18 holes</button>
       </div>
-      <button id="ms-live" class="menu-btn secondary ms-live hidden">⚡ Live — take turns, watch each shot</button>
+      <button id="ms-live" class="menu-btn secondary ms-live hidden">Live — take turns, watch each shot</button>
       <div id="ms-status" class="ne-sub"></div>
       <div class="ne-actions">
         <button id="ms-back" class="menu-btn secondary">Back</button>
@@ -466,8 +473,8 @@
   <div id="match-standings" class="hidden">
     <div class="mb-head">
       <span id="mb-title">Match standings</span>
-      <button id="mb-resync" class="mb-x" aria-label="Resync" title="Resync">⟳</button>
-      <button id="mb-close" class="mb-x" aria-label="Close">✕</button>
+      <button id="mb-resync" class="mb-x" aria-label="Resync" title="Resync"><span class="ic ic-refresh"></span></button>
+      <button id="mb-close" class="mb-x" aria-label="Close"><span class="ic ic-x"></span></button>
     </div>
     <div id="mb-list" class="mb-list"></div>
   </div>
@@ -485,6 +492,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=110"></script>
+  <script src="game.js?v=111"></script>
 </body>
 </html>

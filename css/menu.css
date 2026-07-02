@@ -56,6 +56,64 @@
   opacity: 0.8;
 }
 
+/* ---- Home menu button tiers ------------------------------- */
+/* 2-up multiplayer row */
+.menu-row {
+  display: flex;
+  gap: var(--s-2);
+  width: 260px;
+  max-width: 82vw;
+  margin: var(--s-2) auto;
+}
+.menu-row .menu-btn {
+  width: auto;
+  max-width: none;
+  flex: 1;
+  margin: 0;
+  padding: 14px var(--s-2);
+  font-size: 14px;
+}
+
+/* 2×2 secondary grid */
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+  width: 260px;
+  max-width: 82vw;
+  margin: var(--s-2) auto;
+}
+.menu-grid .menu-btn {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 13px var(--s-2);
+  font-size: var(--t-cap);
+}
+
+/* Small text-link rows (account / admin) */
+.menu-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  column-gap: var(--s-5);
+  row-gap: var(--s-1);
+  margin-top: var(--s-3);
+}
+.menu-links:empty { display: none; }
+.menu-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--w-70);
+  font-size: var(--t-cap);
+  font-weight: var(--fw-med);
+  letter-spacing: 0.3px;
+  padding: var(--s-1) 0;
+}
+.menu-link.hidden { display: none; }
+.menu-links-admin .menu-link { color: var(--brass); }
+
 /* Course picker list */
 #course-list {
   width: 260px;

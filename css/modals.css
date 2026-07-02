@@ -373,6 +373,7 @@ body.is-mobile #match-standings { width: calc(25vw - var(--s-3)); min-width: 0; 
 .mr-score { font-weight: var(--fw-bold); min-width: 36px; text-align: right; }
 .mr-thru { color: var(--text-dim); font-size: 13px; min-width: 40px; text-align: right; }
 .mr-fin { color: var(--accent); font-weight: var(--fw-bold); }
+.mr-trophy { color: var(--brass-bright); font-size: 0.9em; margin-left: 2px; }
 
 /* ===== Match play: format buttons + opponent board ===== */
 .ms-len-row .ms-fmt { flex: 1; margin: 0; }

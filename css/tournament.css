@@ -107,3 +107,6 @@
 .tm-danger { flex-direction: row; gap: var(--s-2); }
 .tm-danger .menu-btn { margin: 0; }
 .tm-del { color: #ff7a73; border-color: rgba(255,90,82,0.4); }
+
+/* Podium ranks on the final board (replaces medal emojis) */
+.tf-medal { color: var(--brass-bright); font-weight: var(--fw-black); }
