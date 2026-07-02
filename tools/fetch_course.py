@@ -25,9 +25,9 @@ import argparse, colorsys, json, math, os, re, sys, urllib.parse, urllib.request
 
 try:
     # optional — used to carve fairways AND bake the surface-classification mask
-    from PIL import Image, ImageDraw, ImageFilter
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
 except ImportError:
-    Image = ImageDraw = ImageFilter = None
+    Image = ImageChops = ImageDraw = ImageFilter = None
 
 OVERPASS = "https://overpass-api.de/api/interpreter"
 ESRI = ("https://services.arcgisonline.com/ArcGIS/rest/services/"
@@ -97,6 +97,7 @@ MASK_SAND_HUE_MAX = 65      # warm hue ceiling (deg)
 MASK_SAND_SAT_LO, MASK_SAND_SAT_HI = 0.08, 0.35
 MASK_SAND_VAL_MIN = 0.55    # sand is bright
 MASK_SAND_NEAR_UNITS = 40   # rescue reach beyond the envelope (~120 yds)
+MASK_PLAY_GUARD_UNITS = 5   # no-WOODS halo around greens/tees/bunkers (~15 yds)
 
 
 def _rgb_to_hsv(r, g, b):
@@ -292,7 +293,8 @@ def _dilate(im, radius_px):
 
 
 def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path,
-                       boundary=None, bunker_world=None, envelope_polys=None):
+                       boundary=None, bunker_world=None, envelope_polys=None,
+                       guard_polys=None):
     """Classify the baked aerial into a coarse fairway/rough/woods/OOB raster.
     Returns {file,w,h,toWorld:[...]} (mask px -> world affine) or None to skip.
 
@@ -304,7 +306,11 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
     polygon `boundary` ([[{x,y},...], ...], world units), the hole corridors
     (centerlines buffered by MASK_CORRIDOR_UNITS) and `envelope_polys` (OSM
     fairway/green/tee polygons) + `bunker_world`, all grown outward by
-    MASK_ENV_DILATE_UNITS — parcel lines often cut through real play areas."""
+    MASK_ENV_DILATE_UNITS — parcel lines often cut through real play areas.
+
+    guard_polys (OSM green/tee/bunker polygons): tree canopy overhanging their
+    edges classifies as WOODS (a penalty surface) — within MASK_PLAY_GUARD_UNITS
+    of them WOODS is demoted to ROUGH, even over the OSM woods prior."""
     if Image is None or not aerial:
         return None
     try:
@@ -399,6 +405,22 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
                         id_ * p["x"] + ie * p["y"] + if_) for p in poly]
                 if len(pts) >= 3:
                     draw.polygon(pts, fill=MASK_ROUGH)
+
+        # no forest hugs a green/tee/bunker — WOODS within the guard halo of a
+        # mapped play feature is overhanging canopy shade, demote it to ROUGH
+        if guard_polys and w2p is not None:
+            guard_im = Image.new("L", (mw, mh), 0)
+            dg = ImageDraw.Draw(guard_im)
+            ia, ib, ic, id_, ie, if_ = w2p
+            for poly in guard_polys:
+                pts = [(ia * p["x"] + ib * p["y"] + ic,
+                        id_ * p["x"] + ie * p["y"] + if_) for p in poly]
+                if len(pts) >= 3:
+                    dg.polygon(pts, fill=255)
+            guard_im = _dilate(guard_im, MASK_PLAY_GUARD_UNITS / units_per_px)
+            idx = Image.frombytes("L", (mw, mh), lab.tobytes())
+            woods_im = idx.point(lambda i: 255 if i == MASK_WOODS else 0)
+            lab.paste(MASK_ROUGH, mask=ImageChops.multiply(woods_im, guard_im))
 
         lab.putpalette(MASK_PALETTE)
         lab.save(out_path)

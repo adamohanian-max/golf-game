@@ -503,7 +503,10 @@ def main():
                                              bunker_world=surfaces["bunker"],
                                              envelope_polys=(surfaces["fairway"]
                                                              + surfaces["green"]
-                                                             + surfaces["tee"]))
+                                                             + surfaces["tee"]),
+                                             guard_polys=(surfaces["green"]
+                                                          + surfaces["tee"]
+                                                          + surfaces["bunker"]))
                 if mask:
                     mask["file"] = mrel
                     course["surfaceMask"] = mask

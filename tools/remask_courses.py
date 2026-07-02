@@ -13,7 +13,8 @@ Usage:
   python3 tools/remask_courses.py --dry-run       # list what would be done
   python3 tools/remask_courses.py --audit         # metrics only, change nothing:
       per course, mask-OB inside OSM fairway polys + runtime-OB (mask-OB or
-      outside-boundary, minus OSM-protected surfaces) in an 8-unit tee->pin band.
+      outside-boundary, minus OSM-protected surfaces) in an 8-unit tee->pin band
+      + mask-WOODS (also a penalty) inside the guard halo around OSM greens.
 """
 import argparse, json, math, os, sys
 
@@ -88,7 +89,7 @@ def _rasters(course, sm):
 
 
 def audit_course(slug):
-    """Returns (obFW%, band8%) or None if the course has no mask."""
+    """Returns (obFW%, band8%, wdGrn%) or None if the course has no mask."""
     course = load(slug)
     sm = course.get("surfaceMask")
     if not sm or not os.path.exists(os.path.join(COURSES, sm["file"])):
@@ -103,8 +104,26 @@ def audit_course(slug):
     n_fw = fw.histogram()[255]
     ob_band = ImageChops.multiply(runtime, band).histogram()[255]
     n_band = band.histogram()[255]
+    # WOODS (also a penalty surface) hugging greens: canopy shade misread as
+    # forest turns near-green misses into OB — the Four Oaks complaint
+    upp = math.hypot(sm["toWorld"][0], sm["toWorld"][3]) or 1.0
+    surf = course.get("surfaces", {})
+    grn = Image.new("L", lab.size, 0)
+    d = ImageDraw.Draw(grn)
+    w2p = fc.invert_affine(*sm["toWorld"])
+    ia, ib, ic, id_, ie, if_ = w2p
+    for poly in surf.get("green", []):
+        pts = [(ia * p["x"] + ib * p["y"] + ic,
+                id_ * p["x"] + ie * p["y"] + if_) for p in poly]
+        if len(pts) >= 3:
+            d.polygon(pts, fill=255)
+    grn = fc._dilate(grn, fc.MASK_PLAY_GUARD_UNITS / upp)
+    wdm = lab.point([255 if i == 3 else 0 for i in range(256)])
+    wd_grn = ImageChops.multiply(wdm, grn).histogram()[255]
+    n_grn = grn.histogram()[255]
     return (100.0 * ob_fw / n_fw if n_fw else 0.0,
-            100.0 * ob_band / n_band if n_band else 0.0)
+            100.0 * ob_band / n_band if n_band else 0.0,
+            100.0 * wd_grn / n_grn if n_grn else 0.0)
 
 
 def remask(slug, dry):
@@ -126,7 +145,9 @@ def remask(slug, dry):
         boundary=course.get("boundary"),
         bunker_world=surf.get("bunker", []),
         envelope_polys=(surf.get("fairway", []) + surf.get("green", [])
-                        + surf.get("tee", [])))
+                        + surf.get("tee", [])),
+        guard_polys=(surf.get("green", []) + surf.get("tee", [])
+                     + surf.get("bunker", [])))
     if not mask:
         return "FAIL (build_surface_mask returned None)"
     mask["file"] = mrel
@@ -151,12 +172,12 @@ def main():
             r = audit_course(slug)
             if r:
                 rows.append((slug, *r))
-        rows.sort(key=lambda r: -r[2])
-        print(f"{'course':46} {'obFW%':>6} {'band8%':>7}")
-        for slug, obfw, band in rows:
-            print(f"{slug:46} {obfw:6.1f} {band:7.1f}")
-        n_bad = sum(1 for r in rows if r[2] > 5 or r[1] > 1)
-        print(f"-- {len(rows)} courses, {n_bad} with band8>5% or obFW>1%")
+        rows.sort(key=lambda r: -(r[2] + r[3]))
+        print(f"{'course':46} {'obFW%':>6} {'band8%':>7} {'wdGrn%':>7}")
+        for slug, obfw, band, wdgrn in rows:
+            print(f"{slug:46} {obfw:6.1f} {band:7.1f} {wdgrn:7.1f}")
+        n_bad = sum(1 for r in rows if r[2] > 5 or r[1] > 1 or r[3] > 2)
+        print(f"-- {len(rows)} courses, {n_bad} with band8>5%, obFW>1% or wdGrn>2%")
         return
 
     ok = fail = skip = 0

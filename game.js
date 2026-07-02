@@ -350,6 +350,25 @@ function loadSurfaceMask(maskRec, onReady) {
     c.drawImage(img, 0, 0);
     const px = c.getImageData(0, 0, w, h).data, lab = new Uint8Array(w * h);
     for (let i = 0; i < lab.length; i++) lab[i] = nearestMaskIdx(px[i * 4], px[i * 4 + 1], px[i * 4 + 2]);
+    // Woods carries the OB penalty, but a WOODS cell bordering playable turf is
+    // usually tree canopy overhanging fairway/rough/green fringe (shade reads
+    // "dark + textured" to the classifier) — a mask cell is ~4-5 yds, so that
+    // fringe misfires on shots that are clearly in play. Erode 1 cell: keep
+    // WOODS only where the whole 4-neighborhood is woods/OB (deep forest),
+    // demote the rest to ROUGH. Off-raster neighbors count as woods.
+    const raw = lab.slice();
+    const rawAt = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 3 : raw[y * w + x];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (raw[i] !== 3) continue;
+        const deep = (rawAt(x - 1, y) === 3 || rawAt(x - 1, y) === 0) &&
+                     (rawAt(x + 1, y) === 3 || rawAt(x + 1, y) === 0) &&
+                     (rawAt(x, y - 1) === 3 || rawAt(x, y - 1) === 0) &&
+                     (rawAt(x, y + 1) === 3 || rawAt(x, y + 1) === 0);
+        if (!deep) lab[i] = 2;
+      }
+    }
     // pre-render a red tint canvas over the OOB + woods cells (drawn through the
     // aerial-style transform when the OB overlay is on)
     const oob = document.createElement("canvas"); oob.width = w; oob.height = h;
