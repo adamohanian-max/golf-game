@@ -1116,9 +1116,11 @@ function swingMove(e) {
     camera.tScale = Math.max(minScale, Math.min(maxScale, camTouch.camScale * newDist / camTouch.dist));
     camera.scale = camera.tScale;
 
-    // rotate
+    // rotate: world follows the fingers (twist CW = map turns CW, like a map app).
+    // Screen y points down, so a visually-CW twist raises atan2, and +camera.angle
+    // also turns the world CW on screen — same sign, so ADD the twist.
     const dAng = angDiff(newAng, camTouch.angle);
-    camera.tAngle = camTouch.camAngle - dAng;
+    camera.tAngle = camTouch.camAngle + dAng;
     camera.angle = camera.tAngle;
 
     // pan: midpoint shift in world coords (accounting for rotation)
