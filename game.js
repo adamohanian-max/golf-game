@@ -2291,9 +2291,15 @@ function drawWindIndicator() {
   const svy = view.d * pwx + view.e * pwy;
   const screenAngle = Math.atan2(svy, svx);
 
-  // Below the notch / Dynamic Island — and on mobile, below the scorecard top
-  // bar (which now spans the top of the screen).
-  const cx = cssW / 2, cy = safeInset.t + (IS_DESKTOP ? 22 : 63);
+  // Below the notch / Dynamic Island. On mobile the top bar cluster (scorecard
+  // + docked shot-info) spans the top-left, so anchor the pill just below
+  // whichever of those is currently the lowest, or it hides behind them.
+  let cx = cssW / 2, cy = safeInset.t + 22;
+  if (!IS_DESKTOP) {
+    const barEl = (elStats && !elStats.classList.contains("hidden")) ? elStats : elScorecard;
+    const b = barEl ? barEl.getBoundingClientRect().bottom : 0;
+    cy = (b > 0 ? b : safeInset.t + 47) + 20;
+  }
   const spd = Math.round(wind.speed);
   const label = spd + " mph";
 
