@@ -4208,6 +4208,9 @@ function parseAuthRedirect() {
   return true;
 }
 
+// Returns the user object, null if the token was explicitly rejected (401/403 —
+// really logged out), or undefined on a transient failure (network/5xx) where
+// we don't yet know and must NOT treat it as a sign-out.
 async function fetchUser() {
   const s = getSession();
   if (!s || !s.access_token) return null;
@@ -4215,39 +4218,55 @@ async function fetchUser() {
     const res = await fetch(LB_URL + "/auth/v1/user", {
       headers: { apikey: LB_KEY, Authorization: "Bearer " + s.access_token },
     });
-    if (!res.ok) return null;
-    return res.json();   // { id, email, ... }
-  } catch (e) { return null; }
+    if (res.ok) return res.json();   // { id, email, ... }
+    if (res.status === 401 || res.status === 403) return null;
+    return undefined;                // 5xx / rate limit — transient
+  } catch (e) { return undefined; }  // offline / network error — transient
 }
 
+// Returns true on success, false otherwise. Only clears the session when the
+// refresh token is explicitly rejected (400/401 — actually revoked/expired);
+// a network error or server hiccup leaves the stored session alone so the
+// next launch can retry instead of forcing a fresh OTP.
 async function refreshSession() {
   const s = getSession();
   if (!s || !s.refresh_token) return false;
+  let res;
   try {
-    const res = await fetch(LB_URL + "/auth/v1/token?grant_type=refresh_token", {
+    res = await fetch(LB_URL + "/auth/v1/token?grant_type=refresh_token", {
       method: "POST",
       headers: { apikey: LB_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: s.refresh_token }),
     });
-    if (!res.ok) { clearSession(); return false; }
-    const tok = await res.json();
-    storeTokens(tok, tok.user || s.user);
-    return true;
-  } catch (e) { clearSession(); return false; }
+  } catch (e) { return false; }      // offline / network error — transient
+  if (!res.ok) {
+    if (res.status === 400 || res.status === 401) clearSession();
+    return false;
+  }
+  const tok = await res.json();
+  storeTokens(tok, tok.user || s.user);
+  return true;
 }
 
 // Validate/restore the stored session; refresh if expired; confirm the user.
+// Transient failures (offline, server hiccup) keep the existing session
+// intact rather than forcing the player back through the OTP flow.
 async function restoreSession() {
   let s = getSession();
   if (!s || !s.access_token) return false;
   if (s.expires_at && Date.now() > s.expires_at - 60000) {
-    if (!(await refreshSession())) return false;
+    if (!(await refreshSession())) return isLoggedIn();
     s = getSession();
   }
   const user = await fetchUser();
-  if (!user) { if (!(await refreshSession())) { clearSession(); return false; }
-               const u2 = await fetchUser(); if (!u2) { clearSession(); return false; }
-               s = getSession(); s.user = u2; setSession(s); return true; }
+  if (user === undefined) return isLoggedIn();  // transient — keep cached session
+  if (user === null) {                          // token explicitly rejected — try one refresh
+    if (!(await refreshSession())) return isLoggedIn();
+    const u2 = await fetchUser();
+    if (u2 === undefined) return isLoggedIn();
+    if (u2 === null) { clearSession(); return false; }
+    s = getSession(); s.user = u2; setSession(s); return true;
+  }
   s.user = user; setSession(s);
   return true;
 }
