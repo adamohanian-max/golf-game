@@ -86,6 +86,17 @@ MASK_DESPECKLE = 5        # ModeFilter window (odd) to kill single-pixel noise
 # OOB only applies OUTSIDE the playing envelope (buffered hole corridors). Inside
 # it, a non-turf pixel (sand/path/dirt) is just rough, not out of bounds.
 MASK_CORRIDOR_UNITS = 26  # corridor half-width (~78 yds) -> course envelope
+# The envelope is the union of the boundary polygon, the hole corridors AND the
+# OSM play polygons (fairway/green/tee/bunker), grown outward a little: OSM parcel
+# lines often cut through real dunes/fairway edges (coastal + multi-parcel courses).
+MASK_ENV_DILATE_UNITS = 6   # outward envelope growth (~18 yds)
+# Sand rescue: bright warm low-ish-sat pixels near the envelope are dunes/waste
+# sand -> rough, never OB. Sat window keeps grey roads (<lo) and terracotta
+# roofs (>hi) out; the near-gate keeps distant tan suburbs OB.
+MASK_SAND_HUE_MAX = 65      # warm hue ceiling (deg)
+MASK_SAND_SAT_LO, MASK_SAND_SAT_HI = 0.08, 0.35
+MASK_SAND_VAL_MIN = 0.55    # sand is bright
+MASK_SAND_NEAR_UNITS = 40   # rescue reach beyond the envelope (~120 yds)
 
 
 def _rgb_to_hsv(r, g, b):
@@ -248,23 +259,40 @@ def _otsu(values, default):
     return best_t
 
 
-def _classify_px(r, g, b, edge, fw_cut, inside):
+def _classify_px(r, g, b, edge, fw_cut, inside, near=False):
     """One aerial pixel -> MASK_OB / FAIRWAY / ROUGH / WOODS.
     fw_cut: fairway/rough brightness boundary; inside: pixel within the playing
-    envelope (if so, non-turf is rough, never out of bounds)."""
+    envelope (if so, non-turf is rough, never out of bounds); near: within
+    sand-rescue reach of the envelope."""
     h, s, v = _rgb_to_hsv(r, g, b)
     hue = h * 360.0
     is_green = (s >= MASK_SAT_MIN and v >= MASK_VAL_MIN
                 and MASK_HUE_LO <= hue <= MASK_HUE_HI)
     if not is_green:
-        return MASK_ROUGH if inside else MASK_OB   # sand/path/dirt inside, OOB outside
+        if inside:
+            return MASK_ROUGH                      # sand/path/dirt inside the course
+        if (near and hue <= MASK_SAND_HUE_MAX
+                and MASK_SAND_SAT_LO <= s <= MASK_SAND_SAT_HI
+                and v >= MASK_SAND_VAL_MIN):
+            return MASK_ROUGH                      # dunes/waste sand is never OB
+        return MASK_OB
     if v < MASK_WOODS_VAL_MAX and edge >= MASK_WOODS_EDGE_MIN:
         return MASK_WOODS                          # dark + textured green canopy = trees
     return MASK_FAIRWAY if v >= fw_cut else MASK_ROUGH
 
 
+def _dilate(im, radius_px):
+    """Grow the white regions of a mode-L mask outward by ~radius_px pixels."""
+    r = int(round(radius_px))
+    while r > 0:
+        step = min(r, 10)
+        im = im.filter(ImageFilter.MaxFilter(2 * step + 1))
+        r -= step
+    return im
+
+
 def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path,
-                       boundary=None, bunker_world=None):
+                       boundary=None, bunker_world=None, envelope_polys=None):
     """Classify the baked aerial into a coarse fairway/rough/woods/OOB raster.
     Returns {file,w,h,toWorld:[...]} (mask px -> world affine) or None to skip.
 
@@ -272,9 +300,11 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
     woods_world: OSM woods polygons ([{x,y},...], world units) unioned in as a
     strong WOODS prior; out_path: PNG out.
 
-    Playing envelope (OOB only outside it): the real course-boundary polygon
-    `boundary` ([[{x,y},...], ...], world units) when available; otherwise falls
-    back to `corridors` (hole centerlines buffered by MASK_CORRIDOR_UNITS)."""
+    Playing envelope (OOB only outside it): union of the real course-boundary
+    polygon `boundary` ([[{x,y},...], ...], world units), the hole corridors
+    (centerlines buffered by MASK_CORRIDOR_UNITS) and `envelope_polys` (OSM
+    fairway/green/tee polygons) + `bunker_world`, all grown outward by
+    MASK_ENV_DILATE_UNITS — parcel lines often cut through real play areas."""
     if Image is None or not aerial:
         return None
     try:
@@ -294,8 +324,9 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
         to_world = [a * ratio, b * ratio, c, d * ratio, e * ratio, f]
         w2p = invert_affine(*to_world)
 
-        # playing envelope = "inside the course". Prefer the real boundary polygon
-        # (OOB = a true property line); fall back to fattened hole centerlines.
+        # playing envelope = "inside the course": boundary polygon ∪ fattened hole
+        # corridors ∪ OSM play polygons, grown outward a little. OOB only outside it.
+        units_per_px = math.hypot(to_world[0], to_world[3]) or 1.0
         inside_im = Image.new("L", (mw, mh), 0)
         if w2p is not None:
             ia, ib, ic, id_, ie, if_ = w2p
@@ -306,15 +337,22 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
                             id_ * p["x"] + ie * p["y"] + if_) for p in ring]
                     if len(pts) >= 3:
                         d_ie.polygon(pts, fill=255)
-            elif corridors:
-                units_per_px = math.hypot(to_world[0], to_world[3]) or 1.0
+            if corridors:
                 width_px = max(3, round(2 * MASK_CORRIDOR_UNITS / units_per_px))
                 for line in corridors:
                     pts = [(ia * p["x"] + ib * p["y"] + ic,
                             id_ * p["x"] + ie * p["y"] + if_) for p in line]
                     if len(pts) >= 2:
                         d_ie.line(pts, fill=255, width=width_px, joint="curve")
-        ins = inside_im.load()
+            for poly in (envelope_polys or []) + (bunker_world or []):
+                pts = [(ia * p["x"] + ib * p["y"] + ic,
+                        id_ * p["x"] + ie * p["y"] + if_) for p in poly]
+                if len(pts) >= 3:
+                    d_ie.polygon(pts, fill=255)
+        inside_im = _dilate(inside_im, MASK_ENV_DILATE_UNITS / units_per_px)
+        near_im = _dilate(inside_im,
+                          (MASK_SAND_NEAR_UNITS - MASK_ENV_DILATE_UNITS) / units_per_px)
+        ins, nr = inside_im.load(), near_im.load()
 
         # adaptive fairway/rough brightness split from the green-turf pixels only
         turf_vals = []
@@ -334,7 +372,8 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
             row = y * mw
             for x in range(mw):
                 r, g, b = px[x, y]
-                buf[row + x] = _classify_px(r, g, b, ex[x, y], fw_cut, ins[x, y] > 0)
+                buf[row + x] = _classify_px(r, g, b, ex[x, y], fw_cut,
+                                            ins[x, y] > 0, nr[x, y] > 0)
         lab.frombytes(bytes(buf))
         # despeckle (mode filter keeps it index-valued)
         lab = lab.filter(ImageFilter.ModeFilter(MASK_DESPECKLE))

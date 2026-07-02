@@ -385,11 +385,16 @@ function surfaceAt(x, y) {
   if (inAnyPoly(x, y, s.bunker)) return "bunker"; // sand
   if (inAnyPoly(x, y, s.green)) return "green";
   if (inAnyPoly(x, y, s.tee)) return "fairway";   // tee boxes play like fairway
-  // Real OB = outside the course-boundary polygon (vector-exact, not the coarse
-  // aerial mask). Tested before the mask so the mask only labels turf inside.
-  if (HOLE._boundary && !inAnyPoly(x, y, HOLE._boundary)) return "ob";
+  // The mask decides OB vs playable first: its bake envelope already unions the
+  // boundary polygon with the hole corridors + OSM play polygons and rescues
+  // dune/waste sand, so it knows parcel lines cut through real play areas
+  // (coastal / multi-parcel courses) where the raw boundary would call OB.
   const m = maskClassAt(x, y);
   if (m) return m;                                // fairway | rough | woods | ob
+  // Off-mask / no-mask: real OB = outside the course-boundary polygon
+  // (vector-exact) — except a mapped fairway past the line still plays.
+  if (HOLE._boundary && !inAnyPoly(x, y, HOLE._boundary) &&
+      !inAnyPoly(x, y, s.fairway)) return "ob";
   // no mask: fall back to OSM polygons
   if (inAnyPoly(x, y, s.fairway)) return "fairway";
   if (inAnyPoly(x, y, s.woods)) return "woods";   // trees = out of bounds (penalty)

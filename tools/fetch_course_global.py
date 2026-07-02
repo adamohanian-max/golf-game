@@ -500,7 +500,10 @@ def main():
                                              surfaces["woods"], corridors,
                                              os.path.join(out_dir, mrel),
                                              boundary=boundary_world,
-                                             bunker_world=surfaces["bunker"])
+                                             bunker_world=surfaces["bunker"],
+                                             envelope_polys=(surfaces["fairway"]
+                                                             + surfaces["green"]
+                                                             + surfaces["tee"]))
                 if mask:
                     mask["file"] = mrel
                     course["surfaceMask"] = mask
