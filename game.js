@@ -2567,7 +2567,8 @@ function draw() {
   ctx.fillStyle = _vignette.grad;
   ctx.fillRect(0, 0, cssW, cssH);
 
-  drawWindIndicator();
+  // Wind is shown as a DOM chip in the top HUD card (updateWindChip), not a
+  // canvas pill — so it can never overlap the pin near screen-top-center.
 
   // range finder: dashed lines ball->marker and marker->pin with yard labels
   if (measurePoint) {
@@ -2684,11 +2685,9 @@ function updateScorecard() {
 // Desktop keeps its own fixed top-right panel — clearing the inline top lets the
 // base CSS govern there. Called on layout changes only (not per frame).
 function positionStatsBar() {
-  if (!elStats) return;
-  if (!document.body.classList.contains("is-mobile")) { elStats.style.top = ""; return; }
-  const r = elScorecard.getBoundingClientRect();
-  // Scorecard is display:none in range mode → fall back to a spot below the HUD btn.
-  elStats.style.top = Math.round(r.height > 0 ? r.bottom + 5 : 60) + "px";
+  // Shot info now flows inside the scorecard card (no docking). Clear any legacy
+  // inline top a previous build left behind so it doesn't offset the in-card block.
+  if (elStats) elStats.style.top = "";
 }
 function hideHint() {
   elHint.classList.add("hidden");
@@ -3498,6 +3497,29 @@ const rowPlays = document.getElementById("st-plays-row");
 const stLieFx = document.getElementById("st-lie-fx");
 const rowLieFx = document.getElementById("st-lie-fx-row");
 const rowCarry = stCarry.parentElement;
+const elWindChip = document.getElementById("wind-chip");
+const elWindArrow = document.getElementById("wind-arrow");
+const elWindMph = document.getElementById("wind-mph");
+let _windMphShown = null;
+
+// Wind readout as a DOM chip in the top HUD card. The arrow rotates with the
+// camera (same projection the old canvas pill used). Gating matches the old
+// drawWindIndicator: course mode, not range, wind actually blowing.
+function updateWindChip() {
+  if (!elWindChip) return;
+  if (!HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) {
+    elWindChip.classList.add("hidden");
+    return;
+  }
+  elWindChip.classList.remove("hidden");
+  // wind push vector (FROM dir → pushes opposite), projected to screen via view
+  const pwx = -Math.sin(wind.dir), pwy = Math.cos(wind.dir);
+  const svx = view.a * pwx + view.b * pwy;
+  const svy = view.d * pwx + view.e * pwy;
+  elWindArrow.style.transform = "rotate(" + Math.atan2(svy, svx) + "rad)";
+  const spd = Math.round(wind.speed);
+  if (spd !== _windMphShown) { elWindMph.textContent = spd + " mph"; _windMphShown = spd; }
+}
 
 function rangeFeedback(msg) { if (elRangeResult) elRangeResult.textContent = msg; }
 
@@ -3738,7 +3760,7 @@ if (elChipBtn) elChipBtn.addEventListener("click", () => setChip(!chipEnabled));
 //  normally pass-through panels grabbable; positions persist per-id in
 //  localStorage as inline left/top px and are re-clamped on resize.
 // =====================================================================
-const HUD_MOVABLE_IDS = ["scorecard", "stats", "hint", "hm-club-row", "hud-btn"];
+const HUD_MOVABLE_IDS = ["scorecard", "hint", "hm-club-row", "hud-btn"];
 const HUD_POS_KEY = "golf.hudPos";
 const HUD_SCALE_MIN = 0.6, HUD_SCALE_MAX = 2.2, HUD_SCALE_STEP = 0.1;
 let hudEditOn = false;
@@ -8239,6 +8261,7 @@ function loop() {
   updateLiveTurnUI(); // keep the whose-turn banner in sync (cheap; cached)
   updateCamera();
   updateStats();
+  updateWindChip();
   draw();
   requestAnimationFrame(loop);
 }
