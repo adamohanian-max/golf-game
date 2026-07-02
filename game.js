@@ -7283,14 +7283,13 @@ function cpuSafePoint(pt, from) {
   }
   return { x: (from.x + HOLE.holePos.x) / 2, y: (from.y + HOLE.holePos.y) / 2 };
 }
-// Human-feeling pause before a shot: 2-6s, longer sometimes on the tee, on
-// green reads, or just because — never metronome-regular.
+// Human-feeling pause before a shot: 0.3-4s, leaning longer sometimes on the
+// tee or on green reads — never metronome-regular.
 function cpuThinkMs(kind, firstOfHole) {
-  let ms = 2000 + Math.random() * 4000;
-  if (firstOfHole && Math.random() < 0.5) ms += Math.random() * 2500;
-  if (kind === "putt" && Math.random() < 0.25) ms += 2000 + Math.random() * 2500;
-  if (Math.random() < 0.07) ms += 3000 + Math.random() * 2000;
-  return ms;
+  let ms = 300 + Math.random() * 2700;
+  if (firstOfHole && Math.random() < 0.5) ms += Math.random() * 1000;
+  if (kind === "putt" && Math.random() < 0.25) ms += Math.random() * 1000;
+  return Math.min(ms, 4000);
 }
 // Plan the current hole as real golf played from the SAME club bag the human
 // gets (TUNE.clubs + clubForYards auto-selection): driver off the tee, layups
