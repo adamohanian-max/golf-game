@@ -1050,7 +1050,18 @@ function camTouchOf(touches, id) {
   return null;
 }
 
+// Mobile browsers replay a tap as synthetic mouse events (mousedown/mouseup)
+// after touchend. Those land on the just-dropped rangefinder marker, register
+// as a "tap on the marker" and dismiss it instantly. Ignore mouse input for a
+// beat after any touch.
+let lastTouchT = 0;
+function ghostMouse(e) {
+  if (e.type.indexOf("touch") === 0) { lastTouchT = performance.now(); return false; }
+  return e.type.indexOf("mouse") === 0 && performance.now() - lastTouchT < 800;
+}
+
 function swingStart(e) {
+  if (ghostMouse(e)) return;
   if (measureMode) { const p = pointerPos(e); measurePoint = screenToWorld(p.x, p.y); measureDragging = true; return; }
   if (e.touches && e.touches.length >= 2) {
     // second finger landed — cancel any pending swing, enter camera-manipulation mode
@@ -1085,6 +1096,7 @@ function swingStart(e) {
   swipePath = [{ x: p.x, y: p.y, t: now }];
 }
 function swingMove(e) {
+  if (ghostMouse(e)) return;
   if (measureMode) { if (measureDragging) { e.preventDefault(); const p = pointerPos(e); measurePoint = screenToWorld(p.x, p.y); } return; }
   if (camTouch && e.touches && e.touches.length >= 2) {
     // two-finger camera: pinch (zoom), drag (pan), twist (rotate)
@@ -1268,6 +1280,7 @@ function launch(dxs, dys, dt, spin = 0) {
 }
 
 function swingEnd(e) {
+  if (ghostMouse(e)) return;
   if (measureMode) { measureDragging = false; return; }
   if (markerDrag) {
     // released on the marker without moving it => a click on the target => dismiss
@@ -2050,6 +2063,38 @@ function drawGreenRelief(g, intensity, showArrows) {
   if (showArrows) drawGreenArrows(g);
 }
 // The green(s) currently relevant: the one the ball sits on + the one holding the pin.
+// Front/middle/back of a green as seen from the ball: cast the ball->green-center
+// ray and take its first/last crossings of the green boundary. Distances are in
+// world units (multiply by YARDS_PER_UNIT for yards). Null if degenerate.
+function greenFMB(green) {
+  const b = state.ball, poly = green.poly;
+  let cx = 0, cy = 0;
+  for (const p of poly) { cx += p.x; cy += p.y; }
+  cx /= poly.length; cy /= poly.length;
+  const len = Math.hypot(cx - b.x, cy - b.y);
+  if (len < 1e-6) return null;
+  const dx = (cx - b.x) / len, dy = (cy - b.y) / len;
+  let tMin = Infinity, tMax = -Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    // ray b + t·d vs edge poly[j] + s·e
+    const ex = poly[i].x - poly[j].x, ey = poly[i].y - poly[j].y;
+    const cross = dx * ey - dy * ex;
+    if (Math.abs(cross) < 1e-9) continue;
+    const apx = poly[j].x - b.x, apy = poly[j].y - b.y;
+    const t = (apx * ey - apy * ex) / cross;
+    const s = (apx * dy - apy * dx) / cross;
+    if (s < 0 || s > 1 || t <= 0) continue;
+    if (t < tMin) tMin = t;
+    if (t > tMax) tMax = t;
+  }
+  if (!isFinite(tMin) || tMax <= tMin) return null;
+  return {
+    front: { x: b.x + dx * tMin, y: b.y + dy * tMin, d: tMin },
+    back:  { x: b.x + dx * tMax, y: b.y + dy * tMax, d: tMax },
+    mid:   { d: (tMin + tMax) / 2 },
+  };
+}
+
 function greensInPlay() {
   const greens = HOLE._greens || [], out = [];
   const add = (p) => { for (const g of greens) { if (!out.includes(g) && pointInPoly(p.x, p.y, g.poly)) { out.push(g); return; } } };
@@ -2516,11 +2561,17 @@ function draw() {
     const bx = wx(b.x, b.y), by = wy(b.x, b.y);
     const mx = wx(measurePoint.x, measurePoint.y), my = wy(measurePoint.x, measurePoint.y);
     const px = wx(HOLE.holePos.x, HOLE.holePos.y), py = wy(HOLE.holePos.x, HOLE.holePos.y);
+    // pressed a green (ball off it): show front/middle/back of that green instead
+    // of the marker->pin readout
+    const gHit = (HOLE._greens || []).find((g) => pointInPoly(measurePoint.x, measurePoint.y, g.poly));
+    const fmb = gHit && !pointInPoly(b.x, b.y, gHit.poly) ? greenFMB(gHit) : null;
     ctx.setLineDash([6, 5]); ctx.lineWidth = 2;
     ctx.strokeStyle = "rgba(255,255,255,0.85)";
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(mx, my); ctx.stroke();   // ball -> marker
-    ctx.strokeStyle = "rgba(255,214,90,0.9)";
-    ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(px, py); ctx.stroke();   // marker -> pin
+    if (!fmb) {
+      ctx.strokeStyle = "rgba(255,214,90,0.9)";
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(px, py); ctx.stroke(); // marker -> pin
+    }
     ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.fill();
@@ -2537,7 +2588,18 @@ function draw() {
       return " " + (df > 0 ? "↑" : "↓") + Math.abs(df) + "ft";
     }
     drawLabel((bx + mx) / 2, (by + my) / 2, yBall + " yds" + elevLabel(b.x, b.y, measurePoint.x, measurePoint.y), "#fff");
-    drawLabel((mx + px) / 2, (my + py) / 2, yPin + " yds" + elevLabel(measurePoint.x, measurePoint.y, HOLE.holePos.x, HOLE.holePos.y), "#ffd65a");
+    if (fmb) {
+      // dots where the ball->center ray crosses the green edge
+      for (const pt of [fmb.front, fmb.back]) {
+        ctx.beginPath(); ctx.arc(wx(pt.x, pt.y), wy(pt.x, pt.y), 3, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffd65a"; ctx.fill();
+      }
+      drawLabel(mx, my - 70, "Back "  + Math.round(fmb.back.d  * YARDS_PER_UNIT), "#fff");
+      drawLabel(mx, my - 46, "Mid "   + Math.round(fmb.mid.d   * YARDS_PER_UNIT), "#ffd65a");
+      drawLabel(mx, my - 22, "Front " + Math.round(fmb.front.d * YARDS_PER_UNIT), "#fff");
+    } else {
+      drawLabel((mx + px) / 2, (my + py) / 2, yPin + " yds" + elevLabel(measurePoint.x, measurePoint.y, HOLE.holePos.x, HOLE.holePos.y), "#ffd65a");
+    }
   }
 
   // hole-change transition: fade out to course-green, swap the hole at the
@@ -5711,9 +5773,15 @@ function ordinal(n) {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
-// Assign standings positions to score-sorted rows, sharing a position on ties
-// (standard competition ranking: 1,2,2,4). Each row gets {pos, tied}.
+// Rank standings by lowest total score (stroke play), sharing a position on
+// ties (standard competition ranking: 1,2,2,4). Each row gets {pos, tied}.
+// Sorts here so callers don't have to: the DB feed is already score-sorted, but
+// the local CPU-match feed (cpuMatchRows) is in insertion order — without this
+// sort the local player always landed at index 0 and was ranked the winner
+// regardless of score. On equal scores, more holes played ranks ahead.
 function rankMatchRows(rows) {
+  rows = [...rows].sort((a, b) =>
+    ((a.score || 0) - (b.score || 0)) || ((b.holes_played || 0) - (a.holes_played || 0)));
   const out = rows.map((r, i) => ({
     ...r,
     pos: (i > 0 && rows[i - 1].score === r.score) ? null : i + 1,
