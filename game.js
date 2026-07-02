@@ -7507,12 +7507,12 @@ function cpuSafePoint(pt, from) {
   }
   return { x: (from.x + HOLE.holePos.x) / 2, y: (from.y + HOLE.holePos.y) / 2 };
 }
-// Human-feeling pause before a shot: 0.3-4s, leaning longer sometimes on the
+// Human-feeling pause before a shot: 1-4s, leaning longer sometimes on the
 // tee or on green reads — never metronome-regular.
 function cpuThinkMs(kind, firstOfHole) {
-  let ms = 300 + Math.random() * 2700;
-  if (firstOfHole && Math.random() < 0.5) ms += Math.random() * 1000;
-  if (kind === "putt" && Math.random() < 0.25) ms += Math.random() * 1000;
+  let ms = 1000 + Math.random() * 2200;
+  if (firstOfHole && Math.random() < 0.5) ms += Math.random() * 800;
+  if (kind === "putt" && Math.random() < 0.25) ms += Math.random() * 800;
   return Math.min(ms, 4000);
 }
 // Plan the current hole as real golf played from the SAME club bag the human
@@ -7558,21 +7558,22 @@ function cpuPlanHole() {
         pt = cpuPointNearPin(proxFt);
         pt.club = clubForYards(remainYds);
       } else {
-        // Auto-club thinking: too far to reach → longest club (driver only off
-        // the tee). Reachable but more field legs to come → either a genuine
-        // layup to wedge range (only from real layup distance), or go for it
-        // with the right club and mishit short — a human never "lays up" a
-        // par-3 tee shot.
+        // Auto-club thinking: too far to reach → longest club, max carry
+        // (driver only off the tee) — humans play aggressive, they don't
+        // throttle a long club. Reachable but more field legs to come →
+        // usually still go for it (mishit short burns the leg); a genuine
+        // wedge-range layup is the rare choice, and only from real layup
+        // distance — a human never "lays up" a par-3 tee shot.
         const longest = (i === 1) ? "driver" : "3w";
         let club = longest, carryYds = carryOf(longest);
         if (remainYds <= carryYds + 20) {
-          if (i > 1 && remainYds >= 140 && Math.random() < 0.6) {
+          if (i > 1 && remainYds >= 200 && Math.random() < 0.2) {
             const leave = 80 + Math.random() * 30;
             club = clubForYards(remainYds - leave);
             carryYds = Math.min(carryOf(club), remainYds - 30);
           } else {
             club = clubForYards(remainYds);
-            carryYds = Math.min(carryOf(club), remainYds) * (0.55 + Math.random() * 0.35);
+            carryYds = Math.min(carryOf(club), remainYds) * (0.65 + Math.random() * 0.3);
           }
         }
         const legsLeft = L - i;   // field legs after this one (incl. the approach)
