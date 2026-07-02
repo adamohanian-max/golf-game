@@ -13,7 +13,7 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=56">
   <link rel="stylesheet" href="css/base.css?v=58">
-  <link rel="stylesheet" href="css/hud.css?v=74">
+  <link rel="stylesheet" href="css/hud.css?v=75">
   <link rel="stylesheet" href="css/menu.css?v=66">
   <link rel="stylesheet" href="css/courses.css?v=5">
   <link rel="stylesheet" href="css/modals.css?v=68">
@@ -109,6 +109,13 @@
   <div id="live-turn" class="hidden"></div>
   <div id="hud-edit-bar" class="hidden">Drag to move · pinch or <button id="hud-zoom-out" class="hud-zoom">−</button><button id="hud-zoom-in" class="hud-zoom">+</button> to resize · <button id="hud-edit-done">Done</button></div>
   <div id="toast" class="hidden"></div>
+
+  <div id="chip-spin" class="hidden">
+    <span class="cs-end cs-top">bite</span>
+    <input id="chip-spin-slider" type="range" min="-100" max="100" value="0">
+    <span class="cs-end cs-bot">run</span>
+    <span class="cs-label">SPIN <b id="chip-spin-val">0</b></span>
+  </div>
 
   <div id="range-ui" class="hidden">
     <div class="range-row">
@@ -512,6 +519,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=126"></script>
+  <script src="game.js?v=127"></script>
 </body>
 </html>

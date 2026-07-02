@@ -18,6 +18,10 @@ const TUNE = {
   chipReachHi: 1.2,      // hardest chip flies 120% (never blows way past)
   chipLandFrac: 0.75,    // chip CARRIES this much of the band target; the rest is roll-out
   chipSpin: 0.1,         // chip backspin multiplier (< full -> ball releases and rolls out)
+  // Chip spin slider (bias -1..+1, 0 = neutral = the two values above). More spin ->
+  // land deeper + check; less spin -> land short + run. Total still finishes near the pin.
+  chipLandSpread: 0.22,  // bias shifts landFrac: 0.53 (full run) .. 0.75 (neutral) .. 0.97 (land at pin)
+  chipSpinRange: 9,      // exponential backspin scale: chipSpin*9^bias -> 0.011 (run) .. 0.1 .. 0.9 (bites/backs up)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
   mousePuttScale: 0.75,    // extra putt scalar when swinging with a mouse (−25%; mouse flicks read faster)
   // Putt control band: most putts are short, but max power reaches YARDS.maxPutt (50yd).
@@ -271,6 +275,7 @@ let showOOB = true;        // red OOB overlay toggle
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
+let chipSpinBias = 0;      // chip spin slider (-1 run .. 0 neutral .. +1 bite); resets to 0 each hole
 let lieEffectEnabled = true; // rough/sand cost power + spin (off = every lie plays clean, easier)
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let markerDropT = 0;       // when the marker was tap-dropped (grace vs insta-dismiss)
@@ -1166,6 +1171,25 @@ function slottedLaunch() {
   hideHint();
 }
 
+// Greenside chip gate: chip mode on, off the green, within range of the pin. Shared
+// by launchShot (physics), updateClubUI (carry readout) and the spin slider show/hide
+// so they never disagree about when a chip is in play.
+function chipActiveNow() {
+  if (!chipEnabled || !HOLE || HOLE.isRange) return false;
+  const b = state.ball;
+  if (surfaceAt(b.x, b.y) === "green") return false;
+  return dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT < TUNE.chipRangeYds;
+}
+// Chip spin slider -> { landFrac, spinScale } (bias -1..+1). More spin lands the ball
+// deeper (higher landFrac) and checks harder (higher spinScale); less spin lands short
+// and runs. Neutral (0) reproduces TUNE.chipLandFrac / TUNE.chipSpin exactly.
+function chipSpinParams() {
+  const bias = chipSpinBias;
+  const landFrac = Math.max(0.5, Math.min(0.98, TUNE.chipLandFrac + bias * TUNE.chipLandSpread));
+  const spinScale = TUNE.chipSpin * Math.pow(TUNE.chipSpinRange, bias);
+  return { landFrac, spinScale };
+}
+
 function launchShot(ang, frac, spin, onGreen) {
   if (!canSwing() || frac <= 0.05) return;
   measurePoint = null; // shot fired — clear the rangefinder marker
@@ -1221,9 +1245,7 @@ function launchShot(ang, frac, spin, onGreen) {
     // (capped at club carry), so a chip is never very short or very far from the hole. Outside
     // chip mode every club flies its rated carry at full swing, floored at clubMinFrac. The
     // club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
-    const toPinFlat = HOLE.isRange ? Infinity
-                : dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-    const chipActive = chipEnabled && !HOLE.isRange && toPinFlat < TUNE.chipRangeYds;  // gate on real distance
+    const chipActive = chipActiveNow();  // chip mode on, off green, within pin range
     let ef;
     if (chipActive) {
       // Tight band: f=0 -> chipReachLo, f=1 -> chipReachHi of pin distance. chipLandFrac
@@ -1232,7 +1254,7 @@ function launchShot(ang, frac, spin, onGreen) {
       // plays-like distance so an uphill chip flies/rolls longer (downhill shorter).
       const toPin = playsLikeYards(b.x, b.y).plays;
       const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * f;
-      ef = Math.min(1, (toPin * reach * TUNE.chipLandFrac) / c.carry);
+      ef = Math.min(1, (toPin * reach * chipSpinParams().landFrac) / c.carry);
     } else {
       // Min power floor for every full-swing club (incl. LW): an imprecise weak read can't
       // dribble it — always flies ≥ clubMinFrac of its rated carry.
@@ -1250,7 +1272,7 @@ function launchShot(ang, frac, spin, onGreen) {
     // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
     const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
     const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[surfaceAt(b.x, b.y)] ?? 1) : 1;  // rough flyer / sand kill backspin
-    const spinScale = chipActive ? TUNE.chipSpin : chipBoost;
+    const spinScale = chipActive ? chipSpinParams().spinScale : chipBoost;
     const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul);
     setupFlight(b, ang, C, H, c.land * Math.PI / 180, effectiveSpinN);
     state.airborne = true;
@@ -3174,6 +3196,7 @@ function setHole(rec) {
   recalcPower();
 
   resetState();
+  resetChipSpin();  // re-center the chip spin slider to neutral for the new hole
   // New wind each hole (no wind on driving range)
   if (!HOLE.isRange && windEnabled) {
     wind.dir   = Math.random() * Math.PI * 2;
@@ -3549,6 +3572,9 @@ function lieNote(label) {
 
 // Shot stats HUD. Yards normally; feet (carry omitted) once on the green.
 function updateStats() {
+  // Chip spin slider: show only greenside in chip range, and only with the ball at rest
+  // (so it never blocks a swing-in-progress). Off in the menu / range.
+  if (elChipSpin) elChipSpin.classList.toggle("hidden", !(mode === "course" && !state.moving && chipActiveNow()));
   if (mode !== "course" && mode !== "range") { elStats.classList.add("hidden"); return; }
   // Hide the stats panel while the ball is in motion so it doesn't cover the
   // hole/ball during a shot; it returns once the ball settles.
@@ -4093,6 +4119,26 @@ let swingSens = Math.min(2, Math.max(0.5, +lsGet(SENS_KEY, 1) || 1));
   });
 })();
 
+// Chip spin slider (right gutter, greenside chips only). Bias -1..+1; NOT persisted —
+// resetChipSpin() re-centers it each hole so a big setting never silently carries over.
+const elChipSpin = document.getElementById("chip-spin");
+const elChipSpinSlider = document.getElementById("chip-spin-slider");
+const elChipSpinVal = document.getElementById("chip-spin-val");
+function chipSpinLabel(pct) { return pct > 0 ? "+" + pct : "" + pct; }
+function resetChipSpin() {
+  chipSpinBias = 0;
+  if (elChipSpinSlider) elChipSpinSlider.value = 0;
+  if (elChipSpinVal) elChipSpinVal.textContent = chipSpinLabel(0);
+}
+if (elChipSpinSlider) {
+  elChipSpinSlider.addEventListener("input", () => {
+    const pct = parseInt(elChipSpinSlider.value, 10);
+    chipSpinBias = pct / 100;
+    if (elChipSpinVal) elChipSpinVal.textContent = chipSpinLabel(pct);
+    updateStats();  // refresh the chip carry readout live as the slider moves
+  });
+}
+
 // Club selector: +/- steps through the bag (putter is automatic on the green).
 function updateClubUI() {
   const onGreen = HOLE && !HOLE.isRange && surfaceAt(state.ball.x, state.ball.y) === "green";
@@ -4103,7 +4149,16 @@ function updateClubUI() {
     elClubName.textContent = "Putter"; elClubYds.textContent = "~30y";
   } else {
     const c = TUNE.clubs[selectedClub];
-    elClubName.textContent = c.name; elClubYds.textContent = c.carry + "y";
+    elClubName.textContent = c.name;
+    if (chipActiveNow()) {
+      // Chip: show where the ball LANDS (carry), which moves with the spin slider —
+      // more spin lands it deeper, less spin lands it short (rolls the rest to the pin).
+      const b = state.ball;
+      const land = playsLikeYards(b.x, b.y).plays * chipSpinParams().landFrac;
+      elClubYds.textContent = Math.round(land) + "y";
+    } else {
+      elClubYds.textContent = c.carry + "y";
+    }
   }
 }
 function setAutoClub(on) {
