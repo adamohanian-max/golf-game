@@ -273,6 +273,7 @@ let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = ma
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
 let lieEffectEnabled = true; // rough/sand cost power + spin (off = every lie plays clean, easier)
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
+let markerDropT = 0;       // when the marker was tap-dropped (grace vs insta-dismiss)
 let measureDragging = false;
 let markerDrag = null;     // active drag of the dropped marker: { moved, x, y } (screen px)
 const MARKER_HIT_PX = 22;  // touch/click radius around the marker to grab/dismiss it
@@ -1077,8 +1078,10 @@ function swingStart(e) {
     };
     return;
   }
-  // grab the dropped rangefinder marker if the press lands on it (drag to move, tap to dismiss)
-  if (measurePoint) {
+  // grab the dropped rangefinder marker if the press lands on it (drag to move,
+  // tap to dismiss). Grace period after the drop: any re-entrant event replaying
+  // the tap (synthetic mouse, duplicate touch) must not instantly dismiss it.
+  if (measurePoint && performance.now() - markerDropT > 600) {
     const p = pointerPos(e);
     const mx = wx(measurePoint.x, measurePoint.y), my = wy(measurePoint.x, measurePoint.y);
     if (Math.hypot(p.x - mx, p.y - my) <= MARKER_HIT_PX) {
@@ -1308,6 +1311,7 @@ function swingEnd(e) {
   if (fdist < 5) {
     // not a swing — treat as a tap: drop the rangefinder marker at the tap point
     measurePoint = screenToWorld(end.x, end.y);
+    markerDropT = performance.now();
     return;
   }
 
@@ -1321,6 +1325,11 @@ function swingEnd(e) {
 canvas.addEventListener("touchstart", swingStart, { passive: false });
 canvas.addEventListener("touchmove", swingMove, { passive: false });
 canvas.addEventListener("touchend", swingEnd);
+// system gesture stole the touch (notification pull, app switch): drop all
+// in-flight input state so the next tap starts clean
+canvas.addEventListener("touchcancel", () => {
+  swipe = null; swipePath = null; camTouch = null; markerDrag = null; measureDragging = false;
+});
 canvas.addEventListener("mousedown", swingStart);
 canvas.addEventListener("mousemove", swingMove);
 window.addEventListener("mouseup", swingEnd);
