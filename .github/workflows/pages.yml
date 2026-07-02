@@ -1,0 +1,44 @@
+name: Deploy to GitHub Pages
+
+# Replaces the legacy "deploy from branch" build (shared queue, whole-tree
+# republish) with a dedicated Actions runner that uploads the site as an
+# artifact and deploys it. You get a visible deploy log + finish time, so you
+# know exactly when a change is live instead of guessing ~30-40 min.
+#
+# ONE-TIME SETUP (required): repo Settings -> Pages -> Build and deployment ->
+# Source = "GitHub Actions". Until that's flipped, the deploy step errors.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deploy at a time; a newer push cancels an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Whole repo root is the site (vanilla static site, no build step).
+          path: .
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
