@@ -1557,6 +1557,7 @@ function resize() {
   refScale = Math.min(cssW / holeFitW, cssH / holeFitH);
   applyView();
   if (typeof clampHudPositions === "function") clampHudPositions(); // keep moved panels on-screen
+  if (typeof positionStatsBar === "function") positionStatsBar();   // re-dock shot info under the top bar
   // Re-anchor the swing hint above the ball if the viewport changed while it's
   // still showing (orientation flip before the player's first swing).
   if (elHint && hudVis.hint && !elHint.classList.contains("hidden")) positionHint();
@@ -2671,6 +2672,19 @@ function updateScorecard() {
     elScore.textContent = formatToPar(round.score);
     elScore.className = round.score < 0 ? "under" : round.score > 0 ? "over" : "even";
   }
+  positionStatsBar();
+}
+
+// Mobile: dock the shot-info panel directly under the top scorecard bar so the
+// two read as one top-of-screen bar (frees the crowded bottom-left corner).
+// Desktop keeps its own fixed top-right panel — clearing the inline top lets the
+// base CSS govern there. Called on layout changes only (not per frame).
+function positionStatsBar() {
+  if (!elStats) return;
+  if (!document.body.classList.contains("is-mobile")) { elStats.style.top = ""; return; }
+  const r = elScorecard.getBoundingClientRect();
+  // Scorecard is display:none in range mode → fall back to a spot below the HUD btn.
+  elStats.style.top = Math.round(r.height > 0 ? r.bottom + 5 : 60) + "px";
 }
 function hideHint() {
   elHint.classList.add("hidden");

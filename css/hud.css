@@ -74,8 +74,8 @@
 #live-turn.hidden { opacity: 0; pointer-events: none; }
 #live-turn.lt-mine { background: rgba(46, 125, 79, 0.92); }   /* your turn — go */
 #live-turn.lt-wait { background: rgba(0, 0, 0, 0.55); }       /* watching opponent */
-/* Mobile: sit just above the bottom stat strip so it stays out of the way. */
-body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + 112px); }
+/* Mobile: the shot-info strip moved up to the top bar, so the corner is free. */
+body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4)); }
 
 /* ---- Transient toast (milestones, near-miss, daily, share) -------- */
 #toast {
@@ -510,11 +510,13 @@ body.is-mobile #scorecard .sc-right {
 
 /* ---- Bottom strip: shot stats as label-over-value chips ---- */
 body.is-mobile #stats {
-  top: auto;
+  /* Docked under the top scorecard bar (JS sets `top` to its bottom edge) so
+     shot info reads as a second row of the top bar, not a bottom strip. */
+  top: 0;
+  bottom: auto;
   left: var(--s-3);
-  /* stop short of the club selector column */
-  right: calc(env(safe-area-inset-right, 0px) + 118px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-3));
+  /* match the scorecard bar's right edge so the two line up as one bar */
+  right: calc(env(safe-area-inset-right, 0px) + 60px);
   max-width: none;
   min-width: 0;
   box-sizing: border-box;
