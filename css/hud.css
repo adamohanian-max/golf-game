@@ -290,10 +290,10 @@ body.is-mobile #live-turn { width: min(240px, 60vw); }
 #hm-course-items.hidden { display: none; }
 .hm-item.hidden { display: none; }   /* e.g. Match board outside a live match */
 
-/* ---- Driving-range controls (bottom-right) ---------------- */
+/* ---- Driving-range controls (bottom, clear of the club column) ---- */
 #range-ui {
   position: fixed;
-  right: var(--s-3);
+  right: calc(env(safe-area-inset-right, 0px) + 134px); /* clear the club selector */
   left: auto;
   bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4));
   width: min(360px, calc(100vw - 24px));
@@ -448,7 +448,15 @@ body.is-mobile #hud-edit-bar {
 body.is-mobile #hud-menu .hm-item,
 body.is-mobile #hud-settings .hm-item { white-space: normal; }
 body.is-mobile #hm-club-cur { min-width: 0; padding: var(--s-2) var(--s-3); }
-body.is-mobile #range-ui { width: min(300px, calc(100vw - 24px)); }
+body.is-mobile #range-ui {
+  /* sit above the bottom stat strip, clear of the club column */
+  left: var(--s-3);
+  right: calc(env(safe-area-inset-right, 0px) + 118px);
+  width: auto;
+  max-width: none;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);
+}
+body.is-mobile #range-ui .range-row { flex-wrap: wrap; justify-content: center; }
 
 /* ---- Top bar: scorecard as one slim wrapping strip --------- */
 body.is-mobile #scorecard {

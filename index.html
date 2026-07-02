@@ -13,10 +13,10 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=56">
   <link rel="stylesheet" href="css/base.css?v=57">
-  <link rel="stylesheet" href="css/hud.css?v=67">
+  <link rel="stylesheet" href="css/hud.css?v=68">
   <link rel="stylesheet" href="css/menu.css?v=66">
-  <link rel="stylesheet" href="css/courses.css?v=4">
-  <link rel="stylesheet" href="css/modals.css?v=67">
+  <link rel="stylesheet" href="css/courses.css?v=5">
+  <link rel="stylesheet" href="css/modals.css?v=68">
   <link rel="stylesheet" href="css/tournament.css?v=55">
 </head>
 <body>
@@ -103,7 +103,7 @@
       <label for="range-slider">Target</label>
       <input id="range-slider" type="range" min="50" max="300" step="5" value="150">
       <span id="range-yards">150</span><span class="unit">yds</span>
-      <button id="range-menu-btn">Menu</button>
+      <button id="range-menu-btn"><span class="ic ic-home ic-lead"></span>Home</button>
     </div>
     <div id="range-result">Aim up the range</div>
   </div>
@@ -148,6 +148,7 @@
       <input id="cs-search" type="search" placeholder="Search courses, locations…" autocomplete="off">
       <span id="cs-count" class="cs-count"></span>
     </header>
+    <div id="cs-context" class="hidden"></div>
     <div id="cs-body">
       <aside id="cs-filters"></aside>
       <main id="cs-grid"></main>
@@ -449,7 +450,7 @@
       </div>
       <div id="ml-field" class="tl-field"></div>
       <ul id="ml-players" class="ml-players"></ul>
-      <button id="ml-begin" class="menu-btn menu-btn-play hidden">Begin — pick course</button>
+      <button id="ml-begin" class="menu-btn menu-btn-play hidden">Set up match</button>
       <div id="ml-waiting" class="tl-status hidden">Waiting for the host to start…</div>
       <button id="ml-leave" class="menu-btn secondary" style="margin-top:8px">Leave</button>
     </div>
@@ -458,7 +459,7 @@
   <div id="match-setup" class="hidden" data-holes="18">
     <div class="ne-box">
       <h2><span class="ic ic-gear"></span>Match settings</h2>
-      <p class="ne-sub">Course: <b id="ms-course">—</b>. Locked once the match begins.</p>
+      <p class="ne-sub">Format and length lock when the match begins. You'll pick the course next.</p>
       <div class="ms-len-row">
         <button class="menu-btn secondary ms-fmt" data-format="stroke">Stroke race</button>
         <button class="menu-btn secondary ms-fmt" data-format="match">Match play</button>
@@ -472,7 +473,7 @@
       <div id="ms-status" class="ne-sub"></div>
       <div class="ne-actions">
         <button id="ms-back" class="menu-btn secondary">Back</button>
-        <button id="ms-confirm" class="menu-btn">Begin match</button>
+        <button id="ms-confirm" class="menu-btn">Choose course</button>
       </div>
     </div>
   </div>
@@ -499,6 +500,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=112"></script>
+  <script src="game.js?v=113"></script>
 </body>
 </html>

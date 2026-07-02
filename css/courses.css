@@ -48,6 +48,18 @@
 #cs-search::placeholder { color: rgba(244,246,243,0.4); }
 .cs-count { flex: none; font-size: 12px; color: rgba(244,246,243,0.45); white-space: nowrap; }
 
+/* Match-pick context strip (shown while the host picks a match course) */
+#cs-context {
+  padding: 8px var(--s-4, 16px);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--brass-bright, #cfa85e);
+  background: var(--brass-soft, rgba(176,141,74,0.14));
+  border-bottom: 1px solid rgba(207,168,94,0.25);
+}
+#cs-context.hidden { display: none; }
+
 #cs-body {
   flex: 1;
   display: flex;

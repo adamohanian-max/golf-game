@@ -108,15 +108,17 @@
 .re-tab {
   flex: 1;
   padding: var(--s-2);
-  border: var(--border-hair);
-  border-radius: var(--r-sm);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--text-dim);
   font-size: var(--t-cap);
   font-weight: var(--fw-med);
+  letter-spacing: 0.4px;
   cursor: pointer;
 }
-.re-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.re-tab.active { border-bottom-color: var(--brass); color: var(--text); }
 
 .re-panel { overflow-y: auto; flex: 1; padding: var(--s-3) var(--s-4); min-height: 0; }
 .re-panel.hidden { display: none; }

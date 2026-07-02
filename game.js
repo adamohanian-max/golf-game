@@ -3292,6 +3292,19 @@ function showCourseSelect() {
   mode = "select";
   elMenu.classList.add("hidden");
   elCourseSelect.classList.remove("hidden");
+  // Context strip: make it obvious when the pick is for a configured match.
+  const ctx = document.getElementById("cs-context");
+  if (ctx) {
+    if (matchSetupMode) {
+      const ov = document.getElementById("match-setup");
+      const fmt = ov && ov.dataset.format === "match" ? "Match play" : "Stroke race";
+      const holes = (ov && ov.dataset.holes) || "18";
+      ctx.textContent = `Pick the course for your match · ${fmt} · ${holes} holes`;
+      ctx.classList.remove("hidden");
+    } else {
+      ctx.classList.add("hidden");
+    }
+  }
   buildFilterRail();
   renderCourseCards();
 }
@@ -3300,8 +3313,8 @@ function hideCourseSelect() { elCourseSelect.classList.add("hidden"); }
 if (elCsSearch) elCsSearch.addEventListener("input", renderCourseCards);
 document.getElementById("cs-back").addEventListener("click", () => {
   hideCourseSelect();
-  // Host picking a course for a match → back returns to the lobby, not the menu.
-  if (matchSetupMode) { matchSetupMode = false; openMatchLobby(); return; }
+  // Host picking a course for a match → back returns to the settings step.
+  if (matchSetupMode) { matchSetupMode = false; openMatchSetup(true); return; }
   showMenu();
 });
 
@@ -3995,8 +4008,8 @@ function setYardsPerUnit(ypu) {
 
 function startCourse() {
   // Match host is mid-setup: the course pick funnels here → divert to the
-  // match settings/length step instead of starting a solo round.
-  if (matchSetupMode) { openMatchSetup(); return; }
+  // configured match instead of starting a solo round.
+  if (matchSetupMode) { startConfiguredMatch(); return; }
   mode = "course";
   dailyMode = false;
   // Match rounds use the match's frozen conditions; tournament rounds use the
@@ -6485,29 +6498,29 @@ async function renderMatchLobby() {
   }
 }
 
-// --- Host: pick course → configure → Begin ---
-// Begin just sends the host into the normal course picker with a flag set; the
-// pick funnels back through startCourse(), which diverts to openMatchSetup().
+// --- Host: configure → pick course → Begin ---
+// Format/length come FIRST, then the course picker (so "Play" on a course
+// card always means "start"); startCourse() diverts to startConfiguredMatch().
 function hostBeginPickCourse() {
-  matchSetupMode = true;
   closeMatchLobby();
-  showCourseSelect();
+  openMatchSetup();
 }
 
-// Settings + length step shown after the host picks a course (selectedCourseId).
-async function openMatchSetup() {
+// Settings + length step, shown from the lobby before the course pick.
+// preserve=true (back-navigation from the course picker) keeps prior choices.
+async function openMatchSetup(preserve) {
   const ov = document.getElementById("match-setup");
   if (!ov) return;
   hideCourseSelect();
   // Matches always use the admin-set global settings (gameDefaults) — the host
   // only picks course/length/format, not the aids.
   _matchSetupSettings = normalizeSettings(gameDefaults);
-  const courseName = (COURSES.find(c => c.id === selectedCourseId) || {}).name || selectedCourseId;
-  document.getElementById("ms-course").textContent = courseName;
-  // length default 18, format default stroke, Live off
-  ov.dataset.holes = "18";
-  ov.dataset.format = "stroke";
-  ov.dataset.live = "0";
+  if (!preserve) {
+    // length default 18, format default stroke, Live off
+    ov.dataset.holes = "18";
+    ov.dataset.format = "stroke";
+    ov.dataset.live = "0";
+  }
   syncMatchLengthButtons();
   syncMatchFormatButtons();
   syncMatchLiveButton();
@@ -6547,17 +6560,29 @@ function closeMatchSetup() {
   if (ov) ov.classList.add("hidden");
 }
 
-async function confirmMatchSetup() {
+// "Choose course" — settings are locked in the dataset; head to the picker.
+function confirmMatchSetup() {
+  matchSetupMode = true;
+  closeMatchSetup();
+  showCourseSelect();
+}
+
+// The host tapped Play on a course card while configuring a match: start it.
+async function startConfiguredMatch() {
   const ov = document.getElementById("match-setup");
   const holes = parseInt(ov.dataset.holes, 10) || 18;
   const format = ov.dataset.format === "match" ? "match" : "stroke";
   const live = format === "match" && ov.dataset.live === "1";
-  const status = document.getElementById("ms-status");
-  if (status) status.textContent = "Starting…";
+  hideCourseSelect();
+  showToast("Starting match…", 1500);
   const ok = await beginMatch(selectedCourseId, holes, _matchSetupSettings, format, live);
-  if (!ok) { if (status) status.textContent = "Couldn't start — try again."; return; }
+  if (!ok) {
+    showToast("Couldn't start the match — try again.", 2200);
+    matchSetupMode = false;
+    openMatchLobby();
+    return;
+  }
   matchSetupMode = false;
-  closeMatchSetup();
   enterLiveMatch();
 }
 
@@ -7771,7 +7796,7 @@ function quickFind() {
   const msConfirm = document.getElementById("ms-confirm");
   if (msConfirm) msConfirm.addEventListener("click", confirmMatchSetup);
   const msBack = document.getElementById("ms-back");
-  if (msBack) msBack.addEventListener("click", () => { closeMatchSetup(); showCourseSelect(); });
+  if (msBack) msBack.addEventListener("click", () => { matchSetupMode = false; closeMatchSetup(); openMatchLobby(); });
 
   const mbClose = document.getElementById("mb-close");
   if (mbClose) mbClose.addEventListener("click", () => toggleMatchBoard(false));
