@@ -7287,27 +7287,33 @@ function cpuThinkMs(kind, firstOfHole) {
   if (Math.random() < 0.07) ms += 3000 + Math.random() * 2000;
   return ms;
 }
-// Plan the current hole as real golf: drive sized to the bot's handicap, full
-// shots marching to an approach that lands on the green, then 1-3 putts. Extra
-// strokes over a clean route show up as visible mistakes (duffs / offline).
+// Plan the current hole as real golf played from the SAME club bag the human
+// gets (TUNE.clubs + clubForYards auto-selection): driver off the tee, layups
+// that leave a comfortable wedge, an approach that lands on the green, then
+// 1-3 putts. Handicap scales carry efficiency; extra strokes over a clean
+// route show up as visible mistakes (duffs / offline).
 function cpuPlanHole() {
   if (!cpuOpp || !HOLE) return;
   const total = cpuHoleScore(HOLE.par, cpuOpp.handicap);
   const tee = HOLE.teePos, pin = HOLE.holePos;
   const holeYds = dist(tee.x, tee.y, pin.x, pin.y) * YARDS_PER_UNIT;
   const hcp = cpuOpp.handicap || 0;
-  const driveYds = Math.max(175, Math.min(295, 272 - 3.1 * hcp + gaussRand() * 9));
-  const woodYds = driveYds * 0.86;
+  // Skill = fraction of a club's rated carry this bot actually gets (hcp 0 →
+  // full number, hcp 18 → ~88%), with a small per-shot jitter.
+  const eff = Math.max(0.75, Math.min(1.02, 1 - hcp * 0.007));
+  cpuOpp._eff = eff;                       // ghost arc height uses it too
+  const carryOf = k => TUNE.clubs[k].carry * eff * (1 + gaussRand() * 0.04);
+  const drvC = TUNE.clubs.driver.carry * eff;
   const latFrac = 0.035 + hcp * 0.0022;   // dispersion as a fraction of carry
   const pts = [];
   if (total === 1) {
-    pts.push({ x: pin.x, y: pin.y, kind: "long" });      // holed from the tee
+    pts.push({ x: pin.x, y: pin.y, kind: "long", club: clubForYards(holeYds) });
   } else {
     // Putts: 1 (20%) / 2 (usual) / 3 (only when over par); field legs get the rest.
     let P = Math.random() < 0.2 ? 1
           : (total > HOLE.par && Math.random() < 0.31 ? 3 : 2);
     P = Math.max(1, Math.min(P, total - 1));
-    const neededClean = Math.max(1, Math.ceil(Math.max(0, holeYds - 15) / driveYds));
+    const neededClean = Math.max(1, Math.ceil(Math.max(0, holeYds - 15) / drvC));
     while (total - P < neededClean && P > 1) P--;   // don't demand impossible carries
     const L = total - P;
     let extra = Math.max(0, L - neededClean);       // legs to burn as mistakes
@@ -7322,15 +7328,28 @@ function cpuPlanHole() {
         if (P === 1) proxFt = Math.min(proxFt, 12);
         if (P === 3) proxFt = Math.max(proxFt, 25);
         pt = cpuPointNearPin(proxFt);
+        pt.club = clubForYards(remainYds);
       } else {
-        const cap = (i === 1) ? driveYds : woodYds;
+        // Auto-club thinking: too far to reach → longest club (driver only off
+        // the tee). Reachable but more field legs to come → either a genuine
+        // layup to wedge range (only from real layup distance), or go for it
+        // with the right club and mishit short — a human never "lays up" a
+        // par-3 tee shot.
+        const longest = (i === 1) ? "driver" : "3w";
+        let club = longest, carryYds = carryOf(longest);
+        if (remainYds <= carryYds + 20) {
+          if (i > 1 && remainYds >= 140 && Math.random() < 0.6) {
+            const leave = 80 + Math.random() * 30;
+            club = clubForYards(remainYds - leave);
+            carryYds = Math.min(carryOf(club), remainYds - 30);
+          } else {
+            club = clubForYards(remainYds);
+            carryYds = Math.min(carryOf(club), remainYds) * (0.55 + Math.random() * 0.35);
+          }
+        }
         const legsLeft = L - i;   // field legs after this one (incl. the approach)
-        // Reserve a real approach distance for later legs — otherwise this leg
-        // eats ~all the hole and the "approach" fires from a few yards out.
-        const reserve = legsLeft * (45 + Math.random() * 65);
-        let carryYds = Math.min(cap, remainYds - reserve);
-        // Feasibility: leave no more than ~250yds per remaining leg.
-        carryYds = Math.max(carryYds, remainYds - 250 * legsLeft, 15);
+        // Feasibility: the remaining legs must still be able to cover the hole.
+        carryYds = Math.max(carryYds, remainYds - drvC * legsLeft, 15);
         let latMult = 1;
         if (extra > 0 && (Math.random() < 0.5 || extra >= L - i)) {
           extra--;
@@ -7343,22 +7362,23 @@ function cpuPlanHole() {
         const fwd = carryU * (1 + (Math.random() * 0.06 - 0.03));
         pt = cpuSafePoint({ x: cur.x + ux * fwd - uy * lat,
                             y: cur.y + uy * fwd + ux * lat }, cur);
+        pt.club = club;
       }
       pt.kind = "long";
       pts.push(pt); cur = pt;
     }
     if (P === 1) {
-      pts.push({ x: pin.x, y: pin.y, kind: "putt" });
+      pts.push({ x: pin.x, y: pin.y, kind: "putt", club: "putter" });
     } else if (P === 2) {
       const lag = cpuPointNearPin(1.5 + Math.abs(gaussRand()) * 2.5);
-      pts.push({ x: lag.x, y: lag.y, kind: "putt" },
-               { x: pin.x, y: pin.y, kind: "putt" });
+      pts.push({ x: lag.x, y: lag.y, kind: "putt", club: "putter" },
+               { x: pin.x, y: pin.y, kind: "putt", club: "putter" });
     } else {
       const p1 = cpuPointNearPin(8 + Math.abs(gaussRand()) * 3);
       const p2 = cpuPointNearPin(1 + Math.random() * 1.5);
-      pts.push({ x: p1.x, y: p1.y, kind: "putt" },
-               { x: p2.x, y: p2.y, kind: "putt" },
-               { x: pin.x, y: pin.y, kind: "putt" });
+      pts.push({ x: p1.x, y: p1.y, kind: "putt", club: "putter" },
+               { x: p2.x, y: p2.y, kind: "putt", club: "putter" },
+               { x: pin.x, y: pin.y, kind: "putt", club: "putter" });
     }
   }
   cpuOpp._plan = pts; cpuOpp._i = 0; cpuOpp._phase = "idle";
@@ -7419,10 +7439,17 @@ function cpuDriverTick() {
     ? Math.max(900, Math.min(2600, 900 + dYds * 3 * 45))
     : Math.max(700, Math.min(3400, dYds * 10 * (0.9 + Math.random() * 0.25)));
   const lie = cpuOpp.cur_strokes === 0 ? "Tee" : cpuLie(from.x, from.y);
+  // Arc apex from the club's rated max height (like the human flight model);
+  // partial shots (duffs, layup clamps) arc proportionally lower.
+  const club = target.club && TUNE.clubs[target.club];
+  const peak = target.kind === "putt" ? 0
+    : club ? (club.maxH / YARDS_PER_UNIT) *
+             Math.min(1, dYds / Math.max(1, club.carry * (cpuOpp._eff || 1)))
+    : d * 0.16;
   cpuOpp._seq++;
   cpuOpp.cur_shot = { seq: cpuOpp._seq, hole: HOLE.num,
     fromX: from.x, fromY: from.y, toX: target.x, toY: target.y,
-    peak: d * 0.16, durMs: Math.round(durMs), lie };
+    peak, durMs: Math.round(durMs), lie };
   cpuOpp.cur_at_rest = false;
   cpuOpp.cur_updated = new Date().toISOString();
   startOppGhost(cpuOpp);                   // launch the arc tween on my screen
