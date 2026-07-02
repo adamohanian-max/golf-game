@@ -289,6 +289,23 @@ body.is-mobile #live-turn { width: min(240px, 60vw); }
 .hm-item.active .ic { color: var(--accent-bright); }
 #hm-course-items.hidden { display: none; }
 .hm-item.hidden { display: none; }   /* e.g. Match board outside a live match */
+/* HUD panel hidden by user preference (Settings > Display). !important so it
+   wins over id-specificity show rules and the per-frame .hidden toggling. */
+.hud-off { display: none !important; }
+.hs-sub {
+  font-size: var(--t-cap);
+  color: var(--text-dim);
+  letter-spacing: 0.8px;
+  text-align: center;
+  padding: 2px 0 4px;
+}
+#hud-settings {
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 96px);
+  overflow-y: auto;
+}
+.hs-sens { padding: 2px var(--s-3) 6px; }
+#sens-slider { flex: 1; accent-color: var(--accent); height: 24px; }
+#sens-val { font-weight: var(--fw-black); font-size: 15px; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---- Driving-range controls (bottom, clear of the club column) ---- */
 #range-ui {

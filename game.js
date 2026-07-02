@@ -1262,7 +1262,7 @@ function launch(dxs, dys, dt, spin = 0) {
   // same regardless of how far the camera is zoomed in.
   const swipeSpeed = (Math.hypot(dxs, dys) / refScale) / Math.max(dt, 0.001);
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  const frac = Math.min(swipeSpeed / TUNE.fullPowerSwipe, 1); // full swing at fullPowerSwipe
+  const frac = Math.min(swipeSpeed * swingSens / TUNE.fullPowerSwipe, 1); // full swing at fullPowerSwipe
   // screen direction -> world direction (undo the camera rotation)
   launchShot(Math.atan2(dys, dxs) - view.angle, frac, spin, onGreen);
 }
@@ -1299,7 +1299,7 @@ function swingEnd(e) {
   }
 
   const speed = (fdist / refScale) / dt;
-  const frac = Math.min(speed / TUNE.touchPowerSwipe, 1);
+  const frac = Math.min(speed * swingSens / TUNE.touchPowerSwipe, 1);
   const ang = Math.atan2(dys, dxs) - view.angle;
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
   launchShot(ang, frac, curveFromPath(path), onGreen);
@@ -1537,7 +1537,7 @@ function resize() {
   if (typeof clampHudPositions === "function") clampHudPositions(); // keep moved panels on-screen
   // Re-anchor the swing hint above the ball if the viewport changed while it's
   // still showing (orientation flip before the player's first swing).
-  if (elHint && !elHint.classList.contains("hidden")) positionHint();
+  if (elHint && hudVis.hint && !elHint.classList.contains("hidden")) positionHint();
 }
 window.addEventListener("resize", resize);
 
@@ -2226,7 +2226,7 @@ function showToast(text, ms, tone) {
 }
 
 function drawWindIndicator() {
-  if (!HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) return;
+  if (!hudVis.wind || !HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) return;
   const cssW = window.innerWidth;
 
   // Wind push vector in world space (FROM dir → pushes opposite)
@@ -3926,6 +3926,73 @@ function closeAdminPanel() {
     } else if (status) {
       status.textContent = "Save failed (admin only).";
     }
+  });
+})();
+
+// =====================================================================
+//  HUD display preferences — which panels are shown. Per-device
+//  (localStorage), NOT part of SETTING_DEFS: purely cosmetic, never
+//  snapshotted into tournaments/matches. #hud-btn is deliberately
+//  excluded so the player can never lock themselves out of Settings.
+// =====================================================================
+const HUD_VIS_KEY = "golf.hudVis";
+const HUD_VIS_DEFS = [
+  { key: "scorecard", id: "scorecard",   label: "Scorecard bar", icon: "ic-clipboard" },
+  { key: "stats",     id: "stats",       label: "Shot info",     icon: "ic-ruler" },
+  { key: "club",      id: "hm-club-row", label: "Club selector", icon: "ic-flag" },
+  { key: "chip",      id: "chip-ind",    label: "Chip banner",   icon: "ic-chip" },
+  { key: "wind",      id: null,          label: "Wind meter",    icon: "ic-wind" }, // canvas-drawn
+  { key: "hint",      id: "hint",        label: "Swing hint",    icon: "ic-target" },
+];
+let hudVis = (() => {
+  const saved = lsGet(HUD_VIS_KEY, {});
+  const out = {};
+  for (const d of HUD_VIS_DEFS) out[d.key] = typeof saved[d.key] === "boolean" ? saved[d.key] : true;
+  return out;
+})();
+function applyHudVis() {
+  for (const d of HUD_VIS_DEFS) {
+    if (!d.id) continue; // wind: guarded in drawWindIndicator()
+    const el = document.getElementById(d.id);
+    if (el) el.classList.toggle("hud-off", !hudVis[d.key]);
+  }
+}
+function setHudVis(key, on) {
+  hudVis[key] = !!on;
+  lsSet(HUD_VIS_KEY, hudVis);
+  applyHudVis();
+  renderHudVisToggles();
+}
+function renderHudVisToggles() {
+  const host = document.getElementById("hs-display");
+  if (!host) return;
+  host.innerHTML = "";
+  for (const d of HUD_VIS_DEFS) {
+    const b = document.createElement("button");
+    b.className = "hm-item" + (hudVis[d.key] ? " active" : "");
+    b.innerHTML = '<span class="ic ' + d.icon + '"></span>' + d.label;
+    b.onclick = () => setHudVis(d.key, !hudVis[d.key]);
+    host.appendChild(b);
+  }
+}
+applyHudVis();
+renderHudVisToggles();
+
+// Swing sensitivity — per-device (localStorage), like HUD display prefs.
+// Multiplies swipe speed before the power mapping, so higher = softer flick
+// reaches full power. Applied in swingEnd() (touch/mouse) and launch() (wheel).
+const SENS_KEY = "golf.swingSensitivity";
+let swingSens = Math.min(2, Math.max(0.5, +lsGet(SENS_KEY, 1) || 1));
+(() => {
+  const slider = document.getElementById("sens-slider");
+  const val = document.getElementById("sens-val");
+  if (!slider) return;
+  slider.value = Math.round(swingSens * 100);
+  val.textContent = slider.value;
+  slider.addEventListener("input", () => {
+    val.textContent = slider.value;
+    swingSens = parseInt(slider.value, 10) / 100;
+    lsSet(SENS_KEY, swingSens);
   });
 })();
 
