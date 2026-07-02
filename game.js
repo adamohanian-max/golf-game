@@ -2281,7 +2281,7 @@ function showToast(text, ms, tone) {
 }
 
 function drawWindIndicator() {
-  if (!hudVis.wind || !HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) return;
+  if (!HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) return;
   const cssW = window.innerWidth;
 
   // Wind push vector in world space (FROM dir → pushes opposite)
@@ -3613,29 +3613,17 @@ const elClubYds = document.getElementById("hm-club-yds");
 const elMeasureBtn = document.getElementById("hm-measure");
 const elSlopeBtn = document.getElementById("hm-slope");
 
-const elHudSettings = document.getElementById("hud-settings");
 function openHud() { elHudMenu.classList.remove("hidden"); elHudBtn.classList.add("open"); }
 function closeHud() {
   elHudMenu.classList.add("hidden");
-  if (elHudSettings) elHudSettings.classList.add("hidden");
   elHudBtn.classList.remove("open");
 }
 elHudBtn.addEventListener("click", (e) => {
   e.stopPropagation();
-  (elHudMenu.classList.contains("hidden") && (!elHudSettings || elHudSettings.classList.contains("hidden")))
-    ? openHud() : closeHud();
+  elHudMenu.classList.contains("hidden") ? openHud() : closeHud();
 });
-elHudMenu.addEventListener("click", (e) => e.stopPropagation()); // don't let clicks fall through
-if (elHudSettings) {
-  elHudSettings.addEventListener("click", (e) => e.stopPropagation());
-  const openBtn = document.getElementById("hm-settings");
-  if (openBtn) openBtn.addEventListener("click", () => {
-    elHudMenu.classList.add("hidden");
-    elHudSettings.classList.remove("hidden");
-  });
-  const doneBtn = document.getElementById("hs-close");
-  if (doneBtn) doneBtn.addEventListener("click", closeHud);
-}
+// Toggles/sliders inside the menu keep it open; the action items call closeHud() themselves.
+elHudMenu.addEventListener("click", (e) => e.stopPropagation());
 document.addEventListener("click", closeHud);
 
 function buildHoleGrid() {
@@ -4025,8 +4013,6 @@ const HUD_VIS_DEFS = [
   { key: "scorecard", id: "scorecard",   label: "Scorecard bar", icon: "ic-clipboard" },
   { key: "stats",     id: "stats",       label: "Shot info",     icon: "ic-ruler" },
   { key: "club",      id: "hm-club-row", label: "Club selector", icon: "ic-flag" },
-  { key: "chip",      id: "chip-ind",    label: "Chip banner",   icon: "ic-chip" },
-  { key: "wind",      id: null,          label: "Wind meter",    icon: "ic-wind" }, // canvas-drawn
   { key: "hint",      id: "hint",        label: "Swing hint",    icon: "ic-target" },
 ];
 let hudVis = (() => {
@@ -8241,21 +8227,6 @@ async function openManageDetail(t) {
 // =====================================================================
 //  Main loop
 // =====================================================================
-// Show the chip-mode cue when a chip would apply to the next shot (auto-engage
-// is otherwise silent): enabled, on a course, settled, near the pin, off the green.
-function updateChipIndicator() {
-  const el = document.getElementById("chip-ind");
-  if (!el) return;
-  let show = false;
-  if (mode === "course" && chipEnabled && HOLE && !HOLE.isRange &&
-      !state.moving && !state.inHole && !holeTransition) {
-    const b = state.ball;
-    const toPin = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-    show = toPin < TUNE.chipRangeYds && surfaceAt(b.x, b.y) !== "green";
-  }
-  el.classList.toggle("hidden", !show);
-}
-
 function loop() {
   update();
   tickHoleDrop();
@@ -8264,7 +8235,6 @@ function loop() {
   updateLiveTurnUI(); // keep the whose-turn banner in sync (cheap; cached)
   updateCamera();
   updateStats();
-  updateChipIndicator();
   draw();
   requestAnimationFrame(loop);
 }

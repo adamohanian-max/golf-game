@@ -49,8 +49,8 @@
 #hint.hidden { opacity: 0; }
 
 /* ---- Live match: whose-turn banner (bottom-left, small + out of the way) -- */
-/* Sits in the bottom-left corner as a compact pill. #chip-ind (greenside) sits
-   just above it; #hint only shows on hole 1's tee and floats above the ball. */
+/* Sits in the bottom-left corner as a compact pill. #hint only shows on
+   hole 1's tee and floats above the ball. */
 #live-turn {
   position: fixed;
   bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4));
@@ -108,26 +108,6 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
   border-color: rgba(207, 168, 94, 0.55);
   font-family: var(--font-display);
 }
-
-/* greenside chip-mode cue — pill above the hint */
-#chip-ind {
-  position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 52px);
-  left: var(--s-3);
-  display: flex;
-  align-items: center;
-  gap: 0.4em;
-  white-space: nowrap;
-  color: var(--brass-bright);
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(207, 168, 94, 0.4);
-  padding: 7px 13px;
-  border-radius: var(--r-pill);
-  font-size: 12px;
-  font-weight: var(--fw-bold);
-  pointer-events: none;
-}
-#chip-ind.hidden { display: none; }
 
 /* ---- Shot stats panel (top-right, below HUD btn) ---------- */
 #stats {
@@ -303,7 +283,7 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
   text-align: center;
   padding: 2px 0 4px;
 }
-#hud-settings {
+#hud-menu {
   max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 96px);
   overflow-y: auto;
 }
@@ -556,13 +536,6 @@ body.is-mobile #hint {
   transform: translateX(-50%);
   bottom: calc(env(safe-area-inset-bottom, 0px) + 142px); /* clear of the tallest stat strip */
   max-width: 86vw;
-}
-body.is-mobile #chip-ind {
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 178px);
-  max-width: 86vw;
-  white-space: normal;
 }
 /* ball speed is a desktop nerd stat — keep the mobile strip tight */
 body.is-mobile #st-speed-row { display: none; }
