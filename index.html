@@ -12,11 +12,11 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=56">
-  <link rel="stylesheet" href="css/base.css?v=56">
-  <link rel="stylesheet" href="css/hud.css?v=66">
+  <link rel="stylesheet" href="css/base.css?v=57">
+  <link rel="stylesheet" href="css/hud.css?v=67">
   <link rel="stylesheet" href="css/menu.css?v=66">
   <link rel="stylesheet" href="css/courses.css?v=4">
-  <link rel="stylesheet" href="css/modals.css?v=66">
+  <link rel="stylesheet" href="css/modals.css?v=67">
   <link rel="stylesheet" href="css/tournament.css?v=55">
 </head>
 <body>
@@ -30,8 +30,10 @@
     <span class="line"><b id="holeLabel">Hole 1</b></span>
     <span class="line" id="course"></span>
     <span class="line">Par <span id="par">4</span> · <span id="yards">450</span> yds</span>
-    <span class="line">Strokes: <span id="strokes">0</span></span>
-    <span class="line"><span id="score-label">Score</span>: <span id="score">E</span></span>
+    <span class="sc-right">
+      <span class="line">Strokes: <span id="strokes">0</span></span>
+      <span class="line"><span id="score-label">Score</span>: <span id="score">E</span></span>
+    </span>
     <span id="trn-timer" class="line trn-timer hidden"></span>
   </div>
 
@@ -65,24 +67,29 @@
   </div>
   <div id="hud-menu" class="hidden">
     <div id="hm-course-items">
-      <button class="hm-item active" id="hm-autoclb"><span class="ic ic-flag"></span>Auto club</button>
-      <button class="hm-item" id="hm-aim"><span class="ic ic-target"></span>Aim</button>
-      <button class="hm-item" id="hm-measure"><span class="ic ic-ruler"></span>Range finder</button>
-      <button class="hm-item active" id="hm-slope"><span class="ic ic-slope"></span>Slope</button>
-      <button class="hm-item active" id="hm-oob"><span class="ic ic-ob"></span>OB areas</button>
-      <button class="hm-item" id="hm-wind"><span class="ic ic-wind"></span>Wind</button>
-      <button class="hm-item active" id="hm-autoaim"><span class="ic ic-target"></span>Auto-aim</button>
-      <button class="hm-item active" id="hm-chip"><span class="ic ic-chip"></span>Chip mode</button>
-      <button class="hm-item" id="hm-slotted"><span class="ic ic-target"></span>Slotted mode</button>
       <button class="hm-item" id="hm-card"><span class="ic ic-clipboard"></span>Scorecard</button>
+      <button class="hm-item" id="hm-holes"><span class="ic ic-flag"></span>Select hole</button>
+      <button class="hm-item" id="hm-measure"><span class="ic ic-ruler"></span>Range finder</button>
+      <button class="hm-item" id="hm-aim"><span class="ic ic-target"></span>Aim at pin</button>
+      <button class="hm-item active" id="hm-chip"><span class="ic ic-chip"></span>Chip mode</button>
       <button class="hm-item hidden" id="hm-match"><span class="ic ic-trophy"></span>Match board</button>
-      <button class="hm-item active" id="hm-sound"><span class="ic ic-flag"></span>Sound</button>
-      <button class="hm-item hud-mobile-only" id="hm-movehud"><span class="ic ic-menu"></span>Move HUD</button>
-      <button class="hm-item hud-mobile-only" id="hm-resethud"><span class="ic ic-home"></span>Reset HUD</button>
-      <div class="hm-sep"></div>
-      <button class="hm-item" id="hm-holes"><span class="ic ic-menu"></span>Select hole</button>
-      <button class="hm-item" id="hm-home"><span class="ic ic-home"></span>Home</button>
     </div>
+    <div class="hm-sep"></div>
+    <button class="hm-item" id="hm-settings"><span class="ic ic-gear"></span>Settings</button>
+    <button class="hm-item" id="hm-home"><span class="ic ic-home"></span>Home</button>
+  </div>
+  <div id="hud-settings" class="hidden">
+    <div class="hs-title">Settings</div>
+    <button class="hm-item active" id="hm-autoclb"><span class="ic ic-flag"></span>Auto club</button>
+    <button class="hm-item active" id="hm-autoaim"><span class="ic ic-target"></span>Auto-aim</button>
+    <button class="hm-item" id="hm-wind"><span class="ic ic-wind"></span>Wind</button>
+    <button class="hm-item active" id="hm-slope"><span class="ic ic-slope"></span>Slope</button>
+    <button class="hm-item active" id="hm-oob"><span class="ic ic-ob"></span>OB areas</button>
+    <button class="hm-item active" id="hm-sound"><span class="ic ic-sound"></span>Sound</button>
+    <div class="hm-sep"></div>
+    <button class="hm-item hud-mobile-only" id="hm-movehud"><span class="ic ic-menu"></span>Move HUD</button>
+    <button class="hm-item hud-mobile-only" id="hm-resethud"><span class="ic ic-home"></span>Reset HUD</button>
+    <button class="hm-item" id="hs-close"><span class="ic ic-check"></span>Done</button>
   </div>
 
   <div id="hint">Swipe to swing · ← → to aim · ↑ ↓ club</div>
@@ -492,6 +499,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=111"></script>
+  <script src="game.js?v=112"></script>
 </body>
 </html>

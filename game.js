@@ -2248,8 +2248,8 @@ function drawWindIndicator() {
   const arrowGap = 26, pillW = arrowGap + 6 + tw + 10, pillH = 26, r = 7;
   const px = cx - pillW / 2, py = cy - pillH / 2;
 
-  // pill background
-  ctx.fillStyle = "rgba(0,0,0,0.48)";
+  // pill background (matches --glass tokens)
+  ctx.fillStyle = "rgba(13,26,18,0.72)";
   ctx.beginPath();
   ctx.roundRect(px, py, pillW, pillH, r);
   ctx.fill();
@@ -2258,12 +2258,12 @@ function drawWindIndicator() {
   const arrowCx = px + 16, arrowCy = cy;
   const AL = 9, AH = 6; // shaft half-length, head size
   const cos = Math.cos(screenAngle), sin = Math.sin(screenAngle);
-  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.lineCap = "round";
+  ctx.strokeStyle = "#ece5d3"; ctx.lineWidth = 2; ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(arrowCx - cos * AL, arrowCy - sin * AL);
   ctx.lineTo(arrowCx + cos * AL, arrowCy + sin * AL);
   ctx.stroke();
-  ctx.fillStyle = "#fff";
+  ctx.fillStyle = "#ece5d3";
   ctx.beginPath();
   ctx.moveTo(arrowCx + cos * AL, arrowCy + sin * AL);
   ctx.lineTo(arrowCx + cos * AL - cos * AH + sin * AH * 0.55,
@@ -2274,7 +2274,7 @@ function drawWindIndicator() {
   ctx.fill();
 
   // speed label
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.fillStyle = "rgba(236,229,211,0.92)";
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
   ctx.fillText(label, px + arrowGap + 4, cy);
   ctx.restore();
@@ -3515,13 +3515,29 @@ const elClubYds = document.getElementById("hm-club-yds");
 const elMeasureBtn = document.getElementById("hm-measure");
 const elSlopeBtn = document.getElementById("hm-slope");
 
+const elHudSettings = document.getElementById("hud-settings");
 function openHud() { elHudMenu.classList.remove("hidden"); elHudBtn.classList.add("open"); }
-function closeHud() { elHudMenu.classList.add("hidden"); elHudBtn.classList.remove("open"); }
+function closeHud() {
+  elHudMenu.classList.add("hidden");
+  if (elHudSettings) elHudSettings.classList.add("hidden");
+  elHudBtn.classList.remove("open");
+}
 elHudBtn.addEventListener("click", (e) => {
   e.stopPropagation();
-  elHudMenu.classList.contains("hidden") ? openHud() : closeHud();
+  (elHudMenu.classList.contains("hidden") && (!elHudSettings || elHudSettings.classList.contains("hidden")))
+    ? openHud() : closeHud();
 });
 elHudMenu.addEventListener("click", (e) => e.stopPropagation()); // don't let clicks fall through
+if (elHudSettings) {
+  elHudSettings.addEventListener("click", (e) => e.stopPropagation());
+  const openBtn = document.getElementById("hm-settings");
+  if (openBtn) openBtn.addEventListener("click", () => {
+    elHudMenu.classList.add("hidden");
+    elHudSettings.classList.remove("hidden");
+  });
+  const doneBtn = document.getElementById("hs-close");
+  if (doneBtn) doneBtn.addEventListener("click", closeHud);
+}
 document.addEventListener("click", closeHud);
 
 function buildHoleGrid() {
@@ -3598,7 +3614,8 @@ function setWind(on) {
 }
 function setSlotted(on) {
   slottedMode = on;
-  document.getElementById("hm-slotted").classList.toggle("active", on);
+  const btn = document.getElementById("hm-slotted"); // admin-only; not in the player menu
+  if (btn) btn.classList.toggle("active", on);
 }
 function setAutoAim(on) {
   autoAimEnabled = on;
@@ -3618,7 +3635,8 @@ function setLieEffect(on) {
 }
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
 document.getElementById("hm-wind").addEventListener("click", () => setWind(!windEnabled));
-document.getElementById("hm-slotted").addEventListener("click", () => setSlotted(!slottedMode));
+const elSlottedBtn = document.getElementById("hm-slotted");
+if (elSlottedBtn) elSlottedBtn.addEventListener("click", () => setSlotted(!slottedMode));
 const elAutoAimBtn = document.getElementById("hm-autoaim");
 if (elAutoAimBtn) elAutoAimBtn.addEventListener("click", () => setAutoAim(!autoAimEnabled));
 const elChipBtn = document.getElementById("hm-chip");
@@ -6600,12 +6618,25 @@ function unsubscribeMatchRealtime() {
   if (_rtChannel && _sbClient) { try { _sbClient.removeChannel(_rtChannel); } catch (e) {} }
   _rtChannel = null;
 }
+// Anchor the standings panel just below the live scorecard so it never
+// overlaps Strokes/Score (the scorecard's height varies with viewport).
+function anchorMatchBoard() {
+  const el = document.getElementById("match-standings");
+  const sc = document.getElementById("scorecard");
+  if (!el || el.classList.contains("hidden")) return;
+  if (sc && !sc.classList.contains("hidden")) {
+    el.style.top = Math.round(sc.getBoundingClientRect().bottom + 8) + "px";
+  } else {
+    el.style.top = ""; // CSS fallback
+  }
+}
+window.addEventListener("resize", anchorMatchBoard);
 function toggleMatchBoard(force) {
   const el = document.getElementById("match-standings");
   if (!el) return;
   const show = force != null ? force : el.classList.contains("hidden");
   el.classList.toggle("hidden", !show);
-  if (show) renderMatchBoard();
+  if (show) { renderMatchBoard(); anchorMatchBoard(); }
 }
 // 1v1 match play now shows its up/down status right on the scorecard
 // (updateScorecard), so the standings panel would just be a redundant popup —

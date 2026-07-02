@@ -22,6 +22,8 @@
   pointer-events: none;
 }
 #scorecard .line { display: block; white-space: nowrap; }
+#scorecard { width: max-content; }
+#scorecard .sc-right { display: contents; } /* desktop: stack like plain lines */
 #scorecard b { font-family: var(--font-display); font-size: 17px; font-weight: var(--fw-bold); }
 #scorecard #course { color: var(--text-dim); font-size: 12px; }
 #scorecard #score { font-family: var(--font-display); font-weight: var(--fw-bold); }
@@ -206,17 +208,17 @@ body.is-mobile #live-turn { width: min(240px, 60vw); }
 #hm-club-row.hidden { display: none; }
 .hm-club-arrow {
   width: 100%;
-  height: 34px;
-  border: var(--border-edge);
+  height: 32px;
+  border: none;
   border-radius: var(--r-sm);
-  background: var(--w-08);
-  color: var(--text);
+  background: transparent;
+  color: var(--text-muted);
   font-size: 15px;
   cursor: pointer;
   flex-shrink: 0;
-  transition: transform var(--dur-fast), background var(--dur-fast);
+  transition: transform var(--dur-fast), background var(--dur-fast), color var(--dur-fast);
 }
-.hm-club-arrow:active { transform: scale(0.94); background: rgba(99, 185, 139, 0.3); }
+.hm-club-arrow:active { transform: scale(0.94); background: rgba(99, 185, 139, 0.3); color: var(--text); }
 #hm-club-cur {
   cursor: pointer;
   display: flex;
@@ -229,10 +231,14 @@ body.is-mobile #live-turn { width: min(240px, 60vw); }
   min-width: 96px;
 }
 #hm-club-cur b { font-family: var(--font-display); font-size: 22px; color: #fff; line-height: 1.1; }
-#hm-club-cur small { font-size: 14px; color: var(--w-85); }
+#hm-club-cur small { font-size: 13px; color: var(--w-85); letter-spacing: 0.3px; }
+/* on the green the selector is locked to the putter — quiet it down */
+#hm-club-row.putting #hm-club-cur { background: var(--surface-raised); }
+#hm-club-row.putting #hm-club-cur b { color: var(--text-muted); }
+#hm-club-row.putting .hm-club-arrow { opacity: 0.4; }
 
-/* ---- HUD dropdown menu ------------------------------------ */
-#hud-menu {
+/* ---- HUD dropdown menu + settings sheet -------------------- */
+#hud-menu, #hud-settings {
   position: fixed;
   right: var(--s-3);
   top: calc(env(safe-area-inset-top, 0px) + 64px);
@@ -247,7 +253,18 @@ body.is-mobile #live-turn { width: min(240px, 60vw); }
   box-shadow: var(--shadow-2);
   animation: panelIn 0.16s var(--ease) both;
 }
-#hud-menu.hidden { display: none; }
+#hud-menu.hidden, #hud-settings.hidden { display: none; }
+.hs-title {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--t-cap);
+  color: var(--text-dim);
+  text-align: center;
+  letter-spacing: 0.8px;
+  padding: var(--s-1) 0 var(--s-2);
+  border-bottom: 1px solid var(--w-08);
+  margin-bottom: var(--s-1);
+}
 .hm-sep { height: 1px; background: var(--w-12); margin: 6px 0; }
 .hm-item {
   display: flex;
@@ -271,7 +288,7 @@ body.is-mobile #live-turn { width: min(240px, 60vw); }
 .hm-item.active { color: var(--accent-bright); }
 .hm-item.active .ic { color: var(--accent-bright); }
 #hm-course-items.hidden { display: none; }
-#hm-slotted { display: none; }   /* hidden from players; admin-only via Admin settings */
+.hm-item.hidden { display: none; }   /* e.g. Match board outside a live match */
 
 /* ---- Driving-range controls (bottom-right) ---------------- */
 #range-ui {
@@ -420,6 +437,7 @@ body.hud-edit .hud-dragging { cursor: grabbing; opacity: 0.85; }
    into the clear middle. (Canvas wind pill stays top-center.)
    ============================================================ */
 body.is-mobile #hud-menu,
+body.is-mobile #hud-settings,
 body.is-mobile #hm-club-row,
 body.is-mobile #range-ui,
 body.is-mobile #hud-edit-bar {
@@ -427,12 +445,14 @@ body.is-mobile #hud-edit-bar {
   min-width: 0;
   box-sizing: border-box;
 }
-body.is-mobile #hud-menu .hm-item { white-space: normal; }
+body.is-mobile #hud-menu .hm-item,
+body.is-mobile #hud-settings .hm-item { white-space: normal; }
 body.is-mobile #hm-club-cur { min-width: 0; padding: var(--s-2) var(--s-3); }
 body.is-mobile #range-ui { width: min(300px, calc(100vw - 24px)); }
 
 /* ---- Top bar: scorecard as one slim wrapping strip --------- */
 body.is-mobile #scorecard {
+  width: auto; /* the desktop corner card is width:max-content; the bar spans */
   left: var(--s-3);
   /* stop short of the HUD button so the bar never slides under it */
   right: calc(env(safe-area-inset-right, 0px) + 60px);
@@ -451,6 +471,13 @@ body.is-mobile #scorecard {
 body.is-mobile #scorecard .line { display: inline-block; white-space: nowrap; }
 body.is-mobile #scorecard b { font-size: 14px; }
 body.is-mobile #scorecard #course { display: none; } /* name lives in the hole picker */
+/* strokes+score cluster hugs the right edge of the bar */
+body.is-mobile #scorecard .sc-right {
+  display: inline-flex;
+  column-gap: 12px;
+  margin-left: auto;
+  white-space: nowrap;
+}
 
 /* ---- Bottom strip: shot stats as label-over-value chips ---- */
 body.is-mobile #stats {
@@ -471,6 +498,7 @@ body.is-mobile #stats {
   font-size: 12px;
   padding: 7px 11px;
   line-height: 1.25;
+  border-top: 1px solid rgba(207, 168, 94, 0.4); /* brass hairline */
 }
 body.is-mobile #stats.hidden { display: none; }
 body.is-mobile #stats .srow {
