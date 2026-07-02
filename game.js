@@ -1516,6 +1516,9 @@ function resize() {
   refScale = Math.min(cssW / holeFitW, cssH / holeFitH);
   applyView();
   if (typeof clampHudPositions === "function") clampHudPositions(); // keep moved panels on-screen
+  // Re-anchor the swing hint above the ball if the viewport changed while it's
+  // still showing (orientation flip before the player's first swing).
+  if (elHint && !elHint.classList.contains("hidden")) positionHint();
 }
 window.addEventListener("resize", resize);
 
@@ -2544,6 +2547,7 @@ function advanceHole(advanceFn) {
 // =====================================================================
 const elStrokes = document.getElementById("strokes");
 const elScore = document.getElementById("score");
+const elScoreLabel = document.getElementById("score-label");
 const elResult = document.getElementById("result");
 const elHint = document.getElementById("hint");
 const elHoleLabel = document.getElementById("holeLabel");
@@ -2564,10 +2568,38 @@ function updateScorecard() {
   elPar.textContent = HOLE.par;
   elYards.textContent = HOLE.yards;
   elStrokes.textContent = state.strokes;
-  elScore.textContent = formatToPar(round.score);
-  elScore.className = round.score < 0 ? "under" : round.score > 0 ? "over" : "even";
+  // 1v1 match play: the number that matters is holes up/down, not gross score.
+  const me = matchPlay() ? meSnapshot() : null;
+  if (me && lastOpp) {
+    const mp = computeMatchPlay(me, lastOpp, matchHoleCount);
+    if (elScoreLabel) elScoreLabel.textContent = "Match";
+    elScore.textContent = mp.result || mp.status;
+    elScore.className = mp.diff > 0 ? "under" : mp.diff < 0 ? "over" : "even";
+  } else {
+    if (elScoreLabel) elScoreLabel.textContent = "Score";
+    elScore.textContent = formatToPar(round.score);
+    elScore.className = round.score < 0 ? "under" : round.score > 0 ? "over" : "even";
+  }
 }
-function hideHint() { elHint.classList.add("hidden"); }
+function hideHint() {
+  elHint.classList.add("hidden");
+  // Undo any dynamic positionHint() override so the default CSS placement
+  // (bottom-centered pill) is clean if the hint is ever shown again.
+  elHint.style.left = elHint.style.top = elHint.style.right = elHint.style.bottom = "";
+  elHint.style.transform = "";
+}
+// The swing hint only teaches the gesture once per round (hole 1's tee shot),
+// so it never becomes a permanent nag. Anchored a fixed distance ABOVE the
+// teed-up ball's on-screen position rather than a fixed screen offset — a
+// bottom-pinned pill would sometimes land right on top of the ball depending
+// on how a given hole's tee frames.
+function positionHint() {
+  if (!elHint) return;
+  const bx = wx(state.ball.x, state.ball.y), by = wy(state.ball.x, state.ball.y);
+  const r = elHint.getBoundingClientRect();
+  elHint.style.transform = "none";
+  placeHudEl(elHint, bx - r.width / 2, by - r.height - 28);
+}
 
 // =====================================================================
 //  Personal bests + milestones (localStorage — no server, works offline)
@@ -2731,7 +2763,6 @@ document.getElementById("play-again").addEventListener("click", () => {
     } else {
       setHole(FALLBACK_HOLE);
     }
-    elHint.classList.remove("hidden");
   });
   // Live match: both players tee the next hole together. If the opponent hasn't
   // finished this hole yet, hold and let the poll advance once they do (the
@@ -3061,7 +3092,13 @@ function setHole(rec) {
   updateScorecard();
   if (matchLive() && !HOLE.isRange) pushMatchShot({ cur_strokes: 0 });  // new hole, ball on tee
   elResult.classList.add("hidden");
-  elHint.classList.remove("hidden");
+  // Swing hint: only ever on hole 1's tee shot (see positionHint/hideHint).
+  // Range/preview/hole-select callers hide it again right after setHole()
+  // returns, since HOLE.isRange etc. aren't set until then.
+  if (round.holesPlayed === 0) {
+    elHint.classList.remove("hidden");
+    positionHint();
+  }
 }
 
 // Hardcoded fallback (offline / file:// or fetch failure): a simple par 4.
@@ -6504,7 +6541,7 @@ function enterLiveMatch() {
   startCourse();
   startBoardPoll();
   subscribeMatchRealtime(activeMatch.id);   // push updates (latency); poll is the fallback
-  toggleMatchBoard(true);   // auto-show the standings during a match
+  autoShowMatchBoard();
 }
 
 // --- Live standings panel (toggle from HUD) ---
@@ -6550,6 +6587,12 @@ function toggleMatchBoard(force) {
   el.classList.toggle("hidden", !show);
   if (show) renderMatchBoard();
 }
+// 1v1 match play now shows its up/down status right on the scorecard
+// (updateScorecard), so the standings panel would just be a redundant popup —
+// only auto-open it for multiplayer stroke-race formats. Match play can still
+// open it manually from the HUD menu (#hm-match) if you want the opponent's
+// per-hole detail.
+function autoShowMatchBoard() { if (!matchPlay()) toggleMatchBoard(true); }
 // --- Match-play math (pure) ---
 // diff>0 = I'm up. thru = holes both completed. decided = closeout reached.
 function computeMatchPlay(me, opp, holesTotal) {
@@ -6855,8 +6898,7 @@ async function checkMatchCloseout() {
   if (!me || !opp) return;
   const mp = computeMatchPlay(me, opp, matchHoleCount);
   if (mp.decided) { matchDecided = true; updateMyMatchProgress(round.score, round.holesPlayed, true); }
-  renderMatchBoard();
-  toggleMatchBoard(true);
+  renderMatchBoard();   // keeps the (manually-openable) panel's content fresh
 }
 
 async function renderMatchBoard() {
@@ -7328,7 +7370,7 @@ function startCpuMatch(format, holes) {
     closeQuickMatch();
     startCourse();
     startBoardPoll();
-    toggleMatchBoard(true);
+    autoShowMatchBoard();
   });
 }
 
