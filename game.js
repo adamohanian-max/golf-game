@@ -5314,7 +5314,7 @@ function renderFriendList(body, f, invites) {
       `<div class="fr-row"><span class="fr-row-name">${esc(iv.from_name)} invited you</span>
         <span class="fr-row-act">
           <button class="fr-mini fr-join" data-inv="${iv.id}" data-code="${esc(iv.code)}">Join</button>
-          <button class="fr-mini secondary fr-decline-inv" data-inv="${iv.id}">✕</button>
+          <button class="fr-mini secondary fr-decline-inv" data-inv="${iv.id}"><span class="ic ic-x"></span></button>
         </span></div>`).join("");
   }
   html += `<div class="av-section">Friends (${f.accepted.length})</div>`;

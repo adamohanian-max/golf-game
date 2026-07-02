@@ -109,6 +109,13 @@ html, body {
 }
 .panel-in { animation: panelIn var(--dur-modal) var(--ease) both; }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ---- Buttons ----------------------------------------------- */
 .menu-btn {
   display: flex;
