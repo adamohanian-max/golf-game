@@ -48,30 +48,34 @@
 }
 #hint.hidden { opacity: 0; }
 
-/* ---- Live match: whose-turn banner (under the standings panel) ----------- */
-/* Default = same left column as #match-standings (clear of the center wind pill);
-   JS anchors top/left/width directly under the standings panel when it's shown. */
+/* ---- Live match: whose-turn banner (bottom-left, small + out of the way) -- */
+/* Sits in the bottom-left corner as a compact pill. #chip-ind (greenside) sits
+   just above it; #hint only shows on hole 1's tee and floats above the ball. */
 #live-turn {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 178px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4));
   left: var(--s-3);
-  width: min(240px, 60vw);
+  max-width: 46vw;
   box-sizing: border-box;
-  text-align: center;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #fff;
-  background: rgba(0, 0, 0, 0.6);
-  padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-lg);
-  font-size: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 5px 11px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
   font-weight: var(--fw-bold);
   pointer-events: none;
   z-index: 40;
   transition: opacity 0.25s;
 }
-body.is-mobile #live-turn { width: min(240px, 60vw); }
 #live-turn.hidden { opacity: 0; pointer-events: none; }
 #live-turn.lt-mine { background: rgba(46, 125, 79, 0.92); }   /* your turn — go */
-#live-turn.lt-wait { background: rgba(0, 0, 0, 0.6); }        /* watching opponent */
+#live-turn.lt-wait { background: rgba(0, 0, 0, 0.55); }       /* watching opponent */
+/* Mobile: sit just above the bottom stat strip so it stays out of the way. */
+body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + 112px); }
 
 /* ---- Transient toast (milestones, near-miss, daily, share) -------- */
 #toast {

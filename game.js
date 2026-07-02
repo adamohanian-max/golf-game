@@ -6955,11 +6955,11 @@ function updateLiveTurnUI() {
   else {
     const me = meSnapshot();
     const t = liveTurnHolder(me, lastOpp);
-    if (!oppResponsive()) { txt = oppName() + " idle — play on"; cls = "lt-mine"; }
-    else if (_awaitLive) { txt = "Waiting for " + oppName() + " to finish the hole…"; cls = "lt-wait"; }
-    else if (t == null) { txt = "Syncing with " + oppName() + "…"; cls = "lt-wait"; }
-    else if (me && sameName(t, me.player_name)) { txt = "Your turn — you're away. Swing!"; cls = "lt-mine"; }
-    else { txt = "Watch " + oppName() + " play…"; cls = "lt-wait"; }
+    if (!oppResponsive()) { txt = oppName() + " idle"; cls = "lt-mine"; }
+    else if (_awaitLive) { txt = "Waiting for " + oppName() + "…"; cls = "lt-wait"; }
+    else if (t == null) { txt = "Syncing…"; cls = "lt-wait"; }
+    else if (me && sameName(t, me.player_name)) { txt = "Your turn"; cls = "lt-mine"; }
+    else { txt = "Watching " + oppName() + "…"; cls = "lt-wait"; }
   }
   const key = cls + "|" + txt;
   if (key === _lastTurnKey) return;
@@ -6969,20 +6969,12 @@ function updateLiveTurnUI() {
   if (cls !== "hidden") positionLiveTurn();
 }
 
-// Anchor the turn banner directly under the live standings panel (so it doesn't
-// cover the wind pill at top-center). Falls back to the CSS default if hidden.
+// The turn banner lives in the bottom-left corner (see hud.css) — clear any
+// stale inline positioning so the CSS default governs.
 function positionLiveTurn() {
   const el = document.getElementById("live-turn");
-  const sb = document.getElementById("match-standings");
   if (!el) return;
-  if (sb && !sb.classList.contains("hidden")) {
-    const rc = sb.getBoundingClientRect();
-    el.style.top = (rc.bottom + 6) + "px";
-    el.style.left = rc.left + "px";
-    el.style.width = rc.width + "px";
-  } else {
-    el.style.top = ""; el.style.left = ""; el.style.width = "";  // CSS default
-  }
+  el.style.top = ""; el.style.left = ""; el.style.width = "";
 }
 
 // Drive the live features from a fresh poll of the players' rows.
