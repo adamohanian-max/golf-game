@@ -292,8 +292,8 @@
 .ms-len-row .ms-len.active { background: var(--accent); color: #fff; }
 
 /* Quick Match — reuse the ms-len-row layout; own active + searching styles */
-.ms-len-row .qm-fmt, .ms-len-row .qm-len { flex: 1; margin: 0; }
-.ms-len-row .qm-fmt.active, .ms-len-row .qm-len.active { background: var(--accent); color: #fff; }
+.ms-len-row .qm-fmt, .ms-len-row .qm-len, .ms-len-row .bot-len { flex: 1; margin: 0; }
+.ms-len-row .qm-fmt.active, .ms-len-row .qm-len.active, .ms-len-row .bot-len.active { background: var(--accent); color: #fff; }
 #qm-searching { text-align: center; }
 #qm-setup.hidden, #qm-searching.hidden { display: none; }
 .qm-hint { opacity: 0.7; }
@@ -303,6 +303,47 @@
   border-radius: 50%; animation: qm-spin 0.8s linear infinite;
 }
 @keyframes qm-spin { to { transform: rotate(360deg); } }
+.qm-bots { width: 100%; margin-top: var(--s-2); }
+
+/* Bot ladder — roster of fixed CPU opponents, unlock by beating the previous */
+.bot-box { width: min(420px, 92vw); }
+.bot-admin-note { color: var(--accent); margin-top: -8px; }
+.bot-admin-note.hidden { display: none; }
+.bot-list {
+  max-height: 52vh; overflow-y: auto;
+  margin-top: var(--s-3); text-align: left;
+}
+.bot-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; margin-bottom: 6px;
+  border-radius: var(--r-md); background: var(--surface-panel);
+}
+.bot-av {
+  flex: none; width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bav, var(--accent)); color: #fff;
+  font-family: var(--font-display); font-weight: 700; font-size: 14px;
+}
+.bot-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bot-name { color: var(--text); font-weight: 700; font-size: 14px; }
+.bot-hcp { color: var(--text-dim); font-weight: 500; font-size: 11px; margin-left: 4px; }
+.bot-desc { color: var(--text-dim); font-size: 12px; }
+.bot-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.bot-tags i {
+  font-style: normal; font-size: 10px; color: var(--text-dim);
+  background: var(--w-08); border-radius: var(--r-sm); padding: 1px 6px;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.bot-row .bot-play { margin: 0; padding: 8px 14px; font-size: 13px; flex: none; width: auto; }
+.bot-locked { opacity: 0.55; }
+.bot-locked .bot-av { filter: grayscale(1); }
+.bot-lock { flex: none; color: var(--text-dim); padding: 0 8px; }
+.bot-check { color: var(--accent); font-size: 12px; }
+
+/* Match results footer (Rematch / Next bot appear only after ladder matches) */
+.mr-actions { display: flex; gap: var(--s-2); }
+.mr-actions .menu-btn { flex: 1; margin: 0; }
+.mr-actions .menu-btn.hidden { display: none; }
 
 /* Live standings — auto-shown during a match, top-left under the scorecard */
 #match-standings {

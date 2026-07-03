@@ -7766,6 +7766,7 @@ function stopResultsPoll() { if (_resultsPoll) { clearInterval(_resultsPoll); _r
 
 function openMatchResults() {
   markMatchDone();   // I've confirmed my card → flag the match finished (H2H, cleanup)
+  if (activeMatch && activeMatch._bot) settleBotMatch();
   stopBoardPoll();
   toggleMatchBoard(false);
   document.getElementById("round-end").classList.add("hidden");
@@ -7779,6 +7780,37 @@ function closeMatchResults() {
   stopResultsPoll();
   const ov = document.getElementById("match-results");
   if (ov) ov.classList.add("hidden");
+  // Ladder buttons are per-match — never leak into human match results.
+  const rm = document.getElementById("mr-rematch"), nb = document.getElementById("mr-next-bot");
+  if (rm) rm.classList.add("hidden");
+  if (nb) nb.classList.add("hidden");
+}
+
+// Ladder settlement: runs once when a bot match reaches the results screen
+// (both end paths funnel here — scorecard confirm and early closeout).
+// Win = match-play victory; halved/lost don't advance the ladder.
+function settleBotMatch() {
+  const rows = cpuMatchRows();          // [me, cpuOpp] — synchronous, offline-safe
+  const mp = computeMatchPlay(rows[0], rows[1], matchHoleCount);
+  const won = !!(mp && mp.result && mp.result.indexOf("Won") === 0);
+  if (won && markBotBeaten(activeMatch._bot)) {
+    const next = nextBotAfter(activeMatch._bot);
+    showToast(next ? next.name + " unlocked" : "Ladder complete — you beat them all", 2800, "gold");
+  }
+  const nb = nextBotAfter(activeMatch._bot);
+  const rm = document.getElementById("mr-rematch"), nbBtn = document.getElementById("mr-next-bot");
+  if (rm) rm.classList.remove("hidden");
+  if (nbBtn) nbBtn.classList.toggle("hidden", !(won && nb));
+}
+
+// Start another ladder match from the results screen (Rematch / Next bot).
+function startBotFromResults(bot) {
+  if (!bot) return;
+  const holes = matchHoleCount;
+  leaveMatch();                         // resets cpuMatch/cpuOpp/activeMatch, closes results
+  closeHud();
+  elScorecard.style.display = "none";
+  startCpuMatch("match", holes, bot);
 }
 
 async function renderMatchResults() {
@@ -8132,7 +8164,65 @@ function cpuMatchRows() {
   };
   return [me, cpuOpp];
 }
-function startCpuMatch(format, holes) {
+// =====================================================================
+//  BOT LADDER — 10 fixed opponents, chess.com style. Beat one to unlock
+//  the next (match play win only; halve/loss = retry). Fixed handicaps
+//  drive the existing cpuPlanHole skill model; per-bot knobs tweak
+//  dispersion (latMul), day-form scatter (vol) + offset (bias) and
+//  one-putt odds (putt). color = avatar circle. Admins play all.
+// =====================================================================
+const BOTS = [
+  { id: "chip",   name: "Chip Duffington",  ini: "CD", hcp: 26, color: "#7d8a6a",
+    desc: "Brand new to the game and thrilled just to make contact.",
+    tags: ["Beginner", "Nervy"],              latMul: 1.25, vol: 4.5, bias: 1.5 },
+  { id: "sandy",  name: "Sandy Trapworth",  ini: "ST", hcp: 22, color: "#a8894e",
+    desc: "Finds every bunker on the course like it owes her money.",
+    tags: ["Bunker magnet", "Scrambler"],     latMul: 1.15, vol: 4,   bias: 1 },
+  { id: "bo",     name: "Bo Geyman",        ini: "BG", hcp: 18, color: "#8a6d5c",
+    desc: "A bogey on every hole, rain or shine — never better, never worse.",
+    tags: ["Bogey machine", "Relentless"],    latMul: 1.0,  vol: 2,   bias: 1 },
+  { id: "shorty", name: "Shorty Fairlane",  ini: "SF", hcp: 15, color: "#5e7d6b",
+    desc: "Never long off the tee, but he has not seen the rough in years.",
+    tags: ["Dead straight", "Short hitter"],  latMul: 0.7,  vol: 3,   bias: 1 },
+  { id: "boomer", name: "Boomer Slicewell", ini: "BS", hcp: 12, color: "#9a5b45",
+    desc: "Swings out of his shoes — the ball goes a mile, usually right.",
+    tags: ["Bomber", "Big slice"],            latMul: 1.35, vol: 5,   bias: 1 },
+  { id: "faye",   name: "Faye Waymaker",    ini: "FW", hcp: 9,  color: "#4e5d6c",
+    desc: "Plots her way around the course like a chess player.",
+    tags: ["Course manager", "Steady"],       latMul: 0.9,  vol: 2.5, bias: 0.5 },
+  { id: "rusty",  name: "Rusty Blades",     ini: "RB", hcp: 6,  color: "#7a4f63",
+    desc: "Birdie or blow-up — he has never heard of laying up.",
+    tags: ["Streaky", "Aggressive"],          latMul: 1.1,  vol: 6,   bias: 0.5 },
+  { id: "iris",   name: "Iris Sweetspot",   ini: "IS", hcp: 3,  color: "#3f6d5a",
+    desc: "Pin-high so often the members stopped applauding.",
+    tags: ["Iron precision", "Pin seeker"],   latMul: 0.75, vol: 3,   bias: 0.5 },
+  { id: "ace",    name: "Ace Parsons",      ini: "AP", hcp: 0,  color: "#31575f",
+    desc: "A scratch machine who has not three-putted since spring.",
+    tags: ["Scratch", "Ice cold"],            latMul: 0.85, vol: 2,   bias: 0.5, putt: 0.25 },
+  { id: "wren",   name: "Wren Ironwood",    ini: "WI", hcp: -3, color: "#2e4d3a",
+    desc: "Tour winner. Does not miss, and the putter is always hot.",
+    tags: ["Tour pro", "Hot putter"],         latMul: 0.8,  vol: 2.5, bias: 0, putt: 0.32 },
+];
+function botById(id) { return BOTS.find(b => b.id === id) || null; }
+function botIndex(id) { return BOTS.findIndex(b => b.id === id); }
+function botHcpLabel(b) { return b.hcp < 0 ? "+" + (-b.hcp) : String(b.hcp); }
+// Ladder progress: {botId: "YYYY-MM-DD"} in localStorage (works for guests).
+function getBotsBeaten() { return lsGet("golf.botsBeaten", {}); }
+function botBeaten(id) { return !!getBotsBeaten()[id]; }
+function markBotBeaten(id) {              // true only on the FIRST win
+  const m = getBotsBeaten();
+  if (m[id]) return false;
+  m[id] = new Date().toISOString().slice(0, 10);
+  lsSet("golf.botsBeaten", m);
+  return true;
+}
+function botUnlocked(i) { return isTournamentAdmin() || i === 0 || botBeaten(BOTS[i - 1].id); }
+function nextBotAfter(id) { const i = botIndex(id); return i >= 0 ? BOTS[i + 1] || null : null; }
+
+// `bot` (optional) = a BOTS entry: fixed identity + trait knobs instead of the
+// random Quick Match opponent. activeMatch._bot marks a ladder match — the
+// random CPU fallback never sets it, so it can never advance the ladder.
+function startCpuMatch(format, holes, bot) {
   stopQuickMatch();
   _qm = null;
   const isMatch = format === "match";
@@ -8140,12 +8230,15 @@ function startCpuMatch(format, holes) {
   matchHoleCount = holes;
   selectedCourseId = qmPickCourse();
   const myH = (typeof _qmHcp === "number") ? _qmHcp : QM_DEFAULT_HCP;
-  const oppH = genOppHandicap(myH);
-  const name = genOppName();
+  const oppH = bot ? bot.hcp : genOppHandicap(myH);
+  const name = bot ? bot.name : genOppName();
   // Day form: a real round scatters around the handicap (usually a bit above
   // it — handicap is potential, not average). Rolled once per match so the
   // bot can have a career day or a blow-up round, not always shoot its number.
-  const dayH = Math.max(-4, oppH + 1 + gaussRand() * 4);
+  // Ladder bots roll with their own consistency (vol) and offset (bias).
+  const dayH = bot
+    ? Math.max(-5, oppH + (bot.bias ?? 1) + gaussRand() * (bot.vol ?? 4))
+    : Math.max(-4, oppH + 1 + gaussRand() * 4);
   cpuOpp = {
     user_id: null, player_name: name, handicap: oppH, _dayHcp: dayH,
     hole_scores: {}, pars: {}, score: 0, holes_played: 0, finished: false,
@@ -8153,6 +8246,7 @@ function startCpuMatch(format, holes) {
     cur_x: null, cur_y: null, cur_shot: null, cur_updated: null,
     _plan: null, _i: 0, _phase: "idle", _flyUntil: 0, _nextAt: 0, _seq: 0,
   };
+  if (bot) { cpuOpp._latMul = bot.latMul; cpuOpp._onePuttP = bot.putt; }
   activeMatch = {
     id: null, status: "live", format: isMatch ? "match" : "stroke",
     live: true,                          // bot plays live shot-by-shot in both formats
@@ -8161,16 +8255,22 @@ function startCpuMatch(format, holes) {
     host_name: Math.random() < 0.5 ? (getPlayerName() || "You") : name,
     settings: normalizeSettings(gameDefaults), _cpu: true,
   };
+  if (bot) activeMatch._bot = bot.id;
   // Live-runtime init (mirrors enterLiveMatch); no realtime — there's no DB row.
   lastOpp = cpuOpp; lastMe = null; oppShot = null; _shotFrom = null;
   _lastOppSeq = -1; _matchSeq = 0; _spectating = false; _awaitLive = null;
   _oppUpdatedSeen = null; _oppFreshAt = performance.now(); _liveStartAt = performance.now();
-  qmMatchFound(name, null, () => {   // no hcp shown — human pairings don't show one
+  const enter = () => {
     closeQuickMatch();
+    if (typeof closeBotSelect === "function") closeBotSelect();
+    closeMatchResults();
     startCourse();
     startBoardPoll();
     autoShowMatchBoard();
-  });
+  };
+  // Ladder: the player picked the opponent — skip the fake "Match found" beat.
+  if (bot) enter();
+  else qmMatchFound(name, null, enter);   // no hcp shown — human pairings don't show one
 }
 
 // "Match found" beat in the searching overlay before dropping into the round.
@@ -8276,13 +8376,13 @@ function cpuPlanHole() {
   cpuOpp._eff = eff;                       // ghost arc height uses it too
   const carryOf = k => TUNE.clubs[k].carry * eff * (1 + gaussRand() * 0.04);
   const drvC = TUNE.clubs.driver.carry * eff;
-  const latFrac = 0.035 + hcp * 0.0022;   // dispersion as a fraction of carry
+  const latFrac = (0.035 + hcp * 0.0022) * (cpuOpp._latMul || 1);   // dispersion as a fraction of carry (ladder bots scale it)
   const pts = [];
   if (total === 1) {
     pts.push({ x: pin.x, y: pin.y, kind: "long", club: clubForYards(holeYds) });
   } else {
-    // Putts: 1 (20%) / 2 (usual) / 3 (only when over par); field legs get the rest.
-    let P = Math.random() < 0.2 ? 1
+    // Putts: 1 (20%, hot-putter bots more) / 2 (usual) / 3 (only when over par).
+    let P = Math.random() < (cpuOpp._onePuttP || 0.2) ? 1
           : (total > HOLE.par && Math.random() < 0.31 ? 3 : 2);
     P = Math.max(1, Math.min(P, total - 1));
     const neededClean = Math.max(1, Math.ceil(Math.max(0, holeYds - 15) / drvC));
@@ -8516,6 +8616,68 @@ function quickFind() {
   if (close) close.addEventListener("click", cancelQuickMatch);
 })();
 
+// --- Bot ladder picker ---
+function openBotSelect() {
+  closeQuickMatch();
+  const ov = document.getElementById("bot-select");
+  if (!ov) return;
+  ov.dataset.holes = ov.dataset.holes || "9";
+  syncBotToggles();
+  renderBotList();
+  ov.classList.remove("hidden");
+}
+function closeBotSelect() {
+  const ov = document.getElementById("bot-select");
+  if (ov) ov.classList.add("hidden");
+}
+function syncBotToggles() {
+  const ov = document.getElementById("bot-select");
+  if (!ov) return;
+  ov.querySelectorAll(".bot-len").forEach(b => b.classList.toggle("active", b.dataset.holes === ov.dataset.holes));
+}
+function renderBotList() {
+  const list = document.getElementById("bot-list");
+  if (!list) return;
+  const admin = isTournamentAdmin();
+  const note = document.getElementById("bot-admin-note");
+  if (note) note.classList.toggle("hidden", !admin);
+  list.innerHTML = BOTS.map((b, i) => {
+    const open = botUnlocked(i), beat = botBeaten(b.id);
+    const state = open
+      ? '<button class="menu-btn menu-btn-play bot-play" data-bot="' + b.id + '">Play</button>'
+      : '<span class="bot-lock"><span class="ic ic-lock"></span></span>';
+    return '<div class="bot-row ' + (open ? (beat ? "bot-beaten" : "bot-open") : "bot-locked") + '">' +
+      '<span class="bot-av" style="--bav:' + b.color + '">' + b.ini + '</span>' +
+      '<span class="bot-info">' +
+        '<span class="bot-name">' + esc(b.name) +
+          (beat ? ' <span class="ic ic-check bot-check"></span>' : "") +
+          ' <span class="bot-hcp">' + botHcpLabel(b) + ' hcp</span></span>' +
+        '<span class="bot-desc">' + (open ? esc(b.desc) : "Beat " + esc(BOTS[i - 1].name) + " to unlock") + '</span>' +
+        (open ? '<span class="bot-tags">' + b.tags.map(t => "<i>" + esc(t) + "</i>").join("") + '</span>' : "") +
+      '</span>' + state + '</div>';
+  }).join("");
+}
+(function wireBots() {
+  const btn = document.getElementById("qm-bots");
+  if (btn) btn.addEventListener("click", () => ensureNameThen(openBotSelect));
+  const ov = document.getElementById("bot-select");
+  if (!ov) return;
+  ov.querySelectorAll(".bot-len").forEach(b => b.addEventListener("click", () => {
+    ov.dataset.holes = b.dataset.holes; syncBotToggles();
+  }));
+  const back = document.getElementById("bot-back");
+  if (back) back.addEventListener("click", () => { closeBotSelect(); openQuickMatch(); });
+  const list = document.getElementById("bot-list");
+  if (list) list.addEventListener("click", (e) => {   // delegated — rows re-render
+    const p = e.target.closest(".bot-play");
+    if (!p) return;
+    const bot = botById(p.dataset.bot);
+    if (bot && botUnlocked(botIndex(bot.id))) {
+      startCpuMatch("match", parseInt(ov.dataset.holes, 10) || 9, bot);
+    }
+  });
+})();
+
 // --- Wire-up ---
 (function wireMatch() {
   const open = document.getElementById("open-match");
@@ -8583,6 +8745,15 @@ function quickFind() {
     elHmClubRow.classList.add("hidden");
     closeHud();
     elScorecard.style.display = "none";
+  });
+  // Ladder: read _bot BEFORE leaveMatch (it nulls activeMatch).
+  const mrRematch = document.getElementById("mr-rematch");
+  if (mrRematch) mrRematch.addEventListener("click", () => {
+    startBotFromResults(botById(activeMatch && activeMatch._bot));
+  });
+  const mrNextBot = document.getElementById("mr-next-bot");
+  if (mrNextBot) mrNextBot.addEventListener("click", () => {
+    startBotFromResults(nextBotAfter(activeMatch && activeMatch._bot));
   });
 
   const msResync = document.getElementById("mb-resync");

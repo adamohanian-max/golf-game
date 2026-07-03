@@ -12,11 +12,11 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=56">
-  <link rel="stylesheet" href="css/base.css?v=59">
+  <link rel="stylesheet" href="css/base.css?v=60">
   <link rel="stylesheet" href="css/hud.css?v=77">
-  <link rel="stylesheet" href="css/menu.css?v=66">
+  <link rel="stylesheet" href="css/menu.css?v=67">
   <link rel="stylesheet" href="css/courses.css?v=5">
-  <link rel="stylesheet" href="css/modals.css?v=68">
+  <link rel="stylesheet" href="css/modals.css?v=69">
   <link rel="stylesheet" href="css/tournament.css?v=55">
 </head>
 <body>
@@ -427,6 +427,7 @@
           <button class="menu-btn secondary qm-len" data-holes="9">9 holes</button>
           <button class="menu-btn secondary qm-len" data-holes="18">18 holes</button>
         </div>
+        <button id="qm-bots" class="menu-btn secondary qm-bots">Play a bot</button>
         <div class="ne-actions">
           <button id="qm-close" class="menu-btn secondary">Cancel</button>
           <button id="qm-find" class="menu-btn menu-btn-play">Find opponent</button>
@@ -440,6 +441,22 @@
         <div class="ne-actions">
           <button id="qm-cancel" class="menu-btn secondary">Cancel search</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bot-select" class="hidden" data-holes="9">
+    <div class="ne-box bot-box">
+      <h2>Play a Bot</h2>
+      <p class="ne-sub">Match play against the clubhouse roster. Beat a bot to unlock the next.</p>
+      <p id="bot-admin-note" class="ne-sub bot-admin-note hidden">Admin — full roster unlocked</p>
+      <div class="ms-len-row">
+        <button class="menu-btn secondary bot-len" data-holes="9">9 holes</button>
+        <button class="menu-btn secondary bot-len" data-holes="18">18 holes</button>
+      </div>
+      <div id="bot-list" class="bot-list"></div>
+      <div class="ne-actions">
+        <button id="bot-back" class="menu-btn secondary">Back</button>
       </div>
     </div>
   </div>
@@ -516,11 +533,15 @@
       </div>
       <div id="mr-banner" class="mr-banner"></div>
       <div id="mr-list" class="mr-list"></div>
-      <button id="mr-home" class="menu-btn">Home</button>
+      <div class="mr-actions">
+        <button id="mr-rematch" class="menu-btn secondary hidden">Rematch</button>
+        <button id="mr-next-bot" class="menu-btn menu-btn-play hidden">Next bot</button>
+        <button id="mr-home" class="menu-btn">Home</button>
+      </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=141"></script>
+  <script src="game.js?v=142"></script>
 </body>
 </html>
