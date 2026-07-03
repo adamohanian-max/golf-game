@@ -788,14 +788,9 @@ function rollStep(b) {
       showToast(rest === "water" ? "Water · +1 stroke" : "Out of bounds · +1 stroke", 2000, "warn");
     } else {
       state.lastSafe = { x: b.x, y: b.y };
-      const toPinYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-      if (rest === "green" && surfaceAt(shot.startX, shot.startY) !== "green") {
-        // approach finished close — the cheapest praise in golf
-        const ft = toPinYds * 3;
-        if (ft <= 2) showToast("Tap-in range", 1800, "gold");
-        else if (ft <= 8) { showToast(Math.round(ft) + " ft — great shot", 1800, "gold"); playCelebrate(0); }
-      } else if (chipEnabled && rest !== "green" && toPinYds < TUNE.chipRangeYds &&
-                 earnMilestone("hint-chip")) {
+      if (chipEnabled && rest !== "green" &&
+          dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT < TUNE.chipRangeYds &&
+          earnMilestone("hint-chip")) {
         showToast("Chip mode: a short swipe floats the ball to the flag", 2400, "gold");
       }
     }
