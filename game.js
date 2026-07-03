@@ -94,13 +94,6 @@ const TUNE = {
   flowTTLMin: 90, flowTTLMax: 210,  // dot lifetime (frames)
   flowAlpha: 0.78,       // peak dot opacity
   flowTrail: 6,          // streak length in frames of motion
-  // Focus blur: keep the tee->pin play corridor sharp, blur + dim the rest so
-  // the eye locks onto where you're playing (toggle: #hm-focus in the HUD menu).
-  focusBlur: 7,          // gaussian blur radius (css px) applied outside the corridor
-  focusFeather: 26,      // mask edge softness (css px) — bigger = gentler sharp->blur fade
-  focusDim: 0.22,        // darken alpha over the blurred surroundings (spotlight feel)
-  focusHalfWidth: 13,    // corridor half-width in world units (covers fairway + landing)
-  focusExtend: 6,        // world units the corridor reaches past the pin (to hold the green)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
@@ -300,12 +293,6 @@ let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt,
 // Slope-mode style: false = flow dots (default), true = static fall-line arrows.
 // Per-device cosmetic preference (localStorage), not a tournament setting.
 let breakArrows = lsGet("golf.breakArrows", false);
-// Focus blur: spotlight the tee->pin corridor, blur the surroundings. ON by
-// default (per-device localStorage). Offscreen buffers + a one-time feature
-// detect for canvas ctx.filter (fall back to dim-only if unsupported).
-let focusBlur = lsGet("golf.focusBlur", true);
-let _fbTmp = null, _fbMask = null, _fbSharp = null; // reused offscreen canvases
-let _fbFilterOK = null; // null = untested; true/false after first applyFocusBlur
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
@@ -1937,7 +1924,10 @@ function contourSegments(h, x0, y0, x1, y1, levels, nx, ny) {
 }
 // Precompute per-green topo (height field + contour segments in world coords).
 // Pass `dem` (from buildDEM) to use real elevation; omit for synthetic fallback.
-function buildGreenTopo(polys, dem) {
+// `opts` (course JSON `greenTopo`) tunes the synthetic field's difficulty:
+//   { tiltMul, undAmp, lobes } — tilt multiplier, undulation amplitude
+//   multiplier, and number of sin×cos lobes (>1 = multi-break shelves).
+function buildGreenTopo(polys, dem, opts) {
   const out = [];
   if (!polys) return out;
   for (const poly of polys) {
@@ -1955,20 +1945,38 @@ function buildGreenTopo(polys, dem) {
       hi = { x: bb.cx - cg.x / cgm * R, y: bb.cy - cg.y / cgm * R };
       lo = { x: bb.cx + cg.x / cgm * R, y: bb.cy + cg.y / cgm * R };
     } else {
+      const o = opts || {};
       const r1 = hashSeed(bb.cx, bb.cy), r2 = hashSeed(bb.cy, bb.cx), r3 = hashSeed(bb.cx + 7.3, bb.cy - 2.1);
       const theta = r1 * Math.PI * 2;
-      const tmag = 0.6 + 0.5 * r2;
-      const wl = R * (0.7 + 0.6 * r3), ph = r3 * 6.2831;
+      const tmag = (0.6 + 0.5 * r2) * (o.tiltMul || 1);
       const dirx = Math.cos(theta), diry = Math.sin(theta);
+      // Undulation lobes: lobe 0 is the classic single sin×cos; extra lobes
+      // (course-requested) are shorter-wavelength, lower-amplitude harmonics
+      // that add shelves/tiers — true multi-break.
+      const amp0 = 0.5 * (o.undAmp || 1);
+      const lobes = [];
+      for (let li = 0, nLb = Math.max(1, o.lobes || 1); li < nLb; li++) {
+        const rs = li === 0 ? r3 : hashSeed(bb.cx * (li + 1.7) - 3.1, bb.cy * (li + 0.6) + 11.4);
+        lobes.push({
+          wl: R * (0.7 + 0.6 * rs) / (1 + li * 0.9),
+          ph: rs * 6.2831,
+          amp: amp0 * Math.pow(0.62, li),
+        });
+      }
       h = (x, y) => {
         const along = ((x - bb.cx) * dirx + (y - bb.cy) * diry) / R;
-        const und = Math.sin((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph);
-        return tmag * along + 0.5 * und;
+        let und = 0;
+        for (const L of lobes) und += L.amp * Math.sin((x - bb.cx) / L.wl + L.ph) * Math.cos((y - bb.cy) / L.wl - L.ph);
+        return tmag * along + und;
       };
-      grad = (x, y) => ({
-        x: tmag * dirx / R + 0.5 * Math.cos((x - bb.cx) / wl + ph) * Math.cos((y - bb.cy) / wl - ph) / wl,
-        y: tmag * diry / R - 0.5 * Math.sin((x - bb.cx) / wl + ph) * Math.sin((y - bb.cy) / wl - ph) / wl,
-      });
+      grad = (x, y) => {
+        let gx = tmag * dirx / R, gy = tmag * diry / R;
+        for (const L of lobes) {
+          gx += L.amp * Math.cos((x - bb.cx) / L.wl + L.ph) * Math.cos((y - bb.cy) / L.wl - L.ph) / L.wl;
+          gy -= L.amp * Math.sin((x - bb.cx) / L.wl + L.ph) * Math.sin((y - bb.cy) / L.wl - L.ph) / L.wl;
+        }
+        return { x: gx, y: gy };
+      };
       hi = { x: bb.cx + dirx * R, y: bb.cy + diry * R };
       lo = { x: bb.cx - dirx * R, y: bb.cy - diry * R };
     }
@@ -2799,95 +2807,6 @@ function drawTeeMarkers() {
   }
 }
 
-// --- Focus blur ---------------------------------------------------------
-// Trace the tee->pin play corridor as a capsule (rounded band) onto ctx2, in
-// DEVICE pixels. wx/wy give css px (the live view already rotates the hole to
-// play "up"), so multiply by dpr. Round caps + a pin-end extension hold the
-// green; half-width covers the fairway + landing area.
-function traceCorridorPath(ctx2, dpr) {
-  const t = HOLE.teePos, p = HOLE.holePos;
-  let ax = wx(t.x, t.y) * dpr, ay = wy(t.x, t.y) * dpr;
-  let bx = wx(p.x, p.y) * dpr, by = wy(p.x, p.y) * dpr;
-  const hw = ws(TUNE.focusHalfWidth) * dpr;      // corridor half-width (screen px)
-  const ext = ws(TUNE.focusExtend) * dpr;        // reach past the pin
-  let dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len, uy = dy / len;            // tee->pin unit
-  ax -= ux * ext; ay -= uy * ext;                // small pad behind the tee too
-  bx += ux * ext; by += uy * ext;
-  const nx = -uy, ny = ux;                        // left normal
-  const a0 = Math.atan2(ny, nx);                  // normal angle (for the caps)
-  ctx2.beginPath();
-  ctx2.moveTo(ax + nx * hw, ay + ny * hw);
-  ctx2.lineTo(bx + nx * hw, by + ny * hw);
-  ctx2.arc(bx, by, hw, a0, a0 - Math.PI, true);   // round cap at the pin end
-  ctx2.lineTo(ax - nx * hw, ay - ny * hw);
-  ctx2.arc(ax, ay, hw, a0 - Math.PI, a0, true);   // round cap at the tee end
-  ctx2.closePath();
-}
-
-// Post-pass (called from draw() right after the surface base is painted): blur
-// + dim everything outside the tee->pin corridor so the line of play pops. Works
-// in device pixels like drawAerial. Gameplay markers are drawn AFTER this, so
-// the cup/flag/ball/relief stay crisp on top.
-function applyFocusBlur() {
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.width, H = canvas.height;
-  if (!W || !H) return;
-  const ensure = (c) => {
-    if (!c || c.width !== W || c.height !== H) {
-      c = document.createElement("canvas"); c.width = W; c.height = H;
-    }
-    return c;
-  };
-  _fbTmp = ensure(_fbTmp); _fbMask = ensure(_fbMask); _fbSharp = ensure(_fbSharp);
-  const tctx = _fbTmp.getContext("2d");
-  const mctx = _fbMask.getContext("2d");
-  const sctx = _fbSharp.getContext("2d");
-
-  // one-time feature detect: does canvas ctx.filter blur? (older WebKit didn't)
-  if (_fbFilterOK === null) {
-    tctx.filter = "blur(2px)";
-    _fbFilterOK = (tctx.filter === "blur(2px)");
-    tctx.filter = "none";
-  }
-
-  // 1. snapshot the scene painted so far (surround + aerial + surface tints)
-  tctx.setTransform(1, 0, 0, 1, 0, 0);
-  tctx.clearRect(0, 0, W, H);
-  tctx.drawImage(canvas, 0, 0);
-
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-  // 2. blur (or, if unsupported, just re-draw) the whole frame, then dim it
-  ctx.filter = _fbFilterOK ? `blur(${(TUNE.focusBlur * dpr).toFixed(2)}px)` : "none";
-  ctx.drawImage(_fbTmp, 0, 0);
-  ctx.filter = "none";
-  ctx.fillStyle = `rgba(8,22,13,${TUNE.focusDim})`;
-  ctx.fillRect(0, 0, W, H);
-
-  // 3. feathered corridor mask (white capsule, soft edges)
-  mctx.setTransform(1, 0, 0, 1, 0, 0);
-  mctx.clearRect(0, 0, W, H);
-  mctx.filter = _fbFilterOK ? `blur(${(TUNE.focusFeather * dpr).toFixed(2)}px)` : "none";
-  mctx.fillStyle = "#fff";
-  traceCorridorPath(mctx, dpr);
-  mctx.fill();
-  mctx.filter = "none";
-
-  // 4. punch the sharp corridor back in: sharp scene masked by the feather
-  sctx.setTransform(1, 0, 0, 1, 0, 0);
-  sctx.clearRect(0, 0, W, H);
-  sctx.globalCompositeOperation = "source-over";
-  sctx.drawImage(_fbTmp, 0, 0);
-  sctx.globalCompositeOperation = "destination-in";
-  sctx.drawImage(_fbMask, 0, 0);
-  sctx.globalCompositeOperation = "source-over";
-  ctx.drawImage(_fbSharp, 0, 0);
-
-  ctx.restore(); // back to the dpr baseline transform for the rest of draw()
-}
-
 function draw() {
   const cssW = window.innerWidth, cssH = window.innerHeight;
   computeViewAABB(); // for off-screen polygon culling this frame
@@ -2906,10 +2825,6 @@ function draw() {
   } else {
     drawVectorSurfaces();
   }
-
-  // Focus blur: spotlight the tee->pin corridor over the surface base. Drawn
-  // before the gameplay markers below so cup/flag/ball/relief stay crisp.
-  if (focusBlur && !HOLE.isRange && !greenView) applyFocusBlur();
 
   // shaded-relief topo: ball's green + the pin's green only. Whisper-faint always;
   // the slope button boosts intensity and adds downhill flow dots.
@@ -3693,7 +3608,7 @@ function setHole(rec) {
   if (glob) {
     // share precomputed DEM + topo + aerial across every hole (load once)
     if (!course._dem && course.dem) course._dem = buildDEM(course.dem);
-    if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green);  // always synthetic — DEM too coarse for green topo
+    if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green, null, course.greenTopo);  // always synthetic — DEM too coarse for green topo
     HOLE._greens = course._greens;
     HOLE._dem = course._dem || null;
     if (course._img === undefined) {
@@ -3720,7 +3635,7 @@ function setHole(rec) {
     HOLE._mask = course._mask;
   } else {
     HOLE._dem = rec.dem ? buildDEM(rec.dem) : null;
-    HOLE._greens = buildGreenTopo(HOLE.surfaces.green);  // always synthetic
+    HOLE._greens = buildGreenTopo(HOLE.surfaces.green, null, rec.greenTopo || (course && course.greenTopo));  // always synthetic
     HOLE._img = null; HOLE._imgReady = false;
     if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
       const target = HOLE;
@@ -4225,13 +4140,6 @@ elArrowsBtn.addEventListener("click", () => {
   breakArrows = !breakArrows;
   lsSet("golf.breakArrows", breakArrows);
   elArrowsBtn.classList.toggle("active", breakArrows);
-});
-const elFocusBtn = document.getElementById("hm-focus");
-elFocusBtn.classList.toggle("active", focusBlur);
-elFocusBtn.addEventListener("click", () => {
-  focusBlur = !focusBlur;
-  lsSet("golf.focusBlur", focusBlur);
-  elFocusBtn.classList.toggle("active", focusBlur);
 });
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
