@@ -95,11 +95,9 @@ const TUNE = {
   flowTrail: 4,          // streak length in frames of motion
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
-  gvTilt: 0.95,          // initial tilt (rad from top-down; 0 = flat plan view)
-  gvTiltMin: 0.40, gvTiltMax: 1.35,
-  gvHeight: 0.28,        // full height range as a fraction of green radius
+  gvTilt: 0.95,          // fixed viewing tilt (rad from top-down; 0 = flat plan view)
+  gvHeight: 0.14,        // full height range as a fraction of green radius (realistic, not dramatic)
   gvYawRate: 0.010,      // rad per horizontal drag px
-  gvTiltRate: 0.006,     // rad per vertical drag px
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
@@ -1453,10 +1451,7 @@ let wheelCooldownUntil = 0;    // ignore wheel events until this time (momentum 
 
 function onWheel(e) {
   e.preventDefault();
-  if (greenView) {   // desktop: scroll tilts the inspect view
-    greenView.tilt = gvClamp(greenView.tilt + e.deltaY * 0.002, TUNE.gvTiltMin, TUNE.gvTiltMax);
-    return;
-  }
+  if (greenView) return;   // inspect view open: swallow wheel (no swing, tilt is fixed)
   const now = performance.now();
   // A trackpad swipe keeps emitting inertial "momentum" wheel events after the
   // fingers lift. Without this, those would start a NEW gesture and fire phantom
@@ -2283,8 +2278,6 @@ function greensInPlay() {
 // axonometric projection, painter's algorithm — pure canvas 2D, no WebGL).
 // Drag rotates (yaw), vertical drag / pinch / scroll tilts, tap closes. The
 // mesh is baked once per open; per-frame work is projection + quad fills.
-function gvClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-
 function openGreenView() {
   const gs = greensInPlay();
   if (!gs.length || !canSwing()) return;
@@ -2466,8 +2459,7 @@ function drawGreenView() {
   // chrome: title, hint, close affordance (tap anywhere closes; ✕ is visual)
   drawLabel(cssW / 2, Math.max(rsv.top + 18, Y0 - panel / 2 - 26), "READING GREEN", "#f4f1e8");
   drawLabel(cssW / 2, cssH - rsv.bot - 16,
-    IS_DESKTOP ? "drag to rotate · scroll to tilt · click to close"
-               : "drag to rotate · pinch to tilt · tap to close",
+    IS_DESKTOP ? "drag to rotate · click to close" : "drag to rotate · tap to close",
     "rgba(244,241,232,0.85)");
   const cxX = cssW - safeInset.r - 30, cxY = safeInset.t + 30;
   ctx.beginPath(); ctx.arc(cxX, cxY, 16, 0, Math.PI * 2);
@@ -2479,37 +2471,28 @@ function drawGreenView() {
   ctx.stroke();
 }
 
-// Inspect-view pointer handling: 1-finger drag = yaw+tilt, pinch = tilt, tap = close.
+// Inspect-view pointer handling: drag = rotate (yaw only — tilt is fixed so the
+// perceived steepness can't be manipulated), tap = close.
 function gvPointerStart(e) {
-  if (e.touches && e.touches.length >= 2) {   // pinch -> tilt
-    const t0 = e.touches[0], t1 = e.touches[1];
-    greenView.drag = {
-      pinch: Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY),
-      tilt0: greenView.tilt, moved: true,
-    };
+  if (e.touches && e.touches.length >= 2) {   // second finger: not a tap, just keep rotating
+    greenView.drag = greenView.drag || { x: 0, y: 0, yaw0: greenView.yaw, t0: 0 };
+    greenView.drag.moved = true;
     return;
   }
   const p = pointerPos(e);
-  greenView.drag = { x: p.x, y: p.y, yaw0: greenView.yaw, tilt0: greenView.tilt, moved: false, t0: performance.now() };
+  greenView.drag = { x: p.x, y: p.y, yaw0: greenView.yaw, moved: false, t0: performance.now() };
 }
 function gvPointerMove(e) {
   const d = greenView.drag;
   if (!d) return;
-  if (d.pinch != null && e.touches && e.touches.length >= 2) {
-    const t0 = e.touches[0], t1 = e.touches[1];
-    const nd = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-    greenView.tilt = gvClamp(d.tilt0 + (d.pinch - nd) * 0.004, TUNE.gvTiltMin, TUNE.gvTiltMax);
-    return;
-  }
   const p = pointerPos(e);
   if (Math.hypot(p.x - d.x, p.y - d.y) > 6) d.moved = true;
   greenView.yaw = d.yaw0 + (p.x - d.x) * TUNE.gvYawRate;
-  greenView.tilt = gvClamp(d.tilt0 + (p.y - d.y) * TUNE.gvTiltRate, TUNE.gvTiltMin, TUNE.gvTiltMax);
 }
 function gvPointerEnd() {
   const d = greenView.drag;
   greenView.drag = null;
-  if (d && !d.moved && d.pinch == null && performance.now() - d.t0 < 450) closeGreenView(); // tap = close
+  if (d && !d.moved && performance.now() - d.t0 < 450) closeGreenView(); // tap = close
 }
 
 // Stylized vector rendering (used when no aerial, e.g. offline / St Andrews).
