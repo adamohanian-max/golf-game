@@ -83,6 +83,24 @@ const TUNE = {
   reliefExag: 6,         // vertical exaggeration -> hillshade contrast
   reliefShade: 1.8,      // highlight/shadow alpha scale per unit of relief
   reliefTint: 0.35,      // max warm-tint alpha on the steepest spots (a hint, not a ramp)
+  // Flow dots: particles drifting downhill on greens-in-play (slope mode).
+  // Speed AND brightness scale with local gradient, so flat spots show a slow
+  // faint drift while steep runs read as fast bright streams.
+  flowDensity: 2.0,      // dots per world-unit^2 of green area
+  flowMaxDots: 240,      // hard cap per green (perf)
+  flowSpeed: 0.035,      // world units/frame at max gradient
+  flowMinFrac: 0.15,     // floor speed fraction on near-flat spots
+  flowTTLMin: 90, flowTTLMax: 210,  // dot lifetime (frames)
+  flowAlpha: 0.75,       // peak dot opacity
+  flowTrail: 4,          // streak length in frames of motion
+  showFallArrows: false, // legacy arrow grid (superseded by flow dots; kept for A/B)
+  // 3D green inspect view (the "read green" button)
+  gvGrid: 36,            // mesh cells per axis
+  gvTilt: 0.95,          // initial tilt (rad from top-down; 0 = flat plan view)
+  gvTiltMin: 0.40, gvTiltMax: 1.35,
+  gvHeight: 0.22,        // full height range as a fraction of green radius
+  gvYawRate: 0.010,      // rad per horizontal drag px
+  gvTiltRate: 0.006,     // rad per vertical drag px
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
@@ -271,6 +289,7 @@ const HOLE_DROP_MS = 520;  // drop animation length; result modal opens when it 
 let measureMode = false;   // range-finder: drag to measure distance from ball & pin
 let showSlope = true;      // slope relief overlay — ON by default (toggle in HUD menu)
 let showOOB = true;        // red OOB overlay toggle
+let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt, drag } or null
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
@@ -802,6 +821,7 @@ function rollStep(b) {
     autoClub(); // pick the club for the next shot's distance to the pin
     updateScorecard();
     if (matchLive()) pushMatchShot();  // ball at rest → push hole/strokes/distance/lie
+    checkHoleConcede();                // match play: dead hole? pick up and move on
   }
 }
 
@@ -819,6 +839,7 @@ const canvas = document.getElementById("game");
 
 function canSwing() {
   return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition
+    && !greenView  // 3D green inspect open: swings/aiming suspended
     && myTurn();   // live match: only the "away" / honors player may swing
 }
 
@@ -1095,6 +1116,7 @@ function ghostMouse(e) {
 
 function swingStart(e) {
   if (ghostMouse(e)) return;
+  if (greenView) { gvPointerStart(e); return; }   // inspect view owns the pointer
   // Pin this gesture to whichever touch just landed (undefined for mouse —
   // pointerPos falls back to touches[0]/the event itself in that case).
   activeTouchId = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].identifier : null;
@@ -1136,6 +1158,7 @@ function swingStart(e) {
 }
 function swingMove(e) {
   if (ghostMouse(e)) return;
+  if (greenView) { e.preventDefault(); gvPointerMove(e); return; }
   if (measureMode) { if (measureDragging) { e.preventDefault(); const p = pointerPos(e, activeTouchId); measurePoint = screenToWorld(p.x, p.y); } return; }
   if (camTouch && e.touches && e.touches.length >= 2) {
     // two-finger camera: pinch (zoom), drag (pan), twist (rotate)
@@ -1338,6 +1361,7 @@ function launch(dxs, dys, dt, spin = 0) {
 
 function swingEnd(e) {
   if (ghostMouse(e)) return;
+  if (greenView) { gvPointerEnd(e); return; }
   if (measureMode) { measureDragging = false; return; }
   if (markerDrag) {
     // released on the marker without moving it => a click on the target => dismiss
@@ -1386,6 +1410,7 @@ canvas.addEventListener("touchend", swingEnd);
 canvas.addEventListener("touchcancel", () => {
   swipe = null; swipePath = null; camTouch = null; markerDrag = null; measureDragging = false;
   activeTouchId = null;
+  if (greenView) greenView.drag = null;
 });
 canvas.addEventListener("mousedown", swingStart);
 canvas.addEventListener("mousemove", swingMove);
@@ -1403,6 +1428,10 @@ let wheelCooldownUntil = 0;    // ignore wheel events until this time (momentum 
 
 function onWheel(e) {
   e.preventDefault();
+  if (greenView) {   // desktop: scroll tilts the inspect view
+    greenView.tilt = gvClamp(greenView.tilt + e.deltaY * 0.002, TUNE.gvTiltMin, TUNE.gvTiltMax);
+    return;
+  }
   const now = performance.now();
   // A trackpad swipe keeps emitting inertial "momentum" wheel events after the
   // fingers lift. Without this, those would start a NEW gesture and fire phantom
@@ -2114,6 +2143,60 @@ function drawGreenArrows(g) {
     drawFallArrow(px, py, gr, t);
   }
 }
+// --- Flow dots: particles drifting downhill along the green's gradient ------
+// Advected per-frame (no dt — matches the rest of the codebase); dots live in
+// world coords so they rotate/zoom with the camera like the burst particles.
+function greenArea(poly) {
+  let a = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++)
+    a += poly[j].x * poly[i].y - poly[i].x * poly[j].y;
+  return Math.abs(a) / 2;
+}
+function spawnFlowDot(g, bb) {
+  for (let n = 0; n < 8; n++) {   // rejection-sample inside the polygon
+    const x = bb.minx + Math.random() * (bb.maxx - bb.minx);
+    const y = bb.miny + Math.random() * (bb.maxy - bb.miny);
+    if (pointInPoly(x, y, g.poly))
+      return { x, y, vx: 0, vy: 0, t: 0, age: 0, ttl: TUNE.flowTTLMin + Math.random() * (TUNE.flowTTLMax - TUNE.flowTTLMin) };
+  }
+  return null;
+}
+function updateFlowDots(g) {
+  if (!g._flow) g._flow = { dots: [], area: greenArea(g.poly), bb: polyBBox(g.poly) };
+  const f = g._flow;
+  const target = Math.min(TUNE.flowMaxDots, Math.round(f.area * TUNE.flowDensity));
+  // trickle-spawn toward target (avoids a pop-in burst on first frame)
+  for (let n = 0; n < 6 && f.dots.length < target; n++) { const d = spawnFlowDot(g, f.bb); if (d) f.dots.push(d); }
+  const gmax = g.gmax || 1e-6;
+  for (let i = f.dots.length - 1; i >= 0; i--) {
+    const d = f.dots[i];
+    const gr = g.grad(d.x, d.y), gm = Math.hypot(gr.x, gr.y) || 1e-6;
+    d.t = Math.min(1, gm / gmax);                       // steepness 0..1 (drives speed + alpha)
+    const sp = TUNE.flowSpeed * (TUNE.flowMinFrac + (1 - TUNE.flowMinFrac) * d.t);
+    d.vx = -gr.x / gm * sp; d.vy = -gr.y / gm * sp;     // unit downhill * speed
+    d.x += d.vx; d.y += d.vy; d.age++;
+    if (d.age >= d.ttl || !pointInPoly(d.x, d.y, g.poly)) f.dots.splice(i, 1);
+  }
+}
+function flowDotAlpha(d) {
+  const u = d.age / d.ttl;                              // fade in 0..0.15, out 0.7..1
+  const fade = Math.min(1, u / 0.15, (1 - u) / 0.3);
+  return fade * TUNE.flowAlpha * (0.45 + 0.55 * d.t);
+}
+function drawFlowDots(g) {
+  if (!g._flow) return;
+  ctx.lineCap = "round";
+  ctx.lineWidth = 2;
+  for (const d of g._flow.dots) {
+    // streak from pos back along velocity: direction reads even in a still frame
+    ctx.strokeStyle = `rgba(248,250,244,${flowDotAlpha(d).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(wx(d.x, d.y), wy(d.x, d.y));
+    ctx.lineTo(wx(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail),
+               wy(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail));
+    ctx.stroke();
+  }
+}
 // Draw a green's shaded relief (clipped, through the view transform) at `intensity`,
 // optionally with fall-line arrows. Mirrors drawAerial's view∘m compose.
 function drawGreenRelief(g, intensity, showArrows) {
@@ -2168,6 +2251,220 @@ function greensInPlay() {
   const add = (p) => { for (const g of greens) { if (!out.includes(g) && pointInPoly(p.x, p.y, g.poly)) { out.push(g); return; } } };
   add(state.ball); add(HOLE.holePos);
   return out;
+}
+
+// --- 3D green inspect view ---------------------------------------------------
+// Full-screen overlay: the green rendered as a tilted 3D surface (manual
+// axonometric projection, painter's algorithm — pure canvas 2D, no WebGL).
+// Drag rotates (yaw), vertical drag / pinch / scroll tilts, tap closes. The
+// mesh is baked once per open; per-frame work is projection + quad fills.
+function gvClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+function openGreenView() {
+  const gs = greensInPlay();
+  if (!gs.length || !canSwing()) return;
+  const g = gs[0];   // ball's green if on one, else the pin's
+  // yaw seeds from the camera angle so the inspect view opens oriented the way
+  // the player was just looking; the main camera is irrelevant while open.
+  greenView = { g, mesh: buildGreenViewMesh(g), yaw: view.angle, tilt: TUNE.gvTilt, drag: null };
+  document.body.classList.add("gv-open");
+}
+function closeGreenView() {
+  greenView = null;
+  document.body.classList.remove("gv-open");
+}
+
+function buildGreenViewMesh(g) {
+  const bb = polyBBox(g.poly);
+  const R = Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2 * 1.02 || 1;
+  const hMid = (g.hmin + g.hmax) / 2, hHalf = Math.max((g.hmax - g.hmin) / 2, 1e-6);
+  const zOf = (x, y) => (g.h(x, y) - hMid) / hHalf * R * TUNE.gvHeight; // world-unit height
+  const N = TUNE.gvGrid, M = N + 1;
+  const W = bb.maxx - bb.minx || 1, H = bb.maxy - bb.miny || 1;
+  // grid corners: world-relative coords + height
+  const px = new Float32Array(M * M), py = new Float32Array(M * M), pz = new Float32Array(M * M);
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+    const X = bb.minx + W * i / N, Y = bb.miny + H * j / N, k = j * M + i;
+    px[k] = X - bb.cx; py[k] = Y - bb.cy; pz[k] = zOf(X, Y);
+  }
+  // cells inside the polygon, hillshade color baked at the cell center
+  // (same light + normal math as buildGreenRelief, applied to a turf base)
+  let lx = -0.55, ly = -0.55, lz = 0.63;
+  const ll = Math.hypot(lx, ly, lz); lx /= ll; ly /= ll; lz /= ll;
+  const cells = [];
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const ccx = bb.minx + W * (i + 0.5) / N, ccy = bb.miny + H * (j + 0.5) / N;
+    if (!pointInPoly(ccx, ccy, g.poly)) continue;
+    const gr = g.grad(ccx, ccy);
+    let nx = -gr.x * TUNE.reliefExag, ny = -gr.y * TUNE.reliefExag, nz = 1;
+    const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+    const d = Math.max(-1, Math.min(1, nx * lx + ny * ly + nz * lz - lz));
+    const shade = Math.max(0.55, Math.min(1.45, 1 + d * 1.6));
+    cells.push({
+      i0: j * M + i, rx: ccx - bb.cx, ry: ccy - bb.cy,
+      color: `rgb(${(111 * shade) | 0},${(174 * shade) | 0},${(119 * shade) | 0})`,
+    });
+  }
+  const rel = (p) => ({ rx: p.x - bb.cx, ry: p.y - bb.cy, z: zOf(p.x, p.y) });
+  const contours = (g.contours || []).map((c) => ({ closed: c.closed, pts: c.pts.map(rel) }));
+  const rim = g.poly.map(rel);
+  let zMin = Infinity;
+  for (let k = 0; k < pz.length; k++) if (pz[k] < zMin) zMin = pz[k];
+  const pin = pointInPoly(HOLE.holePos.x, HOLE.holePos.y, g.poly) ? rel(HOLE.holePos) : null;
+  const ball = pointInPoly(state.ball.x, state.ball.y, g.poly) ? rel(state.ball) : null;
+  return { N, M, R, cx: bb.cx, cy: bb.cy, px, py, pz, cells, contours, rim, zMin, pin, ball, zOf };
+}
+
+// Projection: yaw about the green center, then tilt about the screen-x axis.
+//   u = rx·cosY − ry·sinY            (screen-horizontal)
+//   v = rx·sinY + ry·cosY            (depth; +v = nearer the viewer)
+//   sx = X0 + k·u,  sy = Y0 + k·v·cosT − k·z·sinT
+// Painter's order: draw cells ascending v (far → near).
+let _gvSX = null, _gvSY = null;   // per-frame projected corner scratch
+function drawGreenView() {
+  if (!greenView) return;
+  if (mode !== "course") { closeGreenView(); return; }
+  const gv = greenView, m = gv.mesh;
+  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const rsv = hudReserve();
+  ctx.fillStyle = "rgba(8,18,10,0.88)";                 // scrim over the live course
+  ctx.fillRect(0, 0, cssW, cssH);
+  const cosY = Math.cos(gv.yaw), sinY = Math.sin(gv.yaw);
+  const cosT = Math.cos(gv.tilt), sinT = Math.sin(gv.tilt);
+  const panel = Math.min(cssW - 32, cssH - rsv.top - rsv.bot - 90);
+  const k = panel / (2 * m.R * 1.12);
+  const X0 = cssW / 2, Y0 = (rsv.top + (cssH - rsv.bot)) / 2 + panel * 0.04;
+  const proj = (rx, ry, z) => ({
+    x: X0 + k * (rx * cosY - ry * sinY),
+    y: Y0 + k * (rx * sinY + ry * cosY) * cosT - k * z * sinT,
+  });
+  // project all grid corners once
+  const n = m.px.length;
+  if (!_gvSX || _gvSX.length !== n) { _gvSX = new Float32Array(n); _gvSY = new Float32Array(n); }
+  for (let i = 0; i < n; i++) {
+    _gvSX[i] = X0 + k * (m.px[i] * cosY - m.py[i] * sinY);
+    _gvSY[i] = Y0 + k * (m.px[i] * sinY + m.py[i] * cosY) * cosT - k * m.pz[i] * sinT;
+  }
+  // skirt: green outline extruded down to a dark slab (base + depth cue)
+  const zB = m.zMin - 0.06 * m.R;
+  ctx.fillStyle = "#12301a";
+  ctx.beginPath();
+  m.rim.forEach((p, i) => {
+    const q = proj(p.rx, p.ry, zB);
+    i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
+  });
+  ctx.closePath(); ctx.fill();
+  // surface quads, painter-sorted back to front
+  const order = m.cells.map((_, i) => i);
+  const depth = m.cells.map((c) => c.rx * sinY + c.ry * cosY);
+  order.sort((a, b) => depth[a] - depth[b]);
+  ctx.lineWidth = 1;
+  for (const oi of order) {
+    const c = m.cells[oi], i0 = c.i0, i1 = i0 + 1, i2 = i0 + m.M + 1, i3 = i0 + m.M;
+    ctx.fillStyle = c.color;
+    ctx.strokeStyle = c.color;      // stroke same color: kills antialias seams between quads
+    ctx.beginPath();
+    ctx.moveTo(_gvSX[i0], _gvSY[i0]);
+    ctx.lineTo(_gvSX[i1], _gvSY[i1]);
+    ctx.lineTo(_gvSX[i2], _gvSY[i2]);
+    ctx.lineTo(_gvSX[i3], _gvSY[i3]);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  // contour lines draped on the surface
+  ctx.strokeStyle = "rgba(20,50,25,0.45)";
+  ctx.lineWidth = 1.2;
+  for (const c of m.contours) {
+    ctx.beginPath();
+    c.pts.forEach((p, i) => {
+      const q = proj(p.rx, p.ry, p.z);
+      i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
+    });
+    if (c.closed) ctx.closePath();
+    ctx.stroke();
+  }
+  // flow dots drift downhill ON the tilted surface — the strongest break cue.
+  // (The top-down pass skips advecting this green while the inspect is open.)
+  updateFlowDots(gv.g);
+  if (gv.g._flow) {
+    ctx.lineCap = "round";
+    ctx.lineWidth = 2;
+    for (const d of gv.g._flow.dots) {
+      const a = proj(d.x - m.cx, d.y - m.cy, m.zOf(d.x, d.y));
+      const bx = d.x - d.vx * TUNE.flowTrail, by = d.y - d.vy * TUNE.flowTrail;
+      const b = proj(bx - m.cx, by - m.cy, m.zOf(bx, by));
+      ctx.strokeStyle = `rgba(248,250,244,${flowDotAlpha(d).toFixed(3)})`;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+  }
+  // cup + flagstick (drawn after the mesh — must never be hidden)
+  if (m.pin) {
+    const q = proj(m.pin.rx, m.pin.ry, m.pin.z);
+    ctx.beginPath(); ctx.ellipse(q.x, q.y, 5, Math.max(1.5, 5 * cosT), 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#101010"; ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.strokeStyle = "#f4f1e8"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x, q.y - 44); ctx.stroke();
+    ctx.fillStyle = "#c8442c";
+    ctx.beginPath();
+    ctx.moveTo(q.x, q.y - 44); ctx.lineTo(q.x + 16, q.y - 38.5); ctx.lineTo(q.x, q.y - 33);
+    ctx.closePath(); ctx.fill();
+  }
+  // ball marker (only if the ball is on this green)
+  if (m.ball) {
+    const q = proj(m.ball.rx, m.ball.ry, m.ball.z);
+    ctx.beginPath(); ctx.ellipse(q.x, q.y + 2, 4.5, 2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fill();
+    ctx.beginPath(); ctx.arc(q.x, q.y - 2, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1; ctx.stroke();
+  }
+  // chrome: title, hint, close affordance (tap anywhere closes; ✕ is visual)
+  drawLabel(cssW / 2, rsv.top + 18, "READING GREEN", "#f4f1e8");
+  drawLabel(cssW / 2, cssH - rsv.bot - 16,
+    IS_DESKTOP ? "drag to rotate · scroll to tilt · click to close"
+               : "drag to rotate · pinch to tilt · tap to close",
+    "rgba(244,241,232,0.85)");
+  const cxX = cssW - safeInset.r - 30, cxY = safeInset.t + 30;
+  ctx.beginPath(); ctx.arc(cxX, cxY, 16, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cxX - 5, cxY - 5); ctx.lineTo(cxX + 5, cxY + 5);
+  ctx.moveTo(cxX + 5, cxY - 5); ctx.lineTo(cxX - 5, cxY + 5);
+  ctx.stroke();
+}
+
+// Inspect-view pointer handling: 1-finger drag = yaw+tilt, pinch = tilt, tap = close.
+function gvPointerStart(e) {
+  if (e.touches && e.touches.length >= 2) {   // pinch -> tilt
+    const t0 = e.touches[0], t1 = e.touches[1];
+    greenView.drag = {
+      pinch: Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY),
+      tilt0: greenView.tilt, moved: true,
+    };
+    return;
+  }
+  const p = pointerPos(e);
+  greenView.drag = { x: p.x, y: p.y, yaw0: greenView.yaw, tilt0: greenView.tilt, moved: false, t0: performance.now() };
+}
+function gvPointerMove(e) {
+  const d = greenView.drag;
+  if (!d) return;
+  if (d.pinch != null && e.touches && e.touches.length >= 2) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const nd = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    greenView.tilt = gvClamp(d.tilt0 + (d.pinch - nd) * 0.004, TUNE.gvTiltMin, TUNE.gvTiltMax);
+    return;
+  }
+  const p = pointerPos(e);
+  if (Math.hypot(p.x - d.x, p.y - d.y) > 6) d.moved = true;
+  greenView.yaw = d.yaw0 + (p.x - d.x) * TUNE.gvYawRate;
+  greenView.tilt = gvClamp(d.tilt0 + (p.y - d.y) * TUNE.gvTiltRate, TUNE.gvTiltMin, TUNE.gvTiltMax);
+}
+function gvPointerEnd() {
+  const d = greenView.drag;
+  greenView.drag = null;
+  if (d && !d.moved && d.pinch == null && performance.now() - d.t0 < 450) closeGreenView(); // tap = close
 }
 
 // Stylized vector rendering (used when no aerial, e.g. offline / St Andrews).
@@ -2448,11 +2745,13 @@ function draw() {
   }
 
   // shaded-relief topo: ball's green + the pin's green only. Whisper-faint always;
-  // the slope button boosts intensity and adds fall-line arrows.
+  // the slope button boosts intensity and adds downhill flow dots.
   if (!HOLE.isRange) {
     for (const g of greensInPlay()) {
       if (!polyVisible(g.poly)) continue;
-      drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope);
+      drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope && TUNE.showFallArrows);
+      // inspect view advects + draws this green's dots itself (under its scrim here)
+      if (showSlope && !greenView) { updateFlowDots(g); drawFlowDots(g); }
     }
   }
 
@@ -2707,6 +3006,10 @@ function draw() {
     }
   }
 
+  // 3D green inspect overlay (scrim + tilted mesh) — everything above keeps
+  // rendering beneath it; the hole-transition fade below still covers it.
+  drawGreenView();
+
   // hole-change transition: fade out to course-green, swap the hole at the
   // midpoint (starting zoomed out so the camera eases in), then fade back.
   if (holeTransition) {
@@ -2910,15 +3213,20 @@ function showResult() {
   else if (d === -2) level = 2;
   else if (d === -1) level = 1;
 
-  // Personal best on this hole (skip the range; daily/course both count)
-  const hb = HOLE.isRange ? { isBest: false } : recordHoleBest(holeNum, state.strokes);
+  // Personal best on this hole (skip the range; daily/course both count).
+  // A conceded pickup isn't a real hole score — never a "best", never a modal.
+  const conceded = state._conceded; state._conceded = false;
+  const hb = (HOLE.isRange || conceded) ? { isBest: false } : recordHoleBest(holeNum, state.strokes);
 
   // Ordinary hole (par or worse, no personal best, mid-round): skip the modal —
   // quick score toast + auto-advance. A forced tap on all 18 holes adds up.
-  if (level === 0 && !hb.isBest && !dailyMode && !matchDecided &&
+  if ((level === 0 || conceded) && !hb.isBest && !dailyMode && !matchDecided &&
       !(course && holeIndex >= roundHoleCount() - 1)) {
-    showToast(title + " · " + formatToPar(round.score), 1600);
-    setTimeout(advanceFromResult, 1100);
+    // Match play: say what the hole meant ("Hole lost · 2 down") when the
+    // opponent's score is already in; otherwise the running score.
+    const mo = matchHoleOutcomeText(holeNum);
+    showToast((conceded ? "Picked up" : title) + " · " + (mo || formatToPar(round.score)), mo ? 2200 : 1600);
+    setTimeout(advanceFromResult, mo ? 1500 : 1100);
     return;
   }
 
@@ -3194,6 +3502,7 @@ function pickPin(rec) {
 }
 
 function setHole(rec) {
+  if (greenView) closeGreenView();
   // live match: drop any in-flight shot marker / opponent tween from the last hole
   _shotFrom = null; oppShot = null; _spectating = false;
   const glob = !!(course && course.global && !rec.world);
@@ -3743,6 +4052,16 @@ const elClubName = document.getElementById("hm-club-name");
 const elClubYds = document.getElementById("hm-club-yds");
 const elMeasureBtn = document.getElementById("hm-measure");
 const elSlopeBtn = document.getElementById("hm-slope");
+const elGreenViewBtn = document.getElementById("green-view-btn");
+elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
+// Show the read-green button exactly when green reading matters: in course
+// play, ball at rest, and a green in play (ball on one or pin's green).
+let _gvBtnShown = false;
+function updateGreenViewBtn() {
+  const show = mode === "course" && HOLE && !HOLE.isRange && !greenView
+             && canSwing() && greensInPlay().length > 0;
+  if (show !== _gvBtnShown) { _gvBtnShown = show; elGreenViewBtn.classList.toggle("hidden", !show); }
+}
 
 function openHud() { elHudMenu.classList.remove("hidden"); elHudBtn.classList.add("open"); }
 function closeHud() {
@@ -4267,6 +4586,7 @@ function aimNudge(dir) {
   cameraAiming = true; // eased to the new target by updateCamera
 }
 window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && greenView) { closeGreenView(); return; }
   if (e.key === "ArrowUp" || e.key === "ArrowDown") {
     e.preventDefault();
     if (e.repeat) return;              // one club step per tap
@@ -4286,6 +4606,7 @@ window.addEventListener("keyup", (e) => {
 
 function showMenu() {
   mode = "menu";
+  if (greenView) closeGreenView();
   elMenu.classList.remove("hidden");
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
@@ -7000,6 +7321,34 @@ function computeMatchPlay(me, opp, holesTotal) {
   return { diff, thru, remaining, status, decided, result };
 }
 
+// Match play: end-of-hole outcome + resulting match status ("Hole won · 2 up").
+// Null until both players have a recorded score for hole h.
+function matchHoleOutcomeText(h) {
+  if (!matchPlay() || !lastOpp) return null;
+  const me = meSnapshot();
+  const mine = me && me.hole_scores[h], theirs = (lastOpp.hole_scores || {})[h];
+  if (mine == null || theirs == null) return null;
+  const s = Math.sign(theirs - mine);
+  const mp = computeMatchPlay(me, lastOpp, matchHoleCount);
+  const status = mp.diff > 0 ? mp.diff + " up" : mp.diff < 0 ? (-mp.diff) + " down" : "All square";
+  return (s > 0 ? "Hole won" : s < 0 ? "Hole lost" : "Hole halved") + " · " + status;
+}
+
+// Match play: once the hole can't be won or halved — the opponent is already in
+// with a score my best possible finish (holing the very next stroke) can't
+// match — pick up and move on rather than grinding out a dead hole.
+function checkHoleConcede() {
+  if (!matchPlay() || mode !== "course" || !HOLE || HOLE.isRange) return;
+  if (state.inHole || state.moving || holeTransition || matchDecided) return;
+  if (round.holeStats.some(s => s.hole === HOLE.num)) return; // hole already recorded
+  const theirs = lastOpp && (lastOpp.hole_scores || {})[HOLE.num];
+  if (theirs == null || state.strokes < theirs) return; // holing the next stroke could still halve
+  state._conceded = true;
+  state.strokes += 1;   // the pickup: best-case stroke that still loses the hole
+  state.inHole = true;  // hole is over — no more swings
+  showResult();
+}
+
 // Advisory honors: who is "away" (farthest from pin). Only meaningful when both
 // are at rest on the same hole and neither has holed. Never gates input.
 function whoseHonors(me, opp) {
@@ -7228,6 +7577,7 @@ function onLivePoll(rows) {
     if (oppRow.cur_updated !== _oppUpdatedSeen) { _oppUpdatedSeen = oppRow.cur_updated; _oppFreshAt = performance.now(); }
   }
   reassertMyState();   // re-push my at-rest state so a dropped write self-heals
+  checkHoleConcede();  // opp just finished and my hole is dead? pick up
   pumpLiveAdvance();
   updateLiveTurnUI();
   positionLiveTurn();   // standings size may have changed → keep banner anchored under it
@@ -7240,8 +7590,11 @@ function pumpLiveAdvance() {
   if (!_awaitLive) return;
   const timedOut = !oppResponsive() && (performance.now() - _awaitLive.since) > LIVE_STALE_MS;
   if (oppFinishedHole(_awaitLive.hole) || timedOut) {
+    // opponent just wrapped the hole — now the outcome is known; say it on the way out
+    const mo = matchHoleOutcomeText(_awaitLive.hole);
     const adv = _awaitLive.advance;
     _awaitLive = null;
+    if (mo) showToast(mo, 2000);
     adv();
   }
 }
@@ -7965,6 +8318,7 @@ function cpuDriverTick() {
   lastOpp = cpuOpp; _oppFreshAt = now;   // bot is always "responsive" → turn-gate honored
   if (cpuOpp.cur_hole !== HOLE.num || !cpuOpp._planPin ||
       cpuOpp._planPin.x !== HOLE.holePos.x || cpuOpp._planPin.y !== HOLE.holePos.y) cpuPlanHole();
+  checkHoleConcede();                     // bot already in with a score I can't match? pick up
   pumpLiveAdvance();                      // snappy hole-advance once the bot holes out
 
   // Resolve an in-flight bot shot → land the ball.
@@ -8398,6 +8752,7 @@ function loop() {
   updateCamera();
   updateStats();
   updateWindChip();
+  updateGreenViewBtn();
   draw();
   requestAnimationFrame(loop);
 }
