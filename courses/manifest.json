@@ -14,6 +14,19 @@
     ]
   },
   {
+    "id": "blackwater-vale",
+    "name": "Blackwater Vale",
+    "sub": "Original design \u00b7 Par 72",
+    "par": 72,
+    "yards": 7980,
+    "holes": 18,
+    "location": "The Vale",
+    "region": "Originals",
+    "tags": [
+      "original"
+    ]
+  },
+  {
     "id": "four-oaks-dracut",
     "name": "Four Oaks Country Club",
     "sub": "Dracut, MA \u00b7 Par 70",
