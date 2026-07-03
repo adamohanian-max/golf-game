@@ -98,7 +98,7 @@ const TUNE = {
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial tilt (rad from top-down; 0 = flat plan view)
   gvTiltMin: 0.40, gvTiltMax: 1.35,
-  gvHeight: 0.22,        // full height range as a fraction of green radius
+  gvHeight: 0.28,        // full height range as a fraction of green radius
   gvYawRate: 0.010,      // rad per horizontal drag px
   gvTiltRate: 0.006,     // rad per vertical drag px
   // Landing behaviour per surface: e = vertical restitution (bounce height),
@@ -2310,22 +2310,30 @@ function buildGreenViewMesh(g) {
     const X = bb.minx + W * i / N, Y = bb.miny + H * j / N, k = j * M + i;
     px[k] = X - bb.cx; py[k] = Y - bb.cy; pz[k] = zOf(X, Y);
   }
-  // cells inside the polygon, hillshade color baked at the cell center
-  // (same light + normal math as buildGreenRelief, applied to a turf base)
+  // cells inside the polygon, color baked at the cell center: hillshade (same
+  // light + normal math as buildGreenRelief) x height tint (high = light,
+  // low = dark) so both slope AND elevation read at a glance.
   let lx = -0.55, ly = -0.55, lz = 0.63;
   const ll = Math.hypot(lx, ly, lz); lx /= ll; ly /= ll; lz /= ll;
   const cells = [];
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const ccx = bb.minx + W * (i + 0.5) / N, ccy = bb.miny + H * (j + 0.5) / N;
+    const x0 = bb.minx + W * i / N, y0 = bb.miny + H * j / N;
+    const x1 = x0 + W / N, y1 = y0 + H / N;
+    const ccx = x0 + W / N / 2, ccy = y0 + H / N / 2;
     if (!pointInPoly(ccx, ccy, g.poly)) continue;
+    // boundary quads (a corner pokes past the rim) get clipped to the rim path
+    // at draw time, so the silhouette follows the smooth green outline
+    const edge = !pointInPoly(x0, y0, g.poly) || !pointInPoly(x1, y0, g.poly)
+              || !pointInPoly(x1, y1, g.poly) || !pointInPoly(x0, y1, g.poly);
     const gr = g.grad(ccx, ccy);
     let nx = -gr.x * TUNE.reliefExag, ny = -gr.y * TUNE.reliefExag, nz = 1;
     const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
     const d = Math.max(-1, Math.min(1, nx * lx + ny * ly + nz * lz - lz));
-    const shade = Math.max(0.55, Math.min(1.45, 1 + d * 1.6));
+    const hn = (g.h(ccx, ccy) - g.hmin) / Math.max(g.hmax - g.hmin, 1e-6); // 0 low .. 1 high
+    const shade = Math.max(0.5, Math.min(1.35, (0.9 + d * 1.8) * (0.72 + 0.33 * hn)));
     cells.push({
-      i0: j * M + i, rx: ccx - bb.cx, ry: ccy - bb.cy,
-      color: `rgb(${(111 * shade) | 0},${(174 * shade) | 0},${(119 * shade) | 0})`,
+      i0: j * M + i, rx: ccx - bb.cx, ry: ccy - bb.cy, edge,
+      color: `rgb(${Math.min(255, 116 * shade) | 0},${Math.min(255, 180 * shade) | 0},${Math.min(255, 122 * shade) | 0})`,
     });
   }
   const rel = (p) => ({ rx: p.x - bb.cx, ry: p.y - bb.cy, z: zOf(p.x, p.y) });
@@ -2377,6 +2385,16 @@ function drawGreenView() {
     i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
   });
   ctx.closePath(); ctx.fill();
+  // surface footprint (rim draped at surface height) in base turf: fills any
+  // sliver between clipped boundary quads; also the clip path for edge quads
+  const rimPath = new Path2D();
+  m.rim.forEach((p, i) => {
+    const q = proj(p.rx, p.ry, p.z);
+    i ? rimPath.lineTo(q.x, q.y) : rimPath.moveTo(q.x, q.y);
+  });
+  rimPath.closePath();
+  ctx.fillStyle = "rgb(98,152,103)";
+  ctx.fill(rimPath);
   // surface quads, painter-sorted back to front
   const order = m.cells.map((_, i) => i);
   const depth = m.cells.map((c) => c.rx * sinY + c.ry * cosY);
@@ -2384,6 +2402,7 @@ function drawGreenView() {
   ctx.lineWidth = 1;
   for (const oi of order) {
     const c = m.cells[oi], i0 = c.i0, i1 = i0 + 1, i2 = i0 + m.M + 1, i3 = i0 + m.M;
+    if (c.edge) { ctx.save(); ctx.clip(rimPath); }
     ctx.fillStyle = c.color;
     ctx.strokeStyle = c.color;      // stroke same color: kills antialias seams between quads
     ctx.beginPath();
@@ -2392,6 +2411,7 @@ function drawGreenView() {
     ctx.lineTo(_gvSX[i2], _gvSY[i2]);
     ctx.lineTo(_gvSX[i3], _gvSY[i3]);
     ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (c.edge) ctx.restore();
   }
   // contour lines draped on the surface
   ctx.strokeStyle = "rgba(20,50,25,0.45)";
@@ -2442,7 +2462,7 @@ function drawGreenView() {
     ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1; ctx.stroke();
   }
   // chrome: title, hint, close affordance (tap anywhere closes; ✕ is visual)
-  drawLabel(cssW / 2, rsv.top + 18, "READING GREEN", "#f4f1e8");
+  drawLabel(cssW / 2, Math.max(rsv.top + 18, Y0 - panel / 2 - 26), "READING GREEN", "#f4f1e8");
   drawLabel(cssW / 2, cssH - rsv.bot - 16,
     IS_DESKTOP ? "drag to rotate · scroll to tilt · click to close"
                : "drag to rotate · pinch to tilt · tap to close",

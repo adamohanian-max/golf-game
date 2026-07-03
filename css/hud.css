@@ -192,6 +192,36 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
 #hud-btn.hidden { display: none; }
 #hud-btn.open { background: rgba(46, 125, 79, 0.4); border-color: rgba(99, 185, 139, 0.5); }
 
+/* ---- Read-green button (bottom-left) ----------------------- */
+/* 3D green inspect: shows when the ball is at rest with a green in play. */
+#green-view-btn {
+  position: fixed;
+  left: var(--s-3);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 56px);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-edge);
+  border-radius: var(--r-md);
+  background: var(--surface-hud);
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  backdrop-filter: blur(var(--blur-sm));
+  color: var(--text);
+  cursor: pointer;
+  z-index: 15;
+  box-shadow: var(--shadow-1);
+}
+#green-view-btn .ic { font-size: 22px; }
+#green-view-btn.hidden { display: none; }
+/* Inspect view open: clear the HUD out of the overlay's way */
+body.gv-open #hud-btn,
+body.gv-open #hm-club-row,
+body.gv-open #green-view-btn,
+body.gv-open #chip-spin,
+body.gv-open #hint { display: none; }
+
 /* ---- Club selector (bottom-right) ------------------------- */
 #hm-club-row {
   position: fixed;
