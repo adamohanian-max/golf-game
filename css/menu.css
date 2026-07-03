@@ -228,7 +228,7 @@
 
 /* ---- Name-entry / auth / add-course / admin / account: scrim */
 #name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer,
-#match-menu, #match-lobby, #match-setup, #quick-match, #bot-select,
+#play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select,
 #friends-modal, #friend-profile, #username-modal {
   position: fixed;
   inset: 0;
@@ -244,11 +244,11 @@
 #username-modal { z-index: 55; }   /* above friends, below the name gate */
 #add-course { z-index: 30; }
 #auth-modal, #admin-settings, #account-viewer { z-index: 40; }
-#match-menu, #match-lobby, #match-setup, #quick-match, #bot-select { z-index: 40; }
+#play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select { z-index: 40; }
 #friends-modal { z-index: 42; }
 #friend-profile { z-index: 44; }   /* above the friends list it opens from */
 #name-entry.hidden, #add-course.hidden, #auth-modal.hidden, #admin-settings.hidden, #account-viewer.hidden,
-#match-menu.hidden, #match-lobby.hidden, #match-setup.hidden, #quick-match.hidden, #bot-select.hidden,
+#play-menu.hidden, #match-menu.hidden, #match-lobby.hidden, #match-setup.hidden, #quick-match.hidden, #bot-select.hidden,
 #friends-modal.hidden, #friend-profile.hidden, #username-modal.hidden { display: none; }
 
 /* Friends */
@@ -324,6 +324,27 @@
 .ne-sub { color: var(--text-dim); font-size: var(--t-cap); margin-bottom: var(--s-4); }
 .ne-actions { display: flex; gap: var(--s-3); margin-top: var(--s-4); }
 .ne-actions .menu-btn { flex: 1; margin: 0; padding: var(--s-3); font-size: var(--t-body); }
+
+/* Play-mode picker — stacked rows: label + one-line descriptor */
+.pm-list { display: flex; flex-direction: column; gap: var(--s-2); }
+.pm-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--s-3) var(--s-4);
+  border: var(--border-hair);
+  border-radius: var(--r-md);
+  background: var(--surface-hud);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.pm-item:hover, .pm-item:focus-visible { background: var(--w-05); border-color: var(--w-12); }
+.pm-label { font-weight: var(--fw-med); font-size: var(--t-body); }
+.pm-sub { color: var(--text-dim); font-size: var(--t-cap); }
 
 /* Add-course specifics */
 .ac-box { width: min(420px, 92vw); }

@@ -125,6 +125,7 @@
 
 /* Scorecard grid */
 .re-sc-wrap { overflow-x: auto; }
+.re-sc-empty { color: var(--text-dim); text-align: center; padding: 18px 0; }
 .re-sc {
   width: 100%;
   border-collapse: collapse;
@@ -379,6 +380,29 @@ body.is-mobile #match-standings { width: min(240px, 60vw); min-width: 0; box-siz
 .mb-fin { color: var(--accent); font-weight: var(--fw-bold); }
 .mb-done { color: var(--accent); margin-left: 4px; }
 .mb-empty { color: var(--text-dim); justify-items: center; }
+
+/* CPU vs live distinction — chip on bot opponents, dot on live pairings */
+.cpu-chip {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--w-12);
+  background: var(--w-05);
+  color: var(--text-dim);
+  vertical-align: 1px;
+}
+.qm-live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 7px;
+  vertical-align: 1px;
+}
 
 /* Match results landing page — full-screen live scoreboard after Confirm. */
 #match-results {

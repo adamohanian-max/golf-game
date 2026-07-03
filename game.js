@@ -57,6 +57,9 @@ const TUNE = {
   // Lie spin penalty: backspin multiplier by the surface you're hitting FROM. Rough = "flyer"
   // (grass between club & ball kills backspin -> ball releases and runs out); sand also robs spin.
   lieSpin: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.55, bunker: 0.6, water: 0.6, woods: 0.6, ob: 0.6 },
+  // Lie land-angle penalty: a flyer from rough comes in SHALLOWER as well as lower-spin
+  // (less lift), so it releases even more on landing. Multiplier on the club's land angle.
+  lieLand: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.88, bunker: 0.92, water: 1.0, woods: 1.0, ob: 1.0 },
 
   friction: {            // per-frame velocity multiplier by surface (rolling)
     fairway: 0.97,
@@ -97,10 +100,25 @@ const TUNE = {
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
-  gvTiltMin: 0.40, gvTiltMax: 1.35,
+  gvTiltMin: 0.12, gvTiltMax: 1.48,   // near plan-view ↔ near ground-level (past ~1.5 the slab flips)
   gvHeight: 0.07,        // full height range as a fraction of green radius (~true scale: field spans ±3ft)
   gvYawRate: 0.010,      // rad per horizontal drag px
   gvTiltRate: 0.006,     // rad per vertical drag px
+  // Cinematic 3D landing: a launch-time forward sim (simShotRest) predicts where an
+  // off-green shot finishes; if it's a great one — holed, lipped out, or resting on a
+  // green inside the distance-scaled threshold below — the game cuts to the 3D green
+  // as the ball descends. The bar scales with shot length so a 200yd approach earns
+  // the cut at ~10 ft while a greenside chip needs a near kick-in.
+  cineFtPerYd: 0.05,     // trigger distance (ft from the cup) per yard of shot length
+  cineMinFt: 4,          // floor of that trigger distance (short chips)
+  cineMaxFt: 11,         // ceiling (long approaches)
+  cineCutFrac: 0.35,     // cut to 3D this far down the descent (0 = apex, 1 = touchdown)
+  cineHoldMs: 900,       // linger on the settled ball before returning to the course
+  cineZoomIn: 1.18,      // slow push-in over the landing (multiplies the fit-to-screen zoom)
+  cineZoomMs: 2600,      // duration of the push-in ease
+  cineYawDrift: 0.04,    // gentle orbit (rad/s) while the cinematic plays
+  cineBallZ: 1.0,        // flight-height scale in the 3D view (1 = true world scale)
+  cineSimSteps: 4000,    // forward-sim frame cap (~66s of ball time — never binds in practice)
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
@@ -145,7 +163,26 @@ const TUNE = {
   // rough is a flyer with little spin). 0..1 multiplier on the club's spin.
   spinGrip: { green: 1.0, fairway: 0.5, tee: 0.5, rough: 0.12, bunker: 0.3, woods: 0, water: 0, ob: 0 },
   rolloutK: 7.0,    // base release distance scale (× landing speed) with no spin
-  spinCheckK: 1.2,  // how strongly backspin kills/reverses the release (>1 can back up)
+  spinCheckK: 1.35, // how strongly the landing check kills/reverses the release (>1 can back up)
+  // Landing check = weighted blend of backspin AND descent steepness. A tour 5-iron
+  // holds because it lands at ~50°, not because it spins like a wedge (TrackMan: every
+  // iron lands 46–52°; ≥45° descent holds with modest spin, mid-30s won't even with spin).
+  checkSpinW: 0.55,   // backspin's share of the landing check
+  checkLandW: 0.45,   // descent-angle steepness's share
+  checkLandRef: 35,   // land angle (deg) where steepness starts to grip (driver ~39° ≈ none)
+  checkLandSpan: 20,  // degrees above ref for full steepness credit
+  spinBackMax: 1.2,   // cap on backward roll after a spun-back landing (world units ≈ 3.6yd)
+  // Flighted high spinner: a LONG deliberate swipe (vs a short flick) throws the ball
+  // higher with extra spin — steeper landing + harder check holds firm/tucked greens.
+  // Costs a little carry and drifts more in wind. Path LENGTH picks the flight; power
+  // is still release speed, so both gestures reach full power. Touch + mouse drag only
+  // (the trackpad wheel gesture's length is tied to its speed, so it stays stock).
+  flightHiLen: 0.55,    // swipe path length / screen diagonal that triggers the high ball
+  flightHiApex: 1.25,   // apex height multiplier
+  flightHiLand: 3,      // degrees added to the club's land angle
+  flightHiSpin: 1.25,   // backspin (spinN) multiplier, capped at 1
+  flightHiCarry: 0.95,  // carry multiplier (throwing it up costs distance)
+  flightHiWind: 1.3,    // wind-effect multiplier while the high ball is in the air
 
   // powerFactor, maxPower, puttMaxPower, puttOffGreenPower, launchAngle are derived below.
   powerFactor: 0,
@@ -290,6 +327,10 @@ let measureMode = false;   // range-finder: drag to measure distance from ball &
 let showSlope = true;      // slope relief overlay — ON by default (toggle in HUD menu)
 let showOOB = true;        // red OOB overlay toggle
 let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt, drag } or null
+// Cinematic 3D landing (auto green view on a great approach — see TUNE.cine*).
+let cine = null;           // active cinematic — { g, mesh, t0, yaw0, tilt, restT } or null
+let cinePending = null;    // armed at launch by a great predicted shot; opens on the descent
+let cineEnabled = lsGet("golf.cineLanding", true); // per-device toggle (HUD menu)
 // Slope-mode style: false = flow dots (default), true = static fall-line arrows.
 // Per-device cosmetic preference (localStorage), not a tournament setting.
 let breakArrows = lsGet("golf.breakArrows", false);
@@ -558,10 +599,12 @@ function arcFlightStep(b) {
     const a = b.spin * TUNE.spinFactor * sp;
     b.vx += px * a; b.vy += py * a;
   }
-  // wind: horizontal push (world space). dir = compass FROM bearing.
+  // wind: horizontal push (world space). dir = compass FROM bearing. A flighted
+  // high ball (fl.windMul) hangs longer and rides the wind harder.
   if (wind.speed > 0) {
-    b.vx -= Math.sin(wind.dir) * wind.speed * TUNE.windEffect;
-    b.vy += Math.cos(wind.dir) * wind.speed * TUNE.windEffect;
+    const we = TUNE.windEffect * (fl.windMul || 1);
+    b.vx -= Math.sin(wind.dir) * wind.speed * we;
+    b.vy += Math.cos(wind.dir) * wind.speed * we;
   }
   // height from the two-parabola arc
   const d = fl.d, C = fl.C, H = fl.H, xa = fl.xa;
@@ -594,28 +637,44 @@ function arcFlightStep(b) {
       b.vx = b.vy = b.vz = 0; state.airborne = false;
       return;
     }
-    // Backspin check: a spinning ball grabs on landing. Low spin (driver) releases
-    // and runs; high spin on receptive turf (wedge -> green) checks, and can roll
-    // BACKWARD. Rough is a flyer (little grip) so it releases. `Dr` = rollout (units).
-    const grip = TUNE.spinGrip[surf] ?? 0.3;
-    // Sidespin (b.spin = swipe curve) reduces effective backspin: draw runs, fade checks.
-    // At max sidespin, 40% of backspin converts to sidespin → less check.
-    const backspinRetained = Math.max(0, 1 - 0.4 * Math.abs(b.spin));
-    const check = Math.min(1.1, fl.spinN * backspinRetained * grip);
-    const Dr = fl.vh * TUNE.rolloutK * (1 - check * TUNE.spinCheckK); // <0 = spins back
-    let v;
-    if (surf === "green") v = Math.sign(Dr) * Math.sqrt(2 * TUNE.greenDecel * Math.abs(Dr));
-    else {
-      const fr = TUNE.friction[surf] ?? 0.9;
-      // Cap at fl.vh * bounce[surf].h: the ball can't leave the landing point faster
-      // than it arrived (fl.vh) times the surface landing grip (bo.h). Without this,
-      // high-friction surfaces (bunker fr=0.55) produce huge initial v = Dr*(1-fr) that
-      // shoots the ball off when it rolls off the edge onto low-friction fairway.
-      const bo = TUNE.bounce[surf] ?? TUNE.bounce.fairway;
-      v = Math.min(Dr * (1 - fr), fl.vh * bo.h);
-    }
+    const v = landingRelease(fl, b.spin, surf);
     b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0; state.airborne = false;
   }
+}
+
+// Landing release: how fast the ball leaves its first touchdown, signed along the
+// travel direction (< 0 = spins back). Pure — shared by arcFlightStep AND the
+// launch-time prediction (simShotRest), so the cinematic trigger can never drift
+// from the real physics. Keep it side-effect free.
+function landingRelease(fl, spin, surf) {
+  // Backspin check: a spinning ball grabs on landing. Low spin (driver) releases
+  // and runs; high spin on receptive turf (wedge -> green) checks, and can roll
+  // BACKWARD. Rough is a flyer (little grip) so it releases. `Dr` = rollout (units).
+  const grip = TUNE.spinGrip[surf] ?? 0.3;
+  // Sidespin (spin = swipe curve) reduces effective backspin: draw runs, fade checks.
+  // At max sidespin, 40% of backspin converts to sidespin → less check.
+  const backspinRetained = Math.max(0, 1 - 0.4 * Math.abs(spin));
+  // Descent steepness: the club's land angle (fl.L, radians) mapped to 0..1. Steep
+  // landings (irons, 46–52°) grab even at mid-iron spin; shallow (driver ~39°) release.
+  // Chips opt out (fl.noLandCheck) — their release is tuned purely by the spin slider.
+  const landDeg = fl.L * 180 / Math.PI;
+  const steep = fl.noLandCheck ? 0 :
+    Math.max(0, Math.min(1, (landDeg - TUNE.checkLandRef) / TUNE.checkLandSpan));
+  // Chips keep FULL spin weight (their bite is tuned by the spin slider alone);
+  // full shots blend spin with steepness so mid/long irons hold like the tour.
+  const spinW = fl.noLandCheck ? 1 : TUNE.checkSpinW;
+  const check = Math.min(1.1,
+    (spinW * fl.spinN + TUNE.checkLandW * steep) * backspinRetained * grip);
+  let Dr = fl.vh * TUNE.rolloutK * (1 - check * TUNE.spinCheckK); // <0 = spins back
+  Dr = Math.max(Dr, -TUNE.spinBackMax); // a spun-back wedge sucks back a few yards, not off the green
+  if (surf === "green") return Math.sign(Dr) * Math.sqrt(2 * TUNE.greenDecel * Math.abs(Dr));
+  const fr = TUNE.friction[surf] ?? 0.9;
+  // Cap at fl.vh * bounce[surf].h: the ball can't leave the landing point faster
+  // than it arrived (fl.vh) times the surface landing grip (bo.h). Without this,
+  // high-friction surfaces (bunker fr=0.55) produce huge initial v = Dr*(1-fr) that
+  // shoots the ball off when it rolls off the edge onto low-friction fairway.
+  const bo = TUNE.bounce[surf] ?? TUNE.bounce.fairway;
+  return Math.min(Dr * (1 - fr), fl.vh * bo.h);
 }
 
 // --- Ballistic bounces after the first landing: projectile arc + land/settle ---
@@ -744,16 +803,9 @@ function rollStep(b) {
   // re-testing capture every frame would re-trigger the hop in place forever
   // (ball stuck airborne over the cup, never settling → can't take the next shot).
   if (!HOLE.isRange && !state._lippedThisShot) {
-    const px = b.x - b.vx, py = b.y - b.vy;            // last frame's position
-    const capR = HOLE.holeRadius + BALL_RADIUS_UNITS;  // ball overlaps the cup edge
-    const cd = segPointDist(HOLE.holePos.x, HOLE.holePos.y, px, py, b.x, b.y);
-    if (cd <= capR) {
-      // Pace forgiveness: a grounded putt crossing near-dead-center (within 60% of the
-      // cup radius) at a good — not rammed — pace is grabbed by the lip and drops, like
-      // real life. Off-center / faster passes keep the strict captureSpeed → lip-out.
-      const deadCenter = !state.airborne && cd < 0.6 * HOLE.holeRadius;
-      const dropSpeed = deadCenter ? TUNE.captureAssist : TUNE.captureSpeed;
-      if (speed < dropSpeed) {
+    const cup = resolveCup(b, speed, state.airborne, Math.random);
+    if (cup) {
+      if (cup.holed) {
         // slow enough — drop in. Keep the entry point + heading so the ball can
         // visibly catch the lip, rattle to centre and sink; result modal waits for
         // the drop animation to finish (tickHoleDrop).
@@ -762,38 +814,15 @@ function rollStep(b) {
         beginHoleDrop(b.x, b.y, b.vx, b.vy);
         b.vx = b.vy = 0;
         return;
-      } else {
-        // lip-out: too fast to drop — the ball catches the rim and rolls past.
-        if (!state._lippedThisShot) {   // fire the sting once per shot
-          state._lippedThisShot = true;
-          playNearMiss();
-          cameraPunch(0.018);
-          showToast("So close!");
-        }
-        const spd = Math.hypot(b.vx, b.vy) || 0.01;
-        const dx = b.vx / spd, dy = b.vy / spd;
-        // place ball just past the far lip so it exits the capture zone this frame
-        b.x = HOLE.holePos.x + dx * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
-        b.y = HOLE.holePos.y + dy * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
-        if (spd <= TUNE.lipOutMaxSpeed) {
-          // catchable pace: the lip grabs it. Re-pace so it comes to rest 1–2 ft
-          // FROM THE CUP (green constant-decel model: dist = v²/(2·greenDecel)).
-          // The ball already sits ~1 ft out at the far lip, so subtract that and
-          // roll the remainder. Stays grounded so the distance is exact (no skying).
-          const ftU = 1 / (YARDS_PER_UNIT * 3);           // 1 foot in world units
-          const lipOut = HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05;  // current dist past center
-          const targetFromCup = (1 + Math.random()) * ftU; // 1–2 ft final resting dist
-          const roll = Math.max(0.15 * ftU, targetFromCup - lipOut);  // remaining roll
-          const v = Math.sqrt(2 * TUNE.greenDecel * roll);
-          b.vx = dx * v; b.vy = dy * v; b.vz = 0;
-          state.airborne = false;
-        } else {
-          // rammed too hard — skips the cup and keeps rolling, with a small hop.
-          const excess = spd - TUNE.captureSpeed;
-          b.vz = Math.min(0.07, excess * 1.5);
-          if (b.vz > 0.004) state.airborne = true;
-        }
       }
+      // lip-out: too fast to drop — fire the sting once per shot. The toast is
+      // redundant over the cinematic (the player is WATCHING the lip-out).
+      state._lippedThisShot = true;
+      playNearMiss();
+      cameraPunch(0.018);
+      if (!cine) showToast("So close!");
+      if (cup.grounded) state.airborne = false;
+      else if (cup.hop) state.airborne = true;
     }
   }
 
@@ -848,6 +877,196 @@ function rollStep(b) {
   }
 }
 
+// Cup interaction for a rolling ball whose PATH this frame passed within capture
+// range. Swept test (segPointDist) so a putt can't step over the small real-scale
+// hole between frames. Mutates b on a lip-out (repositions past the far lip and
+// re-paces / hops it). Pure of game state otherwise — shared by rollStep AND the
+// launch-time prediction (simShotRest); `rand` is injected so the sim stays
+// deterministic (the game passes Math.random, the sim a constant).
+// Returns null (no interaction), { holed: true }, or { lip: true, grounded|hop }.
+function resolveCup(b, speed, airborne, rand) {
+  const px = b.x - b.vx, py = b.y - b.vy;            // last frame's position
+  const capR = HOLE.holeRadius + BALL_RADIUS_UNITS;  // ball overlaps the cup edge
+  const cd = segPointDist(HOLE.holePos.x, HOLE.holePos.y, px, py, b.x, b.y);
+  if (cd > capR) return null;
+  // Pace forgiveness: a grounded putt crossing near-dead-center (within 60% of the
+  // cup radius) at a good — not rammed — pace is grabbed by the lip and drops, like
+  // real life. Off-center / faster passes keep the strict captureSpeed → lip-out.
+  const deadCenter = !airborne && cd < 0.6 * HOLE.holeRadius;
+  const dropSpeed = deadCenter ? TUNE.captureAssist : TUNE.captureSpeed;
+  if (speed < dropSpeed) return { holed: true };
+  const spd = Math.hypot(b.vx, b.vy) || 0.01;
+  const dx = b.vx / spd, dy = b.vy / spd;
+  // place ball just past the far lip so it exits the capture zone this frame
+  b.x = HOLE.holePos.x + dx * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
+  b.y = HOLE.holePos.y + dy * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
+  if (spd <= TUNE.lipOutMaxSpeed) {
+    // catchable pace: the lip grabs it. Re-pace so it comes to rest 1–2 ft
+    // FROM THE CUP (green constant-decel model: dist = v²/(2·greenDecel)).
+    // The ball already sits ~1 ft out at the far lip, so subtract that and
+    // roll the remainder. Stays grounded so the distance is exact (no skying).
+    const ftU = 1 / (YARDS_PER_UNIT * 3);           // 1 foot in world units
+    const lipOut = HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05;  // current dist past center
+    const targetFromCup = (1 + rand()) * ftU;       // 1–2 ft final resting dist
+    const roll = Math.max(0.15 * ftU, targetFromCup - lipOut);  // remaining roll
+    const v = Math.sqrt(2 * TUNE.greenDecel * roll);
+    b.vx = dx * v; b.vy = dy * v; b.vz = 0;
+    return { lip: true, grounded: true };
+  }
+  // rammed too hard — skips the cup and keeps rolling, with a small hop.
+  const excess = spd - TUNE.captureSpeed;
+  b.vz = Math.min(0.07, excess * 1.5);
+  return { lip: true, hop: b.vz > 0.004 };
+}
+
+// =====================================================================
+//  Launch-time shot prediction — powers the cinematic 3D landing
+// =====================================================================
+// Replays the per-frame physics (arcFlightStep -> ballisticFlightStep -> rollStep)
+// on a LOCAL ball with zero side effects (no sound/haptic/particles/state), to
+// learn where a just-launched shot finishes. Deterministic: wind is fixed per
+// hole, the green break field is analytic, and the one Math.random on the real
+// path (the lip-out re-pace) is injected as a constant here — and a lip-out
+// triggers the cinematic regardless of where it dies. The drift-prone math lives
+// in the shared pure helpers (landingRelease, resolveCup); the motion code below
+// MUST MATCH the real step functions.
+// Returns { holed:true } | { x, y, surf, lipped } | null (never settled / dead ball).
+function simShotRest(ball0, flight0) {
+  const b = { x: ball0.x, y: ball0.y, vx: ball0.vx, vy: ball0.vy,
+              z: ball0.z, vz: ball0.vz, spin: ball0.spin };
+  let fl = Object.assign({}, flight0);
+  let airborne = true, lipped = false;
+  for (let i = 0; i < TUNE.cineSimSteps; i++) {
+    if (airborne && fl) {
+      // --- arc phase (mirrors arcFlightStep) ---
+      fl.d += fl.vh;
+      b.x += b.vx; b.y += b.vy;
+      if (b.spin) {
+        const sp = Math.hypot(b.vx, b.vy) || 1;
+        const px = -b.vy / sp, py = b.vx / sp;
+        const a = b.spin * TUNE.spinFactor * sp;
+        b.vx += px * a; b.vy += py * a;
+      }
+      if (wind.speed > 0) {
+        const we = TUNE.windEffect * (fl.windMul || 1);
+        b.vx -= Math.sin(wind.dir) * wind.speed * we;
+        b.vy += Math.cos(wind.dir) * wind.speed * we;
+      }
+      const t = fl.d <= fl.xa ? (fl.d - fl.xa) / fl.xa : (fl.d - fl.xa) / (fl.C - fl.xa);
+      b.z = Math.max(fl.H * (1 - t * t), 0);
+      clampToWorld(b);
+      if (fl.d >= fl.C || (fl.d > fl.xa && b.z <= 0)) {
+        b.z = 0;
+        const surf = surfaceAt(b.x, b.y);
+        const sp = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp, dy = b.vy / sp;
+        if (surf === "water" || surf === "woods" || surf === "ob") return null; // dead — no trigger
+        const v = landingRelease(fl, b.spin, surf);
+        b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0;
+        fl = null; airborne = false;
+      }
+    } else if (airborne) {
+      // --- ballistic bounces (mirrors ballisticFlightStep) ---
+      b.x += b.vx; b.y += b.vy; b.z += b.vz;
+      const impactVz = b.vz;
+      b.vz -= TUNE.gravity;
+      const sp = Math.hypot(b.vx, b.vy);
+      if (sp > 1e-4 && b.spin) {
+        const px = -b.vy / sp, py = b.vx / sp;
+        const a = b.spin * TUNE.spinFactor * sp;
+        b.vx += px * a; b.vy += py * a;
+      }
+      b.vx *= TUNE.airDrag;
+      b.vy *= TUNE.airDrag;
+      if (wind.speed > 0) {
+        b.vx -= Math.sin(wind.dir) * wind.speed * TUNE.windEffect;
+        b.vy += Math.cos(wind.dir) * wind.speed * TUNE.windEffect;
+      }
+      clampToWorld(b);
+      if (b.z <= 0) {
+        b.z = 0;
+        const surf = surfaceAt(b.x, b.y);
+        const down = -impactVz;
+        if (surf === "water" || surf === "woods" || surf === "ob") return null;
+        if (down > TUNE.bounceStopVz) {
+          const bo = TUNE.bounce[surf] || TUNE.bounce.fairway;
+          b.vz = down * bo.e;
+          b.vx *= bo.h; b.vy *= bo.h;
+          b.spin *= 0.5;
+        } else {
+          b.vz = 0; b.spin = 0; airborne = false;
+        }
+      }
+    } else {
+      // --- roll phase (mirrors rollStep) ---
+      b.x += b.vx; b.y += b.vy;
+      clampToWorld(b);
+      const surf = surfaceAt(b.x, b.y);
+      if (surf === "green") {
+        const sp = Math.hypot(b.vx, b.vy);
+        const k = sp > 0 ? Math.max(0, sp - TUNE.greenDecel) / sp : 0;
+        b.vx *= k; b.vy *= k;
+        if (sp > TUNE.slopeStopSpeed) {
+          const g = greenSlopeAt(b.x, b.y);
+          if (g) {
+            const gm = Math.hypot(g.x, g.y);
+            const force = gm > 0 ? Math.min(TUNE.slopeAccel * gm, TUNE.greenDecel * TUNE.slopeCapFrac) / gm : 0;
+            b.vx -= force * g.x; b.vy -= force * g.y;
+          }
+        }
+      } else {
+        const sp = Math.hypot(b.vx, b.vy);
+        const f = TUNE.friction[surf];
+        b.vx *= f; b.vy *= f;
+        if (HOLE._dem && sp > TUNE.slopeStopSpeed) {
+          const gv = HOLE._dem.gradAt(b.x, b.y);
+          b.vx -= TUNE.fairwaySlopeAccel * gv.x;
+          b.vy -= TUNE.fairwaySlopeAccel * gv.y;
+        }
+      }
+      const speed = Math.hypot(b.vx, b.vy);
+      if (!HOLE.isRange && !lipped) {
+        const cup = resolveCup(b, speed, false, () => 0.5);
+        if (cup) {
+          if (cup.holed) return { holed: true };
+          lipped = true;                       // like state._lippedThisShot — never re-test
+          if (cup.hop) airborne = true;        // rammed lip-over keeps flying (grounded lip already re-paced)
+        }
+      }
+      if (speed < TUNE.stopThreshold)
+        return { x: b.x, y: b.y, surf: surfaceAt(b.x, b.y), lipped };
+    }
+  }
+  return null;
+}
+
+// Arm the cinematic if the shot just launched deserves it: predicted holed, a
+// lip-out, or resting on a green inside the distance-scaled bar. Must be the
+// LAST thing the launch does — noLandCheck/windMul are set after setupFlight.
+function maybeArmCine() {
+  cinePending = null;
+  if (!cineEnabled || mode !== "course" || !HOLE || HOLE.isRange) return;
+  if (!state.airborne || !state.flight) return;   // putts/bump-and-runs never cut
+  const g = (HOLE._greens || []).find((gr) => pointInPoly(HOLE.holePos.x, HOLE.holePos.y, gr.poly));
+  if (!g) return;                                  // vector-fallback hole without a pin green
+  const r = slottedMode ? { holed: true } : simShotRest(state.ball, state.flight);
+  if (!r) return;
+  let great = !!(r.holed || r.lipped);
+  if (!great && r.surf === "green") {
+    const shotYds = dist(state.ball.x, state.ball.y, r.x, r.y) * YARDS_PER_UNIT;
+    const barFt = Math.max(TUNE.cineMinFt, Math.min(TUNE.cineMaxFt, shotYds * TUNE.cineFtPerYd));
+    const restFt = dist(r.x, r.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT * 3;
+    great = restFt <= barFt;
+  }
+  if (!great) return;
+  const fl = state.flight;
+  // Mesh baked NOW (ball at rest off-green → no baked ball marker, no mid-flight hitch);
+  // the cut itself waits for the descent (tickCine).
+  cinePending = {
+    g, mesh: buildGreenViewMesh(g),
+    openAtD: fl.xa + TUNE.cineCutFrac * (fl.C - fl.xa),
+  };
+}
+
 // =====================================================================
 //  Input — swipe swing (touch) with mouse fallback for desktop
 // =====================================================================
@@ -863,6 +1082,7 @@ const canvas = document.getElementById("game");
 function canSwing() {
   return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition
     && !greenView  // 3D green inspect open: swings/aiming suspended
+    && !cine       // cinematic landing playing: input suspended until it closes
     && myTurn();   // live match: only the "away" / honors player may swing
 }
 
@@ -1139,6 +1359,7 @@ function ghostMouse(e) {
 
 function swingStart(e) {
   if (ghostMouse(e)) return;
+  if (cine) { closeCine(); return; }              // cinematic landing: tap = skip
   if (greenView) { gvPointerStart(e); return; }   // inspect view owns the pointer
   // Pin this gesture to whichever touch just landed (undefined for mouse —
   // pointerPos falls back to touches[0]/the event itself in that case).
@@ -1181,6 +1402,7 @@ function swingStart(e) {
 }
 function swingMove(e) {
   if (ghostMouse(e)) return;
+  if (cine) { e.preventDefault(); return; }
   if (greenView) { e.preventDefault(); gvPointerMove(e); return; }
   if (measureMode) { if (measureDragging) { e.preventDefault(); const p = pointerPos(e, activeTouchId); measurePoint = screenToWorld(p.x, p.y); } return; }
   if (camTouch && e.touches && e.touches.length >= 2) {
@@ -1246,6 +1468,7 @@ function slottedLaunch() {
   updateScorecard();
   if (matchLive()) pushMatchShot({ cur_at_rest: false });  // opponent sees "hitting…"
   hideHint();
+  maybeArmCine();  // predict the finish; a great one cues the 3D landing cut
 }
 
 // Greenside chip gate: chip mode on, off the green, within range of the pin. Shared
@@ -1267,7 +1490,7 @@ function chipSpinParams() {
   return { landFrac, spinScale };
 }
 
-function launchShot(ang, frac, spin, onGreen) {
+function launchShot(ang, frac, spin, onGreen, flight) {
   if (!canSwing() || frac <= 0.05) return;
   measurePoint = null; // shot fired — clear the rangefinder marker
   if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
@@ -1348,12 +1571,14 @@ function launchShot(ang, frac, spin, onGreen) {
       ef = Math.max(f, TUNE.clubMinFrac);
     }
     // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
-    const lieMul = lieEffectEnabled ? (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1) : 1;
-    let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul;     // carry (world units)
+    const lieSurf = surfaceAt(b.x, b.y);
+    const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
+    const hi = flight === "high" && !chipActive;  // flighted high spinner (long-swipe gesture)
+    let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul * (hi ? TUNE.flightHiCarry : 1); // carry (world units)
     // Elevation: make a full shot finish at the plays-like distance (uphill shorter,
     // downhill longer). Chips already fold plays-like into their reach, so skip them.
     if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
-    const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul;     // apex height (scales with the swing)
+    const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul * (hi ? TUNE.flightHiApex : 1); // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
     // Slight amplification so deliberate hooks/slices still register.
     b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
@@ -1361,10 +1586,19 @@ function launchShot(ang, frac, spin, onGreen) {
     // (scale up as f drops below 0.6, short shots check hard). Greenside CHIPS do the
     // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
     const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
-    const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[surfaceAt(b.x, b.y)] ?? 1) : 1;  // rough flyer / sand kill backspin
+    const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[lieSurf] ?? 1) : 1;  // rough flyer / sand kill backspin
     const spinScale = chipActive ? chipSpinParams().spinScale : chipBoost;
-    const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul);
-    setupFlight(b, ang, C, H, c.land * Math.PI / 180, effectiveSpinN);
+    const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (hi ? TUNE.flightHiSpin : 1));
+    // Flyer descent: rough/sand shots also come in shallower (less lift), so the
+    // steepness half of the landing check fades too and the ball releases. Chips skip it.
+    const lieLandMul = (lieEffectEnabled && !chipActive) ? (TUNE.lieLand[lieSurf] ?? 1) : 1;
+    const landDeg = c.land * lieLandMul + (hi ? TUNE.flightHiLand : 0);
+    setupFlight(b, ang, C, H, landDeg * Math.PI / 180, effectiveSpinN);
+    state.flight.noLandCheck = chipActive; // chips: release tuned by the spin slider alone
+    if (hi) {
+      state.flight.windMul = TUNE.flightHiWind; // a high ball rides the wind
+      showToast("High ball · extra spin", 1300);
+    }
     state.airborne = true;
   }
   state.moving = true;
@@ -1380,6 +1614,7 @@ function launchShot(ang, frac, spin, onGreen) {
   updateScorecard();
   if (matchLive()) pushMatchShot({ cur_at_rest: false });  // opponent sees "hitting…"
   hideHint();
+  maybeArmCine();  // predict the finish; a great one cues the 3D landing cut
 }
 
 // Launch from a single screen-space swipe vector (dxs, dys) over dt seconds —
@@ -1398,6 +1633,7 @@ function launch(dxs, dys, dt, spin = 0) {
 
 function swingEnd(e) {
   if (ghostMouse(e)) return;
+  if (cine) return;              // skip already handled on the press
   if (greenView) { gvPointerEnd(e); return; }
   if (measureMode) { measureDragging = false; return; }
   if (markerDrag) {
@@ -1436,7 +1672,20 @@ function swingEnd(e) {
   const frac = Math.min(speed * swingSens / TUNE.touchPowerSwipe, 1);
   const ang = Math.atan2(dys, dxs) - view.angle;
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  launchShot(ang, frac, curveFromPath(path), onGreen);
+  launchShot(ang, frac, curveFromPath(path), onGreen, swipeFlight(path));
+}
+
+// Flight from gesture SIZE: a deliberate swipe spanning most of the screen throws the
+// flighted high spinner; a short flick stays stock. Uses path LENGTH (power is release
+// SPEED, so both gestures reach full power), normalized by the screen diagonal so the
+// threshold feels the same on any device. Touch + mouse drag only — the trackpad wheel
+// gesture's length is proportional to its speed, so it can't express this and stays stock.
+function swipeFlight(path) {
+  let len = 0;
+  for (let i = 1; i < path.length; i++)
+    len += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+  const diag = Math.hypot(window.innerWidth, window.innerHeight);
+  return len / diag >= TUNE.flightHiLen ? "high" : null;
 }
 
 canvas.addEventListener("touchstart", swingStart, { passive: false });
@@ -1465,6 +1714,7 @@ let wheelCooldownUntil = 0;    // ignore wheel events until this time (momentum 
 
 function onWheel(e) {
   e.preventDefault();
+  if (cine) return;  // cinematic: a trackpad swipe must not queue a phantom swing
   if (greenView) {   // desktop: scroll tilts the inspect view
     greenView.tilt = gvClamp(greenView.tilt + e.deltaY * 0.002, TUNE.gvTiltMin, TUNE.gvTiltMax);
     return;
@@ -2385,18 +2635,19 @@ function buildGreenViewMesh(g) {
 //   sx = X0 + k·u,  sy = Y0 + k·v·cosT − k·z·sinT
 // Painter's order: draw cells ascending v (far → near).
 let _gvSX = null, _gvSY = null;   // per-frame projected corner scratch
-function drawGreenView() {
-  if (!greenView) return;
-  if (mode !== "course") { closeGreenView(); return; }
-  const gv = greenView, m = gv.mesh;
+// Shared 3D green painter — scrim, flat shadow slab, side wall, painter-sorted
+// surface quads, contours, optional flow dots, cup + flagstick. Used by the
+// inspect view (drawGreenView) and the landing cinematic (drawCine). Returns the
+// projector + view numbers so callers can draw their own markers in the same space.
+function paintGreen3D(g, m, yaw, tilt, kMul, opts) {
   const cssW = window.innerWidth, cssH = window.innerHeight;
   const rsv = hudReserve();
   ctx.fillStyle = "rgba(8,18,10,0.88)";                 // scrim over the live course
   ctx.fillRect(0, 0, cssW, cssH);
-  const cosY = Math.cos(gv.yaw), sinY = Math.sin(gv.yaw);
-  const cosT = Math.cos(gv.tilt), sinT = Math.sin(gv.tilt);
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const cosT = Math.cos(tilt), sinT = Math.sin(tilt);
   const panel = Math.min(cssW - 32, cssH - rsv.top - rsv.bot - 90);
-  const k = panel / (2 * m.R * 1.12);
+  const k = panel / (2 * m.R * 1.12) * (kMul || 1);
   const X0 = cssW / 2, Y0 = (rsv.top + (cssH - rsv.bot)) / 2 + panel * 0.04;
   const proj = (rx, ry, z) => ({
     x: X0 + k * (rx * cosY - ry * sinY),
@@ -2474,31 +2725,45 @@ function drawGreenView() {
   }
   // flow dots drift downhill ON the tilted surface — the strongest break cue.
   // (The top-down pass skips advecting this green while the inspect is open.)
-  updateFlowDots(gv.g);
-  if (gv.g._flow) {
-    ctx.lineCap = "round";
-    ctx.lineWidth = 2.4;
-    for (const d of gv.g._flow.dots) {
-      const a = proj(d.x - m.cx, d.y - m.cy, m.zOf(d.x, d.y));
-      const bx = d.x - d.vx * TUNE.flowTrail, by = d.y - d.vy * TUNE.flowTrail;
-      const b = proj(bx - m.cx, by - m.cy, m.zOf(bx, by));
-      ctx.strokeStyle = `rgba(10,105,48,${flowDotAlpha(d).toFixed(3)})`;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  if (!opts || !opts.noFlow) {
+    updateFlowDots(g);
+    if (g._flow) {
+      ctx.lineCap = "round";
+      ctx.lineWidth = 2.4;
+      for (const d of g._flow.dots) {
+        const a = proj(d.x - m.cx, d.y - m.cy, m.zOf(d.x, d.y));
+        const bx = d.x - d.vx * TUNE.flowTrail, by = d.y - d.vy * TUNE.flowTrail;
+        const b = proj(bx - m.cx, by - m.cy, m.zOf(bx, by));
+        ctx.strokeStyle = `rgba(10,105,48,${flowDotAlpha(d).toFixed(3)})`;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
     }
   }
-  // cup + flagstick (drawn after the mesh — must never be hidden)
-  if (m.pin) {
-    const q = proj(m.pin.rx, m.pin.ry, m.pin.z);
-    ctx.beginPath(); ctx.ellipse(q.x, q.y, 5, Math.max(1.5, 5 * cosT), 0, 0, Math.PI * 2);
-    ctx.fillStyle = "#101010"; ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1.2; ctx.stroke();
-    ctx.strokeStyle = "#f4f1e8"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x, q.y - 44); ctx.stroke();
-    ctx.fillStyle = "#c8442c";
-    ctx.beginPath();
-    ctx.moveTo(q.x, q.y - 44); ctx.lineTo(q.x + 16, q.y - 38.5); ctx.lineTo(q.x, q.y - 33);
-    ctx.closePath(); ctx.fill();
-  }
+  if (!opts || !opts.noPin) drawCupFlag3D(proj, m, cosT);
+  return { proj, cosY, sinY, cosT, sinT, k, X0, Y0, panel, cssW, cssH, rsv };
+}
+
+// cup + flagstick (drawn after the mesh — must never be hidden)
+function drawCupFlag3D(proj, m, cosT) {
+  if (!m.pin) return;
+  const q = proj(m.pin.rx, m.pin.ry, m.pin.z);
+  ctx.beginPath(); ctx.ellipse(q.x, q.y, 5, Math.max(1.5, 5 * cosT), 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#101010"; ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = "#f4f1e8"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x, q.y - 44); ctx.stroke();
+  ctx.fillStyle = "#c8442c";
+  ctx.beginPath();
+  ctx.moveTo(q.x, q.y - 44); ctx.lineTo(q.x + 16, q.y - 38.5); ctx.lineTo(q.x, q.y - 33);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawGreenView() {
+  if (!greenView) return;
+  if (mode !== "course") { closeGreenView(); return; }
+  const gv = greenView, m = gv.mesh;
+  const s = paintGreen3D(gv.g, m, gv.yaw, gv.tilt, 1, null);
+  const { proj, cssW, cssH, rsv, panel, Y0 } = s;
   // ball marker (only if the ball is on this green)
   if (m.ball) {
     const q = proj(m.ball.rx, m.ball.ry, m.ball.z);
@@ -2522,6 +2787,96 @@ function drawGreenView() {
   ctx.moveTo(cxX - 5, cxY - 5); ctx.lineTo(cxX + 5, cxY + 5);
   ctx.moveTo(cxX + 5, cxY - 5); ctx.lineTo(cxX - 5, cxY + 5);
   ctx.stroke();
+}
+
+// --- Cinematic 3D landing --------------------------------------------------
+// Auto-cut to the pin's green in 3D while a great approach descends onto it
+// (armed by maybeArmCine at launch). Same mesh + projection as the inspect
+// view, but the camera is scripted (slow push-in + gentle orbit) and the BALL
+// IS LIVE — the real physics keeps running underneath; this only renders it.
+function openCine() {
+  if (greenView) closeGreenView();
+  cine = {
+    g: cinePending.g, mesh: cinePending.mesh,
+    t0: performance.now(),
+    yaw0: view.angle,        // same heading the player was just watching — a clean cut
+    tilt: TUNE.gvTilt,
+    restT: 0,                // set when the ball settles; closes after cineHoldMs
+  };
+  cinePending = null;
+  document.body.classList.add("gv-open");
+}
+function closeCine() {
+  cine = null;
+  cinePending = null;
+  document.body.classList.remove("gv-open");
+}
+// Lifecycle (called from loop): cut in once the armed shot is on its way down;
+// close a beat after the ball settles. Hole-outs close via showResult instead.
+function tickCine() {
+  if (cinePending) {
+    if (!state.moving) { cinePending = null; return; } // shot over before the cut (safety)
+    if (!state.airborne || !state.flight || state.flight.d >= cinePending.openAtD) openCine();
+    return;
+  }
+  if (!cine) return;
+  if (mode !== "course") { closeCine(); return; }
+  if (!state.moving && !state.inHole) {
+    if (!cine.restT) cine.restT = performance.now();
+    else if (performance.now() - cine.restT >= TUNE.cineHoldMs) closeCine();
+  }
+}
+function drawCine() {
+  if (!cine) return;
+  if (mode !== "course") { closeCine(); return; }
+  const m = cine.mesh, b = state.ball;
+  const t = (performance.now() - cine.t0) / 1000;
+  // slow push-in (eased) + gentle orbit — scripted, no user input
+  const zp = Math.min(1, (performance.now() - cine.t0) / TUNE.cineZoomMs);
+  const kMul = 1 + (TUNE.cineZoomIn - 1) * (1 - Math.pow(1 - zp, 3));
+  const yaw = cine.yaw0 + TUNE.cineYawDrift * t;
+  const s = paintGreen3D(cine.g, m, yaw, cine.tilt, kMul, { noFlow: true, noPin: true });
+  const { proj, cosT } = s;
+  // live ball: real world position + flight height, in the mesh's space. Surface
+  // z is the exaggerated relief (zOf); the airborne height b.z is true world
+  // units — huge next to the relief, which is the point: the ball drops in from
+  // high above the surface.
+  const rx = b.x - m.cx, ry = b.y - m.cy;
+  const groundZ = m.zOf(b.x, b.y);
+  let drawBallFn = null;
+  if (!state.inHole) {
+    const q0 = proj(rx, ry, groundZ);                          // ground shadow
+    const q = proj(rx, ry, groundZ + b.z * TUNE.cineBallZ);    // ball
+    const r = 4.5 + Math.min(3, b.z * 0.25);                   // a touch bigger up high
+    drawBallFn = () => {
+      ctx.beginPath(); ctx.ellipse(q0.x, q0.y + 2, 4.5, Math.max(1.5, 4.5 * cosT), 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fill();
+      ctx.beginPath(); ctx.arc(q.x, q.y - 2, r, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff"; ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1; ctx.stroke();
+    };
+  } else if (holeDrop) {
+    // holed while the cinematic runs: sink the ball into the cup on the mesh
+    const p = Math.min(1, (performance.now() - holeDrop.t0) / HOLE_DROP_MS);
+    const q = proj(m.pin ? m.pin.rx : rx, m.pin ? m.pin.ry : ry, m.pin ? m.pin.z : groundZ);
+    drawBallFn = () => {
+      ctx.globalAlpha = 1 - p;
+      ctx.beginPath(); ctx.arc(q.x, q.y - 2 * (1 - p), 4.5 * (1 - 0.6 * p), 0, Math.PI * 2);
+      ctx.fillStyle = "#fff"; ctx.fill();
+      ctx.globalAlpha = 1;
+    };
+  }
+  // ball vs flagstick: painter's order by depth so the ball can pass behind the pin
+  const ballDepth = rx * s.sinY + ry * s.cosY;
+  const pinDepth = m.pin ? m.pin.rx * s.sinY + m.pin.ry * s.cosY : -Infinity;
+  if (drawBallFn && ballDepth <= pinDepth) {
+    drawBallFn();
+    drawCupFlag3D(proj, m, cosT);
+  } else {
+    drawCupFlag3D(proj, m, cosT);
+    if (drawBallFn) drawBallFn();
+  }
+  drawLabel(s.cssW / 2, s.cssH - s.rsv.bot - 16, "tap to skip", "rgba(244,241,232,0.6)");
 }
 
 // Inspect-view pointer handling: 1-finger drag = yaw + tilt, pinch = tilt,
@@ -3102,6 +3457,7 @@ function draw() {
   // 3D green inspect overlay (scrim + tilted mesh) — everything above keeps
   // rendering beneath it; the hole-transition fade below still covers it.
   drawGreenView();
+  drawCine();   // cinematic 3D landing (same overlay slot; never open together)
 
   // hole-change transition: fade out to course-green, swap the hole at the
   // midpoint (starting zoomed out so the camera eases in), then fade back.
@@ -3240,6 +3596,7 @@ function earnMilestone(id) {
 }
 
 function showResult() {
+  if (cine) closeCine();  // hole-out ends the cinematic; the result modal takes over
   const d = state.strokes - HOLE.par;
   const holeNum = HOLE.num || round.holesPlayed + 1;
   // Matches are a single locked pass. If this hole was already recorded, a
@@ -3422,6 +3779,7 @@ function buildRoundScorecard() {
   let html = "";
   if (front.length) html += buildScorecardSection(front, back.length === 0);
   if (back.length)  html += buildScorecardSection(back, true);
+  if (!html) html = '<div class="re-sc-empty">No holes completed yet</div>';
   document.getElementById("re-scorecard").innerHTML = html;
 }
 
@@ -3495,7 +3853,8 @@ function showRoundSummary(midRound = false) {
   const played = round.holeStats.length;
   document.getElementById("re-header-title").textContent = midRound ? "Scorecard" : "Round Complete";
   document.getElementById("re-subtitle").textContent = midRound
-    ? `${course ? course.name : "Golf"} · Hole ${played} of ${n} · ${formatToPar(round.score)}`
+    // `played` counts COMPLETED holes — the player is standing on the next one.
+    ? `${course ? course.name : "Golf"} · Hole ${Math.min(played + 1, n)} of ${n} · ${formatToPar(round.score)}`
     : `${course ? course.name : "Golf"} · ${totStrk} (${formatToPar(round.score)})`;
   document.getElementById("re-replay").textContent = midRound ? "Resume" : "Play Again";
   // A match is a single locked round — replaying it would corrupt the shared
@@ -3596,8 +3955,10 @@ function pickPin(rec) {
 
 function setHole(rec) {
   if (greenView) closeGreenView();
+  if (cine || cinePending) closeCine();
   // live match: drop any in-flight shot marker / opponent tween from the last hole
   _shotFrom = null; oppShot = null; _spectating = false;
+  shot.carry = shot.total = null; shot.mph = 0; // fresh hole — no stale HUD stats
   const glob = !!(course && course.global && !rec.world);
   const src = glob ? course : rec; // where world/surfaces/aerial come from
   const pin = pickPin(rec);
@@ -3893,6 +4254,10 @@ function showCourseSelect() {
       const holes = (ov && ov.dataset.holes) || "18";
       ctx.textContent = `Pick the course for your match · ${fmt} · ${holes} holes`;
       ctx.classList.remove("hidden");
+    } else if (botCoursePickMode) {
+      const ov = document.getElementById("bot-select");
+      ctx.textContent = `Pick the course for your bot match · ${(ov && ov.dataset.holes) || "9"} holes`;
+      ctx.classList.remove("hidden");
     } else {
       ctx.classList.add("hidden");
     }
@@ -3907,6 +4272,8 @@ document.getElementById("cs-back").addEventListener("click", () => {
   hideCourseSelect();
   // Host picking a course for a match → back returns to the settings step.
   if (matchSetupMode) { matchSetupMode = false; openMatchSetup(true); return; }
+  // Picking for a bot match → back returns to the roster, choice unchanged.
+  if (botCoursePickMode) { botCoursePickMode = false; openBotSelect(); return; }
   showMenu();
 });
 
@@ -4152,13 +4519,21 @@ elArrowsBtn.addEventListener("click", () => {
   lsSet("golf.breakArrows", breakArrows);
   elArrowsBtn.classList.toggle("active", breakArrows);
 });
+// Cinematic landings: per-device cosmetic (like break arrows), not a tournament setting.
+const elCineBtn = document.getElementById("hm-cine");
+elCineBtn.classList.toggle("active", cineEnabled);
+elCineBtn.addEventListener("click", () => {
+  cineEnabled = !cineEnabled;
+  lsSet("golf.cineLanding", cineEnabled);
+  elCineBtn.classList.toggle("active", cineEnabled);
+});
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
 // Show the read-green button exactly when green reading matters: in course
 // play, ball at rest, and a green in play (ball on one or pin's green).
 let _gvBtnShown = false;
 function updateGreenViewBtn() {
-  const show = mode === "course" && HOLE && !HOLE.isRange && !greenView
+  const show = mode === "course" && HOLE && !HOLE.isRange && !greenView && !cine
              && canSwing() && greensInPlay().length > 0;
   if (show !== _gvBtnShown) { _gvBtnShown = show; elGreenViewBtn.classList.toggle("hidden", !show); }
 }
@@ -4229,7 +4604,7 @@ elMeasureBtn.addEventListener("click", () => setMeasureMode(!measureMode));
 elSlopeBtn.addEventListener("click", () => setSlopeMode(!showSlope));
 elOOBBtn.addEventListener("click", () => setOOBMode(!showOOB));
 document.getElementById("hm-card").addEventListener("click", () => {
-  if (round.holeStats.length > 0) showRoundSummary(true);
+  showRoundSummary(true);   // works from hole 1 too — shows an empty card
   closeHud();
 });
 document.getElementById("hm-holes").addEventListener("click", () => { closeHud(); openCourseMenu(); });
@@ -4687,6 +5062,7 @@ function aimNudge(dir) {
 }
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && greenView) { closeGreenView(); return; }
+  if (e.key === "Escape" && cine) { closeCine(); return; }
   if (e.key === "ArrowUp" || e.key === "ArrowDown") {
     e.preventDefault();
     if (e.repeat) return;              // one club step per tap
@@ -4707,6 +5083,11 @@ window.addEventListener("keyup", (e) => {
 function showMenu() {
   mode = "menu";
   if (greenView) closeGreenView();
+  if (cine || cinePending) closeCine();
+  // Home abandons a local bot/CPU match — there is no resume path, and leaving
+  // it live bleeds match HUD (turn banner, "Match:" score) into the next solo
+  // round. Online matches are left untouched here (their lifecycle is remote).
+  if (cpuMatch && activeMatch) leaveMatch();
   elMenu.classList.remove("hidden");
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
@@ -4729,6 +5110,15 @@ function startCourse() {
   // Match host is mid-setup: the course pick funnels here → divert to the
   // configured match instead of starting a solo round.
   if (matchSetupMode) { startConfiguredMatch(); return; }
+  // Picking a course for a bot match: remember it and return to the roster.
+  if (botCoursePickMode) {
+    botCoursePickMode = false;
+    botCourseId = selectedCourseId;
+    hideCourseSelect();
+    elPreview.classList.add("hidden");
+    openBotSelect();
+    return;
+  }
   mode = "course";
   dailyMode = false;
   // Match rounds use the match's frozen conditions; tournament rounds use the
@@ -4899,7 +5289,7 @@ async function startRange() {
   rangeFeedback("Aim up the range");
 }
 
-document.getElementById("play-course").addEventListener("click", showCourseSelect);
+document.getElementById("play-course").addEventListener("click", openPlayMenu);
 const _playDaily = document.getElementById("play-daily");
 if (_playDaily) _playDaily.addEventListener("click", startDaily);
 document.getElementById("play-range").addEventListener("click", startRange);
@@ -7122,6 +7512,28 @@ function ensureNameThen(cb) {
   openNameEntry(() => cb());
 }
 
+// --- Play-mode picker (single "Play" entry → the four round types) ---
+function openPlayMenu() {
+  const ov = document.getElementById("play-menu");
+  if (ov) ov.classList.remove("hidden");
+}
+function closePlayMenu() {
+  const ov = document.getElementById("play-menu");
+  if (ov) ov.classList.add("hidden");
+}
+(function wirePlayMenu() {
+  const play = document.getElementById("pm-random");
+  if (play) play.addEventListener("click", () => { closePlayMenu(); ensureNameThen(openQuickMatch); });
+  const friends = document.getElementById("pm-friends");
+  if (friends) friends.addEventListener("click", () => { closePlayMenu(); ensureNameThen(openMatchMenu); });
+  const bots = document.getElementById("pm-bots");
+  if (bots) bots.addEventListener("click", () => { closePlayMenu(); ensureNameThen(openBotSelect); });
+  const solo = document.getElementById("pm-solo");
+  if (solo) solo.addEventListener("click", () => { closePlayMenu(); showCourseSelect(); });
+  const back = document.getElementById("pm-back");
+  if (back) back.addEventListener("click", () => { closePlayMenu(); showMenu(); });
+})();
+
 // --- Match menu (start / join) ---
 function openMatchMenu() {
   const ov = document.getElementById("match-menu");
@@ -7646,7 +8058,15 @@ function updateLiveTurnUI() {
     const t = liveTurnHolder(me, lastOpp);
     if (!oppResponsive()) { txt = oppName() + " idle"; cls = "lt-mine"; }
     else if (_awaitLive) { txt = "Waiting for " + oppName() + "…"; cls = "lt-wait"; }
-    else if (t == null) { txt = "Syncing…"; cls = "lt-wait"; }
+    else if (t == null) {
+      // No turn holder: the hole is settled on both sides (result modal owns the
+      // screen) or rows are briefly out of step. A local bot match never syncs,
+      // so "Syncing…" would read as a network stall — hide instead.
+      const meHoled = me && (me.cur_to_pin | 0) < 0;
+      const oppHoled = lastOpp && (lastOpp.cur_to_pin | 0) < 0;
+      if (cpuMatch || (meHoled && oppHoled)) { txt = ""; cls = "hidden"; }
+      else { txt = "Syncing…"; cls = "lt-wait"; }
+    }
     else if (me && sameName(t, me.player_name)) { txt = "Your turn"; cls = "lt-mine"; }
     else { txt = "Watching " + oppName() + "…"; cls = "lt-wait"; }
   }
@@ -7765,7 +8185,7 @@ async function renderMatchBoard() {
     body.innerHTML =
       `<div class="mb-status">${esc(mp.result || mp.status)} · thru ${mp.thru}</div>` +
       `<div class="mb-opp">` +
-        `<div class="mb-opp-name">${esc(opp.player_name)}</div>` +
+        `<div class="mb-opp-name">${esc(opp.player_name)}${cpuMatch ? ' <span class="cpu-chip">CPU</span>' : ""}</div>` +
         `<div class="mb-opp-line">${esc(oppLine)}</div>` +
       `</div>` +
       (honors ? `<div class="mb-honors">${esc(honors)}</div>` : "");
@@ -7782,7 +8202,7 @@ async function renderMatchBoard() {
     const thru = r.finished ? '<span class="mb-fin">F</span>' : `${r.holes_played}/${matchHoleCount}`;
     return `<div class="mb-row${me}${lead}">` +
              `<span class="mb-pos">${posLabel(r)}</span>` +
-             `<span class="mb-name">${esc(r.player_name)}</span>` +
+             `<span class="mb-name">${esc(r.player_name)}${cpuMatch && !isMeEntry(r) ? ' <span class="cpu-chip">CPU</span>' : ""}</span>` +
              `<span class="mb-score">${formatToPar(r.score)}</span>` +
              `<span class="mb-thru">${thru}</span>` +
            `</div>`;
@@ -7870,7 +8290,7 @@ async function renderMatchResults() {
       const thru = r.finished ? '<span class="mr-fin">F</span>' : `${r.holes_played}/${matchHoleCount}`;
       return `<div class="mr-row${meCls}">` +
                `<span class="mr-pos"></span>` +
-               `<span class="mr-name">${esc(r.player_name)}</span>` +
+               `<span class="mr-name">${esc(r.player_name)}${cpuMatch && !isMeEntry(r) ? ' <span class="cpu-chip">CPU</span>' : ""}</span>` +
                `<span class="mr-score">${formatToPar(r.score)}</span>` +
                `<span class="mr-thru">${thru}</span>` +
              `</div>`;
@@ -7894,7 +8314,7 @@ async function renderMatchResults() {
     const thru = r.finished ? '<span class="mr-fin">F</span>' : `${r.holes_played}/${matchHoleCount}`;
     return `<div class="mr-row${meCls}${win ? " mr-win" : ""}">` +
              `<span class="mr-pos">${posLabel(r)}</span>` +
-             `<span class="mr-name">${esc(r.player_name)}${win ? ' <span class="ic ic-trophy mr-trophy"></span>' : ""}</span>` +
+             `<span class="mr-name">${esc(r.player_name)}${cpuMatch && !isMeEntry(r) ? ' <span class="cpu-chip">CPU</span>' : ""}${win ? ' <span class="ic ic-trophy mr-trophy"></span>' : ""}</span>` +
              `<span class="mr-score">${formatToPar(r.score)}</span>` +
              `<span class="mr-thru">${thru}</span>` +
            `</div>`;
@@ -8278,7 +8698,8 @@ function startCpuMatch(format, holes, bot) {
   const isMatch = format === "match";
   cpuMatch = true; matchDecided = false; _matchEntered = false;
   matchHoleCount = holes;
-  selectedCourseId = qmPickCourse();
+  // Ladder matches honor the player's course pick; random otherwise.
+  selectedCourseId = (bot && botCourseId) ? botCourseId : qmPickCourse();
   const myH = (typeof _qmHcp === "number") ? _qmHcp : QM_DEFAULT_HCP;
   const oppH = bot ? bot.hcp : genOppHandicap(myH);
   const name = bot ? bot.name : genOppName();
@@ -8320,18 +8741,27 @@ function startCpuMatch(format, holes, bot) {
   };
   // Ladder: the player picked the opponent — skip the fake "Match found" beat.
   if (bot) enter();
-  else qmMatchFound(name, null, enter);   // no hcp shown — human pairings don't show one
+  else qmMatchFound(name, null, enter, true);   // QM fallback: an honest CPU beat
 }
 
 // "Match found" beat in the searching overlay before dropping into the round.
-function qmMatchFound(name, hcp, then) {
+// A CPU fallback looks different from a live pairing — no pretending.
+function qmMatchFound(name, hcp, then, isCpu) {
   const ov = document.getElementById("quick-match");
   const spin = ov && ov.querySelector(".qm-spinner");
   const hint = ov && ov.querySelector(".qm-hint");
   const s = document.getElementById("qm-search-status");
   if (spin) spin.style.display = "none";
   if (hint) hint.style.display = "none";
-  if (s) s.textContent = "Match found — " + name + (typeof hcp === "number" ? " · hcp " + hcp : "");
+  if (s) {
+    if (isCpu) {
+      s.innerHTML = 'No live player right now — <b>' + esc(name) +
+                    '</b> steps in <span class="cpu-chip">CPU</span>';
+    } else {
+      s.innerHTML = '<span class="qm-live-dot" aria-hidden="true"></span>Match found — <b>' +
+                    esc(name) + '</b>' + (typeof hcp === "number" ? " · hcp " + hcp : "");
+    }
+  }
   setTimeout(then, 900 + Math.random() * 1300);
 }
 
@@ -8661,18 +9091,35 @@ function quickFind() {
   const find = document.getElementById("qm-find");
   if (find) find.addEventListener("click", quickFind);
   const cancel = document.getElementById("qm-cancel");
-  if (cancel) cancel.addEventListener("click", cancelQuickMatch);
-  const close = document.getElementById("qm-close");
-  if (close) close.addEventListener("click", cancelQuickMatch);
+  if (cancel) cancel.addEventListener("click", () => { cancelQuickMatch(); openPlayMenu(); });
+  const close = document.getElementById("qm-close");   // setup "Back" → the Play picker
+  if (close) close.addEventListener("click", () => { cancelQuickMatch(); openPlayMenu(); });
 })();
 
 // --- Bot ladder picker ---
+// Bot-match course choice: null = random (default); an id = play that course.
+// Sticky for the session so Rematch / Next bot keep the player's pick.
+let botCourseId = null;
+let botCoursePickMode = false;   // course picker is open to choose for a bot match
+
+function syncBotCourseRow() {
+  const rnd = document.getElementById("bot-course-random");
+  const pick = document.getElementById("bot-course-pick");
+  if (!rnd || !pick) return;
+  rnd.classList.toggle("active", !botCourseId);
+  pick.classList.toggle("active", !!botCourseId);
+  const c = botCourseId && (COURSES.find(x => x.id === botCourseId) ||
+                            FALLBACK_COURSES.find(x => x.id === botCourseId));
+  pick.textContent = c ? c.name : "Choose course…";
+}
+
 function openBotSelect() {
   closeQuickMatch();
   const ov = document.getElementById("bot-select");
   if (!ov) return;
   ov.dataset.holes = ov.dataset.holes || "9";
   syncBotToggles();
+  syncBotCourseRow();
   renderBotList();
   ov.classList.remove("hidden");
 }
@@ -8708,15 +9155,21 @@ function renderBotList() {
   }).join("");
 }
 (function wireBots() {
-  const btn = document.getElementById("qm-bots");
-  if (btn) btn.addEventListener("click", () => ensureNameThen(openBotSelect));
   const ov = document.getElementById("bot-select");
   if (!ov) return;
   ov.querySelectorAll(".bot-len").forEach(b => b.addEventListener("click", () => {
     ov.dataset.holes = b.dataset.holes; syncBotToggles();
   }));
   const back = document.getElementById("bot-back");
-  if (back) back.addEventListener("click", () => { closeBotSelect(); openQuickMatch(); });
+  if (back) back.addEventListener("click", () => { closeBotSelect(); openPlayMenu(); });
+  const crnd = document.getElementById("bot-course-random");
+  if (crnd) crnd.addEventListener("click", () => { botCourseId = null; syncBotCourseRow(); });
+  const cpick = document.getElementById("bot-course-pick");
+  if (cpick) cpick.addEventListener("click", () => {
+    botCoursePickMode = true;
+    closeBotSelect();
+    showCourseSelect();
+  });
   const list = document.getElementById("bot-list");
   if (list) list.addEventListener("click", (e) => {   // delegated — rows re-render
     const p = e.target.closest(".bot-play");
@@ -9035,6 +9488,7 @@ async function openManageDetail(t) {
 function loop() {
   update();
   tickHoleDrop();
+  tickCine();         // cinematic landing: cut in on the descent, close after rest
   cpuDriverTick();    // drive the live CPU opponent's shots (no-op unless in one)
   liveCameraTick();   // follow the opponent's ball while it's their turn
   updateLiveTurnUI(); // keep the whose-turn banner in sync (cheap; cached)

@@ -10,13 +10,14 @@
   <meta name="apple-mobile-web-app-title" content="Golf">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
+  <link rel="icon" type="image/png" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=56">
   <link rel="stylesheet" href="css/base.css?v=60">
-  <link rel="stylesheet" href="css/hud.css?v=77">
-  <link rel="stylesheet" href="css/menu.css?v=67">
+  <link rel="stylesheet" href="css/hud.css?v=78">
+  <link rel="stylesheet" href="css/menu.css?v=68">
   <link rel="stylesheet" href="css/courses.css?v=5">
-  <link rel="stylesheet" href="css/modals.css?v=69">
+  <link rel="stylesheet" href="css/modals.css?v=71">
   <link rel="stylesheet" href="css/tournament.css?v=55">
 </head>
 <body>
@@ -90,6 +91,7 @@
     <button class="hm-item" id="hm-wind"><span class="ic ic-wind"></span>Wind</button>
     <button class="hm-item active" id="hm-slope"><span class="ic ic-slope"></span>Slope</button>
     <button class="hm-item" id="hm-arrows"><span class="ic ic-chev-down"></span>Break arrows</button>
+    <button class="hm-item active" id="hm-cine"><span class="ic ic-green3d"></span>Cinematic landings</button>
     <button class="hm-item active" id="hm-oob"><span class="ic ic-ob"></span>OB areas</button>
     <button class="hm-item active" id="hm-sound"><span class="ic ic-sound"></span>Sound</button>
     <div class="hm-sep"></div>
@@ -135,10 +137,6 @@
       <h1>GOLF</h1>
       <div class="menu-divider"></div>
       <button id="play-course" class="menu-btn menu-btn-play">Play</button>
-      <div class="menu-row">
-        <button id="open-quickmatch" class="menu-btn">Quick Match</button>
-        <button id="open-match" class="menu-btn">Vs Friends</button>
-      </div>
       <div class="menu-grid">
         <button id="play-daily" class="menu-btn secondary">Daily Challenge</button>
         <button id="play-range" class="menu-btn secondary">Driving Range</button>
@@ -427,9 +425,8 @@
           <button class="menu-btn secondary qm-len" data-holes="9">9 holes</button>
           <button class="menu-btn secondary qm-len" data-holes="18">18 holes</button>
         </div>
-        <button id="qm-bots" class="menu-btn secondary qm-bots">Play a bot</button>
         <div class="ne-actions">
-          <button id="qm-close" class="menu-btn secondary">Cancel</button>
+          <button id="qm-close" class="menu-btn secondary">Back</button>
           <button id="qm-find" class="menu-btn menu-btn-play">Find opponent</button>
         </div>
       </div>
@@ -454,9 +451,41 @@
         <button class="menu-btn secondary bot-len" data-holes="9">9 holes</button>
         <button class="menu-btn secondary bot-len" data-holes="18">18 holes</button>
       </div>
+      <div class="ms-len-row">
+        <button class="menu-btn secondary" id="bot-course-random">Random course</button>
+        <button class="menu-btn secondary" id="bot-course-pick">Choose course…</button>
+      </div>
       <div id="bot-list" class="bot-list"></div>
       <div class="ne-actions">
         <button id="bot-back" class="menu-btn secondary">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="play-menu" class="hidden">
+    <div class="ne-box">
+      <h2>Play</h2>
+      <p class="ne-sub">Pick how you want to play a round.</p>
+      <div class="pm-list">
+        <button class="pm-item" id="pm-random">
+          <span class="pm-label">Random match</span>
+          <span class="pm-sub">Live opponent near your handicap</span>
+        </button>
+        <button class="pm-item" id="pm-friends">
+          <span class="pm-label">Vs friends</span>
+          <span class="pm-sub">Private match with a code</span>
+        </button>
+        <button class="pm-item" id="pm-bots">
+          <span class="pm-label">Bots</span>
+          <span class="pm-sub">Beat the clubhouse roster</span>
+        </button>
+        <button class="pm-item" id="pm-solo">
+          <span class="pm-label">Solo round</span>
+          <span class="pm-sub">Play any course on your own</span>
+        </button>
+      </div>
+      <div class="ne-actions">
+        <button id="pm-back" class="menu-btn secondary">Back</button>
       </div>
     </div>
   </div>
@@ -542,6 +571,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=148"></script>
+  <script src="game.js?v=157"></script>
 </body>
 </html>

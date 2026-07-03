@@ -220,6 +220,7 @@ body.gv-open #hud-btn,
 body.gv-open #hm-club-row,
 body.gv-open #green-view-btn,
 body.gv-open #chip-spin,
+body.gv-open #scorecard,
 body.gv-open #hint { display: none; }
 
 /* ---- Club selector (bottom-right) ------------------------- */
