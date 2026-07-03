@@ -484,6 +484,26 @@ function playsLikeYards(fromX, fromY) {
   return { flat, plays, dz };
 }
 
+// Elevation-adjusted carry (world units) for a full shot: shorten uphill / extend
+// downhill so the ball actually finishes at the plays-like distance the HUD shows.
+// Marches down the aim line to the landing point and applies the SAME playsLikePerFoot
+// climb the caddie number uses — so a club's rated carry becomes a plays-like carry,
+// and a pin whose plays-like == your carry is reached (works for any aim, not just the
+// pin). No elevation data (null DEM off-green) -> unchanged (flat), matching the HUD.
+function elevAdjustCarry(sx, sy, ang, Cflat) {
+  const e0 = terrainElevAt(sx, sy);
+  if (e0 == null) return Cflat;
+  const k = TUNE.playsLikePerFoot / YARDS_PER_UNIT;  // carry units lost per foot of climb
+  const cos = Math.cos(ang), sin = Math.sin(ang);
+  let C = Cflat;
+  for (let i = 0; i < 2; i++) {                       // 2 iters converge on smooth terrain
+    const e1 = terrainElevAt(sx + cos * C, sy + sin * C);
+    if (e1 == null) return Cflat;
+    C = Math.max(Cflat * 0.3, Cflat - (e1 - e0) * k); // uphill shorter; guard against collapse
+  }
+  return C;
+}
+
 // =====================================================================
 //  Physics
 // =====================================================================
@@ -1315,7 +1335,10 @@ function launchShot(ang, frac, spin, onGreen) {
     }
     // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
     const lieMul = lieEffectEnabled ? (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1) : 1;
-    const C = (c.carry / YARDS_PER_UNIT) * ef * lieMul;   // carry (world units)
+    let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul;     // carry (world units)
+    // Elevation: make a full shot finish at the plays-like distance (uphill shorter,
+    // downhill longer). Chips already fold plays-like into their reach, so skip them.
+    if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
     const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul;     // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
     // Slight amplification so deliberate hooks/slices still register.
