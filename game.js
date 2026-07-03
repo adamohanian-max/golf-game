@@ -94,6 +94,13 @@ const TUNE = {
   flowTTLMin: 90, flowTTLMax: 210,  // dot lifetime (frames)
   flowAlpha: 0.78,       // peak dot opacity
   flowTrail: 6,          // streak length in frames of motion
+  // Focus blur: keep the tee->pin play corridor sharp, blur + dim the rest so
+  // the eye locks onto where you're playing (toggle: #hm-focus in the HUD menu).
+  focusBlur: 7,          // gaussian blur radius (css px) applied outside the corridor
+  focusFeather: 26,      // mask edge softness (css px) — bigger = gentler sharp->blur fade
+  focusDim: 0.22,        // darken alpha over the blurred surroundings (spotlight feel)
+  focusHalfWidth: 13,    // corridor half-width in world units (covers fairway + landing)
+  focusExtend: 6,        // world units the corridor reaches past the pin (to hold the green)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
@@ -293,6 +300,12 @@ let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt,
 // Slope-mode style: false = flow dots (default), true = static fall-line arrows.
 // Per-device cosmetic preference (localStorage), not a tournament setting.
 let breakArrows = lsGet("golf.breakArrows", false);
+// Focus blur: spotlight the tee->pin corridor, blur the surroundings. ON by
+// default (per-device localStorage). Offscreen buffers + a one-time feature
+// detect for canvas ctx.filter (fall back to dim-only if unsupported).
+let focusBlur = lsGet("golf.focusBlur", true);
+let _fbTmp = null, _fbMask = null, _fbSharp = null; // reused offscreen canvases
+let _fbFilterOK = null; // null = untested; true/false after first applyFocusBlur
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
@@ -2786,6 +2799,95 @@ function drawTeeMarkers() {
   }
 }
 
+// --- Focus blur ---------------------------------------------------------
+// Trace the tee->pin play corridor as a capsule (rounded band) onto ctx2, in
+// DEVICE pixels. wx/wy give css px (the live view already rotates the hole to
+// play "up"), so multiply by dpr. Round caps + a pin-end extension hold the
+// green; half-width covers the fairway + landing area.
+function traceCorridorPath(ctx2, dpr) {
+  const t = HOLE.teePos, p = HOLE.holePos;
+  let ax = wx(t.x, t.y) * dpr, ay = wy(t.x, t.y) * dpr;
+  let bx = wx(p.x, p.y) * dpr, by = wy(p.x, p.y) * dpr;
+  const hw = ws(TUNE.focusHalfWidth) * dpr;      // corridor half-width (screen px)
+  const ext = ws(TUNE.focusExtend) * dpr;        // reach past the pin
+  let dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;            // tee->pin unit
+  ax -= ux * ext; ay -= uy * ext;                // small pad behind the tee too
+  bx += ux * ext; by += uy * ext;
+  const nx = -uy, ny = ux;                        // left normal
+  const a0 = Math.atan2(ny, nx);                  // normal angle (for the caps)
+  ctx2.beginPath();
+  ctx2.moveTo(ax + nx * hw, ay + ny * hw);
+  ctx2.lineTo(bx + nx * hw, by + ny * hw);
+  ctx2.arc(bx, by, hw, a0, a0 - Math.PI, true);   // round cap at the pin end
+  ctx2.lineTo(ax - nx * hw, ay - ny * hw);
+  ctx2.arc(ax, ay, hw, a0 - Math.PI, a0, true);   // round cap at the tee end
+  ctx2.closePath();
+}
+
+// Post-pass (called from draw() right after the surface base is painted): blur
+// + dim everything outside the tee->pin corridor so the line of play pops. Works
+// in device pixels like drawAerial. Gameplay markers are drawn AFTER this, so
+// the cup/flag/ball/relief stay crisp on top.
+function applyFocusBlur() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width, H = canvas.height;
+  if (!W || !H) return;
+  const ensure = (c) => {
+    if (!c || c.width !== W || c.height !== H) {
+      c = document.createElement("canvas"); c.width = W; c.height = H;
+    }
+    return c;
+  };
+  _fbTmp = ensure(_fbTmp); _fbMask = ensure(_fbMask); _fbSharp = ensure(_fbSharp);
+  const tctx = _fbTmp.getContext("2d");
+  const mctx = _fbMask.getContext("2d");
+  const sctx = _fbSharp.getContext("2d");
+
+  // one-time feature detect: does canvas ctx.filter blur? (older WebKit didn't)
+  if (_fbFilterOK === null) {
+    tctx.filter = "blur(2px)";
+    _fbFilterOK = (tctx.filter === "blur(2px)");
+    tctx.filter = "none";
+  }
+
+  // 1. snapshot the scene painted so far (surround + aerial + surface tints)
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  tctx.clearRect(0, 0, W, H);
+  tctx.drawImage(canvas, 0, 0);
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  // 2. blur (or, if unsupported, just re-draw) the whole frame, then dim it
+  ctx.filter = _fbFilterOK ? `blur(${(TUNE.focusBlur * dpr).toFixed(2)}px)` : "none";
+  ctx.drawImage(_fbTmp, 0, 0);
+  ctx.filter = "none";
+  ctx.fillStyle = `rgba(8,22,13,${TUNE.focusDim})`;
+  ctx.fillRect(0, 0, W, H);
+
+  // 3. feathered corridor mask (white capsule, soft edges)
+  mctx.setTransform(1, 0, 0, 1, 0, 0);
+  mctx.clearRect(0, 0, W, H);
+  mctx.filter = _fbFilterOK ? `blur(${(TUNE.focusFeather * dpr).toFixed(2)}px)` : "none";
+  mctx.fillStyle = "#fff";
+  traceCorridorPath(mctx, dpr);
+  mctx.fill();
+  mctx.filter = "none";
+
+  // 4. punch the sharp corridor back in: sharp scene masked by the feather
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+  sctx.clearRect(0, 0, W, H);
+  sctx.globalCompositeOperation = "source-over";
+  sctx.drawImage(_fbTmp, 0, 0);
+  sctx.globalCompositeOperation = "destination-in";
+  sctx.drawImage(_fbMask, 0, 0);
+  sctx.globalCompositeOperation = "source-over";
+  ctx.drawImage(_fbSharp, 0, 0);
+
+  ctx.restore(); // back to the dpr baseline transform for the rest of draw()
+}
+
 function draw() {
   const cssW = window.innerWidth, cssH = window.innerHeight;
   computeViewAABB(); // for off-screen polygon culling this frame
@@ -2804,6 +2906,10 @@ function draw() {
   } else {
     drawVectorSurfaces();
   }
+
+  // Focus blur: spotlight the tee->pin corridor over the surface base. Drawn
+  // before the gameplay markers below so cup/flag/ball/relief stay crisp.
+  if (focusBlur && !HOLE.isRange && !greenView) applyFocusBlur();
 
   // shaded-relief topo: ball's green + the pin's green only. Whisper-faint always;
   // the slope button boosts intensity and adds downhill flow dots.
@@ -4119,6 +4225,13 @@ elArrowsBtn.addEventListener("click", () => {
   breakArrows = !breakArrows;
   lsSet("golf.breakArrows", breakArrows);
   elArrowsBtn.classList.toggle("active", breakArrows);
+});
+const elFocusBtn = document.getElementById("hm-focus");
+elFocusBtn.classList.toggle("active", focusBlur);
+elFocusBtn.addEventListener("click", () => {
+  focusBlur = !focusBlur;
+  lsSet("golf.focusBlur", focusBlur);
+  elFocusBtn.classList.toggle("active", focusBlur);
 });
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
