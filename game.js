@@ -74,7 +74,8 @@ const TUNE = {
   // green field's gradient. slopeAccel folds the field's vertical scale + gravity
   // into one knob (world-units/frame^2 per unit gradient); calibrate by feel.
   // Slope is ignored below slopeStopSpeed so a ball settles instead of creeping.
-  slopeAccel: 0.00225,        // break strength; capped at 75% of greenDecel so ball can always stop
+  slopeAccel: 0.0036,         // break strength; capped at slopeCapFrac of greenDecel so ball can always stop
+  slopeCapFrac: 0.82,         // slope force ceiling as a fraction of greenDecel (higher = more break on steep greens, but less guaranteed decel)
   fairwaySlopeAccel: 0.0003,  // terrain slope accel on fairway/rough (gentler than green break)
   slopeStopSpeed: 0.028,
   // Shaded-relief topo overlay (greens only). Intensity = drawImage globalAlpha.
@@ -707,9 +708,9 @@ function rollStep(b) {
       const g = greenSlopeAt(b.x, b.y);
       if (g) {
         const gm = Math.hypot(g.x, g.y);
-        // Cap slope force to 75% of greenDecel — guarantees 25% net decel on any slope,
-        // so the ball can always stop even on the steepest green.
-        const force = gm > 0 ? Math.min(TUNE.slopeAccel * gm, TUNE.greenDecel * 0.75) / gm : 0;
+        // Cap slope force to slopeCapFrac of greenDecel — guarantees a net decel on any
+        // slope, so the ball can always stop even on the steepest green.
+        const force = gm > 0 ? Math.min(TUNE.slopeAccel * gm, TUNE.greenDecel * TUNE.slopeCapFrac) / gm : 0;
         b.vx -= force * g.x; b.vy -= force * g.y;
       }
     }
