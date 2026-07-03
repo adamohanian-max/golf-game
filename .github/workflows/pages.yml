@@ -42,3 +42,7 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # Site is heavy (~347MB of baked aerials) so Pages ingestion can be
+          # slow; give it 15 min (default 10) before the deploy step gives up.
+          timeout: 900000
