@@ -1293,14 +1293,25 @@ function launchShot(ang, frac, spin, onGreen) {
       // the cup uphill and down (slope force opposes uphill, aids downhill — budget for it).
       const hB = greenHeightAt(b.x, b.y), hP = greenHeightAt(HOLE.holePos.x, HOLE.holePos.y);
       const rise = (hB == null || hP == null) ? 0 : (hP - hB);       // + uphill, − downhill
-      const v2 = 2 * TUNE.greenDecel * targetU + 2 * TUNE.slopeAccel * rise;
-      power = Math.sqrt(Math.max(v2, 1e-9));                         // guard steep-downhill ≤0
+      // Budget the slope's help/cost, but cap it to what the ROLL can actually deliver.
+      // rollStep clamps its per-step slope force to greenDecel·slopeCapFrac, so over
+      // targetU the slope can move the pace by at most this much. Using the raw
+      // 2·slopeAccel·rise here over-credits a steep downhiller and collapses power to ~0
+      // (v2≤0) — the ball then launches below slopeStopSpeed, the downhill aid is gated
+      // off, and it dribbles a few inches ("sticky" putt). Clamping keeps v2 > 0.
+      const slopeWork = 2 * TUNE.slopeAccel * rise;
+      const slopeCap = 2 * TUNE.greenDecel * TUNE.slopeCapFrac * targetU;
+      const v2 = 2 * TUNE.greenDecel * targetU + Math.max(-slopeCap, Math.min(slopeCap, slopeWork));
+      power = Math.sqrt(Math.max(v2, 1e-9));
       // Short-putt floor: inside puttFloorFt never leave it short. Use at least the pace to
-      // reach the cup on flat — on a soft downhiller the discounted slope-aid doesn't engage
-      // (launch drops below slopeStopSpeed first), so without this it dies well short.
+      // reach the cup on flat.
       if (flatU * YARDS_PER_UNIT * 3 <= TUNE.puttFloorFt) {
         power = Math.max(power, Math.sqrt(2 * TUNE.greenDecel * flatU));
       }
+      // Downhill aid only engages while the ball rolls above slopeStopSpeed. If the
+      // budgeted pace launches below it, the modeled break never materializes and the
+      // putt dies short — floor a downhiller to just clear the gate so it gets moving.
+      if (rise < 0) power = Math.max(power, TUNE.slopeStopSpeed * 1.05);
     } else {
       // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
       // simple sqrt ramp (its max is already tiny). Range putts keep the on-green ramp.
