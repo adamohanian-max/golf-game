@@ -18,6 +18,12 @@ import json
 import math
 import os
 
+try:
+    # optional — only needed for --aerial-base compositing
+    from PIL import Image, ImageDraw, ImageFilter
+except ImportError:
+    Image = ImageDraw = ImageFilter = None
+
 YARDS_PER_UNIT = 3.0
 WORLD = {"w": 940, "h": 740}
 
@@ -171,6 +177,19 @@ def rnd(poly):
     return [{"x": round(x, 2), "y": round(y, 2)} for x, y in poly]
 
 
+def pip(x, y, poly):
+    """Ray-cast point-in-polygon (matches game.js pointInPoly)."""
+    inside = False
+    j = len(poly) - 1
+    for i in range(len(poly)):
+        xi, yi = poly[i]
+        xj, yj = poly[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
 # ---------------------------------------------------------------- course spec
 # Waypoints hand-routed in world units (1u = 3yds), origin top-left.
 # Front nine ("The Vale") loops the west half; back nine ("The Spine") the east.
@@ -253,19 +272,28 @@ HOLES = [
          bunkers=[(0.55, 9, 5, 3.4), (0.93, 9, 4.4, 3.2)]),
 ]
 
+# Real lakes in the base aerial (Superior NF patch) — matching water polygons
+# so what LOOKS like water in the photo also plays as water: (cx, cy, rx, ry).
+ABS_WATER = [
+    (382, 380, 45, 50),   # the big blackwater lake inside the front-nine loop
+    (38, 205, 28, 48),    # western lake beyond hole 4's designed lake
+]
+
 # Water anchored to holes: (hole num, frac, side, rx, ry) blobs, plus specials.
+# side must exceed ry (blob half-width across play) + the local fairway/green
+# half-width, or the blob spills onto the playing surface — the audit checks.
 WATER_BLOBS = [
-    (4, 0.5, -17, 80, 20),    # Black Lake: full left flank of 4 (long axis along play)
-    (6, 1.0, -22, 26, 18),    # lake body NE of 6's peninsula green
-    (15, 0.97, 15, 12, 14),   # pond guarding 15's approach
+    (4, 0.5, -19, 75, 9),     # Black Lake: hugs 4's left edge (long axis along play)
+    (6, 1.0, -32, 26, 14),    # lake body NE of 6's peninsula green, beyond the moat
+    (15, 0.93, 17, 10, 9),    # pond guarding 15's approach, short-right
     (17, 0.5, 0, 15, 10),     # lake arm 17 carries
-    (18, 0.45, -13, 48, 10),  # lake down 18's left (long axis along play)
+    (18, 0.45, -16, 48, 7),   # lake down 18's left (long axis along play)
 ]
 MOATS = [  # (hole num, width, open_span_deg) — opening faces the approach
     (6, 13, 105),
     (7, 11, 120),
 ]
-CREEKS = [(2, 0.70, 24, 3.0)]  # (hole, frac, half length across, half width)
+CREEKS = [(2, 0.70, 24, 4.5)]  # (hole, frac, half length across, half width)
 
 WOODS = [  # (cx, cy, rx, ry) pine blocks in the dead ground between corridors
     (200, 655, 45, 24), (245, 480, 38, 30), (185, 300, 28, 38),
@@ -340,6 +368,14 @@ def build():
         report.append((n, spec["par"], spec["yards"],
                        round(polyline_length(line) * YARDS_PER_UNIT)))
 
+    # absolute water (real lakes in the aerial base) — physics only; the bake
+    # does NOT paint these (the photo already shows them). Kept FIRST in the
+    # water list, and inset well inside the visible shoreline so the game's
+    # blue water tint reads as lake depth, never spills onto trees. The shore
+    # strip plays as rough — generous, and only reachable when badly offline.
+    for (cx, cy, rx, ry) in ABS_WATER:
+        surfaces["water"].append(blob(cx, cy, rx, ry, seed=cx * 0.7 + cy,
+                                      irr=0.06, n=24))
     # anchored water
     for (hn, f, side, rx, ry) in WATER_BLOBS:
         line = lines[hn]
@@ -357,7 +393,15 @@ def build():
     for (hn, f, half_len, half_w) in CREEKS:
         line = lines[hn]
         (x, y), (dx, dy) = point_at(line, f)
-        surfaces["water"].append(rect_at(x, y, -dy, dx, half_len, half_w))
+        px, py = -dy, dx  # creek runs across the corridor
+        wig = [(x + px * t * half_len +
+                dx * math.sin(t * 4.2 + hn) * half_w * 1.6,
+                y + py * t * half_len +
+                dy * math.sin(t * 4.2 + hn) * half_w * 1.6)
+               for t in [i / 8.0 * 2 - 1 for i in range(9)]]
+        surfaces["water"].append(ribbon(wig, [(0.0, half_w * 0.7), (0.5, half_w),
+                                              (1.0, half_w * 0.8)],
+                                        jitter=0.15, seed=hn * 1.9, n=24))
 
     for (cx, cy, rx, ry) in WOODS:
         surfaces["woods"].append(blob(cx, cy, rx, ry, seed=cx * 0.13 + cy, irr=0.22, n=18))
@@ -388,7 +432,36 @@ def build():
             dmin = min(math.hypot(p[0] - q[0], p[1] - q[1])
                        for p in a[::4] for q in b[::4])
             if dmin < 22:
-                warn.append((HOLES[i]["num"], HOLES[j]["num"], round(dmin, 1)))
+                warn.append("holes %d and %d corridors only %.1f units apart"
+                            % (HOLES[i]["num"], HOLES[j]["num"], dmin))
+
+    # water-overlap audit: no green/tee point (or green interior) may sit in
+    # water, and no water other than a creek may cross a fairway centerline.
+    n_creek = len(CREEKS)
+    for gi, green in enumerate(surfaces["green"]):
+        bbx = [p[0] for p in green]; bby = [p[1] for p in green]
+        cx, cy = sum(bbx) / len(bbx), sum(bby) / len(bby)
+        probes = list(green) + [(cx, cy)] + \
+                 [((x + cx) / 2, (y + cy) / 2) for x, y in green]
+        for w in surfaces["water"]:
+            if any(pip(x, y, w) for x, y in probes):
+                warn.append("water overlaps green of hole %d" % HOLES[gi]["num"])
+                break
+    for ti, tee in enumerate(surfaces["tee"]):
+        for w in surfaces["water"]:
+            if any(pip(x, y, w) for x, y in tee):
+                warn.append("water overlaps tee of hole %d" % HOLES[ti]["num"])
+                break
+    non_creek = surfaces["water"][:-n_creek] if n_creek else surfaces["water"]
+    for spec in HOLES:
+        if not spec["fw"]:
+            continue
+        line = lines[spec["num"]]
+        for k in range(0, len(line), 3):
+            x, y = line[k]
+            if any(pip(x, y, w) for w in non_creek):
+                warn.append("water crosses fairway centerline of hole %d" % spec["num"])
+                break
 
     course = {
         "id": "blackwater-vale",
@@ -408,6 +481,171 @@ def build():
 SVG_FILL = {"rough": "#2c6e30", "fairway": "#4eb053", "tee": "#5cbf61",
             "bunker": "#e8d9a8", "water": "#2a86d4", "woods": "#274d2b",
             "green": "#8fd095", "grass": "#3a9440"}
+
+
+# ------------------------------------------------------------- aerial bake
+# Composite the course into a real aerial photo (any forest patch downloaded
+# from Esri World Imagery) so the game can render it in photoreal mode. The
+# base photo supplies the setting (real pine/lakes/texture); we "carve" the
+# playing surfaces into it with feathered, texture-modulated paint. Colors are
+# kept a touch muted — the game's processAerial() grades every aerial
+# (saturate 1.35 + green wash) at load.
+
+def _mask(size):
+    return Image.new("L", size, 0)
+
+
+def _pt(p):
+    return (p["x"], p["y"]) if isinstance(p, dict) else (p[0], p[1])
+
+
+def _draw_polys(mask, polys, scale, fill=255):
+    d = ImageDraw.Draw(mask)
+    for poly in polys:
+        pts = [_pt(p) for p in poly]
+        d.polygon([(x * scale, y * scale) for x, y in pts], fill=fill)
+
+
+def _sub_ribbon(line, profile, f0, f1, n=6):
+    left, right = [], []
+    for i in range(n + 1):
+        f = f0 + (f1 - f0) * i / n
+        (x, y), (dx, dy) = point_at(line, f)
+        w = width_at(profile, f)
+        px, py = -dy, dx
+        left.append((x - px * w, y - py * w))
+        right.append((x + px * w, y + py * w))
+    return left + right[::-1]
+
+
+def bake_aerial(course, lines, base_path, out_path):
+    base = Image.open(base_path).convert("RGB")
+    W, H = base.size
+    scale = W / float(course["world"]["w"])
+    S = course["surfaces"]
+    unit = scale  # px per world unit
+
+    def paint(mask_polys, rgb, feather, opacity, noise_sigma=9):
+        """Blend a flat-ish color into `base` through a feathered polygon mask,
+        modulated by the underlying photo's texture so it sits in the scene."""
+        mask = _mask((W, H))
+        _draw_polys(mask, mask_polys, scale)
+        mask = mask.filter(ImageFilter.GaussianBlur(feather * unit))
+        mask = mask.point(lambda v: int(v * opacity / 255))
+        color = Image.new("RGB", (W, H), rgb)
+        if noise_sigma:
+            noise = Image.effect_noise((W, H), noise_sigma).filter(
+                ImageFilter.GaussianBlur(0.6))
+            color = Image.composite(
+                Image.blend(color, Image.new("RGB", (W, H), (0, 0, 0)), 0.18),
+                Image.blend(color, Image.new("RGB", (W, H), (255, 255, 255)), 0.10),
+                noise)
+        # let the real ground texture (blurred luminance) show through the paint
+        lum = base.convert("L").filter(ImageFilter.GaussianBlur(1.2))
+        lum = lum.point(lambda v: min(255, int(150 + v * 0.9)))  # 0.59..1.5 gain
+        color = Image.composite(color, color.point(lambda v: int(v * 0.55)),
+                                lum)
+        base.paste(color, (0, 0), mask)
+
+    # rough band under everything (slightly wild, low opacity keeps ground detail)
+    paint(S["grass"], (96, 122, 64), 1.6, 220, 11)
+    paint(S["rough"], (82, 110, 58), 1.4, 170, 12)
+    # fairways with mow stripes
+    paint(S["fairway"], (112, 148, 70), 0.8, 250, 9)
+    for spec in HOLES:
+        if not spec["fw"]:
+            continue
+        line = lines[spec["num"]]
+        total = polyline_length(line)
+        band = 7.0 / total  # stripe every ~7 world units
+        f = 0.0
+        i = 0
+        stripes_l, stripes_d = [], []
+        while f < 1.0:
+            f1 = min(1.0, f + band)
+            (stripes_l if i % 2 == 0 else stripes_d).append(
+                _sub_ribbon(line, spec["fw"], f, f1))
+            f = f1
+            i += 1
+        paint(stripes_l, (122, 158, 76), 0.5, 105, 7)
+        paint(stripes_d, (103, 138, 66), 0.5, 95, 7)
+    paint(S["tee"], (120, 158, 78), 0.4, 250, 7)
+    # greens: bright, smooth, tight feather
+    paint(S["green"], (138, 172, 88), 0.5, 255, 5)
+    # bunkers: sand with a softly darker rim (mask blur eats the edge)
+    paint(S["bunker"], (188, 172, 132), 0.5, 250, 13)
+    inner = _mask((W, H))
+    _draw_polys(inner, S["bunker"], scale)
+    inner = inner.filter(ImageFilter.GaussianBlur(1.5 * unit))
+    inner = inner.point(lambda v: 255 if v > 235 else 0)
+    inner = inner.filter(ImageFilter.GaussianBlur(0.5 * unit))
+    sand = Image.new("RGB", (W, H), (206, 192, 152))
+    base.paste(sand, (0, 0), inner.point(lambda v: int(v * 0.85)))
+    # water: blackwater — dark core, slightly lifted shore ring. Skip the
+    # ABS_WATER polys (first in the list): those are real lakes already in the
+    # photo — painting over them wrecks their natural shorelines.
+    designed_water = S["water"][len(ABS_WATER):]
+    paint(designed_water, (26, 38, 36), 0.7, 255, 6)
+    core = _mask((W, H))
+    _draw_polys(core, designed_water, scale)
+    core = core.filter(ImageFilter.GaussianBlur(1.2 * unit))
+    core = core.point(lambda v: 255 if v > 220 else 0).filter(
+        ImageFilter.GaussianBlur(0.6 * unit))
+    base.paste(Image.new("RGB", (W, H), (12, 20, 20)), (0, 0),
+               core.point(lambda v: int(v * 0.9)))
+    # cartpaths: thin worn line
+    d = ImageDraw.Draw(base, "RGBA")
+    for path in S["cartpath"]:
+        d.line([(x * scale, y * scale) for x, y in map(_pt, path)],
+               fill=(186, 176, 150, 120), width=max(2, int(0.55 * unit)),
+               joint="curve")
+
+    base.save(out_path, quality=82)
+    return {"file": os.path.join("img", course["id"], os.path.basename(out_path)).replace(os.sep, "/"),
+            "w": W, "h": H,
+            "toWorld": [round(course["world"]["w"] / W, 6), 0, 0,
+                        0, round(course["world"]["h"] / H, 6), 0]}
+
+
+# Surface-classification mask from ground-truth geometry (no aerial heuristics
+# needed — we KNOW where everything is). Everything off the maintained
+# corridors is dense forest -> WOODS (carries the OB penalty and the red OB
+# tint, exactly matching what the photo shows); outside the property boundary
+# -> OB. Palette indices must match fetch_course.py's MASK_PALETTE, which the
+# game's nearestMaskIdx decodes: 0=OB, 1=FAIRWAY, 2=ROUGH, 3=WOODS.
+MASK_PALETTE = [200, 40, 40, 150, 210, 90, 60, 130, 55, 25, 60, 30]
+
+
+def bake_mask(course, out_path):
+    Wm, Hm = int(course["world"]["w"]), int(course["world"]["h"])  # 1 unit/px
+    im = Image.new("P", (Wm, Hm), 3)  # default: deep forest (woods)
+    im.putpalette(MASK_PALETTE + [0] * (768 - len(MASK_PALETTE)))
+    d = ImageDraw.Draw(im)
+    S = course["surfaces"]
+
+    def dr(polys, idx):
+        for poly in polys:
+            d.polygon([_pt(p) for p in poly], fill=idx)
+
+    # playable band first (rough), then fairway/tee on top. Green/bunker/water
+    # cells are marked ROUGH — the game checks those polygons before the mask,
+    # so the mask value under them only matters at polygon edges (keep benign).
+    dr(S["rough"], 2)
+    dr(S["grass"], 2)
+    dr(S["water"], 2)
+    dr(S["bunker"], 2)
+    dr(S["green"], 2)
+    for path in S["cartpath"]:  # cart paths through the forest stay playable
+        d.line([_pt(p) for p in path], fill=2, width=3)
+    dr(S["fairway"], 1)
+    dr(S["tee"], 1)
+    # OB outside the property boundary
+    outside = Image.new("L", (Wm, Hm), 255)
+    ImageDraw.Draw(outside).polygon([_pt(p) for p in course["boundary"][0]], fill=0)
+    im.paste(0, (0, 0), outside)
+    im.save(out_path, optimize=True)
+    return {"file": os.path.join("img", course["id"], os.path.basename(out_path)).replace(os.sep, "/"),
+            "w": Wm, "h": Hm, "toWorld": [1, 0, 0, 0, 1, 0]}
 
 
 def write_svg(path, course, lines):
@@ -440,19 +678,33 @@ def write_svg(path, course, lines):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--svg", help="also write a debug SVG of the whole property")
+    ap.add_argument("--aerial-base",
+                    help="real Esri forest JPG to composite the course into "
+                         "(bakes courses/img/<id>/aerial.jpg + aerial key)")
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..",
                                                   "courses", "blackwater-vale.json"))
     args = ap.parse_args()
 
     course, report, warn, lines = build()
+    if args.aerial_base:
+        if Image is None:
+            raise SystemExit("--aerial-base needs Pillow (pip install pillow)")
+        img_dir = os.path.join(os.path.dirname(args.out), "img", course["id"])
+        os.makedirs(img_dir, exist_ok=True)
+        out_img = os.path.join(img_dir, "aerial.jpg")
+        course["aerial"] = bake_aerial(course, lines, args.aerial_base, out_img)
+        print("baked aerial %s (%.0f KB)" % (out_img, os.path.getsize(out_img) / 1024))
+        out_mask = os.path.join(img_dir, "surfacemask.png")
+        course["surfaceMask"] = bake_mask(course, out_mask)
+        print("baked mask %s (%.0f KB)" % (out_mask, os.path.getsize(out_mask) / 1024))
     total_par = sum(h["par"] for h in course["holes"])
     total_yds = sum(h["yards"] for h in course["holes"])
     print("hole  par  yards (measured)")
     for n, par, yds, measured in report:
         print("  %2d    %d   %4d  (%d)" % (n, par, yds, measured))
     print("total par %d, %d yds" % (total_par, total_yds))
-    for (a, b, d) in warn:
-        print("WARN: holes %d and %d corridors only %.1f units apart" % (a, b, d))
+    for w in warn:
+        print("WARN: " + w)
 
     with open(args.out, "w") as f:
         json.dump(course, f, separators=(",", ":"))
