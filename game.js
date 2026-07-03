@@ -1516,25 +1516,36 @@ function launchShot(ang, frac, spin, onGreen, flight) {
       // the cup uphill and down (slope force opposes uphill, aids downhill — budget for it).
       const hB = greenHeightAt(b.x, b.y), hP = greenHeightAt(HOLE.holePos.x, HOLE.holePos.y);
       const rise = (hB == null || hP == null) ? 0 : (hP - hB);       // + uphill, − downhill
-      // Budget the slope's help/cost, but cap it to what the ROLL can actually deliver.
-      // rollStep clamps its per-step slope force to greenDecel·slopeCapFrac, so over
-      // targetU the slope can move the pace by at most this much. Using the raw
-      // 2·slopeAccel·rise here over-credits a steep downhiller and collapses power to ~0
-      // (v2≤0) — the ball then launches below slopeStopSpeed, the downhill aid is gated
-      // off, and it dribbles a few inches ("sticky" putt). Clamping keeps v2 > 0.
-      const slopeWork = 2 * TUNE.slopeAccel * rise;
-      const slopeCap = 2 * TUNE.greenDecel * TUNE.slopeCapFrac * targetU;
-      const v2 = 2 * TUNE.greenDecel * targetU + Math.max(-slopeCap, Math.min(slopeCap, slopeWork));
+      let v2;
+      if (rise < 0) {
+        // Downhill: invert the ACTUAL roll model instead of an energy budget. The
+        // roll's downhill aid is capped at greenDecel·slopeCapFrac (net decel is
+        // always positive — the ball can never run away) and gated off entirely
+        // below slopeStopSpeed. A raw work budget (2·slopeAccel·rise) credits
+        // gravity the roll never delivers, collapses v2 toward 0, and every
+        // downhill putt launched at the old floor speed and died ~half way — the
+        // cup was unreachable at ANY swing power. Piecewise instead: net decel
+        // a1 = greenDecel − aid while above the gate, full greenDecel below it.
+        const gmAvg = -rise / Math.max(flatU, 1e-6);   // avg downhill gradient along the line
+        const aid = Math.min(TUNE.slopeAccel * gmAvg, TUNE.greenDecel * TUNE.slopeCapFrac);
+        const a1 = TUNE.greenDecel - aid;
+        const vg = TUNE.slopeStopSpeed;
+        const dGate = vg * vg / (2 * TUNE.greenDecel); // dist the gated (unaided) tail covers
+        v2 = targetU <= dGate ? 2 * TUNE.greenDecel * targetU
+                              : vg * vg + 2 * a1 * (targetU - dGate);
+      } else {
+        // Flat/uphill: energy budget, slope cost capped to what the roll's clamped
+        // force can actually apply over targetU (keeps v2 > 0 on steep climbs).
+        const slopeWork = 2 * TUNE.slopeAccel * rise;
+        const slopeCap = 2 * TUNE.greenDecel * TUNE.slopeCapFrac * targetU;
+        v2 = 2 * TUNE.greenDecel * targetU + Math.min(slopeCap, slopeWork);
+      }
       power = Math.sqrt(Math.max(v2, 1e-9));
       // Short-putt floor: inside puttFloorFt never leave it short. Use at least the pace to
       // reach the cup on flat.
       if (flatU * YARDS_PER_UNIT * 3 <= TUNE.puttFloorFt) {
         power = Math.max(power, Math.sqrt(2 * TUNE.greenDecel * flatU));
       }
-      // Downhill aid only engages while the ball rolls above slopeStopSpeed. If the
-      // budgeted pace launches below it, the modeled break never materializes and the
-      // putt dies short — floor a downhiller to just clear the gate so it gets moving.
-      if (rise < 0) power = Math.max(power, TUNE.slopeStopSpeed * 1.05);
     } else {
       // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
       // simple sqrt ramp (its max is already tiny). Range putts keep the on-green ramp.
