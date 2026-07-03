@@ -2214,7 +2214,7 @@ function drawFlowDots(g) {
   ctx.lineWidth = 2;
   for (const d of g._flow.dots) {
     // streak from pos back along velocity: direction reads even in a still frame
-    ctx.strokeStyle = `rgba(18,24,18,${flowDotAlpha(d).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(10,105,48,${flowDotAlpha(d).toFixed(3)})`;
     ctx.beginPath();
     ctx.moveTo(wx(d.x, d.y), wy(d.x, d.y));
     ctx.lineTo(wx(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail),
@@ -2449,7 +2449,7 @@ function drawGreenView() {
       const a = proj(d.x - m.cx, d.y - m.cy, m.zOf(d.x, d.y));
       const bx = d.x - d.vx * TUNE.flowTrail, by = d.y - d.vy * TUNE.flowTrail;
       const b = proj(bx - m.cx, by - m.cy, m.zOf(bx, by));
-      ctx.strokeStyle = `rgba(18,24,18,${flowDotAlpha(d).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(10,105,48,${flowDotAlpha(d).toFixed(3)})`;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
   }
