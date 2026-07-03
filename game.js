@@ -88,12 +88,11 @@ const TUNE = {
   // faint drift while steep runs read as fast bright streams.
   flowDensity: 2.0,      // dots per world-unit^2 of green area
   flowMaxDots: 240,      // hard cap per green (perf)
-  flowSpeed: 0.035,      // world units/frame at max gradient
+  flowSpeed: 0.018,      // world units/frame at max gradient
   flowMinFrac: 0.15,     // floor speed fraction on near-flat spots
   flowTTLMin: 90, flowTTLMax: 210,  // dot lifetime (frames)
-  flowAlpha: 0.75,       // peak dot opacity
+  flowAlpha: 0.6,        // peak dot opacity
   flowTrail: 4,          // streak length in frames of motion
-  showFallArrows: false, // legacy arrow grid (superseded by flow dots; kept for A/B)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial tilt (rad from top-down; 0 = flat plan view)
@@ -290,6 +289,9 @@ let measureMode = false;   // range-finder: drag to measure distance from ball &
 let showSlope = true;      // slope relief overlay — ON by default (toggle in HUD menu)
 let showOOB = true;        // red OOB overlay toggle
 let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt, drag } or null
+// Slope-mode style: false = flow dots (default), true = static fall-line arrows.
+// Per-device cosmetic preference (localStorage), not a tournament setting.
+let breakArrows = lsGet("golf.breakArrows", false);
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
@@ -2333,7 +2335,7 @@ function buildGreenViewMesh(g) {
     const shade = Math.max(0.5, Math.min(1.35, (0.9 + d * 1.8) * (0.72 + 0.33 * hn)));
     cells.push({
       i0: j * M + i, rx: ccx - bb.cx, ry: ccy - bb.cy, edge,
-      color: `rgb(${Math.min(255, 116 * shade) | 0},${Math.min(255, 180 * shade) | 0},${Math.min(255, 122 * shade) | 0})`,
+      color: `rgb(${Math.min(255, 96 * shade) | 0},${Math.min(255, 150 * shade) | 0},${Math.min(255, 102 * shade) | 0})`,
     });
   }
   const rel = (p) => ({ rx: p.x - bb.cx, ry: p.y - bb.cy, z: zOf(p.x, p.y) });
@@ -2393,7 +2395,7 @@ function drawGreenView() {
     i ? rimPath.lineTo(q.x, q.y) : rimPath.moveTo(q.x, q.y);
   });
   rimPath.closePath();
-  ctx.fillStyle = "rgb(98,152,103)";
+  ctx.fillStyle = "rgb(80,126,86)";
   ctx.fill(rimPath);
   // surface quads, painter-sorted back to front
   const order = m.cells.map((_, i) => i);
@@ -2792,9 +2794,9 @@ function draw() {
   if (!HOLE.isRange) {
     for (const g of greensInPlay()) {
       if (!polyVisible(g.poly)) continue;
-      drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope && TUNE.showFallArrows);
+      drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope && breakArrows);
       // inspect view advects + draws this green's dots itself (under its scrim here)
-      if (showSlope && !greenView) { updateFlowDots(g); drawFlowDots(g); }
+      if (showSlope && !breakArrows && !greenView) { updateFlowDots(g); drawFlowDots(g); }
     }
   }
 
@@ -4095,6 +4097,13 @@ const elClubName = document.getElementById("hm-club-name");
 const elClubYds = document.getElementById("hm-club-yds");
 const elMeasureBtn = document.getElementById("hm-measure");
 const elSlopeBtn = document.getElementById("hm-slope");
+const elArrowsBtn = document.getElementById("hm-arrows");
+elArrowsBtn.classList.toggle("active", breakArrows);
+elArrowsBtn.addEventListener("click", () => {
+  breakArrows = !breakArrows;
+  lsSet("golf.breakArrows", breakArrows);
+  elArrowsBtn.classList.toggle("active", breakArrows);
+});
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
 // Show the read-green button exactly when green reading matters: in course
