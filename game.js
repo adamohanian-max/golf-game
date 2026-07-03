@@ -8111,10 +8111,13 @@ function gaussRand() {
 }
 // A hole score for a bot of the given handicap: mean = par + hcp/18, jittered,
 // clamped to a sane band (eagle floor on par-5s, birdie floor otherwise).
+// Legend-tier bots (hcp ≤ -15) get one shot more of headroom so they can
+// eagle par-4s — a +22 lives on this floor, birdying nearly every hole.
 function cpuHoleScore(par, hcp) {
   const mean = par + (hcp || 0) / 18;
   const s = Math.round(mean + gaussRand() * 1.0);
-  const lo = par >= 5 ? par - 2 : par - 1;
+  const deep = (hcp || 0) <= -15 ? 1 : 0;
+  const lo = (par >= 5 ? par - 2 : par - 1) - deep;
   return Math.max(1, Math.min(par + 4, Math.max(lo, s)));
 }
 // Believable opponent identity (never revealed as a bot). Three name styles —
@@ -8202,6 +8205,20 @@ const BOTS = [
   { id: "wren",   name: "Wren Ironwood",    ini: "WI", hcp: -3, color: "#2e4d3a",
     desc: "Tour winner. Does not miss, and the putter is always hot.",
     tags: ["Tour pro", "Hot putter"],         latMul: 0.8,  vol: 2.5, bias: 0, putt: 0.32 },
+  // Legend tier — beyond human. Plus-handicaps deep enough that the hole-score
+  // model lives on its birdie/eagle floor; each one putts hotter than the last.
+  { id: "blaze",  name: "Blaze Calloway",   ini: "BC", hcp: -6, color: "#6d3f2e",
+    desc: "Won everything worth winning, then won it all again.",
+    tags: ["Legend", "Clutch"],               latMul: 0.7,  vol: 2,   bias: 0, putt: 0.35 },
+  { id: "miles",  name: "Miles Farr",       ini: "MF", hcp: -10, color: "#3a4d6d",
+    desc: "The longest hitter alive — the fairway simply cannot escape him.",
+    tags: ["Machine long", "Flawless"],       latMul: 0.6,  vol: 1.8, bias: 0, putt: 0.38 },
+  { id: "domino", name: "Domino Vale",      ini: "DV", hcp: -15, color: "#4d2e4a",
+    desc: "Plays the course like it was rigged in her favor.",
+    tags: ["Unshakable", "Surgical"],         latMul: 0.55, vol: 1.5, bias: 0, putt: 0.42 },
+  { id: "keeper", name: "The Greenskeeper", ini: "GK", hcp: -22, color: "#1d2b20",
+    desc: "Knows every blade of grass by name. Nobody has ever beaten him.",
+    tags: ["Myth", "Perfect"],                latMul: 0.5,  vol: 1.2, bias: 0, putt: 0.5 },
 ];
 function botById(id) { return BOTS.find(b => b.id === id) || null; }
 function botIndex(id) { return BOTS.findIndex(b => b.id === id); }
@@ -8237,7 +8254,7 @@ function startCpuMatch(format, holes, bot) {
   // bot can have a career day or a blow-up round, not always shoot its number.
   // Ladder bots roll with their own consistency (vol) and offset (bias).
   const dayH = bot
-    ? Math.max(-5, oppH + (bot.bias ?? 1) + gaussRand() * (bot.vol ?? 4))
+    ? Math.max(oppH - 3, oppH + (bot.bias ?? 1) + gaussRand() * (bot.vol ?? 4))  // floor tracks the bot (legend tier goes past -5)
     : Math.max(-4, oppH + 1 + gaussRand() * 4);
   cpuOpp = {
     user_id: null, player_name: name, handicap: oppH, _dayHcp: dayH,
@@ -8376,7 +8393,7 @@ function cpuPlanHole() {
   cpuOpp._eff = eff;                       // ghost arc height uses it too
   const carryOf = k => TUNE.clubs[k].carry * eff * (1 + gaussRand() * 0.04);
   const drvC = TUNE.clubs.driver.carry * eff;
-  const latFrac = (0.035 + hcp * 0.0022) * (cpuOpp._latMul || 1);   // dispersion as a fraction of carry (ladder bots scale it)
+  const latFrac = Math.max(0.004, 0.035 + hcp * 0.0022) * (cpuOpp._latMul || 1);   // dispersion as a fraction of carry (floored — legend hcp would go negative)
   const pts = [];
   if (total === 1) {
     pts.push({ x: pin.x, y: pin.y, kind: "long", club: clubForYards(holeYds) });
