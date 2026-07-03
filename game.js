@@ -97,7 +97,7 @@ const TUNE = {
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
   gvTiltMin: 0.40, gvTiltMax: 1.35,
-  gvHeight: 0.14,        // full height range as a fraction of green radius (realistic, not dramatic)
+  gvHeight: 0.07,        // full height range as a fraction of green radius (~true scale: field spans ±3ft)
   gvYawRate: 0.010,      // rad per horizontal drag px
   gvTiltRate: 0.006,     // rad per vertical drag px
   // Landing behaviour per surface: e = vertical restitution (bounce height),
@@ -2214,7 +2214,7 @@ function drawFlowDots(g) {
   ctx.lineWidth = 2;
   for (const d of g._flow.dots) {
     // streak from pos back along velocity: direction reads even in a still frame
-    ctx.strokeStyle = `rgba(248,250,244,${flowDotAlpha(d).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(18,24,18,${flowDotAlpha(d).toFixed(3)})`;
     ctx.beginPath();
     ctx.moveTo(wx(d.x, d.y), wy(d.x, d.y));
     ctx.lineTo(wx(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail),
@@ -2449,7 +2449,7 @@ function drawGreenView() {
       const a = proj(d.x - m.cx, d.y - m.cy, m.zOf(d.x, d.y));
       const bx = d.x - d.vx * TUNE.flowTrail, by = d.y - d.vy * TUNE.flowTrail;
       const b = proj(bx - m.cx, by - m.cy, m.zOf(bx, by));
-      ctx.strokeStyle = `rgba(248,250,244,${flowDotAlpha(d).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(18,24,18,${flowDotAlpha(d).toFixed(3)})`;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
   }
