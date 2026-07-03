@@ -7599,8 +7599,9 @@ function drawOppGhost() {
   ctx.strokeStyle = "rgba(90,60,10,0.8)";
   ctx.lineWidth = 1;
   ctx.stroke();
-  // name tag above the ball
-  drawLabel(bx, by - r - 9, oppName(), "#ffd65a");
+  // name tag above the ball — hidden on the green, where the pill would sit
+  // right over the cup and hide the hole.
+  if (surfaceAt(g.x, g.y) !== "green") drawLabel(bx, by - r - 9, oppName(), "#ffd65a");
 }
 
 // Start an arc tween when the opponent broadcasts a new shot on this hole.
