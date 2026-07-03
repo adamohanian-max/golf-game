@@ -120,6 +120,11 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
   border-color: rgba(207, 168, 94, 0.55);
   font-family: var(--font-display);
 }
+/* penalty: red-tinted — water / out of bounds */
+#toast.toast-warn {
+  color: #eda49e;
+  border-color: rgba(204, 70, 63, 0.55);
+}
 
 /* ---- Shot-info group: chip strip nested inside the card -------- */
 #stats {

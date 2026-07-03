@@ -23,7 +23,6 @@ const TUNE = {
   chipLandSpread: 0.22,  // bias shifts landFrac: 0.53 (full run) .. 0.75 (neutral) .. 0.97 (land at pin)
   chipSpinRange: 9,      // exponential backspin scale: chipSpin*9^bias -> 0.011 (run) .. 0.1 .. 0.9 (bites/backs up)
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
-  mousePuttScale: 0.75,    // extra putt scalar when swinging with a mouse (−25%; mouse flicks read faster)
   // Putt control band: most putts are short, but max power reaches YARDS.maxPutt (50yd).
   // Two-segment power curve — the first puttControlFrac of input covers 0..puttControlYds
   // (the common 5–40ft band, low sensitivity = easy to lag), the top covers the rest up to max.
@@ -650,6 +649,8 @@ function rollStep(b) {
     state.greenReached = true;
     state.proximity = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
     state.gir = state.strokesOffGreen <= HOLE.par - 2;
+    if (showSlope && earnMilestone("hint-green"))
+      showToast("Contours show the break · arrows point downhill", 2400, "gold");
   }
   if (surf === "green") {
     // Realistic green roll: subtract a constant deceleration from the speed
@@ -776,12 +777,27 @@ function rollStep(b) {
     const rest = surfaceAt(b.x, b.y);
     const isOB = rest === "woods" || rest === "ob"; // trees + out-of-bounds
     if (rest === "water" || (isOB && TUNE.obPenalty)) {
-      // hazard / out of bounds: +1 penalty, drop at last safe spot
+      // hazard / out of bounds: +1 penalty, drop at last safe spot — and SAY so
+      // (a silent teleport reads as the game cheating)
       state.strokes += 1;
+      penaltyAnim = { t0: performance.now(), fx: b.x, fy: b.y };
       b.x = state.lastSafe.x;
       b.y = state.lastSafe.y;
+      playPenalty();
+      haptic(14);
+      showToast(rest === "water" ? "Water · +1 stroke" : "Out of bounds · +1 stroke", 2000, "warn");
     } else {
       state.lastSafe = { x: b.x, y: b.y };
+      const toPinYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+      if (rest === "green" && surfaceAt(shot.startX, shot.startY) !== "green") {
+        // approach finished close — the cheapest praise in golf
+        const ft = toPinYds * 3;
+        if (ft <= 2) showToast("Tap-in range", 1800, "gold");
+        else if (ft <= 8) { showToast(Math.round(ft) + " ft — great shot", 1800, "gold"); playCelebrate(0); }
+      } else if (chipEnabled && rest !== "green" && toPinYds < TUNE.chipRangeYds &&
+                 earnMilestone("hint-chip")) {
+        showToast("Chip mode: a short swipe floats the ball to the flag", 2400, "gold");
+      }
     }
     // reframe to fit the remaining shot and re-aim the camera up the line to the
     // pin (smoothly) so the next shot is already oriented toward the hole.
@@ -915,6 +931,13 @@ function playLand(surface, speed) {
     noiseHit(ac, t, 0.06, 0.09 * v, 250);
     tone(ac, t, 110, 0.07, 0.07 * v, "sine", 70);
   }
+}
+// Penalty — low descending "dunk": the ball is gone, stroke added.
+function playPenalty() {
+  if (muted) return; const ac = ensureAudio(); if (!ac) return;
+  const t = ac.currentTime;
+  tone(ac, t, 220, 0.28, 0.12, "sine", 95);
+  noiseHit(ac, t + 0.05, 0.14, 0.08, 220);
 }
 // "Aww" — a putt rims the cup and stays out. Near-miss = motivating sting.
 function playNearMiss() {
@@ -1081,6 +1104,7 @@ function swingStart(e) {
       camAngle: camera.angle, camScale: camera.scale,
       focusX: camera.focus.x, focusY: camera.focus.y,
     };
+    if (earnMilestone("hint-camera")) showToast("Twist to aim · pinch to zoom", 2200, "gold");
     return;
   }
   // grab the dropped rangefinder marker if the press lands on it (drag to move,
@@ -1228,10 +1252,9 @@ function launchShot(ang, frac, spin, onGreen) {
       // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
       // simple sqrt ramp (its max is already tiny). Range putts keep the on-green ramp.
       const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
-      const mouseScale = swingIsMouse ? TUNE.mousePuttScale : 1;   // mouse putts −25%
       const ramp = onGreen ? puttPowerFrac(f) : Math.sqrt(f);
       const lieMul = (onGreen || !lieEffectEnabled) ? 1 : (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1);  // bump from rough/sand loses pace
-      power = maxPow * TUNE.puttSensitivity * mouseScale * ramp * lieMul;
+      power = maxPow * TUNE.puttSensitivity * ramp * lieMul;
     }
     shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
     b.vx = Math.cos(ang) * power; b.vy = Math.sin(ang) * power;
@@ -1336,6 +1359,8 @@ function swingEnd(e) {
     // not a swing — treat as a tap: drop the rangefinder marker at the tap point
     measurePoint = screenToWorld(end.x, end.y);
     markerDropT = performance.now();
+    if (earnMilestone("hint-marker"))
+      showToast("Drag to move · tap to dismiss · press a green for front/mid/back", 2600, "gold");
     return;
   }
 
@@ -1380,6 +1405,7 @@ function onWheel(e) {
   if (!wheelGesture) {
     wheelGesture = { sx: 0, sy: 0, t0: now, path: [{ x: 0, y: 0, t: now }] };
     setTimeout(finishWheelSwing, WHEEL_WINDOW_MS);
+    if (earnMilestone("hint-keys")) showToast("← → aim · ↑ ↓ club", 2400, "gold");
   }
   wheelGesture.sx += e.deltaX;
   wheelGesture.sy += e.deltaY;
@@ -2241,6 +2267,7 @@ function drawPhotoSurfaces() {
 }
 
 let ballTrail = [];   // recent airborne ball positions (screen px) for motion trail
+let penaltyAnim = null; // { t0, fx, fy } — render-only fade-out at the hazard, fade-in at the drop
 let _vignette = null; // cached edge-darkening gradient, keyed to viewport size
 
 // --- Juice: particles + camera punch + toast --------------------------------
@@ -2298,6 +2325,7 @@ function showToast(text, ms, tone) {
   if (!el) return;
   el.textContent = text;
   el.classList.toggle("toast-gold", tone === "gold");
+  el.classList.toggle("toast-warn", tone === "warn");
   el.classList.remove("hidden");
   el.classList.add("show");
   clearTimeout(_toastTimer);
@@ -2509,16 +2537,47 @@ function draw() {
       ctx.stroke();
     }
 
+    // live swipe: thin direction-only tick from the ball — echoes that input is
+    // registering without giving any power/landing assist
+    if (swipePath && swipePath.length >= 2 && !state.moving) {
+      const p0 = swipePath[0], pl = swipePath[swipePath.length - 1];
+      const sdx = pl.x - p0.x, sdy = pl.y - p0.y, sm = Math.hypot(sdx, sdy);
+      if (sm > 12) {
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(gx, gy);
+        ctx.lineTo(gx + (sdx / sm) * 48, gy + (sdy / sm) * 48);
+        ctx.stroke();
+      }
+    }
+
+    // penalty drop: fade out at the hazard, reappear fading in at the drop spot
+    // (render-only; physics already placed the ball at lastSafe)
+    let pbx = gx, pby = gy, pAlpha = 1;
+    if (penaltyAnim) {
+      const pp = (performance.now() - penaltyAnim.t0) / 500;
+      if (pp >= 1) penaltyAnim = null;
+      else if (pp < 0.5) {
+        pbx = wx(penaltyAnim.fx, penaltyAnim.fy);
+        pby = wy(penaltyAnim.fx, penaltyAnim.fy);
+        pAlpha = 1 - pp * 2;
+      } else {
+        pAlpha = (pp - 0.5) * 2;
+      }
+    }
+    ctx.globalAlpha = pAlpha;
+
     // shadow shrinks slightly as the ball climbs
     const shR = baseR * Math.max(0.45, 1 - b.z * 0.012);
     ctx.beginPath();
-    ctx.ellipse(gx, gy, shR, shR * 0.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(pbx, pby, shR, shR * 0.6, 0, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
     ctx.fill();
 
     // ball grows slightly with height; top-left highlight for a 3D feel
     const r = baseR * (1 + b.z * 0.012);
-    const bx = gx, by = gy - lift;
+    const bx = pbx, by = pby - lift;
     const rg = ctx.createRadialGradient(bx - r * 0.35, by - r * 0.35, r * 0.1, bx, by, r);
     rg.addColorStop(0, "#ffffff");
     rg.addColorStop(0.6, "#f2f2ee");
@@ -2530,6 +2589,7 @@ function draw() {
     ctx.strokeStyle = "rgba(120,120,110,0.7)";
     ctx.lineWidth = 1;
     ctx.stroke();
+    ctx.globalAlpha = 1;
   } else if (holeDrop) {
     // ball-into-cup. Two beats: (1) roll the last bit to the cup, decelerating, with a
     // rim rattle if it arrived with pace; (2) the ball drops BELOW the lip — clipped to
@@ -2845,6 +2905,15 @@ function showResult() {
   // Personal best on this hole (skip the range; daily/course both count)
   const hb = HOLE.isRange ? { isBest: false } : recordHoleBest(holeNum, state.strokes);
 
+  // Ordinary hole (par or worse, no personal best, mid-round): skip the modal —
+  // quick score toast + auto-advance. A forced tap on all 18 holes adds up.
+  if (level === 0 && !hb.isBest && !dailyMode && !matchDecided &&
+      !(course && holeIndex >= roundHoleCount() - 1)) {
+    showToast(title + " · " + formatToPar(round.score), 1600);
+    setTimeout(advanceFromResult, 1100);
+    return;
+  }
+
   const titleEl = document.getElementById("result-title");
   titleEl.textContent = title;
   titleEl.className = "rt-l" + level + (hb.isBest ? " rt-best" : "");
@@ -2873,7 +2942,8 @@ function showResult() {
   if (ms) setTimeout(() => showToast(ms, 2200, "gold"), 400);
 }
 
-document.getElementById("play-again").addEventListener("click", () => {
+// Leave the result (modal tap OR the quick-path auto-advance) and move on.
+function advanceFromResult() {
   elResult.classList.add("hidden");
   // Daily is a single hole → straight to the summary (streak + share live there)
   if (dailyMode) { showRoundSummary(); return; }
@@ -2904,7 +2974,8 @@ document.getElementById("play-again").addEventListener("click", () => {
     return;
   }
   doAdvance();
-});
+}
+document.getElementById("play-again").addEventListener("click", advanceFromResult);
 
 // =====================================================================
 //  Round-end summary
