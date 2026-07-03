@@ -1064,20 +1064,29 @@ function puttPowerFrac(f) {
   return cFrac + (1 - cFrac) * ((f - cf) / (1 - cf));     // steep top segment up to max
 }
 
-function pointerPos(e) {
+// `id` (a touch identifier) pins the position to the SAME finger for the whole
+// gesture. Without it, a stray second contact (palm/thumb while holding the
+// phone one-handed) can reorder `touches[0]` mid-drag and yank the rangefinder
+// marker (or swipe) away from the finger that's actually doing the dragging.
+function pointerPos(e, id) {
   const rect = canvas.getBoundingClientRect();
-  const src = e.touches && e.touches[0] ? e.touches[0]
-            : e.changedTouches && e.changedTouches[0] ? e.changedTouches[0]
-            : e;
+  const src = (id != null && (camTouchOf(e.touches, id) || camTouchOf(e.changedTouches, id)))
+            || (e.touches && e.touches[0])
+            || (e.changedTouches && e.changedTouches[0])
+            || e;
   return { x: src.clientX - rect.left, y: src.clientY - rect.top };
 }
 
 // Two-finger camera state: { id0, id1, cx, cy, dist, angle, camAngle, camScale, focusX, focusY }
 let camTouch = null;
 function camTouchOf(touches, id) {
+  if (!touches) return null;
   for (let i = 0; i < touches.length; i++) if (touches[i].identifier === id) return touches[i];
   return null;
 }
+// Touch identifier the current single-finger gesture (swipe / measure-drag /
+// marker-drag) is pinned to. Null while using mouse input.
+let activeTouchId = null;
 
 // Mobile browsers replay a tap as synthetic mouse events (mousedown/mouseup)
 // after touchend. Those land on the just-dropped rangefinder marker, register
@@ -1091,7 +1100,10 @@ function ghostMouse(e) {
 
 function swingStart(e) {
   if (ghostMouse(e)) return;
-  if (measureMode) { const p = pointerPos(e); measurePoint = screenToWorld(p.x, p.y); measureDragging = true; return; }
+  // Pin this gesture to whichever touch just landed (undefined for mouse —
+  // pointerPos falls back to touches[0]/the event itself in that case).
+  activeTouchId = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].identifier : null;
+  if (measureMode) { const p = pointerPos(e, activeTouchId); measurePoint = screenToWorld(p.x, p.y); measureDragging = true; return; }
   if (e.touches && e.touches.length >= 2) {
     // second finger landed — cancel any pending swing, enter camera-manipulation mode
     swipe = null; swipePath = null;
@@ -1111,7 +1123,7 @@ function swingStart(e) {
   // tap to dismiss). Grace period after the drop: any re-entrant event replaying
   // the tap (synthetic mouse, duplicate touch) must not instantly dismiss it.
   if (measurePoint && performance.now() - markerDropT > 600) {
-    const p = pointerPos(e);
+    const p = pointerPos(e, activeTouchId);
     const mx = wx(measurePoint.x, measurePoint.y), my = wy(measurePoint.x, measurePoint.y);
     if (Math.hypot(p.x - mx, p.y - my) <= MARKER_HIT_PX) {
       markerDrag = { moved: false, x: p.x, y: p.y };
@@ -1122,14 +1134,14 @@ function swingStart(e) {
   if (!canSwing()) return;
   camTouch = null;
   swingIsMouse = !!(e && typeof e.type === "string" && e.type.indexOf("mouse") === 0);
-  const p = pointerPos(e);
+  const p = pointerPos(e, activeTouchId);
   const now = performance.now();
   swipe = { x: p.x, y: p.y, t: now };
   swipePath = [{ x: p.x, y: p.y, t: now }];
 }
 function swingMove(e) {
   if (ghostMouse(e)) return;
-  if (measureMode) { if (measureDragging) { e.preventDefault(); const p = pointerPos(e); measurePoint = screenToWorld(p.x, p.y); } return; }
+  if (measureMode) { if (measureDragging) { e.preventDefault(); const p = pointerPos(e, activeTouchId); measurePoint = screenToWorld(p.x, p.y); } return; }
   if (camTouch && e.touches && e.touches.length >= 2) {
     // two-finger camera: pinch (zoom), drag (pan), twist (rotate)
     e.preventDefault();
@@ -1163,14 +1175,14 @@ function swingMove(e) {
   }
   if (markerDrag) {
     e.preventDefault();
-    const p = pointerPos(e);
+    const p = pointerPos(e, activeTouchId);
     if (Math.hypot(p.x - markerDrag.x, p.y - markerDrag.y) > 4) markerDrag.moved = true;
     measurePoint = screenToWorld(p.x, p.y);
     return;
   }
   if (!swipe) return;
   e.preventDefault();
-  const p = pointerPos(e);
+  const p = pointerPos(e, activeTouchId);
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
 }
 
@@ -1344,7 +1356,7 @@ function swingEnd(e) {
     return;
   }
   if (!swipe || !canSwing()) { swipe = null; swipePath = null; return; }
-  const p = pointerPos(e);
+  const p = pointerPos(e, activeTouchId);
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
   const path = swipePath;
   swipe = null; swipePath = null;
@@ -1378,6 +1390,7 @@ canvas.addEventListener("touchend", swingEnd);
 // in-flight input state so the next tap starts clean
 canvas.addEventListener("touchcancel", () => {
   swipe = null; swipePath = null; camTouch = null; markerDrag = null; measureDragging = false;
+  activeTouchId = null;
 });
 canvas.addEventListener("mousedown", swingStart);
 canvas.addEventListener("mousemove", swingMove);
@@ -3479,7 +3492,7 @@ function showCourseSelect() {
   if (ctx) {
     if (matchSetupMode) {
       const ov = document.getElementById("match-setup");
-      const fmt = ov && ov.dataset.format === "match" ? "Match play" : "Stroke race";
+      const fmt = ov && ov.dataset.format === "match" ? "Match play" : "Stroke play";
       const holes = (ov && ov.dataset.holes) || "18";
       ctx.textContent = `Pick the course for your match · ${fmt} · ${holes} holes`;
       ctx.classList.remove("hidden");
@@ -6605,7 +6618,7 @@ async function beginMatch(courseId, holeCount, settings, format, live) {
     hole_count: holeCount,
     settings: normalizeSettings(settings),
     format: isMatch ? "match" : "stroke",
-    live: isMatch && !!live,   // Live is match-play only
+    live: !!live,   // 1v1 turn-based; works for both match play and stroke play
     status: "live",
     started_at: new Date().toISOString(),
   };
@@ -6821,14 +6834,15 @@ async function openMatchSetup(preserve) {
   syncMatchFormatButtons();
   syncMatchLiveButton();
   ov.classList.remove("hidden");
-  // Match play is 1v1 only — enable it only when exactly 2 players are present.
+  // Match play AND live are 1v1 only — both need exactly 2 players present.
   const players = await fetchMatchPlayers(activeMatch ? activeMatch.id : null);
   const twoUp = players.length === 2;
+  ov.dataset.two = twoUp ? "1" : "0";
   const fmtBtn = ov.querySelector('.ms-fmt[data-format="match"]');
   const note = document.getElementById("ms-fmt-note");
   if (fmtBtn) fmtBtn.disabled = !twoUp;
   if (!twoUp) { ov.dataset.format = "stroke"; ov.dataset.live = "0"; syncMatchFormatButtons(); }
-  if (note) note.textContent = twoUp ? "" : "Match play needs exactly 2 players";
+  if (note) note.textContent = twoUp ? "" : "Match play & live need exactly 2 players";
   syncMatchLiveButton();
 }
 function syncMatchLengthButtons() {
@@ -6841,15 +6855,16 @@ function syncMatchFormatButtons() {
   const fmt = ov.dataset.format;
   ov.querySelectorAll(".ms-fmt").forEach(b => b.classList.toggle("active", b.dataset.format === fmt));
 }
-// "Live" toggle — shown/enabled only for match play (1v1), forced off otherwise.
+// "Live" toggle — any format, but 1v1 only (the turn/ghost machinery is
+// two-player); hidden and forced off unless exactly 2 players are in.
 function syncMatchLiveButton() {
   const ov = document.getElementById("match-setup");
   const btn = document.getElementById("ms-live");
   if (!btn) return;
-  const isMatch = ov.dataset.format === "match";
-  if (!isMatch) ov.dataset.live = "0";
-  btn.classList.toggle("hidden", !isMatch);
-  btn.classList.toggle("active", isMatch && ov.dataset.live === "1");
+  const can = ov.dataset.two === "1";
+  if (!can) ov.dataset.live = "0";
+  btn.classList.toggle("hidden", !can);
+  btn.classList.toggle("active", can && ov.dataset.live === "1");
 }
 function closeMatchSetup() {
   const ov = document.getElementById("match-setup");
@@ -6868,7 +6883,7 @@ async function startConfiguredMatch() {
   const ov = document.getElementById("match-setup");
   const holes = parseInt(ov.dataset.holes, 10) || 18;
   const format = ov.dataset.format === "match" ? "match" : "stroke";
-  const live = format === "match" && ov.dataset.live === "1";
+  const live = ov.dataset.live === "1";   // any format, gated to 1v1 by the toggle
   hideCourseSelect();
   showToast("Starting match…", 1500);
   const ok = await beginMatch(selectedCourseId, holes, _matchSetupSettings, format, live);
@@ -6961,7 +6976,7 @@ function toggleMatchBoard(force) {
 }
 // 1v1 match play now shows its up/down status right on the scorecard
 // (updateScorecard), so the standings panel would just be a redundant popup —
-// only auto-open it for multiplayer stroke-race formats. Match play can still
+// only auto-open it for multiplayer stroke-play formats. Match play can still
 // open it manually from the HUD menu (#hm-match) if you want the opponent's
 // per-hole detail.
 function autoShowMatchBoard() { if (!matchPlay()) toggleMatchBoard(true); }
@@ -7308,7 +7323,7 @@ async function renderMatchBoard() {
     return;
   }
 
-  // --- stroke race: sorted standings (positions w/ ties, "F" when done) ---
+  // --- stroke play: sorted standings (positions w/ ties, "F" when done) ---
   const ranked = rankMatchRows(rows);
   const allDone = ranked.length && ranked.every(r => r.finished);
   if (title) title.textContent = allDone ? "Final standings" : "Match standings";
@@ -7382,7 +7397,7 @@ async function renderMatchResults() {
     return;
   }
 
-  // Stroke race: ranked standings + the player's live position.
+  // Stroke play: ranked standings + the player's live position.
   const ranked = rankMatchRows(rows);
   const meRow = ranked.find(isMeEntry);
   if (bannerEl) {
