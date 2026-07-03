@@ -506,7 +506,8 @@ def main():
                                                              + surfaces["tee"]),
                                              guard_polys=(surfaces["green"]
                                                           + surfaces["tee"]
-                                                          + surfaces["bunker"]))
+                                                          + surfaces["bunker"]),
+                                             fairway_world=surfaces["fairway"])
                 if mask:
                     mask["file"] = mrel
                     course["surfaceMask"] = mask

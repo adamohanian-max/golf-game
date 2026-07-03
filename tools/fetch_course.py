@@ -86,6 +86,8 @@ MASK_DESPECKLE = 5        # ModeFilter window (odd) to kill single-pixel noise
 # OOB only applies OUTSIDE the playing envelope (buffered hole corridors). Inside
 # it, a non-turf pixel (sand/path/dirt) is just rough, not out of bounds.
 MASK_CORRIDOR_UNITS = 26  # corridor half-width (~78 yds) -> course envelope
+MASK_WOODS_CORRIDOR_UNITS = 12  # no heuristic WOODS within this of a centerline (~36 yds; shadows across fairways read as forest)
+MASK_WOODS_FW_HALO_UNITS = 5    # ...or within this of a mapped fairway edge (~15 yds; same shadow problem on doglegs off the straight line)
 # The envelope is the union of the boundary polygon, the hole corridors AND the
 # OSM play polygons (fairway/green/tee/bunker), grown outward a little: OSM parcel
 # lines often cut through real dunes/fairway edges (coastal + multi-parcel courses).
@@ -294,7 +296,7 @@ def _dilate(im, radius_px):
 
 def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path,
                        boundary=None, bunker_world=None, envelope_polys=None,
-                       guard_polys=None):
+                       guard_polys=None, fairway_world=None):
     """Classify the baked aerial into a coarse fairway/rough/woods/OOB raster.
     Returns {file,w,h,toWorld:[...]} (mask px -> world affine) or None to skip.
 
@@ -310,7 +312,12 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
 
     guard_polys (OSM green/tee/bunker polygons): tree canopy overhanging their
     edges classifies as WOODS (a penalty surface) — within MASK_PLAY_GUARD_UNITS
-    of them WOODS is demoted to ROUGH, even over the OSM woods prior."""
+    of them WOODS is demoted to ROUGH, even over the OSM woods prior.
+
+    fairway_world (mapped OSM fairway polygons): ground truth — pasted in as
+    FAIRWAY last, so tree shadows falling across a real fairway can never
+    label it WOODS/OB (mask outranks the vector fairway at runtime, so a
+    mislabel here becomes a penalty in the middle of the short grass)."""
     if Image is None or not aerial:
         return None
     try:
@@ -384,6 +391,37 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
         # despeckle (mode filter keeps it index-valued)
         lab = lab.filter(ImageFilter.ModeFilter(MASK_DESPECKLE))
 
+        # heuristic WOODS near a hole centerline is almost always tree shadow
+        # streaking across the line of play (leafless/low-sun aerials), and it
+        # plays as a penalty — demote it to ROUGH inside a narrow corridor.
+        # Runs BEFORE the OSM woods paste, so mapped forest (a real dogleg
+        # corner) stays WOODS even on the corridor.
+        if (corridors or fairway_world) and w2p is not None:
+            cor_im = Image.new("L", (mw, mh), 0)
+            dc = ImageDraw.Draw(cor_im)
+            ia, ib, ic, id_, ie, if_ = w2p
+            cw = max(1, round(2 * MASK_WOODS_CORRIDOR_UNITS / units_per_px))
+            for line in (corridors or []):
+                pts = [(ia * p["x"] + ib * p["y"] + ic,
+                        id_ * p["x"] + ie * p["y"] + if_) for p in line]
+                if len(pts) >= 2:
+                    dc.line(pts, fill=255, width=cw, joint="curve")
+            # doglegs bend off the straight corridor: also demote around the
+            # mapped fairways themselves (dilated by the halo)
+            if fairway_world:
+                fw_im = Image.new("L", (mw, mh), 0)
+                df = ImageDraw.Draw(fw_im)
+                for poly in fairway_world:
+                    pts = [(ia * p["x"] + ib * p["y"] + ic,
+                            id_ * p["x"] + ie * p["y"] + if_) for p in poly]
+                    if len(pts) >= 3:
+                        df.polygon(pts, fill=255)
+                fw_im = _dilate(fw_im, MASK_WOODS_FW_HALO_UNITS / units_per_px)
+                cor_im = ImageChops.lighter(cor_im, fw_im)
+            idx = Image.frombytes("L", (mw, mh), lab.tobytes())
+            woods_im = idx.point(lambda i: 255 if i == MASK_WOODS else 0)
+            lab.paste(MASK_ROUGH, mask=ImageChops.multiply(woods_im, cor_im))
+
         # union the OSM woods polygons in as WOODS (strong prior over the heuristic)
         if woods_world and w2p is not None:
             ia, ib, ic, id_, ie, if_ = w2p
@@ -405,6 +443,18 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
                         id_ * p["x"] + ie * p["y"] + if_) for p in poly]
                 if len(pts) >= 3:
                     draw.polygon(pts, fill=MASK_ROUGH)
+
+        # mapped fairways are ground truth: whatever the pixels look like
+        # (tree shadow, dark stripe), inside a real OSM fairway polygon the
+        # label is FAIRWAY. Painted before the guard pass, after the priors.
+        if fairway_world and w2p is not None:
+            ia, ib, ic, id_, ie, if_ = w2p
+            draw = ImageDraw.Draw(lab)
+            for poly in fairway_world:
+                pts = [(ia * p["x"] + ib * p["y"] + ic,
+                        id_ * p["x"] + ie * p["y"] + if_) for p in poly]
+                if len(pts) >= 3:
+                    draw.polygon(pts, fill=MASK_FAIRWAY)
 
         # no forest hugs a green/tee/bunker — WOODS within the guard halo of a
         # mapped play feature is overhanging canopy shade, demote it to ROUGH

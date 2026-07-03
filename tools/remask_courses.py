@@ -121,9 +121,14 @@ def audit_course(slug):
     wdm = lab.point([255 if i == 3 else 0 for i in range(256)])
     wd_grn = ImageChops.multiply(wdm, grn).histogram()[255]
     n_grn = grn.histogram()[255]
+    # WOODS in the tee->pin band: also a penalty surface — a shadow-streaked
+    # fairway labels as forest and plays like OB mid-fairway (the Muirfield
+    # Village CC complaint); the OB-only band metric was blind to it.
+    wd_band = ImageChops.multiply(wdm, band).histogram()[255]
     return (100.0 * ob_fw / n_fw if n_fw else 0.0,
             100.0 * ob_band / n_band if n_band else 0.0,
-            100.0 * wd_grn / n_grn if n_grn else 0.0)
+            100.0 * wd_grn / n_grn if n_grn else 0.0,
+            100.0 * wd_band / n_band if n_band else 0.0)
 
 
 def remask(slug, dry):
@@ -147,7 +152,8 @@ def remask(slug, dry):
         envelope_polys=(surf.get("fairway", []) + surf.get("green", [])
                         + surf.get("tee", [])),
         guard_polys=(surf.get("green", []) + surf.get("tee", [])
-                     + surf.get("bunker", [])))
+                     + surf.get("bunker", [])),
+        fairway_world=surf.get("fairway", []))
     if not mask:
         return "FAIL (build_surface_mask returned None)"
     mask["file"] = mrel
@@ -172,12 +178,12 @@ def main():
             r = audit_course(slug)
             if r:
                 rows.append((slug, *r))
-        rows.sort(key=lambda r: -(r[2] + r[3]))
-        print(f"{'course':46} {'obFW%':>6} {'band8%':>7} {'wdGrn%':>7}")
-        for slug, obfw, band, wdgrn in rows:
-            print(f"{slug:46} {obfw:6.1f} {band:7.1f} {wdgrn:7.1f}")
-        n_bad = sum(1 for r in rows if r[2] > 5 or r[1] > 1 or r[3] > 2)
-        print(f"-- {len(rows)} courses, {n_bad} with band8>5%, obFW>1% or wdGrn>2%")
+        rows.sort(key=lambda r: -(r[2] + r[3] + r[4]))
+        print(f"{'course':46} {'obFW%':>6} {'band8%':>7} {'wdGrn%':>7} {'wdBand%':>8}")
+        for slug, obfw, band, wdgrn, wdband in rows:
+            print(f"{slug:46} {obfw:6.1f} {band:7.1f} {wdgrn:7.1f} {wdband:8.1f}")
+        n_bad = sum(1 for r in rows if r[2] > 5 or r[1] > 1 or r[3] > 2 or r[4] > 5)
+        print(f"-- {len(rows)} courses, {n_bad} with band8>5%, obFW>1%, wdGrn>2% or wdBand>5%")
         return
 
     ok = fail = skip = 0
