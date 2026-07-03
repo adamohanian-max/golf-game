@@ -91,8 +91,8 @@ const TUNE = {
   flowSpeed: 0.018,      // world units/frame at max gradient
   flowMinFrac: 0.15,     // floor speed fraction on near-flat spots
   flowTTLMin: 90, flowTTLMax: 210,  // dot lifetime (frames)
-  flowAlpha: 0.6,        // peak dot opacity
-  flowTrail: 4,          // streak length in frames of motion
+  flowAlpha: 0.78,       // peak dot opacity
+  flowTrail: 6,          // streak length in frames of motion
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
@@ -2206,12 +2206,12 @@ function updateFlowDots(g) {
 function flowDotAlpha(d) {
   const u = d.age / d.ttl;                              // fade in 0..0.15, out 0.7..1
   const fade = Math.min(1, u / 0.15, (1 - u) / 0.3);
-  return fade * TUNE.flowAlpha * (0.45 + 0.55 * d.t);
+  return fade * TUNE.flowAlpha * (0.55 + 0.45 * d.t);
 }
 function drawFlowDots(g) {
   if (!g._flow) return;
   ctx.lineCap = "round";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.4;
   for (const d of g._flow.dots) {
     // streak from pos back along velocity: direction reads even in a still frame
     ctx.strokeStyle = `rgba(10,105,48,${flowDotAlpha(d).toFixed(3)})`;
@@ -2444,7 +2444,7 @@ function drawGreenView() {
   updateFlowDots(gv.g);
   if (gv.g._flow) {
     ctx.lineCap = "round";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.4;
     for (const d of gv.g._flow.dots) {
       const a = proj(d.x - m.cx, d.y - m.cy, m.zOf(d.x, d.y));
       const bx = d.x - d.vx * TUNE.flowTrail, by = d.y - d.vy * TUNE.flowTrail;
