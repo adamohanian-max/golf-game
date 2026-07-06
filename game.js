@@ -271,6 +271,121 @@ function autoClub() {
 }
 
 // =====================================================================
+//  Analytics
+// =====================================================================
+// Thin, no-op-safe wrapper over PostHog (initialised cookieless in index.html).
+// Never throws, so a missing key or a blocked CDN can't affect gameplay. Only
+// product-usage events for retention/funnels — no PII beyond an anonymous id.
+function track(event, props) {
+  try { if (window.posthog && posthog.capture) posthog.capture(event, props || {}); }
+  catch (e) { /* analytics must never break the game */ }
+}
+
+// =====================================================================
+//  Ads — rewarded, opt-in ONLY (see ADS.md)
+// =====================================================================
+// Hard rule: an ad NEVER plays without an explicit player tap. No interstitials,
+// no banners over gameplay. showRewarded() is the single entry point; it's
+// provider-agnostic so the SDK can be swapped without touching game logic.
+const ADS = {
+  enabled: true,        // master switch (a future no-ads purchase also disables)
+  provider: "stub",     // "stub" (demo) | "crazygames" | "gam" — swap when a real SDK is wired
+};
+
+// May we offer an ad right now? (Respects the no-ads flag + age.) Callers gate
+// the *offer* on this; the ad itself still needs a tap.
+function adsAvailable() {
+  if (!ADS.enabled) return false;
+  if (lsGet("golf.noAds", false)) return false;         // future "remove ads" entitlement
+  if (lsGet("golf.under13", false)) return false;        // never serve ads to minors
+  return true;
+}
+
+// Play a rewarded ad. Resolves true only if the player watched to the reward,
+// false if they closed early or none was available. PLAYER-INITIATED ONLY.
+function showRewarded(reason) {
+  track("ad_offer_taken", { reason, provider: ADS.provider });
+  try {
+    // Real providers (wire when ready) — both expose a promise/callback that
+    // resolves on reward. Keep the shapes here so swapping is a one-liner.
+    if (ADS.provider === "crazygames" &&
+        window.CrazyGames && CrazyGames.SDK && CrazyGames.SDK.ad) {
+      return CrazyGames.SDK.ad.requestAd("rewarded")
+        .then(() => true).catch(() => false);
+    }
+    // TODO(gam): Google H5 Games Ads rewarded via googletag.rewardedSlot().
+  } catch (e) { /* fall through to the demo */ }
+  return showStubAd(reason);   // dev/demo: a labelled placeholder, resolves true after a beat
+}
+
+// =====================================================================
+//  Sharing — native share sheet with clipboard fallback (viral loop)
+// =====================================================================
+// The public game URL every share points at (NOT location.origin — a share from
+// a localhost/dev build should still send people to the real game).
+const SHARE_URL = "https://adamohanian-max.github.io/golf-game/";
+
+// Share a result via the OS share sheet (navigator.share, mobile) → clipboard
+// fallback (desktop). Must be called from a user gesture (a button click).
+async function shareResult(text) {
+  track("share_taken", { where: "round" });
+  try {
+    if (navigator.share) { await navigator.share({ text, url: SHARE_URL }); return; }
+  } catch (e) {
+    if (e && e.name === "AbortError") return;   // user dismissed the sheet — not an error
+  }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text + " " + SHARE_URL);
+      showToast("Copied — paste to share", 2000);
+      return;
+    }
+  } catch (e) { /* fall through */ }
+  showToast("Sharing isn't available here", 1800);
+}
+
+// One-line share caption for the round just finished (daily includes the streak).
+function roundShareText() {
+  const totStrk = round.holeStats.reduce((s, h) => s + h.strokes, 0);
+  if (dailyMode) {
+    const st = getDaily();
+    const date = (dailyInfo && dailyInfo.date) || todayStr();
+    return `Golf Daily ${date} · ${totStrk} (${formatToPar(round.score)}) · ⛳️🔥${st.streak || 1}`;
+  }
+  const cn = course ? course.name : "Golf";
+  return `⛳️ I shot ${totStrk} (${formatToPar(round.score)}) at ${cn} on Golf`;
+}
+
+// Demo "ad": a clearly-labelled placeholder so the rewarded flow is testable
+// before a real SDK exists. Never ships as a real ad — swap ADS.provider.
+function showStubAd(reason) {
+  return new Promise((resolve) => {
+    const ov = document.getElementById("ad-stub");
+    const claim = document.getElementById("ad-stub-claim");
+    const cancel = document.getElementById("ad-stub-cancel");
+    const count = document.getElementById("ad-stub-count");
+    if (!ov || !claim || !cancel) { resolve(true); return; }
+    let n = 3, timer = null;
+    const cleanup = (result) => {
+      if (timer) clearInterval(timer);
+      claim.onclick = cancel.onclick = null;
+      ov.classList.add("hidden");
+      resolve(result);
+    };
+    claim.disabled = true;
+    count.textContent = `Reward in ${n}…`;
+    ov.classList.remove("hidden");
+    timer = setInterval(() => {
+      n -= 1;
+      if (n <= 0) { clearInterval(timer); timer = null; claim.disabled = false; count.textContent = "Ready"; }
+      else count.textContent = `Reward in ${n}…`;
+    }, 1000);
+    claim.onclick = () => cleanup(true);
+    cancel.onclick = () => cleanup(false);
+  });
+}
+
+// =====================================================================
 //  State
 // =====================================================================
 let state;
@@ -3484,6 +3599,40 @@ function draw() {
     ctx.fillRect(0, 0, cssW, cssH);
     if (p >= 1) holeTransition = null;
   }
+
+  drawAttribution();
+}
+
+// On-map data/imagery credit (ODbL requires visible OSM attribution; NAIP/Esri
+// terms ask for an imagery credit). Bottom-left, faint, only while the map is on
+// screen (not behind the home menu). Originals aren't OSM-derived so they skip
+// the OSM line; the menu fineprint carries the clickable openstreetmap.org link.
+function drawAttribution() {
+  if (!HOLE || HOLE.isRange) return;
+  if (!elMenu.classList.contains("hidden")) return;   // hidden behind the home menu
+  const meta = COURSES.find((c) => c.id === selectedCourseId);
+  const isOriginal = meta && meta.region === "Originals";
+  const src = HOLE.aerial && HOLE.aerial.src;
+  const lines = [
+    isOriginal ? "" : "© OpenStreetMap contributors",
+    HOLE.aerial ? (src === "naip" ? "Imagery: USGS / NAIP" : "Imagery © Esri") : "",
+  ].filter(Boolean);
+  if (!lines.length) return;
+  ctx.save();
+  ctx.font = "10px system-ui, -apple-system, sans-serif";
+  ctx.textBaseline = "bottom";
+  ctx.textAlign = "left";
+  const pad = 6;
+  let y = window.innerHeight - pad;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(0,0,0,0.45)";
+    ctx.strokeText(lines[i], pad, y);
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    ctx.fillText(lines[i], pad, y);
+    y -= 13;
+  }
+  ctx.restore();
 }
 
 // Animate a hole change: `advanceFn` performs the actual setHole at the fade midpoint.
@@ -3679,9 +3828,16 @@ function showResult() {
   const conceded = state._conceded; state._conceded = false;
   const hb = (HOLE.isRange || conceded) ? { isBest: false } : recordHoleBest(holeNum, state.strokes);
 
+  // Rewarded "replay this hole": offered only on a bad solo-round hole (bogey+),
+  // once per hole, and only when an ad is available. Player-initiated (see ADS.md).
+  const canRetry = !HOLE.isRange && mode === "course" && !inMatch() && !dailyMode &&
+    !activeTournamentRound && course && d >= 1 &&
+    !(round._retried && round._retried.has(holeIndex)) && adsAvailable();
+
   // Ordinary hole (par or worse, no personal best, mid-round): skip the modal —
   // quick score toast + auto-advance. A forced tap on all 18 holes adds up.
-  if ((level === 0 || conceded) && !hb.isBest && !dailyMode && !matchDecided &&
+  // A retry-eligible blow-up forces the modal so the offer can be shown.
+  if ((level === 0 || conceded) && !hb.isBest && !dailyMode && !matchDecided && !canRetry &&
       !(course && holeIndex >= roundHoleCount() - 1)) {
     // Match play: say what the hole meant ("Hole lost · 2 down") when the
     // opponent's score is already in; otherwise the running score.
@@ -3700,6 +3856,11 @@ function showResult() {
   else if (hb.isBest && hb.prev == null && !HOLE.isRange) detail += `\nFirst time on this hole — best set`;
   else if (hb.prev != null) detail += `\nYour best: ${hb.prev}` + (state.strokes > hb.prev ? ` — ${state.strokes - hb.prev} to beat` : "");
   document.getElementById("result-detail").textContent = detail;
+  const retryBtn = document.getElementById("result-retry");
+  if (retryBtn) {
+    if (canRetry) { _retryCtx = { d, holeNum }; retryBtn.disabled = false; retryBtn.classList.remove("hidden"); }
+    else { _retryCtx = null; retryBtn.classList.add("hidden"); }
+  }
   elResult.classList.remove("hidden");
 
   // Juice: sound + confetti + camera punch scaled to the moment
@@ -3753,6 +3914,33 @@ function advanceFromResult() {
   doAdvance();
 }
 document.getElementById("play-again").addEventListener("click", advanceFromResult);
+
+// Rewarded "replay this hole": undo the just-folded hole score, then re-tee the
+// SAME hole. Only reachable from the modal button, which is shown only when
+// canRetry (bogey+ solo hole, once per hole, ad available). See showResult/ADS.md.
+let _retryCtx = null;
+(function wireRetryHole() {
+  const btn = document.getElementById("result-retry");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    const ctx = _retryCtx;
+    if (!ctx || !course) return;
+    btn.disabled = true;
+    const ok = await showRewarded("retry-hole");
+    if (!ok) { btn.disabled = false; return; }   // cancelled — no reward, modal stays
+    track("ad_reward_granted", { reason: "retry-hole" });
+    // reverse this hole's fold (mirror of showResult's score/stats update)
+    round.score -= ctx.d;
+    round.holesPlayed -= 1;
+    const j = round.holeStats.map(s => s.hole).lastIndexOf(ctx.holeNum);
+    if (j >= 0) round.holeStats.splice(j, 1);
+    (round._retried || (round._retried = new Set())).add(holeIndex);
+    _retryCtx = null;
+    updateScorecard();
+    elResult.classList.add("hidden");
+    advanceHole(() => setHole(course.holes[holeIndex]));   // replay same hole from the tee
+  });
+})();
 
 // =====================================================================
 //  Round-end summary
@@ -3877,6 +4065,9 @@ function showRoundSummary(midRound = false) {
   document.getElementById("re-confirm-match").classList.toggle("hidden", !matchEnd);
   document.getElementById("re-home").classList.toggle("hidden", matchEnd);
   document.getElementById("re-leaderboard").classList.toggle("hidden", matchEnd);
+  // Share: only a finished solo/daily round is worth sharing (not mid-round peeks
+  // or the single-flow match end). The viral "I played X" hook.
+  document.getElementById("re-share").classList.toggle("hidden", midRound || matchEnd);
   // reset to scorecard tab each open
   document.querySelectorAll(".re-tab").forEach(t => t.classList.toggle("active", t.dataset.panel === "re-card"));
   document.querySelectorAll(".re-panel").forEach(p => p.classList.toggle("hidden", p.id !== "re-card"));
@@ -3921,6 +4112,8 @@ document.querySelectorAll(".re-tab").forEach(btn => {
     document.querySelectorAll(".re-panel").forEach(p => p.classList.toggle("hidden", p.id !== target));
   });
 });
+
+document.getElementById("re-share").addEventListener("click", () => shareResult(roundShareText()));
 
 document.getElementById("re-home").addEventListener("click", () => {
   document.getElementById("round-end").classList.add("hidden");
@@ -4083,7 +4276,24 @@ function setHole(rec) {
     elHint.classList.remove("hidden");
     positionHint();
   }
+  if (!HOLE.isRange) maybeShowOnboarding();
 }
+
+// First-run "How to play" card — shown once, the first time a player reaches a
+// real hole (localStorage golf.onboarded). Plugs the drop-in learning gap without
+// nagging returning players. Wired to its own dismiss button at boot.
+function maybeShowOnboarding() {
+  if (lsGet("golf.onboarded", false)) return;
+  const ov = document.getElementById("onboarding");
+  if (ov) ov.classList.remove("hidden");
+}
+(function wireOnboarding() {
+  const ov = document.getElementById("onboarding");
+  const done = document.getElementById("ob-got");
+  const dismiss = () => { if (ov) ov.classList.add("hidden"); lsSet("golf.onboarded", true); };
+  if (done) done.addEventListener("click", dismiss);
+  if (ov) ov.addEventListener("click", (e) => { if (e.target === ov) dismiss(); });
+})();
 
 // Hardcoded fallback (offline / file:// or fetch failure): a simple par 4.
 function circlePoly(cx, cy, r, n) {
@@ -5132,6 +5342,7 @@ function startCourse() {
   }
   mode = "course";
   dailyMode = false;
+  track("round_start", { mode: matchLive() ? "match" : "solo", course: selectedCourseId });
   // Match rounds use the match's frozen conditions; tournament rounds use the
   // tournament's; otherwise the global defaults. Apply before setHole so
   // wind/auto-club pick them up.
@@ -5156,6 +5367,7 @@ function startCourse() {
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
+  round._retried = new Set();   // hole indexes already replayed via a rewarded ad (once each)
   // Match + tournament pins are frozen per game so every entrant gets the same
   // pins; casual rounds get fresh pins each time.
   round.pinSeed = matchLive()
@@ -5209,6 +5421,7 @@ async function startDaily() {
   const dateStr = todayStr();
   const c = dailyCourseFor(dateStr);
   mode = "course"; dailyMode = true; activeTournamentRound = null;
+  track("round_start", { mode: "daily", course: c });
   activeSettings = normalizeSettings(gameDefaults);
   applySettings(activeSettings);
   elMenu.classList.add("hidden");
@@ -5223,6 +5436,7 @@ async function startDaily() {
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
+  round._retried = new Set();   // hole indexes already replayed via a rewarded ad (once each)
   round.pinSeed = strSeed(dateStr);  // date-seeded pins: same for everyone today
   try {
     if (!course || course.id !== c.id) await loadCourse(c.id);
@@ -5254,6 +5468,7 @@ function finishDaily(totStrk) {
     st.lastDate = dateStr; st.lastScore = totStrk; st.lastToPar = round.score;
     lsSet("golf.daily", st);
   }
+  track("daily_played", { streak: st.streak, strokes: totStrk, to_par: round.score });
   spawnBurst(HOLE.holePos.x, HOLE.holePos.y, "confetti");
   const sub = document.getElementById("re-subtitle");
   sub.textContent += ` · Streak ${st.streak}`;
@@ -5395,6 +5610,7 @@ async function verifyOtp(email, code) {
     const tok = await res.json();   // { access_token, refresh_token, user, ... }
     if (!tok.access_token) return false;
     storeTokens(tok, tok.user || null);
+    track("signup_complete");
     return true;
   } catch (e) { console.warn("OTP verify failed:", e); return false; }
 }
@@ -5655,6 +5871,11 @@ function closeAuthModal() {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) {
       err.textContent = "Enter a valid email."; err.classList.remove("hidden"); return;
     }
+    const ageCk = document.getElementById("auth-age-ck");
+    if (ageCk && !ageCk.checked) {
+      err.textContent = "Please confirm you're 13 or older and accept the Terms.";
+      err.classList.remove("hidden"); return;
+    }
     if (!LB_ON()) {
       err.textContent = "Auth not configured (set LB_URL / LB_KEY)."; err.classList.remove("hidden"); return;
     }
@@ -5879,6 +6100,8 @@ function submitFinishedRound() {
   round._submitted = true;
   const payload = buildRoundPayload();
   if (!payload) return;
+  track("round_complete", { course: payload.course_id, holes: payload.hole_count,
+    strokes: payload.strokes, to_par: payload.to_par, signed_in: !!payload.user_id });
   const btn = document.getElementById("re-leaderboard");
   const post = () => {
     payload.name = getPlayerName();   // pick up a name set just now
@@ -6179,7 +6402,42 @@ function closeAccountViewer() {
   if (close) close.addEventListener("click", closeAccountViewer);
   const out = document.getElementById("av-signout");
   if (out) out.addEventListener("click", async () => { await signOut(); closeAccountViewer(); updateMenuPlayerLine(); });
+  const del = document.getElementById("av-delete");
+  if (del) del.addEventListener("click", deleteMyAccount);
 })();
+
+// Self-serve account + data deletion (privacy.html / COPPA/GDPR right-to-erasure).
+// Tries the delete_account() RPC first (removes the auth user + all rows in one
+// server-side transaction; see schema.sql); falls back to deleting the user's own
+// rows directly under per-row RLS. Either way the local session is cleared.
+async function deleteMyAccount() {
+  const u = currentUser();
+  if (!LB_ON() || !u || !u.id) { showToast("Not signed in", 2000); return; }
+  if (!confirm("Delete your account and ALL your scores? This can't be undone.")) return;
+  if (!confirm("Are you sure? This permanently removes your data.")) return;
+  const del = document.getElementById("av-delete");
+  if (del) { del.disabled = true; del.textContent = "Deleting…"; }
+  let ok = false;
+  try {
+    // Preferred: one server-side transaction that also removes the auth user.
+    const r = await fetch(LB_URL + "/rest/v1/rpc/delete_account", {
+      method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: "{}",
+    });
+    ok = r.ok;
+    if (!ok) {
+      // Fallback: delete my own rows directly (RLS scopes these to me).
+      for (const path of [`rounds?user_id=eq.${u.id}`, `profiles?id=eq.${u.id}`]) {
+        await fetch(LB_URL + "/rest/v1/" + path, { method: "DELETE", headers: authHeaders({ Prefer: "return=minimal" }) });
+      }
+      ok = true;
+    }
+  } catch (e) { console.warn("account delete failed:", e); }
+  if (del) { del.disabled = false; del.textContent = "Delete account & data"; }
+  await signOut();
+  closeAccountViewer();
+  updateMenuPlayerLine();
+  showToast(ok ? "Account and data deleted" : "Signed out — email us to finish deletion", 3000);
+}
 
 // =====================================================================
 //  Friends — unique-handle friend graph (request → accept), friend
@@ -7429,6 +7687,7 @@ async function fetchMatchPlayers(matchId) {
 
 async function beginMatch(courseId, holeCount, settings, format, live) {
   if (!LB_ON() || !activeMatch) return false;
+  track("match_start", { kind: live ? "live" : "async", format, holes: holeCount });
   const isMatch = format === "match";
   const patch = {
     course_id: courseId,
@@ -8706,6 +8965,7 @@ function nextBotAfter(id) { const i = botIndex(id); return i >= 0 ? BOTS[i + 1] 
 function startCpuMatch(format, holes, bot) {
   stopQuickMatch();
   _qm = null;
+  track("match_start", { kind: bot ? "bot" : "cpu", format, holes, bot: bot ? bot.id : null });
   const isMatch = format === "match";
   cpuMatch = true; matchDecided = false; _matchEntered = false;
   matchHoleCount = holes;
@@ -9542,4 +9802,5 @@ loadManifest().then(() => {
     if (gs) { gameDefaults = normalizeSettings(gs); activeSettings = Object.assign({}, gameDefaults); }
   } catch (e) { console.warn("Auth boot failed:", e); }
   updateMenuPlayerLine();
+  track("app_open", { signed_in: isLoggedIn() });
 })();

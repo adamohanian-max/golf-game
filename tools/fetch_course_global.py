@@ -220,7 +220,14 @@ def main():
                     help="Keep only holes whose number is in the inclusive range LO-HI "
                          "(e.g. '1-18') and crop surfaces to that routing — for "
                          "facilities mapped with extra nines (e.g. Elmwood's 27 holes)")
+    ap.add_argument("--imagery", choices=("esri", "naip"), default="esri",
+                    help="Aerial imagery source. 'naip' (USDA/USGS, public domain, "
+                         "commercial-OK, US-only) is the license-clean swap for "
+                         "monetized deployment; 'esri' (default) is free non-revenue only.")
     args = ap.parse_args()
+
+    # Point the shared aerial fetcher at the chosen source (see fc.IMAGERY).
+    fc.ESRI = fc.IMAGERY[args.imagery]
 
     keep_lo = keep_hi = None
     if args.keep_holes:
@@ -450,7 +457,8 @@ def main():
 
     rel = f"img/{args.id}/course.jpg"
     aerial = None if args.no_imagery else {
-        "file": rel, "w": pxw, "h": pxh, "toWorld": [round(v, 6) for v in to_world]}
+        "file": rel, "w": pxw, "h": pxh, "toWorld": [round(v, 6) for v in to_world],
+        "src": args.imagery}   # "esri" | "naip" -> drives on-map imagery credit
 
     # write the JSON FIRST so geometry is saved even if the image download is slow
     dem = None

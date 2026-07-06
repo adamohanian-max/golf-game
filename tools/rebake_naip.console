@@ -1,0 +1,179 @@
+19:28:00 === rebake_naip: 97 US courses | 88 to bake | 0 already naip | 9 no-boundary-id ===
+19:28:00 NO BOUNDARY ID (bake by hand): four-oaks-dracut, tpc-river-highlands, bethpage-black, overlook-golf-club, butter-brook-golf-club, crystal-lake-haverhill, agawam-hunt, prairie-green, elmwood-sioux-falls
+19:28:00 [1/88] pinehurst-no2 -> --boundary-way 1358696570 --imagery naip
+19:28:10     PASS pinehurst-no2 ::   (7 synth fairway(s) carved; mask=yes; JSON re-written)
+19:28:16 [2/88] pebble-beach-golf-course -> --boundary-rel 3741806 --imagery naip
+19:28:34     PASS pebble-beach-golf-course ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+19:28:40 [3/88] country-club-of-north-carolina-cardinal -> --boundary-rel 6388538 --imagery naip
+19:28:55     FAIL country-club-of-north-carolina-cardinal rc=1 :: urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+19:29:01 [4/88] country-club-of-north-carolina-dogwood -> --boundary-rel 6388539 --imagery naip
+19:29:21     PASS country-club-of-north-carolina-dogwood ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+19:29:27 [5/88] abenaqui-country-club -> --boundary-way 320111052 --imagery naip
+19:29:40     PASS abenaqui-country-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:29:46 [6/88] andover-country-club -> --boundary-way 264546240 --imagery naip
+19:30:07     PASS andover-country-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+19:30:13 [7/88] apple-hill-golf-club -> --boundary-way 320123435 --imagery naip
+19:30:22     PASS apple-hill-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+19:30:28 [8/88] atkinson-resort-country-club -> --boundary-way 443670941 --imagery naip
+19:30:36     FAIL atkinson-resort-country-club rc=1 :: urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+19:30:42 [9/88] black-swan-country-club -> --boundary-way 29830594 --imagery naip
+19:31:10     PASS black-swan-country-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+19:31:16 [10/88] bradford-country-club -> --boundary-rel 4135994 --imagery naip
+19:31:30     PASS bradford-country-club ::   (10 synth fairway(s) carved; mask=yes; JSON re-written)
+19:31:36 [11/88] breakfast-hill-golf-club -> --boundary-way 320123438 --imagery naip
+19:31:57     PASS breakfast-hill-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+19:32:03 [12/88] candia-woods -> --boundary-way 882067093 --imagery naip
+19:32:12     FAIL candia-woods rc=1 :: urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+19:32:18 [13/88] derryfield-country-club -> --boundary-way 343126670 --imagery naip
+19:32:35     PASS derryfield-country-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:32:41 [14/88] hickory-hill-golf-course -> --boundary-way 29745459 --imagery naip
+19:32:50     FAIL hickory-hill-golf-course rc=1 :: urllib.error.HTTPError: HTTP Error 504: Gateway Timeout
+19:32:56 [15/88] hidden-valley-championship-course -> --boundary-way 88981692 --imagery naip
+19:33:09     PASS hidden-valley-championship-course ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+19:33:15 [16/88] indian-ridge-golf-club -> --boundary-way 264546248 --imagery naip
+19:33:25     PASS indian-ridge-golf-club ::   (9 synth fairway(s) carved; mask=yes; JSON re-written)
+19:33:31 [17/88] ipswich-country-club -> --boundary-rel 4143635 --imagery naip
+19:33:55     PASS ipswich-country-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+19:34:01 [18/88] londonderry-country-club -> --boundary-way 86495884 --imagery naip
+19:34:15     PASS londonderry-country-club ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+19:34:21 [19/88] manchester-country-club -> --boundary-way 71365982 --imagery naip
+19:34:32     PASS manchester-country-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+19:34:38 [20/88] merrimack-valley-golf-club -> --boundary-way 844843860 --imagery naip
+19:34:54     PASS merrimack-valley-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+19:35:00 [21/88] myopia-hunt-club -> --boundary-way 29689937 --imagery naip
+19:35:15     PASS myopia-hunt-club ::   (12 synth fairway(s) carved; mask=yes; JSON re-written)
+19:35:21 [22/88] nashua-country-club -> --boundary-way 149509096 --imagery naip
+19:35:41     PASS nashua-country-club ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+19:35:47 [23/88] passaconaway-country-club -> --boundary-way 32835942 --imagery naip
+19:36:07     PASS passaconaway-country-club ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+19:36:13 [24/88] pease-golf-course -> --boundary-way 320123444 --imagery naip
+19:36:28     PASS pease-golf-course ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+19:36:34 [25/88] portsmouth-country-club -> --boundary-way 320123445 --imagery naip
+19:36:46     PASS portsmouth-country-club ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+19:36:52 [26/88] renaissance-golf-club -> --boundary-way 251858105 --imagery naip
+19:37:09     PASS renaissance-golf-club ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+19:37:15 [27/88] sagamore-hampton-golf-club -> --boundary-way 791025659 --imagery naip
+19:37:25     PASS sagamore-hampton-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+19:37:31 [28/88] scottish-highlands -> --boundary-way 500715840 --imagery naip
+19:37:44     PASS scottish-highlands ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:37:50 [29/88] sky-meadow-country-club -> --boundary-rel 3562967 --imagery naip
+19:38:05     PASS sky-meadow-country-club ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+19:38:11 [30/88] the-golf-club-of-new-england -> --boundary-way 320123446 --imagery naip
+19:38:32     PASS the-golf-club-of-new-england ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:38:38 [31/88] trull-brook-golf-course -> --boundary-way 29859779 --imagery naip
+19:38:52     PASS trull-brook-golf-course ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+19:38:58 [32/88] vesper-country-club -> --boundary-rel 3537891 --imagery naip
+19:39:13     PASS vesper-country-club ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+19:39:19 [33/88] windham-country-club -> --boundary-way 107936574 --imagery naip
+19:39:31     PASS windham-country-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:39:37 [34/88] augusta-national-golf-club -> --boundary-way 871993734 --imagery naip
+19:39:52     PASS augusta-national-golf-club ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+19:39:58 [35/88] baltusrol-golf-course -> --boundary-way 39835869 --imagery naip
+19:40:15     PASS baltusrol-golf-course ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+19:40:21 [36/88] bandon-dunes-golf-resort -> --boundary-way 362513477 --imagery naip
+19:40:34     PASS bandon-dunes-golf-resort ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+19:40:40 [37/88] bandon-sheep-ranch -> --boundary-way 823626858 --imagery naip
+19:40:49     FAIL bandon-sheep-ranch rc=1 :: urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+19:40:55 [38/88] bandon-trails -> --boundary-way 362513476 --imagery naip
+19:41:08     PASS bandon-trails ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+19:41:14 [39/88] bethpage-state-park-golf-courses -> --boundary-way 29468839 --imagery naip
+19:41:33     PASS bethpage-state-park-golf-courses ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+19:41:39 [40/88] chicago-golf-club -> --boundary-way 281979769 --imagery naip
+19:41:53     PASS chicago-golf-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+19:41:59 [41/88] cypress-point-golf-course -> --boundary-way 36435651 --imagery naip
+19:42:18     PASS cypress-point-golf-course ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+19:42:24 [42/88] east-lake-golf-club -> --boundary-way 25587469 --imagery naip
+19:42:35     PASS east-lake-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+19:42:41 [43/88] garden-city-golf-club -> --boundary-way 60925271 --imagery naip
+19:42:56     PASS garden-city-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:43:02 [44/88] harbour-town-golf-links -> --boundary-rel 4813858 --imagery naip
+19:43:17     PASS harbour-town-golf-links ::   (6 synth fairway(s) carved; mask=yes; JSON re-written)
+19:43:23 [45/88] hazeltine-national-golf-course -> --boundary-rel 9892305 --imagery naip
+19:43:35     PASS hazeltine-national-golf-course ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:43:41 [46/88] inverness-golf-club -> --boundary-way 188430959 --imagery naip
+19:43:54     PASS inverness-golf-club ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+19:44:00 [47/88] kiawah-island-club-cassique -> --boundary-way 1288431702 --imagery naip
+19:44:12     PASS kiawah-island-club-cassique ::   (7 synth fairway(s) carved; mask=yes; JSON re-written)
+19:44:18 [48/88] kiawah-island-club-river-course -> --boundary-rel 17702344 --imagery naip
+19:44:27     PASS kiawah-island-club-river-course ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+19:44:33 [49/88] kiawah-island-golf-resort-the-ocean-course -> --boundary-rel 17647608 --imagery naip
+19:44:43     PASS kiawah-island-golf-resort-the-ocean-course ::   (15 synth fairway(s) carved; mask=yes; JSON re-written)
+19:44:49 [50/88] los-angeles-country-club -> --boundary-way 56135439 --imagery naip
+19:45:02     PASS los-angeles-country-club ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+19:45:08 [51/88] maidstone-club -> --boundary-way 967422877 --imagery naip
+19:45:24     PASS maidstone-club ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+19:45:30 [52/88] merion-golf-club-east -> --boundary-way 225722010 --imagery naip
+19:45:44     PASS merion-golf-club-east ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+19:45:50 [53/88] merion-golf-club-west -> --boundary-way 225722011 --imagery naip
+19:46:08     PASS merion-golf-club-west ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+19:46:14 [54/88] monterey-peninsula-country-club-dunes-course -> --boundary-way 238036734 --imagery naip
+19:46:31     PASS monterey-peninsula-country-club-dunes-course ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+19:46:37 [55/88] monterey-peninsula-country-club-shore-course -> --boundary-way 397895551 --imagery naip
+19:46:46     PASS monterey-peninsula-country-club-shore-course ::   (16 synth fairway(s) carved; mask=yes; JSON re-written)
+19:46:52 [56/88] muirfield-village-golf-club -> --boundary-rel 337418 --imagery naip
+19:47:13     PASS muirfield-village-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:47:19 [57/88] national-golf-links-of-america -> --boundary-way 28989103 --imagery naip
+19:47:31     PASS national-golf-links-of-america ::   (7 synth fairway(s) carved; mask=yes; JSON re-written)
+19:47:37 [58/88] oakmont-country-club -> --boundary-rel 6174192 --imagery naip
+19:47:48     PASS oakmont-country-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+19:47:54 [59/88] olympic-club-golf-course -> --boundary-rel 3573537 --imagery naip
+19:48:08     PASS olympic-club-golf-course ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+19:48:14 [60/88] olympic-club-lake-course -> --boundary-way 1417078425 --imagery naip
+19:48:22     PASS olympic-club-lake-course ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+19:48:28 [61/88] pine-valley-country-club -> --boundary-way 820204638 --imagery naip
+19:48:49     PASS pine-valley-country-club ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+19:48:55 [62/88] plainfield-country-club -> --boundary-way 39847755 --imagery naip
+19:49:20     PASS plainfield-country-club ::   (8 synth fairway(s) carved; mask=yes; JSON re-written)
+19:49:26 [63/88] prairie-dunes -> --boundary-way 778336759 --imagery naip
+19:49:42     PASS prairie-dunes ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+19:49:48 [64/88] quaker-ridge-golf-club -> --boundary-way 122734578 --imagery naip
+19:50:03     PASS quaker-ridge-golf-club ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+19:50:09 [65/88] riviera-country-club -> --boundary-way 44652700 --imagery naip
+19:50:21     PASS riviera-country-club ::   (11 synth fairway(s) carved; mask=yes; JSON re-written)
+19:50:27 [66/88] scioto-reserve-country-club -> --boundary-way 560536597 --imagery naip
+19:50:42     PASS scioto-reserve-country-club ::   (3 synth fairway(s) carved; mask=yes; JSON re-written)
+19:50:48 [67/88] shinnecock-hills-golf-club -> --boundary-way 689056680 --imagery naip
+19:51:07     PASS shinnecock-hills-golf-club ::   (13 synth fairway(s) carved; mask=yes; JSON re-written)
+19:51:13 [68/88] southern-hills-country-club -> --boundary-rel 19140582 --imagery naip
+19:51:27     PASS southern-hills-country-club ::   (7 synth fairway(s) carved; mask=yes; JSON re-written)
+19:51:33 [69/88] spyglass-hill-golf-course -> --boundary-way 281477606 --imagery naip
+19:51:41     PASS spyglass-hill-golf-course ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+19:51:47 [70/88] the-country-club-at-muirfield-village -> --boundary-rel 337417 --imagery naip
+19:52:11     PASS the-country-club-at-muirfield-village ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+19:52:17 [71/88] torrey-pines-north-course -> --boundary-way 35679009 --imagery naip
+19:52:29     PASS torrey-pines-north-course ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+19:52:35 [72/88] torrey-pines-south-course -> --boundary-way 35679036 --imagery naip
+19:53:00     PASS torrey-pines-south-course ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+19:53:06 [73/88] valhalla-golf-club -> --boundary-way 59737644 --imagery naip
+19:53:27     PASS valhalla-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+19:53:33 [74/88] whistling-straits -> --boundary-way 205111637 --imagery naip
+19:53:46     PASS whistling-straits ::   (11 synth fairway(s) carved; mask=yes; JSON re-written)
+19:53:52 [75/88] winged-foot-golf-club -> --boundary-way 122734591 --imagery naip
+19:54:04     PASS winged-foot-golf-club ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:54:10 [76/88] bay-hill-golf-club -> --boundary-rel 5462405 --imagery naip
+19:54:20     FAIL bay-hill-golf-club rc=1 :: urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+19:54:26 [77/88] colonial-country-club -> --boundary-way 27865544 --imagery naip
+19:54:54     PASS colonial-country-club ::   (5 synth fairway(s) carved; mask=yes; JSON re-written)
+19:55:00 [78/88] detroit-golf-club -> --boundary-rel 909401 --imagery naip
+19:55:27     PASS detroit-golf-club ::   (2 synth fairway(s) carved; mask=yes; JSON re-written)
+19:55:33 [79/88] liberty-national-golf-club -> --boundary-way 27459421 --imagery naip
+19:55:46     PASS liberty-national-golf-club ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+19:55:52 [80/88] memorial-park-golf-course -> --boundary-rel 13729803 --imagery naip
+19:56:16     PASS memorial-park-golf-course ::   (17 synth fairway(s) carved; mask=yes; JSON re-written)
+19:56:22 [81/88] quail-hollow-club -> --boundary-way 877659537 --imagery naip
+19:56:33     PASS quail-hollow-club ::   (18 synth fairway(s) carved; mask=yes; JSON re-written)
+19:56:39 [82/88] silverado-golf-club -> --boundary-way 61414903 --imagery naip
+19:56:53     PASS silverado-golf-club ::   (0 synth fairway(s) carved; mask=yes; JSON re-written)
+19:56:59 [83/88] silverado-resort -> --boundary-way 35828614 --imagery naip
+19:57:19     PASS silverado-resort ::   (9 synth fairway(s) carved; mask=yes; JSON re-written)
+19:57:25 [84/88] the-country-club-at-castle-pines -> --boundary-way 1481663617 --imagery naip
+19:57:37     PASS the-country-club-at-castle-pines ::   (4 synth fairway(s) carved; mask=yes; JSON re-written)
+19:57:43 [85/88] tpc-scottsdale-champions-course -> --boundary-way 78388952 --imagery naip
+19:57:51     PASS tpc-scottsdale-champions-course ::   (14 synth fairway(s) carved; mask=yes; JSON re-written)
+19:57:57 [86/88] tpc-scottsdale-stadium-course -> --boundary-way 78388948 --imagery naip
+19:58:07     FAIL tpc-scottsdale-stadium-course rc=1 :: urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+19:58:13 [87/88] tpc-southwind -> --boundary-rel 4849522 --imagery naip
+19:58:21     PASS tpc-southwind ::   (12 synth fairway(s) carved; mask=yes; JSON re-written)
+19:58:27 [88/88] tpc-twin-cities -> --boundary-rel 16135348 --imagery naip
+19:58:41     PASS tpc-twin-cities ::   (1 synth fairway(s) carved; mask=yes; JSON re-written)
+19:58:47 === done: 81 PASS, 7 FAIL, 9 no-id, 0 already-naip ===

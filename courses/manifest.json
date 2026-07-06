@@ -1124,5 +1124,31 @@
     "location": "Sioux Falls, SD",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "pinehurst-no2-naip",
+    "name": "Pinehurst No. 2 (NAIP)",
+    "sub": "Imagery test \u00b7 USGS NAIP \u00b7 Par 71",
+    "par": 71,
+    "yards": 7386,
+    "holes": 18,
+    "location": "Pinehurst, NC",
+    "region": "Imagery test",
+    "tags": [
+      "imageryTest"
+    ]
+  },
+  {
+    "id": "atkinson-resort-country-club-naip",
+    "name": "Atkinson R&CC (NAIP)",
+    "sub": "Imagery test \u00b7 USGS NAIP \u00b7 Par 72",
+    "par": 72,
+    "yards": 6509,
+    "holes": 18,
+    "location": "Atkinson, NH",
+    "region": "Imagery test",
+    "tags": [
+      "imageryTest"
+    ]
   }
 ]

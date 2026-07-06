@@ -179,6 +179,12 @@
 .menu-auth-account.hidden { display: none; }
 #menu-signin.hidden { display: none; }
 
+.menu-fineprint {
+  margin: var(--s-3) 0 0; text-align: center;
+  color: var(--text-muted); font-size: 11px; line-height: 1.5; opacity: 0.85;
+}
+.menu-fineprint a { color: var(--text-muted); text-decoration: underline; }
+
 /* ---- In-course hole-select modal -------------------------- */
 #course-menu {
   position: fixed;
@@ -229,7 +235,7 @@
 /* ---- Name-entry / auth / add-course / admin / account: scrim */
 #name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer,
 #play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select,
-#friends-modal, #friend-profile, #username-modal {
+#friends-modal, #friend-profile, #username-modal, #onboarding, #ad-stub {
   position: fixed;
   inset: 0;
   display: flex;
@@ -240,6 +246,39 @@
   -webkit-backdrop-filter: blur(var(--blur-sm));
   backdrop-filter: blur(var(--blur-sm));
 }
+#onboarding { z-index: 50; }   /* over gameplay, under the name gate (60) */
+#onboarding.hidden { display: none; }
+#ad-stub { z-index: 70; }      /* rewarded-ad overlay: above the result modal */
+#ad-stub.hidden { display: none; }
+.ad-stub-box {
+  width: min(360px, 92vw); background: var(--surface-raised, var(--w-08));
+  border: 1px solid var(--w-08); border-radius: var(--r-lg, 16px);
+  padding: var(--s-5); text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+}
+.ad-stub-tag { margin: 0 0 var(--s-2); font-size: 11px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text-muted); font-weight: var(--fw-bold); }
+.ad-stub-msg { margin: 0 0 var(--s-3); font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.ad-stub-count { margin: 0 0 var(--s-4); font-size: 20px; font-weight: var(--fw-black); color: var(--text); }
+
+.result-retry { background: var(--w-05); border: 1px solid var(--w-08); }
+.result-retry.hidden { display: none; }
+.ad-badge {
+  display: inline-block; background: var(--brass, #b8894a); color: #14100a;
+  font-size: 10px; font-weight: var(--fw-black); letter-spacing: 0.5px;
+  border-radius: 4px; padding: 1px 5px; margin-right: 6px; vertical-align: 1px;
+}
+.ob-card {
+  width: min(400px, 92vw); background: var(--surface-raised, var(--w-08));
+  border: 1px solid var(--w-08); border-radius: var(--r-lg, 16px);
+  padding: var(--s-5) var(--s-5) var(--s-4); text-align: center;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
+.ob-card h2 { margin: 0 0 var(--s-3); }
+.ob-list { text-align: left; margin: 0 0 var(--s-4); padding-left: 1.1em;
+  color: var(--text-dim); font-size: 14px; line-height: 1.55; }
+.ob-list li { margin-bottom: var(--s-2); }
+.ob-list b { color: var(--text); }
+.ob-card .menu-btn { width: 100%; margin: 0; }
 #name-entry { z-index: 60; }   /* name gate: above match/auth/tournament overlays (z-index 40) */
 #username-modal { z-index: 55; }   /* above friends, below the name gate */
 #add-course { z-index: 30; }
@@ -372,6 +411,17 @@
 /* Auth specifics */
 .auth-error { color: var(--status-error); font-size: var(--t-cap); margin-top: var(--s-2); min-height: 16px; }
 .auth-error.hidden { display: none; }
+
+.auth-age { display: flex; gap: var(--s-2); align-items: flex-start; margin-top: var(--s-3);
+  font-size: var(--t-cap); color: var(--text-dim); line-height: 1.4; cursor: pointer; }
+.auth-age input { margin-top: 2px; flex: 0 0 auto; }
+.auth-age a { color: var(--accent-bright); }
+
+.av-delete { display: block; margin: var(--s-3) auto 0; background: none; border: none;
+  color: var(--status-error); font-size: var(--t-cap); text-decoration: underline;
+  cursor: pointer; padding: var(--s-1); opacity: 0.85; }
+.av-delete:hover { opacity: 1; }
+.av-delete:disabled { opacity: 0.5; cursor: default; }
 #auth-form.hidden, #auth-sent.hidden { display: none; }
 #auth-sent .menu-btn { margin: var(--s-4) auto 0; }
 

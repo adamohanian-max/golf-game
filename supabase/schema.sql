@@ -343,3 +343,87 @@ end $$;
 
 grant execute on function find_quick_match(uuid, text, numeric, text, int, numeric, uuid)
   to anon, authenticated;
+
+-- =====================================================================
+--  Hardening (2026-07-04) — apply in the Supabase SQL editor
+-- =====================================================================
+-- WHY: matches / match_players / match_queue use permissive `update using(true)`
+-- so GUEST players (no auth.uid(), anon key) can drive live match + queue state.
+-- That is intentional for guest-first play, but it also means anyone holding the
+-- public anon key can rewrite those rows. We CANNOT identity-scope the UPDATE to
+-- auth.uid() without breaking guests. So we do two safe things now:
+--   (1) bound the SHAPE of the data with CHECK constraints, so the worst abuse
+--       (giant strings, garbage status, absurd scores) is rejected outright;
+--   (2) leave the Phase-2 scaffold (below) for a match-code-as-secret RPC that
+--       would let us drop the blanket UPDATE entirely.
+-- All wrapped so re-running is a no-op.
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'mplayers_name_len') then
+    alter table match_players add constraint mplayers_name_len
+      check (char_length(player_name) between 1 and 24);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'mplayers_score_rng') then
+    alter table match_players add constraint mplayers_score_rng
+      check (score between -200 and 200 and holes_played between 0 and 18
+             and cur_strokes between 0 and 40);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'matches_hostname_len') then
+    alter table matches add constraint matches_hostname_len
+      check (host_name is null or char_length(host_name) <= 24);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'matches_status_enum') then
+    alter table matches add constraint matches_status_enum
+      check (status in ('lobby','live','done'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'matches_format_enum') then
+    alter table matches add constraint matches_format_enum
+      check (format in ('stroke','match'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'matches_holes_rng') then
+    alter table matches add constraint matches_holes_rng
+      check (hole_count is null or hole_count in (9,18));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'mq_name_len') then
+    alter table match_queue add constraint mq_name_len
+      check (char_length(player_name) between 1 and 24);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'mq_status_enum') then
+    alter table match_queue add constraint mq_status_enum
+      check (status in ('waiting','matched','cancelled'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'mq_hcp_rng') then
+    alter table match_queue add constraint mq_hcp_rng
+      check (handicap between -30 and 60);
+  end if;
+end $$;
+
+-- Self-serve account + data deletion (right-to-erasure; called by the app's
+-- "Delete account & data" button via /rest/v1/rpc/delete_account). Runs as a
+-- single privileged transaction so it can also remove the auth user; the client
+-- falls back to deleting its own rows under RLS if this RPC isn't present.
+create or replace function delete_account() returns void
+  language plpgsql security definer set search_path = public, auth as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  delete from rounds            where user_id = auth.uid();
+  delete from tournament_rounds where user_id = auth.uid();
+  update match_players set user_id = null where user_id = auth.uid();
+  delete from profiles          where id = auth.uid();
+  delete from auth.users        where id = auth.uid();
+end $$;
+revoke all on function delete_account() from public, anon;
+grant execute on function delete_account() to authenticated;
+
+-- ---- Phase-2 scaffold (NOT enabled): drop blanket match UPDATE -------------
+-- The correct long-term fix is to treat the 6-char match `code` as a shared
+-- secret and route all guest writes through a security-definer RPC that checks
+-- the caller supplied the right code for the row, e.g.:
+--
+--   create or replace function match_update(p_code text, p_patch jsonb) ...
+--   -- validate p_code matches the row, then apply whitelisted columns
+--
+-- and then: drop policy "matches update" on matches;  (repeat for the others).
+-- Deferred so today's change can't break live guest matches.

@@ -30,8 +30,19 @@ except ImportError:
     Image = ImageChops = ImageDraw = ImageFilter = None
 
 OVERPASS = "https://overpass-api.de/api/interpreter"
-ESRI = ("https://services.arcgisonline.com/ArcGIS/rest/services/"
-        "World_Imagery/MapServer/export")
+# Aerial imagery sources. Esri World Imagery is free ONLY for non-revenue use
+# (its terms forbid monetized apps); NAIP (USDA, via The National Map) is public
+# domain + commercial-OK and exposes the same ArcGIS export API, so it's the
+# license-clean swap for US courses. Both take bbox,bboxSR,imageSR,size,format,f.
+# `ESRI` stays the module default (many call sites reference it by name); the
+# bake tools override it per-run via --imagery. See CLAUDE.md.
+IMAGERY = {
+    "esri": ("https://services.arcgisonline.com/ArcGIS/rest/services/"
+             "World_Imagery/MapServer/export"),
+    "naip": ("https://imagery.nationalmap.gov/arcgis/rest/services/"
+             "USGSNAIPImagery/ImageServer/exportImage"),
+}
+ESRI = IMAGERY["esri"]
 UA = "golf-game-dev/1.0 (course baking)"
 R_EARTH = 6378137.0
 

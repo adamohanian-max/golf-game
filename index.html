@@ -15,10 +15,31 @@
   <link rel="stylesheet" href="css/tokens.css?v=56">
   <link rel="stylesheet" href="css/base.css?v=60">
   <link rel="stylesheet" href="css/hud.css?v=78">
-  <link rel="stylesheet" href="css/menu.css?v=68">
+  <link rel="stylesheet" href="css/menu.css?v=70">
   <link rel="stylesheet" href="css/courses.css?v=5">
   <link rel="stylesheet" href="css/modals.css?v=71">
   <link rel="stylesheet" href="css/tournament.css?v=55">
+
+  <!-- Analytics: PostHog, cookieless (localStorage id, no cookies -> no consent
+       banner needed). Only measures product usage for retention/funnels; no ads,
+       no session recording, no autocapture. Set POSTHOG_KEY to your project key
+       (Project Settings -> API key) to turn it on; until then it self-disables so
+       there are no console errors on a fork/local run. See MARKETING.md. -->
+  <script>
+    window.POSTHOG_KEY = "";            // <-- paste PostHog project key here to enable
+    window.POSTHOG_HOST = "https://us.i.posthog.com";
+    if (window.POSTHOG_KEY) {
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      posthog.init(window.POSTHOG_KEY, {
+        api_host: window.POSTHOG_HOST,
+        persistence: "localStorage",     // cookieless -> no consent banner
+        autocapture: false,
+        capture_pageview: true,
+        disable_session_recording: true,
+        person_profiles: "identified_only"
+      });
+    }
+  </script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -157,6 +178,10 @@
         <button id="menu-signin" class="menu-auth-link">Sign in / Create account</button>
         <span id="menu-account" class="menu-auth-account hidden">Signed in · <button id="menu-signout" class="menu-auth-link">Sign out</button></span>
       </div>
+      <p class="menu-fineprint">
+        <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> ·
+        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors
+      </p>
     </div>
   </div>
 
@@ -195,7 +220,22 @@
     <div class="result-box">
       <h2 id="result-title">In the hole!</h2>
       <p id="result-detail"></p>
+      <button id="result-retry" class="result-retry hidden"><span class="ad-badge">AD</span> Watch to replay this hole</button>
       <button id="play-again">Next hole</button>
+    </div>
+  </div>
+
+  <!-- Rewarded-ad placeholder (demo). A real SDK (CrazyGames / Google H5) replaces
+       this; never plays without a player tap. See ADS.md / showRewarded(). -->
+  <div id="ad-stub" class="hidden">
+    <div class="ad-stub-box">
+      <p class="ad-stub-tag">Rewarded ad · demo</p>
+      <p class="ad-stub-msg">A rewarded video plays here in production (CrazyGames / Google H5 Games Ads). You only ever see an ad after tapping to watch.</p>
+      <div id="ad-stub-count" class="ad-stub-count">Reward in 3…</div>
+      <div class="ne-actions">
+        <button id="ad-stub-cancel" class="menu-btn secondary">Cancel</button>
+        <button id="ad-stub-claim" class="menu-btn" disabled>Claim reward</button>
+      </div>
     </div>
   </div>
 
@@ -220,6 +260,7 @@
       </div>
       <div class="re-actions">
         <button id="re-home" class="menu-btn secondary">Home</button>
+        <button id="re-share" class="menu-btn secondary hidden"><span class="ic ic-clipboard"></span>Share</button>
         <button id="re-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>View leaderboard</button>
         <button id="re-replay" class="menu-btn">Play Again</button>
         <button id="re-confirm-match" class="menu-btn hidden">Confirm scorecard</button>
@@ -250,6 +291,7 @@
         <button id="av-signout" class="menu-btn secondary">Sign out</button>
         <button id="av-close" class="menu-btn">Close</button>
       </div>
+      <button id="av-delete" class="av-delete">Delete account &amp; data</button>
     </div>
   </div>
 
@@ -326,6 +368,7 @@
         <h2>Sign in</h2>
         <p class="ne-sub">Enter your email — we'll send a login code. No password.</p>
         <input id="auth-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" autocapitalize="off" autocorrect="off">
+        <label id="auth-age" class="auth-age"><input type="checkbox" id="auth-age-ck"> I am 13 or older and agree to the <a href="terms.html" target="_blank" rel="noopener">Terms</a> &amp; <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</label>
         <div id="auth-error" class="auth-error hidden"></div>
         <div class="ne-actions">
           <button id="auth-cancel" class="menu-btn secondary">Cancel</button>
@@ -342,6 +385,20 @@
           <button id="auth-verify" class="menu-btn">Verify</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- First-run how-to-play (shown once via golf.onboarded) -->
+  <div id="onboarding" class="hidden">
+    <div class="ob-card">
+      <h2>How to play</h2>
+      <ul class="ob-list">
+        <li><b>Swipe</b> to swing — flick speed is your power, a curved swipe bends the shot.</li>
+        <li><b>Twist</b> with two fingers to aim, <b>pinch</b> to zoom the hole.</li>
+        <li>On the green, tap to putt and read the <b>contour lines</b> — the ball breaks with the slope.</li>
+        <li>Use the green button to inspect the green in <b>3D</b> before a putt.</li>
+      </ul>
+      <button id="ob-got" class="menu-btn">Got it — let's play</button>
     </div>
   </div>
 
@@ -571,6 +628,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=158"></script>
+  <script src="game.js?v=161"></script>
 </body>
 </html>
