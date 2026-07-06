@@ -9103,11 +9103,16 @@ function cpuHazardPoint(from, carryU) {
 }
 // Human-feeling pause before a shot: 1-4s, leaning longer sometimes on the
 // tee or on green reads — never metronome-regular.
+// Bot pace: CPU opponents aren't humans — no reason to wait on them like one.
+// Scales BOTH think time and shot-flight time; lower = snappier. Applies to every
+// CPU match (ladder + Quick Match fallback).
+const CPU_PACE = 0.4;   // ~2.5x faster than the old human-like cadence
+
 function cpuThinkMs(kind, firstOfHole) {
   let ms = 1000 + Math.random() * 2200;
   if (firstOfHole && Math.random() < 0.5) ms += Math.random() * 800;
   if (kind === "putt" && Math.random() < 0.25) ms += Math.random() * 800;
-  return Math.min(ms, 4000);
+  return Math.max(250, Math.min(ms, 4000) * CPU_PACE);
 }
 // Plan the current hole as real golf played from the SAME club bag the human
 // gets (TUNE.clubs + clubForYards auto-selection): driver off the tee, layups
@@ -9283,9 +9288,10 @@ function cpuDriverTick() {
   const d = dist(from.x, from.y, target.x, target.y);
   const dYds = d * YARDS_PER_UNIT;
   // Putts roll slow and flat; full shots hang in the air like a real swing.
+  // Scaled by CPU_PACE so the bot's ball also travels faster (still readable).
   const durMs = target.kind === "putt"
-    ? Math.max(900, Math.min(2600, 900 + dYds * 3 * 45))
-    : Math.max(700, Math.min(3400, dYds * 10 * (0.9 + Math.random() * 0.25)));
+    ? Math.max(350, Math.min(2600, 900 + dYds * 3 * 45) * CPU_PACE)
+    : Math.max(300, Math.min(3400, dYds * 10 * (0.9 + Math.random() * 0.25)) * CPU_PACE);
   const lie = cpuOpp.cur_strokes === 0 ? "Tee" : cpuLie(from.x, from.y);
   // Arc apex from the club's rated max height (like the human flight model);
   // partial shots (duffs, layup clamps) arc proportionally lower.
