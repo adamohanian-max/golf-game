@@ -13,8 +13,8 @@
   <link rel="icon" type="image/png" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=56">
-  <link rel="stylesheet" href="css/base.css?v=60">
-  <link rel="stylesheet" href="css/hud.css?v=78">
+  <link rel="stylesheet" href="css/base.css?v=61">
+  <link rel="stylesheet" href="css/hud.css?v=79">
   <link rel="stylesheet" href="css/menu.css?v=70">
   <link rel="stylesheet" href="css/courses.css?v=5">
   <link rel="stylesheet" href="css/modals.css?v=71">
@@ -91,6 +91,7 @@
 
   <button id="hud-btn" class="hidden" aria-label="Controls"><span class="ic ic-menu"></span></button>
   <button id="green-view-btn" class="hidden" aria-label="Read green"><span class="ic ic-green3d"></span></button>
+  <button id="tilt-view-btn" class="hidden" aria-label="3D view"><span class="ic ic-tilt"></span></button>
   <div id="hm-club-row" class="hidden">
     <button id="hm-club-up" class="hm-club-arrow" aria-label="Longer club"><span class="ic ic-chev-up"></span></button>
     <div id="hm-club-cur"><b id="hm-club-name">Driver</b><small id="hm-club-yds">282y</small></div>
@@ -136,10 +137,10 @@
   <div id="toast" class="hidden"></div>
 
   <div id="chip-spin" class="hidden">
-    <span class="cs-end cs-top">bite</span>
+    <span class="cs-end cs-top" id="cs-top">bite</span>
     <input id="chip-spin-slider" type="range" min="-100" max="100" value="0">
-    <span class="cs-end cs-bot">run</span>
-    <span class="cs-label">SPIN <b id="chip-spin-val">0</b></span>
+    <span class="cs-end cs-bot" id="cs-bot">run</span>
+    <span class="cs-label"><span id="cs-name">SPIN</span> <b id="chip-spin-val">0</b></span>
   </div>
 
   <div id="range-ui" class="hidden">
@@ -628,6 +629,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=162"></script>
+  <script src="game.js?v=164"></script>
 </body>
 </html>

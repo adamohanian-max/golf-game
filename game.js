@@ -97,6 +97,10 @@ const TUNE = {
   flowTTLMin: 90, flowTTLMax: 210,  // dot lifetime (frames)
   flowAlpha: 0.78,       // peak dot opacity
   flowTrail: 6,          // streak length in frames of motion
+  // Slightly-3D tilted course view (the HUD 3D toggle): the whole scene is
+  // y-squashed in screen space (affine axonometric lean), so the aerial,
+  // overlays, input inversion and culling all follow the one view transform.
+  tiltCos: 0.86,         // ground-plane squash when ON (cos of the lean; 1 = flat top-down)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
@@ -172,12 +176,10 @@ const TUNE = {
   checkLandRef: 35,   // land angle (deg) where steepness starts to grip (driver ~39° ≈ none)
   checkLandSpan: 20,  // degrees above ref for full steepness credit
   spinBackMax: 1.2,   // cap on backward roll after a spun-back landing (world units ≈ 3.6yd)
-  // Flighted high spinner: a LONG deliberate swipe (vs a short flick) throws the ball
-  // higher with extra spin — steeper landing + harder check holds firm/tucked greens.
-  // Costs a little carry and drifts more in wind. Path LENGTH picks the flight; power
-  // is still release speed, so both gestures reach full power. Touch + mouse drag only
-  // (the trackpad wheel gesture's length is tied to its speed, so it stays stock).
-  flightHiLen: 0.55,    // swipe path length / screen diagonal that triggers the high ball
+  // Flighted high spinner (FLIGHT slider in the right gutter, full shots off the green):
+  // throws the ball higher with extra spin — steeper landing + harder check holds
+  // firm/tucked greens — at the cost of a little carry and more wind drift. Each knob
+  // is the slider's t=1 endpoint; the effect lerps continuously from stock at 0.
   flightHiApex: 1.25,   // apex height multiplier
   flightHiLand: 3,      // degrees added to the club's land angle
   flightHiSpin: 1.25,   // backspin (spinN) multiplier, capped at 1
@@ -449,10 +451,12 @@ let cineEnabled = lsGet("golf.cineLanding", true); // per-device toggle (HUD men
 // Slope-mode style: false = flow dots (default), true = static fall-line arrows.
 // Per-device cosmetic preference (localStorage), not a tournament setting.
 let breakArrows = lsGet("golf.breakArrows", false);
+let tiltView = lsGet("golf.tiltView", false); // slightly-3D tilted course camera (HUD button)
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
 let chipSpinBias = 0;      // chip spin slider (-1 run .. 0 neutral .. +1 bite); resets to 0 each hole
+let flightBias = 0;        // full-shot FLIGHT slider (0 stock .. 1 high spinner); one-shot, resets after the swing
 let lieEffectEnabled = true; // rough/sand cost power + spin (off = every lie plays clean, easier)
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let markerDropT = 0;       // when the marker was tap-dropped (grace vs insta-dismiss)
@@ -1605,7 +1609,7 @@ function chipSpinParams() {
   return { landFrac, spinScale };
 }
 
-function launchShot(ang, frac, spin, onGreen, flight) {
+function launchShot(ang, frac, spin, onGreen) {
   if (!canSwing() || frac <= 0.05) return;
   measurePoint = null; // shot fired — clear the rangefinder marker
   if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
@@ -1699,12 +1703,14 @@ function launchShot(ang, frac, spin, onGreen, flight) {
     // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
     const lieSurf = surfaceAt(b.x, b.y);
     const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
-    const hi = flight === "high" && !chipActive;  // flighted high spinner (long-swipe gesture)
-    let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul * (hi ? TUNE.flightHiCarry : 1); // carry (world units)
+    // Flight slider (right gutter, full shots): 0 = stock, 1 = full high spinner.
+    // Continuous — each flightHi* knob is the t=1 endpoint, lerped by the slider.
+    const hiT = chipActive ? 0 : flightBias;
+    let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul * (1 - (1 - TUNE.flightHiCarry) * hiT); // carry (world units)
     // Elevation: make a full shot finish at the plays-like distance (uphill shorter,
     // downhill longer). Chips already fold plays-like into their reach, so skip them.
     if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
-    const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul * (hi ? TUNE.flightHiApex : 1); // apex height (scales with the swing)
+    const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul * (1 + (TUNE.flightHiApex - 1) * hiT); // apex height (scales with the swing)
     shot.mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
     // Slight amplification so deliberate hooks/slices still register.
     b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
@@ -1714,16 +1720,16 @@ function launchShot(ang, frac, spin, onGreen, flight) {
     const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
     const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[lieSurf] ?? 1) : 1;  // rough flyer / sand kill backspin
     const spinScale = chipActive ? chipSpinParams().spinScale : chipBoost;
-    const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (hi ? TUNE.flightHiSpin : 1));
+    const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (1 + (TUNE.flightHiSpin - 1) * hiT));
     // Flyer descent: rough/sand shots also come in shallower (less lift), so the
     // steepness half of the landing check fades too and the ball releases. Chips skip it.
     const lieLandMul = (lieEffectEnabled && !chipActive) ? (TUNE.lieLand[lieSurf] ?? 1) : 1;
-    const landDeg = c.land * lieLandMul + (hi ? TUNE.flightHiLand : 0);
+    const landDeg = c.land * lieLandMul + TUNE.flightHiLand * hiT;
     setupFlight(b, ang, C, H, landDeg * Math.PI / 180, effectiveSpinN);
     state.flight.noLandCheck = chipActive; // chips: release tuned by the spin slider alone
-    if (hi) {
-      state.flight.windMul = TUNE.flightHiWind; // a high ball rides the wind
-      showToast("High ball · extra spin", 1300);
+    if (hiT > 0) {
+      state.flight.windMul = 1 + (TUNE.flightHiWind - 1) * hiT; // a high ball rides the wind
+      resetFlightBias(); // one-shot: the slider never silently carries to the next swing
     }
     state.airborne = true;
   }
@@ -1753,8 +1759,8 @@ function launch(dxs, dys, dt, spin = 0) {
   const swipeSpeed = (Math.hypot(dxs, dys) / refScale) / Math.max(dt, 0.001);
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
   const frac = Math.min(swipeSpeed * swingSens / TUNE.fullPowerSwipe, 1); // full swing at fullPowerSwipe
-  // screen direction -> world direction (undo the camera rotation)
-  launchShot(Math.atan2(dys, dxs) - view.angle, frac, spin, onGreen);
+  // screen direction -> world direction (undo the tilt squash, then the camera rotation)
+  launchShot(Math.atan2(dys / view.tilt, dxs) - view.angle, frac, spin, onGreen);
 }
 
 function swingEnd(e) {
@@ -1796,22 +1802,9 @@ function swingEnd(e) {
 
   const speed = (fdist / refScale) / dt;
   const frac = Math.min(speed * swingSens / TUNE.touchPowerSwipe, 1);
-  const ang = Math.atan2(dys, dxs) - view.angle;
+  const ang = Math.atan2(dys / view.tilt, dxs) - view.angle; // undo tilt squash, then rotation
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  launchShot(ang, frac, curveFromPath(path), onGreen, swipeFlight(path));
-}
-
-// Flight from gesture SIZE: a deliberate swipe spanning most of the screen throws the
-// flighted high spinner; a short flick stays stock. Uses path LENGTH (power is release
-// SPEED, so both gestures reach full power), normalized by the screen diagonal so the
-// threshold feels the same on any device. Touch + mouse drag only — the trackpad wheel
-// gesture's length is proportional to its speed, so it can't express this and stays stock.
-function swipeFlight(path) {
-  let len = 0;
-  for (let i = 1; i < path.length; i++)
-    len += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
-  const diag = Math.hypot(window.innerWidth, window.innerHeight);
-  return len / diag >= TUNE.flightHiLen ? "high" : null;
+  launchShot(ang, frac, curveFromPath(path), onGreen);
 }
 
 canvas.addEventListener("touchstart", swingStart, { passive: false });
@@ -1883,7 +1876,7 @@ canvas.addEventListener("wheel", onWheel, { passive: false });
 const ctx = canvas.getContext("2d");
 // World->screen as a full affine so the camera can ROTATE (each hole plays "up"
 // even on the connected global map). screen.x = a*x + b*y + c, screen.y = d*x + e*y + f.
-const view = { a: 1, b: 0, c: 0, d: 0, e: 1, f: 0, scale: 1, angle: 0 };
+const view = { a: 1, b: 0, c: 0, d: 0, e: 1, f: 0, scale: 1, angle: 0, tilt: 1 };
 const VIEW_PAD_MIN = 3;     // world-unit margin when ball is right by the cup
 const VIEW_PAD_FRAC = 0.25; // extra margin as a fraction of the ball->cup span
 const VIEW_MIN = 7;         // smallest framed dimension (caps how far we zoom in)
@@ -1906,6 +1899,9 @@ let holeFitW = 100, holeFitH = 100; // full-hole framing dims -> refScale
 const camera = {
   focus: { x: WORLD.w / 2, y: WORLD.h / 2 }, scale: 1, angle: 0,
   tFocus: { x: WORLD.w / 2, y: WORLD.h / 2 }, tScale: 1, tAngle: 0,
+  // Slightly-3D lean: screen-space y-squash factor (1 = flat). Seeded from the
+  // persisted toggle so a reload opens already tilted (no startup animation).
+  tilt: tiltView ? TUNE.tiltCos : 1, tTilt: tiltView ? TUNE.tiltCos : 1,
   _w: 100, _h: 100, // last framing dims (for refScale)
 };
 let cameraAiming = false; // true while smoothly rotating toward camera.tAngle
@@ -1927,10 +1923,12 @@ function frameTarget(fx, fy) {
   const h = Math.max(Math.abs(by - py) + 2 * pad, VIEW_MIN);
   camera._w = w; camera._h = h;
   // Fit into the play area between the HUD bands (not the full screen).
+  // The tilt squash shrinks screen height by tTilt, so the vertical fit gains
+  // that headroom back — the leaned hole still fills the play area.
   const rsv = hudReserve();
   const availW = Math.max(120, window.innerWidth - rsv.left - rsv.right);
   const availH = Math.max(120, window.innerHeight - rsv.top - rsv.bot);
-  camera.tScale = Math.min(availW / w, availH / h);
+  camera.tScale = Math.min(availW / w, availH / (h * camera.tTilt));
   camera.tFocus.x = (ox + HOLE.holePos.x) / 2;
   camera.tFocus.y = (oy + HOLE.holePos.y) / 2;
 }
@@ -1940,16 +1938,20 @@ function snapCamera() {
   camera.angle = camera.tAngle;
   camera.focus = { x: camera.tFocus.x, y: camera.tFocus.y };
   camera.scale = camera.tScale;
+  camera.tilt = camera.tTilt;
   cameraAiming = false;
 }
 
 // world->screen affine: screen = scale * R(angle) * (world - focus) + screenCenter.
+// With the slightly-3D toggle on, the second row is scaled by camera.tilt — a
+// screen-space y-squash (axonometric lean). Staying affine means the aerial
+// blit, screenToWorld and the view AABB all keep working unchanged.
 function applyView() {
   const cssW = window.innerWidth, cssH = window.innerHeight;
   const s = camera.scale * (1 + camPunch), cos = Math.cos(camera.angle), sin = Math.sin(camera.angle);
-  view.scale = s; view.angle = camera.angle;
+  view.scale = s; view.angle = camera.angle; view.tilt = camera.tilt;
   view.a = s * cos; view.b = -s * sin;
-  view.d = s * sin; view.e = s * cos;
+  view.d = s * sin * camera.tilt; view.e = s * cos * camera.tilt;
   // Center the focus in the play area between the HUD bands, not the raw screen.
   const rsv = hudReserve();
   const cx = (rsv.left + (cssW - rsv.right)) / 2;
@@ -1976,6 +1978,7 @@ function updateCamera() {
   camera.focus.x += (camera.tFocus.x - camera.focus.x) * s;
   camera.focus.y += (camera.tFocus.y - camera.focus.y) * s;
   camera.scale += (camera.tScale - camera.scale) * s;
+  camera.tilt += (camera.tTilt - camera.tilt) * s;
   if (camPunch > 0.0005) camPunch *= 0.82; else camPunch = 0;  // ease the punch back
   applyView();
 }
@@ -1983,12 +1986,12 @@ function updateCamera() {
 // Visible world rect (axis-aligned; used by the vector renderer at angle≈0).
 // Matches applyView's play-area centering so stripe ranges cover the full screen.
 function visibleRect() {
-  const s = camera.scale, cssW = window.innerWidth, cssH = window.innerHeight;
+  const s = camera.scale, sy = s * camera.tilt, cssW = window.innerWidth, cssH = window.innerHeight;
   const rsv = hudReserve();
   const cx = (rsv.left + (cssW - rsv.right)) / 2;
   const cy = (rsv.top + (cssH - rsv.bot)) / 2;
   return { x: camera.focus.x - cx / s, w: cssW / s,
-           y: camera.focus.y - cy / s, h: cssH / s };
+           y: camera.focus.y - cy / sy, h: cssH / sy };
 }
 
 // Safe-area insets (notch / Dynamic Island / home indicator). The DOM HUD uses
@@ -4641,9 +4644,9 @@ function lieNote(label) {
 
 // Shot stats HUD. Yards normally; feet (carry omitted) once on the green.
 function updateStats() {
-  // Chip spin slider: show only greenside in chip range, and only with the ball at rest
-  // (so it never blocks a swing-in-progress). Off in the menu / range.
-  if (elChipSpin) elChipSpin.classList.toggle("hidden", !(mode === "course" && !state.moving && chipActiveNow()));
+  // Gutter slider (SPIN greenside / FLIGHT on full shots): shown only with the ball
+  // at rest off the green (so it never blocks a swing-in-progress). Off in menu/range.
+  syncSpinSlider();
   if (mode !== "course" && mode !== "range") { elStats.classList.add("hidden"); return; }
   // Hide the stats panel while the ball is in motion so it doesn't cover the
   // hole/ball during a shot; it returns once the ball settles.
@@ -4750,6 +4753,23 @@ elCineBtn.addEventListener("click", () => {
 });
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
+// Slightly-3D tilted view: per-device camera preference (like break arrows).
+const elTiltBtn = document.getElementById("tilt-view-btn");
+elTiltBtn.classList.toggle("active", tiltView);
+elTiltBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  tiltView = !tiltView;
+  lsSet("golf.tiltView", tiltView);
+  elTiltBtn.classList.toggle("active", tiltView);
+  camera.tTilt = tiltView ? TUNE.tiltCos : 1;
+  if (mode === "course" || mode === "range") frameTarget(); // refit zoom for the new lean
+});
+// Camera toggle, so no ball-state gating — just not under the 3D overlays.
+let _tiltBtnShown = false;
+function updateTiltBtn() {
+  const show = (mode === "course" || mode === "range") && !greenView && !cine;
+  if (show !== _tiltBtnShown) { _tiltBtnShown = show; elTiltBtn.classList.toggle("hidden", !show); }
+}
 // Show the read-green button exactly when green reading matters: in course
 // play, ball at rest, and a green in play (ball on one or pin's green).
 let _gvBtnShown = false;
@@ -5213,23 +5233,67 @@ let swingSens = Math.min(2, Math.max(0.5, +lsGet(SENS_KEY, 1) || 1));
   });
 })();
 
-// Chip spin slider (right gutter, greenside chips only). Bias -1..+1; NOT persisted —
-// resetChipSpin() re-centers it each hole so a big setting never silently carries over.
+// Right-gutter shot slider — ONE widget, two meanings by context (syncSpinSlider):
+//   chip range  -> SPIN  (bite +1 .. run −1), drives chipSpinBias. Resets each hole.
+//   full shot   -> FLIGHT (std 0 .. high +1), drives flightBias — the flighted high
+//                  spinner (see TUNE.flightHi*). One-shot: consumed & reset on launch.
+// Neither is persisted, so a big setting never silently carries over.
 const elChipSpin = document.getElementById("chip-spin");
 const elChipSpinSlider = document.getElementById("chip-spin-slider");
 const elChipSpinVal = document.getElementById("chip-spin-val");
+const elCsTop = document.getElementById("cs-top");
+const elCsBot = document.getElementById("cs-bot");
+const elCsName = document.getElementById("cs-name");
+let spinSliderMode = null;  // "chip" | "flight" — what the gutter slider currently drives
 function chipSpinLabel(pct) { return pct > 0 ? "+" + pct : "" + pct; }
 function resetChipSpin() {
   chipSpinBias = 0;
-  if (elChipSpinSlider) elChipSpinSlider.value = 0;
-  if (elChipSpinVal) elChipSpinVal.textContent = chipSpinLabel(0);
+  flightBias = 0;
+  spinSliderMode = null;  // force a relabel + revalue on the next sync
+}
+function resetFlightBias() {
+  flightBias = 0;
+  spinSliderMode = null;
+}
+// Show/relabel/revalue the gutter slider for the current context. Called from
+// updateStats() so it tracks ball position, rest state and chip range.
+function syncSpinSlider() {
+  if (!elChipSpin || !elChipSpinSlider) return;
+  const show = mode === "course" && !state.moving && !state.inHole &&
+               surfaceAt(state.ball.x, state.ball.y) !== "green" &&
+               selectedClub !== "putter";
+  elChipSpin.classList.toggle("hidden", !show);
+  if (!show) return;
+  const m = chipActiveNow() ? "chip" : "flight";
+  if (m === spinSliderMode) return;
+  spinSliderMode = m;
+  if (m === "chip") {
+    elChipSpinSlider.min = -100;
+    if (elCsTop) elCsTop.textContent = "bite";
+    if (elCsBot) elCsBot.textContent = "run";
+    if (elCsName) elCsName.textContent = "SPIN";
+    elChipSpinSlider.value = Math.round(chipSpinBias * 100);
+    if (elChipSpinVal) elChipSpinVal.textContent = chipSpinLabel(Math.round(chipSpinBias * 100));
+  } else {
+    elChipSpinSlider.min = 0;
+    if (elCsTop) elCsTop.textContent = "high";
+    if (elCsBot) elCsBot.textContent = "std";
+    if (elCsName) elCsName.textContent = "FLIGHT";
+    elChipSpinSlider.value = Math.round(flightBias * 100);
+    if (elChipSpinVal) elChipSpinVal.textContent = "" + Math.round(flightBias * 100);
+  }
 }
 if (elChipSpinSlider) {
   elChipSpinSlider.addEventListener("input", () => {
     const pct = parseInt(elChipSpinSlider.value, 10);
-    chipSpinBias = pct / 100;
-    if (elChipSpinVal) elChipSpinVal.textContent = chipSpinLabel(pct);
-    updateStats();  // refresh the chip carry readout live as the slider moves
+    if (spinSliderMode === "flight") {
+      flightBias = pct / 100;
+      if (elChipSpinVal) elChipSpinVal.textContent = "" + pct;
+    } else {
+      chipSpinBias = pct / 100;
+      if (elChipSpinVal) elChipSpinVal.textContent = chipSpinLabel(pct);
+    }
+    updateStats();  // refresh the carry readout live as the slider moves
   });
 }
 
@@ -5251,7 +5315,8 @@ function updateClubUI() {
       const land = playsLikeYards(b.x, b.y).plays * chipSpinParams().landFrac;
       elClubYds.textContent = Math.round(land) + "y";
     } else {
-      elClubYds.textContent = c.carry + "y";
+      // Full shot: fold the FLIGHT slider's carry cost into the readout live.
+      elClubYds.textContent = Math.round(c.carry * (1 - (1 - TUNE.flightHiCarry) * flightBias)) + "y";
     }
   }
 }
@@ -9773,6 +9838,7 @@ function loop() {
   updateStats();
   updateWindChip();
   updateGreenViewBtn();
+  updateTiltBtn();
   draw();
   requestAnimationFrame(loop);
 }

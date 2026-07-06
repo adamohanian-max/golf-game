@@ -215,10 +215,36 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
 }
 #green-view-btn .ic { font-size: 22px; }
 #green-view-btn.hidden { display: none; }
+
+/* ---- Slightly-3D tilt toggle (above the read-green button) -- */
+#tilt-view-btn {
+  position: fixed;
+  left: var(--s-3);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 112px);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-edge);
+  border-radius: var(--r-md);
+  background: var(--surface-hud);
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  backdrop-filter: blur(var(--blur-sm));
+  color: var(--text);
+  cursor: pointer;
+  z-index: 15;
+  box-shadow: var(--shadow-1);
+}
+#tilt-view-btn .ic { font-size: 22px; }
+#tilt-view-btn.hidden { display: none; }
+#tilt-view-btn.active { background: rgba(46, 125, 79, 0.4); border-color: rgba(99, 185, 139, 0.5); }
+
 /* Inspect view open: clear the HUD out of the overlay's way */
 body.gv-open #hud-btn,
 body.gv-open #hm-club-row,
 body.gv-open #green-view-btn,
+body.gv-open #tilt-view-btn,
 body.gv-open #chip-spin,
 body.gv-open #scorecard,
 body.gv-open #hint { display: none; }
