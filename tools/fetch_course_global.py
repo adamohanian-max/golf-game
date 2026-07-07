@@ -190,7 +190,7 @@ YPU = fc.YARDS_PER_UNIT          # 3 yards/unit
 MPY = fc.M_PER_YARD
 SCALE = 1.0 / (YPU * MPY)        # meters -> world units
 MARGIN = fc.MARGIN_UNITS
-IMG_MAX_PX = 2560                # one big aerial over the whole course
+IMG_MAX_PX = 3584                # one big aerial over the whole course (zoom headroom; NAIP native ~0.6 m/px)
 IMG_PAD = 1.04
 
 

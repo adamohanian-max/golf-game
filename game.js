@@ -81,6 +81,14 @@ const TUNE = {
   slopeCapFrac: 0.82,         // slope force ceiling as a fraction of greenDecel (higher = more break on steep greens, but less guaranteed decel)
   fairwaySlopeAccel: 0.0003,  // terrain slope accel on fairway/rough (gentler than green break)
   slopeStopSpeed: 0.028,
+  // Anti-pixelation detail grain: past the aerial's native resolution a
+  // world-anchored procedural grass grain fades in (soft-light) so deep zoom
+  // reads as fine turf texture instead of bilinear mush. Ramp is measured in
+  // screen px per SOURCE aerial px (k): invisible at k<=lo, full at k>=hi.
+  detailAlpha: 0.55,     // peak grain opacity at deep zoom
+  detailRampLo: 1.5,     // grain starts fading in past this magnification
+  detailRampHi: 5,       // ...and saturates here
+  detailTileUnits: 4,    // world units (~12 yds) covered by one grain tile
   // Shaded-relief topo overlay (greens only). Intensity = drawImage globalAlpha.
   reliefAmbient: 0.14,   // always-on whisper on the in-play / target green
   reliefFull: 0.32,      // boosted by the slope button (+ fall-line arrows)
@@ -2467,12 +2475,14 @@ function strokePolyline(poly) {
 // we compose dpr * (view ∘ toWorld) and draw the image, then restore.
 // Bake the grade + course-green wash into the aerial ONCE (offscreen) so each
 // frame is a plain drawImage — no per-frame ctx.filter / blend on a huge photo.
-function processAerial(img) {
+function bakeAerial(img, up) {
   const c = document.createElement("canvas");
-  c.width = img.width; c.height = img.height;
+  c.width = Math.round(img.width * up); c.height = Math.round(img.height * up);
   const g = c.getContext("2d");
+  if (!g || !c.width || !c.height) return null;
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
   g.filter = "saturate(1.35) contrast(1.05) brightness(1.02)";
-  g.drawImage(img, 0, 0);
+  g.drawImage(img, 0, 0, c.width, c.height);
   g.filter = "none";
   g.globalCompositeOperation = "color";       // recolor toward course-green
   g.globalAlpha = 0.45; g.fillStyle = "#5a8f3c"; g.fillRect(0, 0, c.width, c.height);
@@ -2480,22 +2490,39 @@ function processAerial(img) {
   g.globalAlpha = 0.5; g.fillStyle = "#3f7a34"; g.fillRect(0, 0, c.width, c.height);
   g.globalCompositeOperation = "source-over"; // faint darken
   g.globalAlpha = 0.08; g.fillStyle = "#23461e"; g.fillRect(0, 0, c.width, c.height);
+  c._up = up; // px density vs the source aerial — drawAerial folds this out
   return c;
+}
+function processAerial(img) {
+  // Bake at 1.5x: the extra octave keeps the deep-zoom resample smooth (real
+  // detail is capped by the source imagery, this only tames bilinear blocking).
+  // Oversize canvases can fail SILENTLY (iOS area limits), so probe a center
+  // pixel and fall back to a native-res bake.
+  try {
+    const c = bakeAerial(img, 1.5);
+    if (c && c.getContext("2d").getImageData(c.width >> 1, c.height >> 1, 1, 1).data[3] > 0)
+      return c;
+  } catch (e) { /* fall through to 1x */ }
+  return bakeAerial(img, 1);
 }
 
 function drawAerial() {
   const a = HOLE.aerial, img = HOLE._img;
   if (!a || !img) return;
   const m = a.toWorld, dpr = window.devicePixelRatio || 1;
+  const up = img._up || 1;   // supersampled bake: canvas px are up× denser than source px
+  const m0 = m[0] / up, m1 = m[1] / up, m3 = m[3] / up, m4 = m[4] / up;
   // compose pixel -> world (m) with world -> screen (view affine): screen = view ∘ m
-  const A = view.a * m[0] + view.b * m[3];        // px coef in screen.x
-  const C = view.a * m[1] + view.b * m[4];        // py coef in screen.x
+  const A = view.a * m0 + view.b * m3;            // px coef in screen.x
+  const C = view.a * m1 + view.b * m4;            // py coef in screen.x
   const E = view.a * m[2] + view.b * m[5] + view.c;
-  const B = view.d * m[0] + view.e * m[3];        // px coef in screen.y
-  const D = view.d * m[1] + view.e * m[4];        // py coef in screen.y
+  const B = view.d * m0 + view.e * m3;            // px coef in screen.y
+  const D = view.d * m1 + view.e * m4;            // py coef in screen.y
   const F = view.d * m[2] + view.e * m[5] + view.f;
   ctx.save();
   ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   // Draw only the visible pixel sub-rect, not the whole (often 2000²+) global
   // aerial. The camera is zoomed into one hole, so most of the image is off
   // screen; sampling all of it every frame is the main render cost. Invert the
@@ -2514,12 +2541,86 @@ function drawAerial() {
     }
     const sx = Math.max(0, Math.floor(minX) - 1);
     const sy = Math.max(0, Math.floor(minY) - 1);
-    const sw = Math.min(a.w, Math.ceil(maxX) + 1) - sx;
-    const sh = Math.min(a.h, Math.ceil(maxY) + 1) - sy;
+    const sw = Math.min(img.width, Math.ceil(maxX) + 1) - sx;
+    const sh = Math.min(img.height, Math.ceil(maxY) + 1) - sy;
     if (sw > 0 && sh > 0) ctx.drawImage(img, sx, sy, sw, sh, sx, sy, sw, sh);
   } else {
     ctx.drawImage(img, 0, 0); // degenerate transform: fall back to full draw
   }
+  ctx.restore();
+}
+
+// --- Anti-pixelation detail grain --------------------------------------------
+// The aerial tops out around 0.6 m/px; the putt camera stretches that 30-40x
+// across the screen and no resampling can invent the missing detail. So once
+// the photo is magnified past its native resolution, a world-anchored
+// procedural turf grain fades in on top (soft-light over the aerial) — the
+// classic terrain "detail texture" trick. World-anchored means it sticks to
+// the ground through pan/rotate/tilt; crisp vector overlays draw above it.
+let _grain = null; // { canvas, size, pattern }
+function grainTile() {
+  if (_grain) return _grain;
+  const S = 256, c = document.createElement("canvas");
+  c.width = S; c.height = S;
+  const g = c.getContext("2d"), id = g.createImageData(S, S);
+  const rnd = mulberry32(0x51ee7);
+  // Two-octave tileable value noise: random lattices sampled with wrap, so the
+  // 256px tile repeats seamlessly. Neutral 128 gray = invisible under soft-light.
+  const lat = (n) => { const a = new Float32Array(n * n); for (let i = 0; i < n * n; i++) a[i] = rnd(); return a; };
+  const l1 = lat(64), l2 = lat(16);
+  const samp = (a, n, x, y) => {
+    const fx = x * n / S, fy = y * n / S;
+    const x0 = Math.floor(fx) % n, y0 = Math.floor(fy) % n, x1 = (x0 + 1) % n, y1 = (y0 + 1) % n;
+    const tx = fx - Math.floor(fx), ty = fy - Math.floor(fy);
+    return (a[y0 * n + x0] * (1 - tx) + a[y0 * n + x1] * tx) * (1 - ty)
+         + (a[y1 * n + x0] * (1 - tx) + a[y1 * n + x1] * tx) * ty;
+  };
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let v = 0.62 * samp(l1, 64, x, y) + 0.38 * samp(l2, 16, x, y);
+    v += 0.08 * Math.sin((x + y) * Math.PI * 8 / S);   // faint diagonal mow streak
+    const lum = Math.max(0, Math.min(255, Math.round(128 + (v - 0.5) * 110)));
+    const i = (y * S + x) * 4;
+    id.data[i] = lum; id.data[i + 1] = lum; id.data[i + 2] = lum; id.data[i + 3] = 255;
+  }
+  g.putImageData(id, 0, 0);
+  _grain = { canvas: c, size: S, pattern: null };
+  return _grain;
+}
+function drawDetailGrain() {
+  const a = HOLE.aerial;
+  if (!a || !HOLE._img) return;
+  const dpr = window.devicePixelRatio || 1;
+  // Magnification k = device px per SOURCE aerial px (the 1.5x bake adds no
+  // real detail, so it doesn't count). Below the ramp the photo still has
+  // native texture and the grain stays fully off.
+  const k = dpr * view.scale * Math.hypot(a.toWorld[0], a.toWorld[3]);
+  const t = (k - TUNE.detailRampLo) / (TUNE.detailRampHi - TUNE.detailRampLo);
+  const alpha = TUNE.detailAlpha * Math.max(0, Math.min(1, t));
+  if (alpha < 0.01) return;
+  const gr = grainTile();
+  if (!gr.pattern) gr.pattern = ctx.createPattern(gr.canvas, "repeat");
+  const u = TUNE.detailTileUnits / gr.size;   // world units per tile px
+  // tile px -> css: same view compose as drawAerial, with m = scale(u)
+  const A = view.a * u, C = view.b * u, E = view.c;
+  const B = view.d * u, D = view.e * u, F = view.f;
+  const det = A * D - C * B;
+  if (Math.abs(det) < 1e-12) return;
+  // visible screen corners -> tile-space AABB (pattern repeats, no clamp needed)
+  const cssW = window.innerWidth, cssH = window.innerHeight;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [scx, scy] of [[0, 0], [cssW, 0], [0, cssH], [cssW, cssH]]) {
+    const dx = scx - E, dy = scy - F;
+    const px = (D * dx - C * dy) / det;
+    const py = (-B * dx + A * dy) / det;
+    if (px < minX) minX = px; if (px > maxX) maxX = px;
+    if (py < minY) minY = py; if (py > maxY) maxY = py;
+  }
+  ctx.save();
+  ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
+  ctx.globalCompositeOperation = "soft-light";
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = gr.pattern;
+  ctx.fillRect(minX - 1, minY - 1, (maxX - minX) + 2, (maxY - minY) + 2);
   ctx.restore();
 }
 
@@ -2700,6 +2801,7 @@ function drawGreenRelief(g, intensity, showArrows) {
   tracePoly(g.poly); ctx.clip();                      // clip set in device space, survives setTransform
   ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * Dd, dpr * E, dpr * F);
   ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.globalAlpha = intensity;
   ctx.drawImage(g.relief.canvas, 0, 0);
   ctx.restore();
@@ -3113,6 +3215,7 @@ function drawOOBOverlay(s) {
     ctx.save();
     ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(m.oob, 0, 0);
     ctx.restore();
     return;
@@ -3190,6 +3293,7 @@ function drawVectorSurfaces() {
 function drawPhotoSurfaces() {
   const s = HOLE.surfaces;
   drawAerial(); // grade + course-green wash are baked into the image (processAerial)
+  drawDetailGrain(); // zoom-ramped turf grain over the stretched photo
   ctx.globalAlpha = 0.16;                          // gentle fairway tint
   fillPolys(s.fairway, "#8ad98f");
   ctx.globalAlpha = 1;
