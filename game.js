@@ -113,10 +113,13 @@ const TUNE = {
   // on screen (column-band warp), trees stand up from the woods mask, and a
   // hillshade overlay sells the slopes. All of it fades in with camera.tilt.
   tExag: 1.6,            // terrain relief exaggeration (1 = true DEM scale)
-  tWarpCol: 16,          // warp column width, css px (×1.3 on mobile)
+  tWarpCol: 10,          // warp column width, css px (×1.3 on mobile) — narrow
+                         // enough that lift steps between columns don't tear
+                         // the high-contrast lifted canopy texture
   tWarpRow: 24,          // warp band height, css px (×1.3 on mobile)
-  treeMax: 3500,         // cap on generated trees per course
+  treeMax: 3500,         // cap on generated trees per course (sprite fallback)
   treeHMin: 3.5, treeHMax: 6.5, // tree height range, world units (~30–60 ft)
+  canopyH: 4.6,          // photo-canopy extrusion height, world units (~40 ft)
   tHillAlpha: 0.22,      // DEM hillshade overlay strength when fully tilted
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
@@ -3356,7 +3359,8 @@ function warpSig(cssW, cssH) {
   return q(view.a) + "," + q(view.b) + "," + q(view.c) + "," + q(view.d) + "," +
          q(view.e) + "," + q(view.f) + "," + q(view.kz * 100) + "," + q(view.zFocus * 50) + "," +
          HOLE.num + "," + (showOOB ? 1 : 0) + (showSlope ? 1 : 0) + (breakArrows ? 1 : 0) +
-         (HOLE._imgReady ? 1 : 0) + "," + gids + "," + cssW + "x" + cssH + "," + _warpPad;
+         (HOLE._imgReady ? 1 : 0) + (HOLE._mask && HOLE._mask.lab ? 1 : 0) + "," +
+         gids + "," + cssW + "x" + cssH + "," + _warpPad;
 }
 // Max |lift| on screen this frame, from a coarse screen grid (+slack).
 function estimateWarpPad(cssW, cssH) {
@@ -3401,6 +3405,11 @@ function finishGroundWarp(cssW, cssH, sig) {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, cssW, cssH);
   g.imageSmoothingEnabled = true;
+  if (!pad) {
+    // no measurable lift (no DEM, or flat terrain in view): the capture IS the
+    // frame — copy it straight into the cache, skip the band loop entirely
+    g.drawImage(_groundC, 0, 0, _groundC.width, _groundC.height, 0, 0, cssW, cssH);
+  } else {
   const mul = IS_DESKTOP ? 1 : 1.3;
   const colW = Math.max(TUNE.tWarpCol * mul, cssW / 32);
   const rowH = Math.max(TUNE.tWarpRow * mul, cssH / 28);
@@ -3421,8 +3430,9 @@ function finishGroundWarp(cssW, cssH, sig) {
       y0 = y1; l0 = l1;
     }
   }
+  }
   // trees are static under the same sig — bake them into the cache so parked
-  // frames are one blit (courses without a DEM draw them live in draw())
+  // frames are one blit
   const real = ctx;
   ctx = g; drawTrees(); ctx = real;
   _warpCache.sig = sig;
@@ -3434,24 +3444,71 @@ function finishGroundWarp(cssW, cssH, sig) {
 // hash-thinned) or, without a mask, a seeded scatter inside the OSM woods
 // polygons. Built once per course; drawn as pre-rendered canopy sprites that
 // rise with the tilt (lift = ws(h)·kz), painter-sorted by screen y.
+// A closed, rounded-corner blob outline (jittered radius per angle, joined by
+// quadratic curves through edge midpoints) traced into `g`'s current path —
+// the standard "cloud/tree clump" shape, NOT a circle/ellipse. Mottling
+// alone (internal gradient) still reads as a sphere once magnified because
+// the OUTLINE stays perfectly round; breaking the outline itself is what
+// sells "leafy" at any zoom.
+function blobPath(g, cx, cy, r, jitter, n, rnd, squash) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const rad = r * (1 - jitter / 2 + rnd() * jitter);
+    pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad * squash]);
+  }
+  const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+  const m0 = mid(pts[n - 1], pts[0]);
+  g.beginPath();
+  g.moveTo(m0[0], m0[1]);
+  for (let i = 0; i < n; i++) {
+    const cur = pts[i], next = pts[(i + 1) % n], m = mid(cur, next);
+    g.quadraticCurveTo(cur[0], cur[1], m[0], m[1]);
+  }
+  g.closePath();
+}
 let _treeSprites = null;
 function treeSprites() {
   if (_treeSprites) return _treeSprites;
   _treeSprites = [];
+  // A single smooth ellipse + faint internal gradient reads as a glossy
+  // sphere once magnified for a close-up 3D view (the old 2 lobes were too
+  // faint to survive the blur). Fix: 3 overlapping jittered-blob lobes give
+  // an irregular, multi-lump SILHOUETTE (not just internal color variation),
+  // plus mottled puffs for dappled shading — reads as foliage at any zoom.
   const shades = [["#3a7a40", "#16351c"], ["#457f3b", "#1b3d1e"], ["#3c7448", "#173920"], ["#4c8442", "#204322"]];
+  const S = 96;
+  let seed = 0xdec1d5;
   for (const [lite, dark] of shades) {
-    const S = 48, c = document.createElement("canvas");
+    const c = document.createElement("canvas");
     c.width = S; c.height = S;
     const g = c.getContext("2d");
-    const rg = g.createRadialGradient(S * 0.40, S * 0.32, S * 0.05, S * 0.5, S * 0.46, S * 0.48);
-    rg.addColorStop(0, lite);
-    rg.addColorStop(1, dark);
-    g.fillStyle = rg;
-    g.beginPath(); g.ellipse(S * 0.5, S * 0.46, S * 0.44, S * 0.42, 0, 0, Math.PI * 2); g.fill();
-    // two offset lobes break the perfect-ellipse silhouette
-    g.globalAlpha = 0.8;
-    g.beginPath(); g.ellipse(S * 0.32, S * 0.56, S * 0.20, S * 0.17, 0.4, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.ellipse(S * 0.68, S * 0.58, S * 0.17, S * 0.15, -0.5, 0, Math.PI * 2); g.fill();
+    const rnd = mulberry32(seed); seed = (seed + 0x9e3779b9) >>> 0;
+    // 3 overlapping lobes (one big + two smaller offset clumps) build a lumpy
+    // multi-lobed crown outline instead of one round blob.
+    const lobes = [
+      { cx: S * 0.5, cy: S * 0.5, r: S * 0.36 },
+      { cx: S * 0.28 + rnd() * S * 0.08, cy: S * 0.58 + rnd() * S * 0.08, r: S * 0.22 },
+      { cx: S * 0.68 + rnd() * S * 0.08, cy: S * 0.42 + rnd() * S * 0.1, r: S * 0.24 },
+    ];
+    for (const { cx, cy, r } of lobes) {
+      const rg = g.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.1, cx, cy, r * 1.15);
+      rg.addColorStop(0, lite); rg.addColorStop(1, dark);
+      g.fillStyle = rg;
+      blobPath(g, cx, cy, r, 0.4, 9, rnd, 0.92);
+      g.fill();
+    }
+    // small mottled puffs on top for dappled internal texture
+    for (let i = 0; i < 7; i++) {
+      const ang = rnd() * Math.PI * 2, rad = rnd() * S * 0.3;
+      const cx = S * 0.5 + Math.cos(ang) * rad, cy = S * 0.5 + Math.sin(ang) * rad * 0.9;
+      const pr = S * (0.1 + rnd() * 0.1);
+      g.globalAlpha = 0.3 + rnd() * 0.3;
+      g.fillStyle = rnd() > 0.5 ? lite : dark;
+      blobPath(g, cx, cy, pr, 0.5, 7, rnd, 0.9);
+      g.fill();
+    }
+    g.globalAlpha = 1;
     _treeSprites.push(c);
   }
   return _treeSprites;
@@ -3502,6 +3559,7 @@ function drawTrees() {
   const kz = view.kz;
   if (!kz || !HOLE || HOLE.isRange || greenView || cine) return;
   if (ws(TUNE.treeHMax) * kz < 2.5) return; // too zoomed-out to read as height
+  if (ensureCanopyLayer()) return;          // photo canopy extrusion covers it
   const holder = course || HOLE;
   // The mask decodes async — don't bake trees from the OSM fallback while a
   // mask is still on its way; rebuild once it lands (mask wins on quality).
@@ -3543,6 +3601,124 @@ function drawTrees() {
     const d = rr * 2.3;
     ctx.drawImage(sprites[t.s], sx - d / 2, sy - lift - d * 0.52, d, d);
   }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// --- Photo-canopy extrusion (tilted view) ----------------------------------
+// On photo courses the trees ARE in the aerial — so instead of pasting sprite
+// billboards over them, cut the woods pixels out of the graded aerial (mask
+// canopy cells -> feathered alpha) and extrude that cutout: stacked dark
+// silhouettes from the ground up form the side wall, then the full-color
+// cutout drawn lifted by ws(canopyH)·kz is the canopy top. The forest rises
+// out of the photo with its own texture, color and real sun shadows intact.
+function buildCanopyLayer(m, img, a) {
+  const out = { mask: m, img, c: null, dark: null };
+  try {
+    const w = Math.round(a.w), h = Math.round(a.h);   // source aerial px
+    if (!w || !h) return out;
+    // 1. feathered alpha of the canopy cells, painted in mask px
+    const am = document.createElement("canvas");
+    am.width = m.w; am.height = m.h;
+    const ag = am.getContext("2d");
+    const id = ag.createImageData(m.w, m.h);
+    const src = m.canopy || m.lab;
+    for (let i = 0; i < src.length; i++) {
+      if (src[i] !== 3) continue;
+      const o = i * 4;
+      id.data[o] = id.data[o + 1] = id.data[o + 2] = id.data[o + 3] = 255;
+    }
+    ag.putImageData(id, 0, 0);
+    // 2. mask px -> aerial px = inv(aerial.toWorld) ∘ mask.toWorld
+    const A = a.toWorld, M = m.toWorld;
+    const det = A[0] * A[4] - A[1] * A[3];
+    if (Math.abs(det) < 1e-12) return out;
+    const m11 = (A[4] * M[0] - A[1] * M[3]) / det;
+    const m12 = (-A[3] * M[0] + A[0] * M[3]) / det;
+    const m21 = (A[4] * M[1] - A[1] * M[4]) / det;
+    const m22 = (-A[3] * M[1] + A[0] * M[4]) / det;
+    const dx = (A[4] * (M[2] - A[2]) - A[1] * (M[5] - A[5])) / det;
+    const dy = (-A[3] * (M[2] - A[2]) + A[0] * (M[5] - A[5])) / det;
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d");
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    g.setTransform(m11, m12, m21, m22, dx, dy);
+    g.drawImage(am, 0, 0);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    // 3. keep the graded aerial only where the alpha says canopy
+    g.globalCompositeOperation = "source-in";
+    g.drawImage(img, 0, 0, img.width, img.height, 0, 0, w, h);
+    // probe: oversize canvases fail silently on iOS — bail to sprite fallback
+    if (!g.getImageData(w >> 1, h >> 1, 1, 1)) return out;
+    // 4. half-res darkened copy for the extrusion side walls
+    const d = document.createElement("canvas");
+    d.width = Math.max(1, w >> 1); d.height = Math.max(1, h >> 1);
+    const dg = d.getContext("2d");
+    dg.imageSmoothingEnabled = true;
+    dg.drawImage(c, 0, 0, d.width, d.height);
+    dg.globalCompositeOperation = "source-atop";
+    dg.fillStyle = "rgba(10,26,12,0.88)";
+    dg.fillRect(0, 0, d.width, d.height);
+    out.c = c; out.dark = d;
+  } catch (e) { /* no canopy layer -> sprite fallback */ }
+  return out;
+}
+function ensureCanopyLayer() {
+  const m = HOLE._mask, img = HOLE._img, a = HOLE.aerial;
+  if (!m || !m.lab || !img || !a || !HOLE._imgReady) return null;
+  const holder = course || HOLE;
+  let L = holder._canopyLayer;
+  if (!L || L.mask !== m || L.img !== img) {
+    L = holder._canopyLayer = buildCanopyLayer(m, img, a);
+  }
+  return L.c ? L : null;
+}
+function drawCanopy() {
+  if (!view.kz || !HOLE || HOLE.isRange || greenView || cine) return;
+  const L = ensureCanopyLayer();
+  if (!L) return;
+  const liftPx = ws(TUNE.canopyH) * view.kz;   // css px the canopy rises
+  if (liftPx < 2) return;                      // too zoomed out to read
+  // compose source-aerial px -> screen, same pattern as drawAerial (up = 1)
+  const m = HOLE.aerial.toWorld, dpr = window.devicePixelRatio || 1;
+  const A = view.a * m[0] + view.b * m[3];
+  const C = view.a * m[1] + view.b * m[4];
+  const E = view.a * m[2] + view.b * m[5] + view.c;
+  const B = view.d * m[0] + view.e * m[3];
+  const D = view.d * m[1] + view.e * m[4];
+  const F = view.d * m[2] + view.e * m[5] + view.f;
+  const det = A * D - C * B;
+  if (Math.abs(det) < 1e-9) return;
+  // visible source rect: screen corners (viewport + capture pad + lift head-
+  // room below, since every layer shifts content UP) back through the inverse
+  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad + liftPx;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [scx, scy] of [[0, 0], [cssW, 0], [0, cssH], [cssW, cssH]]) {
+    const ddx = scx - E, ddy = scy - F;
+    const px = (D * ddx - C * ddy) / det;
+    const py = (-B * ddx + A * ddy) / det;
+    if (px < minX) minX = px; if (px > maxX) maxX = px;
+    if (py < minY) minY = py; if (py > maxY) maxY = py;
+  }
+  const sx = Math.max(0, Math.floor(minX) - 1);
+  const sy = Math.max(0, Math.floor(minY) - 1);
+  const sw = Math.min(L.c.width, Math.ceil(maxX) + 1) - sx;
+  const sh = Math.min(L.c.height, Math.ceil(maxY) + 1) - sy;
+  if (sw <= 0 || sh <= 0) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  const layer = (cnv, offY, sc, alpha) => {
+    ctx.globalAlpha = alpha;
+    ctx.setTransform(dpr * A * sc, dpr * B * sc, dpr * C * sc, dpr * D * sc, dpr * E, dpr * (F - offY));
+    ctx.drawImage(cnv, sx / sc, sy / sc, sw / sc, sh / sc, sx / sc, sy / sc, sw / sc, sh / sc);
+  };
+  // side wall: stacked dark silhouettes ground -> top (bounded layer count;
+  // canopy blobs are far taller on screen than the step, so no banding)
+  const step = Math.max(3, liftPx / 10);
+  for (let o = 0; o < liftPx; o += step) layer(L.dark, o, 2, 0.85);
+  layer(L.c, liftPx, 1, 1);                    // full-color canopy top
   ctx.restore();
   ctx.globalAlpha = 1;
 }
@@ -3615,6 +3791,7 @@ function drawPhotoSurfaces() {
   ctx.globalAlpha = 1;
   drawGreen(true);
   drawOOBOverlay(s);                               // red OOB tint over aerial
+  drawCanopy();      // tilted only: the photo's own woods pixels, extruded
 }
 
 let ballTrail = [];   // recent airborne ball positions (screen px) for motion trail
@@ -3773,12 +3950,14 @@ function drawTeeMarkers() {
 
 function draw() {
   const cssW = window.innerWidth, cssH = window.innerHeight;
-  // Tilted 3D: measure this frame's terrain displacement; a nonzero pad routes
-  // the whole ground stack through the offscreen capture + column-band warp.
-  _warpPad = (view.kz && !HOLE.isRange && !greenView && !cine)
-    ? estimateWarpPad(cssW, cssH) : 0;
+  // Tilted 3D: route the whole ground stack through the offscreen capture +
+  // cache whenever tilted — with a DEM the column-band warp displaces it (pad
+  // = measured max lift), without one (pad 0) it's a straight cached copy, so
+  // heavy tilt layers (photo-canopy extrusion) still cost one blit parked.
+  const tilt3d = !!(view.kz && !HOLE.isRange && !greenView && !cine);
+  _warpPad = tilt3d ? estimateWarpPad(cssW, cssH) : 0;
   computeViewAABB(); // for off-screen polygon culling this frame
-  const warp = _warpPad > 0;
+  const warp = tilt3d;
   const wSig = warp ? warpSig(cssW, cssH) : null;
   if (warp && _warpCache && _warpCache.sig === wSig) {
     // parked camera: the warped ground is identical to last frame — one blit
@@ -3811,7 +3990,8 @@ function draw() {
   }
   if (warp) finishGroundWarp(cssW, cssH, wSig);
   }  // end of ground rebuild (skipped entirely on a warp-cache hit)
-  if (!warp) drawTrees(); // no-DEM courses: trees live (nothing to warp/cache)
+  // (tilted always goes through the capture+cache now, so trees/canopy are
+  // baked in there; nothing draws live here when flat — kz=0 no-ops drawTrees)
   // animated flow dots draw ABOVE the (possibly cached) ground so they never
   // force a ground re-render; wyg() keeps them glued to the displaced turf
   if (!HOLE.isRange && showSlope && !breakArrows && !greenView) {
@@ -3837,10 +4017,11 @@ function draw() {
     ctx.fill();
   } else {
   drawTeeMarkers();   // flank the tee box so it reads clearly
-  // hole cup — dark hole with a bright rim so it reads on the photo
+  // hole cup — dark hole with a bright rim so it reads on the photo. A circle
+  // on the ground foreshortens with the camera tilt, so ry scales by view.tilt.
   const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
   ctx.beginPath();
-  ctx.arc(hx, hy, hr, 0, Math.PI * 2);
+  ctx.ellipse(hx, hy, hr, hr * view.tilt, 0, 0, Math.PI * 2);
   ctx.fillStyle = "#0a1f0f";
   ctx.fill();
   ctx.lineWidth = Math.max(hr * 0.18, 1);
@@ -3996,7 +4177,7 @@ function draw() {
       const fall = s * hr * 1.6;                                  // drop below the lip
       const r = baseR * (1 - 0.25 * s);
       ctx.save();
-      ctx.beginPath(); ctx.arc(hx, hy, hr * 1.02, 0, Math.PI * 2); ctx.clip();
+      ctx.beginPath(); ctx.ellipse(hx, hy, hr * 1.02, hr * 1.02 * view.tilt, 0, 0, Math.PI * 2); ctx.clip();
       ctx.beginPath(); ctx.arc(bx, by + fall, r, 0, Math.PI * 2);
       ctx.fillStyle = `rgb(${mix(244, 14)},${mix(244, 30)},${mix(237, 18)})`;
       ctx.fill();
@@ -4246,6 +4427,16 @@ function earnMilestone(id) {
   lsSet("golf.milestones", m);
   return true;
 }
+// A milestone can unlock a marquee course (ACHIEVEMENT_COURSES) — toast it
+// after the milestone's own toast has had its moment.
+function announceMilestoneUnlocks(msId, delayMs) {
+  for (const cid in ACHIEVEMENT_COURSES) {
+    if (ACHIEVEMENT_COURSES[cid].milestone !== msId) continue;
+    const c = COURSES.find((x) => x.id === cid);
+    const name = c ? c.name : cid;
+    setTimeout(() => showToast(name + " unlocked!", 2600, "gold"), delayMs);
+  }
+}
 
 function showResult() {
   if (cine) closeCine();  // hole-out ends the cinematic; the result modal takes over
@@ -4366,7 +4557,7 @@ function showResult() {
 
   // First-time milestone toasts (once ever, per device)
   let ms = null;
-  if (level === 4 && earnMilestone("first-ace")) ms = "First hole-in-one!";
+  if (level === 4 && earnMilestone("first-ace")) { ms = "First hole-in-one!"; announceMilestoneUnlocks("first-ace", 2800); }
   else if (level >= 2 && earnMilestone("first-eagle")) ms = "First eagle!";
   else if (level === 1 && earnMilestone("first-birdie")) ms = "First birdie!";
   if (ms) setTimeout(() => showToast(ms, 2200, "gold"), 400);
@@ -4582,6 +4773,11 @@ function showRoundSummary(midRound = false) {
         const diff = round.score - cb.prev.toPar;
         sub.textContent += ` · Best ${formatToPar(cb.prev.toPar)}` + (diff > 0 ? ` (${diff} to beat)` : "");
       }
+    }
+    // Under par over a full 18 → the break-par milestone (unlocks its course).
+    if (!dailyMode && round.score < 0 && round.holeStats.length >= 18 && earnMilestone("break-par")) {
+      setTimeout(() => showToast("Broke par — milestone earned!", 2400, "gold"), 600);
+      announceMilestoneUnlocks("break-par", 3200);
     }
     if (dailyMode) finishDaily(totStrk);  // streak + share + daily board
     submitFinishedRound();                // post to regular leaderboard
@@ -4829,13 +5025,23 @@ async function loadCourse(id) {
 // courses/manifest.json (loadManifest); this hardcoded set is the fallback if the
 // manifest is missing. First is the default.
 const FALLBACK_COURSES = [
-  { id: "pinehurst-no2", name: "Pinehurst No. 2", sub: "Pinehurst, NC · Par 70" },
-  { id: "four-oaks-dracut", name: "Four Oaks Country Club", sub: "Dracut, MA · Par 70" },
-  { id: "tpc-river-highlands", name: "TPC River Highlands", sub: "Cromwell, CT · Par 70" },
-  { id: "st-andrews-old", name: "St Andrews — Old Course", sub: "St Andrews, Scotland · Par 72" },
-  { id: "bethpage-black", name: "Bethpage Black", sub: "Farmingdale, NY · Par 71" },
+  { id: "pinehurst-no2", name: "Pinehurst No. 2", sub: "Pinehurst, NC · Par 70", aerial: "naip" },
+  { id: "four-oaks-dracut", name: "Four Oaks Country Club", sub: "Dracut, MA · Par 70", aerial: "naip" },
+  { id: "tpc-river-highlands", name: "TPC River Highlands", sub: "Cromwell, CT · Par 70", aerial: "naip" },
+  { id: "st-andrews-old", name: "St Andrews — Old Course", sub: "St Andrews, Scotland · Par 72", aerial: "esri" },
+  { id: "bethpage-black", name: "Bethpage Black", sub: "Farmingdale, NY · Par 71", aerial: "naip" },
 ];
 let COURSES = FALLBACK_COURSES.slice();
+
+// Esri World Imagery terms forbid monetized (ad-supported) use — only NAIP-sourced
+// courses (public domain, commercial-OK) are eligible to show ads. Checked against
+// the manifest's per-course `aerial` field so ad code doesn't need the full course
+// JSON just to decide. Range/no-manifest-entry courses are treated as ineligible
+// (fail closed) rather than assumed clean.
+function courseAdsEligible(courseId) {
+  const meta = COURSES.find((c) => c.id === courseId);
+  return !!meta && meta.aerial === "naip";
+}
 let selectedCourseId = COURSES[0].id;
 // Replace COURSES from courses/manifest.json (admin bakes append to it). Falls
 // back silently to FALLBACK_COURSES on any error so the menu always works.
@@ -4847,6 +5053,60 @@ async function loadManifest() {
     if (Array.isArray(arr) && arr.length) COURSES = arr;
   } catch (e) { console.warn("manifest load failed, using fallback courses:", e); }
   if (!COURSES.some((c) => c.id === selectedCourseId)) selectedCourseId = COURSES[0].id;
+}
+
+// ---------------------------------------------------------------------
+//  Course unlock progression — mirror of the bot ladder's botUnlocked().
+//  Nothing stores an "unlocked list": state derives live from golf.botsBeaten
+//  + golf.milestones + golf.entitlements, so it can't drift and needs no
+//  migration. golf.entitlements is the future paid seam — hydrate it from a
+//  server entitlements table (like _profile) and purchases just work.
+// ---------------------------------------------------------------------
+const FREE_COURSE_IDS = FALLBACK_COURSES.map((c) => c.id); // offline fallback must stay playable
+// Marquee courses earned by deed, not ladder position.
+const ACHIEVEMENT_COURSES = {
+  "pebble-beach-golf-course":   { milestone: "first-ace", label: "Make a hole-in-one" },
+  "augusta-national-golf-club": { milestone: "break-par", label: "Break par in an 18-hole round" },
+  "blackwater-vale":            { milestone: "match-win", label: "Win a quick match" },
+};
+// Fixed chunk size (NOT count/14): manifest order is append-only, so a fixed
+// size means existing courses never change tier as the list grows — new bakes
+// land in the last tier.
+const TIER_SIZE = 7;
+
+let _tierMap = null, _tierSrc = null;
+function courseTierMap() {           // Map(courseId -> bot tier index)
+  if (_tierMap && _tierSrc === COURSES) return _tierMap;
+  const m = new Map();
+  let i = 0;
+  for (const c of COURSES) {
+    if (FREE_COURSE_IDS.includes(c.id) || ACHIEVEMENT_COURSES[c.id]) continue;
+    m.set(c.id, Math.min(Math.floor(i / TIER_SIZE), BOTS.length - 1));
+    i++;
+  }
+  _tierMap = m; _tierSrc = COURSES;
+  return m;
+}
+
+function getEntitlements() { return lsGet("golf.entitlements", { v: 1, courses: {} }); }
+function purchasedCourse(id) { return !!getEntitlements().courses[id]; }
+
+// Single source of truth for "what does it take to play this course".
+function unlockReq(id) {
+  if (FREE_COURSE_IDS.includes(id)) return { type: "free", label: "", met: true };
+  const ach = ACHIEVEMENT_COURSES[id];
+  if (ach) return { type: "milestone", milestoneId: ach.milestone, label: ach.label,
+                    met: !!getMilestones()[ach.milestone] };
+  const t = courseTierMap().get(id);
+  if (t == null) return { type: "free", label: "", met: true };  // unknown id — never brick a course
+  return { type: "bot", botId: BOTS[t].id, label: "Beat " + BOTS[t].name, met: botBeaten(BOTS[t].id) };
+}
+function courseUnlocked(id) {
+  return isTournamentAdmin() || purchasedCourse(id) || isDailyFeatured(id) || unlockReq(id).met;
+}
+function unlockedCourseIds() { return COURSES.filter((c) => courseUnlocked(c.id)).map((c) => c.id); }
+function courseUnlockCount() {
+  return { unlocked: COURSES.filter((c) => courseUnlocked(c.id)).length, total: COURSES.length };
 }
 // ---------------------------------------------------------------------
 //  Course-select page: search + filter rail + card grid
@@ -4916,36 +5176,50 @@ function renderCourseCards() {
       : chip.dataset.ft === courseFilter.type && chip.dataset.fv === courseFilter.value;
     chip.classList.toggle("active", on);
   });
-  if (elCsCount) elCsCount.textContent = list.length + (list.length === 1 ? " course" : " courses");
+  if (elCsCount) {
+    const uc = courseUnlockCount();
+    elCsCount.textContent = list.length + (list.length === 1 ? " course" : " courses") +
+      " · " + uc.unlocked + " unlocked";
+  }
   if (!list.length) { elCsGrid.innerHTML = `<div class="cs-empty">No courses match.</div>`; return; }
+  // Unlocked courses first (stable partition — manifest order kept within each group).
+  const ordered = [...list.filter((c) => courseUnlocked(c.id)), ...list.filter((c) => !courseUnlocked(c.id))];
   const frag = document.createDocumentFragment();
-  for (const c of list) {
+  for (const c of ordered) {
+    const locked = !courseUnlocked(c.id);
+    const req = unlockReq(c.id);
+    const featured = isDailyFeatured(c.id);
     const card = document.createElement("div");
-    card.className = "cs-card";
+    card.className = "cs-card" + (locked ? " cs-card--locked" : "");
     const best = courseBest(c.id);
     const bestBadge = best ? `<span class="cs-card-best">Best ${formatToPar(best.toPar)}</span>` : "";
     const tags = c.tags || [];
     let badges = "";
+    if (featured && !isTournamentAdmin()) badges += `<span class="cs-badge featured">Free today</span>`;
     if (tags.includes("pgaTour")) badges += `<span class="cs-badge pga">PGA Tour</span>`;
     if (tags.includes("major")) badges += `<span class="cs-badge major">Major</span>`;
     const par = c.par != null ? c.par : "—";
     const yds = c.yards ? c.yards.toLocaleString() + " yds" : "";
     const loc = c.location && c.location !== "Unknown" ? esc(c.location) : "";
     const meta = [loc, "Par " + par, yds].filter(Boolean).join(" · ");
+    const btns = locked
+      ? `<span class="cs-req"><span class="ic ic-lock"></span>${esc(req.label)}</span>` +
+        `<button class="cs-preview">Preview</button>`
+      : `<button class="cs-play">Play</button>` +
+        `<button class="cs-preview">Preview</button>`;
     card.innerHTML =
       `<div class="cs-card-img">` +
         `<div class="cs-card-badges">${badges}</div>${bestBadge}` +
+        (locked ? `<span class="cs-lock-ic"><span class="ic ic-lock"></span></span>` : "") +
         `<img loading="lazy" src="${courseImg(c.id)}" alt="" onerror="this.style.display='none'">` +
       `</div>` +
       `<div class="cs-card-body">` +
         `<div class="cs-card-name">${esc(c.name)}</div>` +
         `<div class="cs-card-meta">${meta}</div>` +
-        `<div class="cs-card-btns">` +
-          `<button class="cs-play">Play</button>` +
-          `<button class="cs-preview">Preview</button>` +
-        `</div>` +
+        `<div class="cs-card-btns">${btns}</div>` +
       `</div>`;
-    card.querySelector(".cs-play").addEventListener("click", () => { selectedCourseId = c.id; startCourse(); });
+    const play = card.querySelector(".cs-play");
+    if (play) play.addEventListener("click", () => { selectedCourseId = c.id; startCourse(); });
     card.querySelector(".cs-preview").addEventListener("click", () => openPreview(c.id));
     frag.appendChild(card);
   }
@@ -5058,6 +5332,10 @@ document.getElementById("pv-close").addEventListener("click", closePreview);
 document.getElementById("pv-prev").addEventListener("click", () => { previewIdx--; showPreviewHole(); });
 document.getElementById("pv-next").addEventListener("click", () => { previewIdx++; showPreviewHole(); });
 document.getElementById("pv-play").addEventListener("click", () => {
+  if (course && !courseUnlocked(course.id)) {
+    showToast("Locked — " + unlockReq(course.id).label, 2400);
+    return;
+  }
   if (course) selectedCourseId = course.id;
   elPreview.classList.add("hidden");
   startCourse();
@@ -5877,6 +6155,33 @@ function showMenu() {
   setMeasureMode(false);
   setSlopeMode(true);   // slope relief on by default
   closeCourseMenu();
+  renderMenuChips();
+}
+
+// Home-menu chips: daily streak + today's featured (free) course.
+function renderMenuChips() {
+  const wrap = document.getElementById("menu-chips");
+  if (!wrap) return;
+  const stEl = document.getElementById("menu-streak");
+  const ftEl = document.getElementById("menu-featured");
+  const st = getDaily();
+  let any = false;
+  if (stEl) {
+    const show = (st.streak || 0) > 0;
+    stEl.classList.toggle("hidden", !show);
+    if (show) {
+      stEl.textContent = "Daily streak: " + st.streak +
+        (st.lastDate !== todayStr() ? " · play today to keep it" : "");
+      any = true;
+    }
+  }
+  if (ftEl) {
+    const fid = dailyFeaturedCourseId();
+    const c = fid && COURSES.find((x) => x.id === fid);
+    ftEl.classList.toggle("hidden", !c);
+    if (c) { ftEl.textContent = "Free today: " + c.name; any = true; }
+  }
+  wrap.classList.toggle("hidden", !any);
 }
 
 // Switch the world scale (yards/unit) and refresh derived power if it changed.
@@ -5885,6 +6190,13 @@ function setYardsPerUnit(ypu) {
 }
 
 function startCourse() {
+  // Locked-course backstop: every picker path funnels here. Live-match guests
+  // play the host's course and tournament rounds are admin-chosen — exempt.
+  if (!matchLive() && activeTournamentRound === null && !courseUnlocked(selectedCourseId)) {
+    showToast("Locked — " + unlockReq(selectedCourseId).label, 2400);
+    showCourseSelect();
+    return;
+  }
   // Match host is mid-setup: the course pick funnels here → divert to the
   // configured match instead of starting a solo round.
   if (matchSetupMode) { startConfiguredMatch(); return; }
@@ -5973,6 +6285,16 @@ function dailyCourseFor(dateStr) {
   const rnd = mulberry32(strSeed(dateStr));
   return list[Math.floor(rnd() * list.length)];
 }
+
+// Daily featured course: one normally-locked course is free for everyone
+// today. Pool = all non-free courses (not "currently locked") so the pick is
+// identical for every player and never shifts as an individual unlocks things.
+function dailyFeaturedCourseId() {
+  const pool = COURSES.filter((c) => unlockReq(c.id).type !== "free").map((c) => c.id);
+  if (!pool.length) return null;
+  return pool[Math.floor(mulberry32(strSeed("feat:" + todayStr()))() * pool.length)];
+}
+function isDailyFeatured(id) { return id === dailyFeaturedCourseId(); }
 
 async function startDaily() {
   const dateStr = todayStr();
@@ -9076,7 +9398,13 @@ function settleBotMatch() {
   if (won && markBotBeaten(activeMatch._bot)) {
     const next = nextBotAfter(activeMatch._bot);
     showToast(next ? next.name + " unlocked" : "Ladder complete — you beat them all", 2800, "gold");
+    // This bot's course tier just opened — tell the player what they won.
+    const tier = botIndex(activeMatch._bot);
+    let n = 0;
+    courseTierMap().forEach((t) => { if (t === tier) n++; });
+    if (n) setTimeout(() => showToast(n + " new course" + (n === 1 ? "" : "s") + " unlocked", 2600, "gold"), 3200);
   }
+  if (won && earnMilestone("match-win")) announceMilestoneUnlocks("match-win", 6000);
   const nb = nextBotAfter(activeMatch._bot);
   const rm = document.getElementById("mr-rematch"), nbBtn = document.getElementById("mr-next-bot");
   if (rm) rm.classList.remove("hidden");
@@ -9112,6 +9440,11 @@ async function renderMatchResults() {
     const me = rows.find(isMeEntry), opp = rows.find(r => !isMeEntry(r));
     const mp = (me && opp) ? computeMatchPlay(me, opp, matchHoleCount) : null;
     if (bannerEl) bannerEl.textContent = mp ? (mp.result || mp.status || "") : "";
+    // First quick-match win → milestone (idempotent, safe under the results poll).
+    if (allDone && mp && mp.result && mp.result.indexOf("Won") === 0 && earnMilestone("match-win")) {
+      showToast("First match win!", 2200, "gold");
+      announceMilestoneUnlocks("match-win", 2600);
+    }
     listEl.innerHTML = rows.map(r => {
       const meCls = isMeEntry(r) ? " mr-me" : "";
       const thru = r.finished ? '<span class="mr-fin">F</span>' : `${r.holes_played}/${matchHoleCount}`;
@@ -9134,6 +9467,11 @@ async function renderMatchResults() {
       (meRow.pos === 1 && !meRow.tied ? " — winner!" : "");
     else if (meRow.finished) bannerEl.textContent = `In the clubhouse — currently ${posLabel(meRow)}`;
     else bannerEl.textContent = `You're ${posLabel(meRow)}`;
+  }
+  // First quick-match win (stroke play) → milestone (idempotent under the poll).
+  if (allDone && meRow && meRow.pos === 1 && !meRow.tied && earnMilestone("match-win")) {
+    showToast("First match win!", 2200, "gold");
+    announceMilestoneUnlocks("match-win", 2600);
   }
   listEl.innerHTML = ranked.map(r => {
     const meCls = isMeEntry(r) ? " mr-me" : "";
@@ -9192,8 +9530,9 @@ function qmBandFor(elapsed) {
   return 999;   // any handicap
 }
 function qmPickCourse() {
-  const list = COURSES.length ? COURSES : FALLBACK_COURSES;
-  return list[(Math.random() * list.length) | 0].id;
+  const ids = unlockedCourseIds();
+  const list = ids.length ? ids : FREE_COURSE_IDS;
+  return list[(Math.random() * list.length) | 0];
 }
 
 // My pairing rating: stored profile handicap → computed from rounds → default.
@@ -10015,6 +10354,76 @@ function renderBotList() {
   });
 })();
 
+// =====================================================================
+//  Trophy Room — progress overview: courses, ladder, achievements, daily.
+// =====================================================================
+const PROGRESS_MILESTONES = [
+  { id: "first-birdie", label: "First birdie",      hint: "Finish a hole one under par" },
+  { id: "first-eagle",  label: "First eagle",       hint: "Finish a hole two under par" },
+  { id: "first-ace",    label: "Hole-in-one",       hint: "Ace any hole" },
+  { id: "break-par",    label: "Break par",         hint: "Finish an 18-hole round under par" },
+  { id: "match-win",    label: "Match winner",      hint: "Win a quick match" },
+];
+function renderProgress() {
+  const body = document.getElementById("pr-body");
+  if (!body) return;
+  const uc = courseUnlockCount();
+  const beaten = Object.keys(getBotsBeaten()).filter((id) => botById(id)).length;
+  const nextBot = BOTS.find((b) => !botBeaten(b.id));
+  let nextTierN = 0;
+  if (nextBot) {
+    const t = botIndex(nextBot.id);
+    courseTierMap().forEach((v) => { if (v === t) nextTierN++; });
+  }
+  const ms = getMilestones();
+  const fid = dailyFeaturedCourseId();
+  const feat = fid && COURSES.find((c) => c.id === fid);
+  const st = getDaily();
+  const pct = uc.total ? Math.round(100 * uc.unlocked / uc.total) : 0;
+  // Reverse index: which course each milestone unlocks (for the hint line).
+  const msCourse = {};
+  for (const cid in ACHIEVEMENT_COURSES) {
+    const c = COURSES.find((x) => x.id === cid);
+    msCourse[ACHIEVEMENT_COURSES[cid].milestone] = c ? c.name : cid;
+  }
+  let html = `<div class="pr-section"><div class="pr-title">Courses</div>` +
+    `<div class="pr-row"><span>${uc.unlocked} / ${uc.total} unlocked</span></div>` +
+    `<div class="pr-bar"><div class="pr-bar-fill" style="width:${pct}%"></div></div>` +
+    (feat ? `<div class="pr-row pr-dim"><span>Free today: ${esc(feat.name)}</span></div>` : "") +
+    `</div>`;
+  html += `<div class="pr-section"><div class="pr-title">Bot ladder</div>` +
+    `<div class="pr-row"><span>${beaten} / ${BOTS.length} bots beaten</span></div>` +
+    (nextBot
+      ? `<div class="pr-row pr-dim"><span>Next: beat ${esc(nextBot.name)}` +
+        (nextTierN ? ` — unlocks ${nextTierN} course${nextTierN === 1 ? "" : "s"}` : "") + `</span></div>`
+      : `<div class="pr-row pr-dim"><span>Ladder complete</span></div>`) +
+    `</div>`;
+  html += `<div class="pr-section"><div class="pr-title">Achievements</div>` +
+    PROGRESS_MILESTONES.map((m) => {
+      const earned = ms[m.id];
+      const unlockNote = msCourse[m.id] ? ` · unlocks ${esc(msCourse[m.id])}` : "";
+      return `<div class="pr-row ${earned ? "pr-earned" : "pr-locked"}">` +
+        `<span class="ic ${earned ? "ic-check" : "ic-lock"}"></span>` +
+        `<span class="pr-ms"><b>${m.label}</b><i>${earned ? "Earned " + earned : m.hint + unlockNote}</i></span>` +
+        `</div>`;
+    }).join("") + `</div>`;
+  html += `<div class="pr-section"><div class="pr-title">Daily challenge</div>` +
+    `<div class="pr-row"><span>` +
+    ((st.streak || 0) > 0
+      ? `Streak: ${st.streak}` + (st.lastDate !== todayStr() ? " · play today to keep it" : "")
+      : "No streak yet — play today's daily") +
+    `</span></div></div>`;
+  body.innerHTML = html;
+}
+(function wireProgress() {
+  const open = document.getElementById("open-progress");
+  const ov = document.getElementById("progress");
+  const close = document.getElementById("pr-close");
+  if (!open || !ov) return;
+  open.addEventListener("click", () => { renderProgress(); ov.classList.remove("hidden"); });
+  if (close) close.addEventListener("click", () => ov.classList.add("hidden"));
+})();
+
 // --- Wire-up ---
 (function wireMatch() {
   const open = document.getElementById("open-match");
@@ -10345,6 +10754,7 @@ showMenu();
 probeBakeApi();           // reveal admin "Add course" only if the bake server is up
 loadManifest().then(() => {
   buildCourseList();      // refresh list from courses/manifest.json (admin-baked courses)
+  renderMenuChips();      // featured course needs the real manifest
   return loadCourse(selectedCourseId);
 }).catch((e) => {
   console.warn("Course load failed, using fallback hole:", e);

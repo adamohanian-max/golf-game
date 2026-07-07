@@ -15,9 +15,9 @@
   <link rel="stylesheet" href="css/tokens.css?v=56">
   <link rel="stylesheet" href="css/base.css?v=62">
   <link rel="stylesheet" href="css/hud.css?v=79">
-  <link rel="stylesheet" href="css/menu.css?v=70">
-  <link rel="stylesheet" href="css/courses.css?v=5">
-  <link rel="stylesheet" href="css/modals.css?v=71">
+  <link rel="stylesheet" href="css/menu.css?v=71">
+  <link rel="stylesheet" href="css/courses.css?v=6">
+  <link rel="stylesheet" href="css/modals.css?v=72">
   <link rel="stylesheet" href="css/tournament.css?v=55">
 
   <!-- Analytics: PostHog, cookieless (localStorage id, no cookies -> no consent
@@ -164,6 +164,11 @@
         <button id="play-range" class="menu-btn secondary">Driving Range</button>
         <button id="open-leaderboard" class="menu-btn secondary">Leaderboard</button>
         <button id="open-tournaments" class="menu-btn secondary">Tournaments</button>
+        <button id="open-progress" class="menu-btn secondary">Trophy Room</button>
+      </div>
+      <div id="menu-chips" class="menu-chips hidden">
+        <span id="menu-streak" class="menu-chip hidden"></span>
+        <span id="menu-featured" class="menu-chip hidden"></span>
       </div>
       <div class="menu-links">
         <button id="open-account" class="menu-link hidden">My Account</button>
@@ -520,6 +525,17 @@
     </div>
   </div>
 
+  <div id="progress" class="hidden">
+    <div class="ne-box pr-box">
+      <h2>Trophy Room</h2>
+      <p class="ne-sub">Your progress — courses, ladder, achievements.</p>
+      <div id="pr-body"></div>
+      <div class="ne-actions">
+        <button id="pr-close" class="menu-btn secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="play-menu" class="hidden">
     <div class="ne-box">
       <h2>Play</h2>
@@ -629,6 +645,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=171"></script>
+  <script src="game.js?v=174"></script>
 </body>
 </html>
