@@ -753,6 +753,15 @@ function arcFlightStep(b) {
     }
     const surf = surfaceAt(b.x, b.y);
     const sp = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp, dy = b.vy / sp; // travel dir
+    // Touchdown thud (the arc path never bounces, so without this a normal shot
+    // lands silently). Downward impact speed from the arc's descent slope.
+    const down = fl.vh * Math.tan(fl.L);
+    if (!shot._landed) {
+      playLand(surf === "ob" ? "woods" : surf, down);
+      spawnBurst(b.x, b.y, surf === "water" ? "splash" : "dust");
+      shot._landed = true;
+    }
+    haptic(Math.max(2, Math.round(down * 35)));  // same impact buzz as a ballistic bounce
     state.flight = null;
     if (surf === "water" || surf === "woods" || surf === "ob") {
       b.vx = b.vy = b.vz = 0; state.airborne = false;
@@ -1317,6 +1326,7 @@ function playSample(buf, when, vol, rate) {
 }
 // Strike off the clubface: real club whoosh swelling into the recorded contact
 // crack, both scaled by swing power. Synth fallback until samples decode.
+const STRIKE_VOL = 0.55;  // master volume on the swing whoosh + contact crack
 function playStrike(power) {
   if (muted) return; const ac = ensureAudio(); if (!ac) return;
   const t = ac.currentTime, p = Math.max(0.2, Math.min(1, power || 0.6));
@@ -1324,17 +1334,17 @@ function playStrike(power) {
     const jitter = 0.97 + Math.random() * 0.06;   // never the exact same hit twice
     if (sfxBuf.whoosh && p > 0.45) {
       const wRate = (0.9 + 0.35 * p) * jitter;    // faster swing = quicker, brighter whoosh
-      playSample(sfxBuf.whoosh, t, 0.10 + 0.5 * p, wRate);
+      playSample(sfxBuf.whoosh, t, (0.10 + 0.5 * p) * STRIKE_VOL, wRate);
       const impact = t + (sfxBuf.whoosh.duration / wRate) * 0.7; // crack rides the whoosh peak
-      playSample(sfxBuf.strike, impact, 0.35 + 0.65 * p, (0.94 + 0.12 * p) * jitter);
+      playSample(sfxBuf.strike, impact, (0.35 + 0.65 * p) * STRIKE_VOL, (0.94 + 0.12 * p) * jitter);
     } else {
       // soft swing / chip: contact only, duller and quieter
-      playSample(sfxBuf.strike, t, 0.25 + 0.5 * p, 0.9 * jitter);
+      playSample(sfxBuf.strike, t, (0.25 + 0.5 * p) * STRIKE_VOL, 0.9 * jitter);
     }
     return;
   }
-  noiseHit(ac, t, 0.05, 0.22 * p, 1200 + 2600 * p);
-  tone(ac, t, 220 + 120 * p, 0.06, 0.10 * p, "square", 90);
+  noiseHit(ac, t, 0.05, 0.22 * p * STRIKE_VOL, 1200 + 2600 * p);
+  tone(ac, t, 220 + 120 * p, 0.06, 0.10 * p * STRIKE_VOL, "square", 90);
 }
 // Soft tap of a putt.
 function playPutt() {
@@ -1351,8 +1361,8 @@ function playLand(surface, speed) {
     noiseHit(ac, t, 0.22, 0.16 * v, 300);
     tone(ac, t, 180, 0.18, 0.09, "sine", 80);
   } else {
-    noiseHit(ac, t, 0.06, 0.09 * v, 250);
-    tone(ac, t, 110, 0.07, 0.07 * v, "sine", 70);
+    noiseHit(ac, t, 0.06, 0.13 * v, 250);
+    tone(ac, t, 110, 0.07, 0.10 * v, "sine", 70);
   }
 }
 // Penalty — low descending "dunk": the ball is gone, stroke added.
