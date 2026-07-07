@@ -109,6 +109,15 @@ const TUNE = {
   // y-squashed in screen space (affine axonometric lean), so the aerial,
   // overlays, input inversion and culling all follow the one view transform.
   tiltCos: 0.55,         // ground-plane squash when ON (cos of the lean; 1 = flat top-down)
+  // True-3D relief in the tilted view: the DEM displaces the ground vertically
+  // on screen (column-band warp), trees stand up from the woods mask, and a
+  // hillshade overlay sells the slopes. All of it fades in with camera.tilt.
+  tExag: 1.6,            // terrain relief exaggeration (1 = true DEM scale)
+  tWarpCol: 16,          // warp column width, css px (×1.3 on mobile)
+  tWarpRow: 24,          // warp band height, css px (×1.3 on mobile)
+  treeMax: 3500,         // cap on generated trees per course
+  treeHMin: 3.5, treeHMax: 6.5, // tree height range, world units (~30–60 ft)
+  tHillAlpha: 0.22,      // DEM hillshade overlay strength when fully tilted
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
@@ -576,7 +585,9 @@ function loadSurfaceMask(maskRec, onReady) {
       }
     }
     oc.putImageData(od, 0, 0);
-    onReady({ w, h, lab, w2p, toWorld: maskRec.toWorld, oob });
+    // `raw` keeps pre-erosion WOODS (canopy incl. overhang) — tree placement
+    // wants the trees you SEE, not just the deep forest that carries the penalty.
+    onReady({ w, h, lab, canopy: raw, w2p, toWorld: maskRec.toWorld, oob });
   };
   img.src = "courses/" + maskRec.file;
 }
@@ -1546,7 +1557,7 @@ function swingStart(e) {
   // Pin this gesture to whichever touch just landed (undefined for mouse —
   // pointerPos falls back to touches[0]/the event itself in that case).
   activeTouchId = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].identifier : null;
-  if (measureMode) { const p = pointerPos(e, activeTouchId); measurePoint = screenToWorld(p.x, p.y); measureDragging = true; return; }
+  if (measureMode) { const p = pointerPos(e, activeTouchId); measurePoint = screenToWorldGround(p.x, p.y); measureDragging = true; return; }
   if (e.touches && e.touches.length >= 2) {
     // second finger landed — cancel any pending swing, enter camera-manipulation mode
     swipe = null; swipePath = null;
@@ -1567,7 +1578,7 @@ function swingStart(e) {
   // the tap (synthetic mouse, duplicate touch) must not instantly dismiss it.
   if (measurePoint && performance.now() - markerDropT > 600) {
     const p = pointerPos(e, activeTouchId);
-    const mx = wx(measurePoint.x, measurePoint.y), my = wy(measurePoint.x, measurePoint.y);
+    const mx = wx(measurePoint.x, measurePoint.y), my = wyg(measurePoint.x, measurePoint.y);
     if (Math.hypot(p.x - mx, p.y - my) <= MARKER_HIT_PX) {
       markerDrag = { moved: false, x: p.x, y: p.y };
       swipe = null; swipePath = null;
@@ -1586,7 +1597,7 @@ function swingMove(e) {
   if (ghostMouse(e)) return;
   if (cine) { e.preventDefault(); return; }
   if (greenView) { e.preventDefault(); gvPointerMove(e); return; }
-  if (measureMode) { if (measureDragging) { e.preventDefault(); const p = pointerPos(e, activeTouchId); measurePoint = screenToWorld(p.x, p.y); } return; }
+  if (measureMode) { if (measureDragging) { e.preventDefault(); const p = pointerPos(e, activeTouchId); measurePoint = screenToWorldGround(p.x, p.y); } return; }
   if (camTouch && e.touches && e.touches.length >= 2) {
     // two-finger camera: pinch (zoom), drag (pan), twist (rotate)
     e.preventDefault();
@@ -1622,7 +1633,7 @@ function swingMove(e) {
     e.preventDefault();
     const p = pointerPos(e, activeTouchId);
     if (Math.hypot(p.x - markerDrag.x, p.y - markerDrag.y) > 4) markerDrag.moved = true;
-    measurePoint = screenToWorld(p.x, p.y);
+    measurePoint = screenToWorldGround(p.x, p.y);
     return;
   }
   if (!swipe) return;
@@ -1856,7 +1867,7 @@ function swingEnd(e) {
   const fdist = Math.hypot(dxs, dys);
   if (fdist < 5) {
     // not a swing — treat as a tap: drop the rangefinder marker at the tap point
-    measurePoint = screenToWorld(end.x, end.y);
+    measurePoint = screenToWorldGround(end.x, end.y);
     markerDropT = performance.now();
     if (earnMilestone("hint-marker"))
       showToast("Drag to move · tap to dismiss · press a green for front/mid/back", 2600, "gold");
@@ -1936,7 +1947,7 @@ canvas.addEventListener("wheel", onWheel, { passive: false });
 // =====================================================================
 //  Rendering
 // =====================================================================
-const ctx = canvas.getContext("2d");
+let ctx = canvas.getContext("2d"); // rebound to an offscreen during the tilted ground capture
 // World->screen as a full affine so the camera can ROTATE (each hole plays "up"
 // even on the connected global map). screen.x = a*x + b*y + c, screen.y = d*x + e*y + f.
 const view = { a: 1, b: 0, c: 0, d: 0, e: 1, f: 0, scale: 1, angle: 0, tilt: 1 };
@@ -2015,6 +2026,14 @@ function applyView() {
   view.scale = s; view.angle = camera.angle; view.tilt = camera.tilt;
   view.a = s * cos; view.b = -s * sin;
   view.d = s * sin * camera.tilt; view.e = s * cos * camera.tilt;
+  // Terrain relief factor: 0 when flat, sin(lean)·tExag when fully tilted;
+  // fades with the toggle tween. zFocus centers displacement on the camera
+  // focus so the framing never jumps between holes or as the ball advances.
+  const t = camera.tilt;
+  view.kz = t >= 0.999 ? 0
+          : Math.sqrt(Math.max(0, 1 - t * t)) * TUNE.tExag
+            * Math.min(1, (1 - t) / Math.max(1e-6, 1 - TUNE.tiltCos));
+  view.zFocus = view.kz ? terrainZ(camera.focus.x, camera.focus.y) : 0;
   // Center the focus in the play area between the HUD bands, not the raw screen.
   const rsv = hudReserve();
   const cx = (rsv.left + (cssW - rsv.right)) / 2;
@@ -2049,10 +2068,11 @@ function updateCamera() {
 // Visible world rect (axis-aligned; used by the vector renderer at angle≈0).
 // Matches applyView's play-area centering so stripe ranges cover the full screen.
 function visibleRect() {
-  const s = camera.scale, sy = s * camera.tilt, cssW = window.innerWidth, cssH = window.innerHeight;
+  const s = camera.scale, sy = s * camera.tilt, cssW = window.innerWidth;
+  const cssH = window.innerHeight + 2 * _capPad; // capture pad: cover the warp bands too
   const rsv = hudReserve();
   const cx = (rsv.left + (cssW - rsv.right)) / 2;
-  const cy = (rsv.top + (cssH - rsv.bot)) / 2;
+  const cy = (rsv.top + (window.innerHeight - rsv.bot)) / 2 + _capPad;
   return { x: camera.focus.x - cx / s, w: cssW / s,
            y: camera.focus.y - cy / sy, h: cssH / sy };
 }
@@ -2139,6 +2159,29 @@ function screenToWorld(sx, sy) {
   const x = sx - view.c, y = sy - view.f;
   return { x: (view.e * x - view.b * y) / det, y: (-view.d * x + view.a * y) / det };
 }
+// --- Terrain relief (tilted view) --------------------------------------
+// DEM elevation in WORLD UNITS (1 unit = 3 yds = 2.743 m). 0 without a DEM.
+const M_PER_UNIT = 2.7432;
+function terrainZ(x, y) {
+  return HOLE && HOLE._dem ? HOLE._dem.elevAt(x, y) / M_PER_UNIT : 0;
+}
+// Screen-y lift of the ground at a world point. view.kz (set each frame in
+// applyView) folds sin(lean)·tExag·tilt-fade into one factor; zero when flat,
+// so every caller collapses back to today's rendering with no branches.
+function liftAt(x, y) {
+  return view.kz ? (terrainZ(x, y) - view.zFocus) * view.scale * view.kz : 0;
+}
+// Ground-anchored screen y: wy + terrain displacement. Use for anything that
+// sits ON the ground (cup, flag base, ball shadow, markers, trees).
+function wyg(x, y) { return wy(x, y) - liftAt(x, y); }
+// Inverse that accounts for the terrain lift (taps on a displaced slope land
+// where the eye sees them). Two fixed-point iterations are plenty — lift
+// varies slowly (DEM cells are ~6 yds).
+function screenToWorldGround(sx, sy) {
+  let p = screenToWorld(sx, sy);
+  for (let i = 0; i < 2; i++) p = screenToWorld(sx, sy + liftAt(p.x, p.y));
+  return p;
+}
 // Pill label centered at (x,y) — used by the range finder.
 function drawLabel(x, y, text, color) {
   ctx.font = "600 13px -apple-system, BlinkMacSystemFont, sans-serif";
@@ -2160,7 +2203,10 @@ function drawLabel(x, y, text, color) {
 let _viewAABB = null;
 function computeViewAABB() {
   const cssW = window.innerWidth, cssH = window.innerHeight;
-  const c = [screenToWorld(0, 0), screenToWorld(cssW, 0), screenToWorld(cssW, cssH), screenToWorld(0, cssH)];
+  // Tilted: extend vertically so polys feeding the warp pad bands (and trees
+  // taller than the viewport edge) aren't culled away.
+  const py = _warpPad + (view.kz ? ws(TUNE.treeHMax) * view.kz : 0);
+  const c = [screenToWorld(0, -py), screenToWorld(cssW, -py), screenToWorld(cssW, cssH + py), screenToWorld(0, cssH + py)];
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   for (const p of c) {
     if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x;
@@ -2287,7 +2333,7 @@ function polyBBox(poly) {
 // Mowing stripes: alternating bands across the currently visible world rect.
 // axis "y" => horizontal bands; axis "x" => vertical bands.
 function stripes(c1, c2, bandW, axis) {
-  const r = visibleRect(), cssW = window.innerWidth, cssH = window.innerHeight;
+  const r = visibleRect(), cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad;
   if (axis === "x") {
     for (let x = Math.floor(r.x / bandW) * bandW; x < r.x + r.w; x += bandW) {
       ctx.fillStyle = (Math.floor(x / bandW) & 1) ? c1 : c2;
@@ -2528,7 +2574,7 @@ function drawAerial() {
   // screen; sampling all of it every frame is the main render cost. Invert the
   // pixel→css affine [[A,C],[B,D]] to map the 4 screen corners back to image
   // pixels, take their bounding box, clamp to the image, and crop to that.
-  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad;
   const det = A * D - C * B;
   if (Math.abs(det) > 1e-9) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -2606,7 +2652,7 @@ function drawDetailGrain() {
   const det = A * D - C * B;
   if (Math.abs(det) < 1e-12) return;
   // visible screen corners -> tile-space AABB (pattern repeats, no clamp needed)
-  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [scx, scy] of [[0, 0], [cssW, 0], [0, cssH], [cssW, cssH]]) {
     const dx = scx - E, dy = scy - F;
@@ -2626,7 +2672,7 @@ function drawDetailGrain() {
 
 // Green: collar + fill + topo contours. `photo` => translucent over the aerial.
 function drawGreen(photo) {
-  const cssW = window.innerWidth, cssH = window.innerHeight, s = HOLE.surfaces;
+  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
   ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(90,165,99,0.35)";
   ctx.lineWidth = ws(photo ? 1.2 : 1.5);
   ctx.lineJoin = "round";
@@ -2784,9 +2830,9 @@ function drawFlowDots(g) {
     // streak from pos back along velocity: direction reads even in a still frame
     ctx.strokeStyle = `rgba(10,105,48,${flowDotAlpha(d).toFixed(3)})`;
     ctx.beginPath();
-    ctx.moveTo(wx(d.x, d.y), wy(d.x, d.y));
+    ctx.moveTo(wx(d.x, d.y), wyg(d.x, d.y));
     ctx.lineTo(wx(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail),
-               wy(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail));
+               wyg(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail));
     ctx.stroke();
   }
 }
@@ -3233,7 +3279,7 @@ function drawOOBOverlay(s) {
 }
 
 function drawVectorSurfaces() {
-  const cssW = window.innerWidth, cssH = window.innerHeight, s = HOLE.surfaces;
+  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
   const bg = ctx.createLinearGradient(0, 0, 0, cssH);
   bg.addColorStop(0, "#236425");
   bg.addColorStop(1, "#2c7e2f");
@@ -3268,6 +3314,7 @@ function drawVectorSurfaces() {
   }
 
   fillPolys(s.woods, "#2f5d34");                  // tree stands
+  drawDEMShade();                                  // tilted only: DEM light/shadow
   if (showOOB) drawOOBOverlay(s);                  // red OOB tint on top
   ctx.strokeStyle = "rgba(225,220,205,0.8)";       // cart paths
   ctx.lineWidth = Math.max(ws(0.8), 1);
@@ -3289,11 +3336,274 @@ function drawVectorSurfaces() {
   }
 }
 
+// --- True-3D tilted ground: the flat ground render is captured (with vertical
+// pad) into an offscreen, then re-drawn in vertical column bands displaced by
+// the DEM — cheap axis-aligned displacement mapping. Photo, tints, contours,
+// OOB, relief all warp together because they're all in the capture.
+let _capPad = 0;      // css px of extra viewport above+below while capturing
+let _warpPad = 0;     // this frame's pad (0 = warp off)
+let _groundC = null;  // cached offscreen canvas
+let _mainCtx = null, _savedViewF = 0;
+// Warped-ground cache: the camera is parked most of the time, so the capture +
+// band warp only re-runs when something in the ground actually changed; parked
+// frames cost one full-screen blit. Animated bits (flow dots, ball, flag) draw
+// above the cache.
+let _warpCache = null; // { sig, canvas, g }
+function warpSig(cssW, cssH) {
+  const q = (v) => Math.round(v * 8) / 8; // 1/8px quantum ends the ease-tail churn
+  const gids = !HOLE.isRange && HOLE._greens
+    ? greensInPlay().map((g) => HOLE._greens.indexOf(g)).join(".") : "";
+  return q(view.a) + "," + q(view.b) + "," + q(view.c) + "," + q(view.d) + "," +
+         q(view.e) + "," + q(view.f) + "," + q(view.kz * 100) + "," + q(view.zFocus * 50) + "," +
+         HOLE.num + "," + (showOOB ? 1 : 0) + (showSlope ? 1 : 0) + (breakArrows ? 1 : 0) +
+         (HOLE._imgReady ? 1 : 0) + "," + gids + "," + cssW + "x" + cssH + "," + _warpPad;
+}
+// Max |lift| on screen this frame, from a coarse screen grid (+slack).
+function estimateWarpPad(cssW, cssH) {
+  if (!view.kz || !HOLE || !HOLE._dem) return 0;
+  let mx = 0;
+  for (let i = 0; i <= 4; i++) for (let j = 0; j <= 3; j++) {
+    const p = screenToWorld(cssW * i / 4, cssH * j / 3);
+    const l = Math.abs((terrainZ(p.x, p.y) - view.zFocus) * view.scale * view.kz);
+    if (l > mx) mx = l;
+  }
+  return mx < 1 ? 0 : Math.min(220, Math.ceil(mx) + 10);
+}
+function startGroundCapture(cssW, cssH) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(cssW * dpr), h = Math.round((cssH + 2 * _warpPad) * dpr);
+  if (!_groundC || _groundC.width !== w || _groundC.height !== h) {
+    _groundC = document.createElement("canvas");
+    _groundC.width = w; _groundC.height = h;
+  }
+  _capPad = _warpPad;
+  _savedViewF = view.f;
+  view.f += _capPad;  // shift the scene down so the top pad band has content
+  const g = _groundC.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, cssW, cssH + 2 * _capPad);
+  _mainCtx = ctx; ctx = g;  // the whole ground stack draws into the offscreen
+}
+// Restore the real context/view, then displace: dest band [y0,y1] samples the
+// capture at [y0+l0, y1+l1] — lift pulls pixels up, bands stay contiguous.
+function finishGroundWarp(cssW, cssH, sig) {
+  const dpr = window.devicePixelRatio || 1;
+  const pad = _capPad;
+  ctx = _mainCtx; _mainCtx = null;
+  view.f = _savedViewF; _capPad = 0;
+  const w = Math.round(cssW * dpr), h = Math.round(cssH * dpr);
+  if (!_warpCache || _warpCache.canvas.width !== w || _warpCache.canvas.height !== h) {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    _warpCache = { sig: null, canvas: c, g: c.getContext("2d") };
+  }
+  const g = _warpCache.g;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, cssW, cssH);
+  g.imageSmoothingEnabled = true;
+  const mul = IS_DESKTOP ? 1 : 1.3;
+  const colW = Math.max(TUNE.tWarpCol * mul, cssW / 32);
+  const rowH = Math.max(TUNE.tWarpRow * mul, cssH / 28);
+  for (let x = 0; x < cssW; x += colW) {
+    const cw = Math.min(colW, cssW - x), cx = x + cw / 2;
+    let y0 = 0;
+    let p = screenToWorld(cx, 0), l0 = liftAt(p.x, p.y);
+    while (y0 < cssH) {
+      const y1 = Math.min(y0 + rowH, cssH);
+      p = screenToWorld(cx, y1);
+      const l1 = liftAt(p.x, p.y);
+      const sh = (y1 + l1) - (y0 + l0);
+      if (sh > 0.01) {
+        g.drawImage(_groundC,
+          x * dpr, (y0 + l0 + pad) * dpr, cw * dpr, sh * dpr,
+          x, y0, cw, y1 - y0);
+      }
+      y0 = y1; l0 = l1;
+    }
+  }
+  // trees are static under the same sig — bake them into the cache so parked
+  // frames are one blit (courses without a DEM draw them live in draw())
+  const real = ctx;
+  ctx = g; drawTrees(); ctx = real;
+  _warpCache.sig = sig;
+  ctx.drawImage(_warpCache.canvas, 0, 0, cssW, cssH);
+}
+
+// --- Standing trees (tilted view) ----------------------------------------
+// Tree positions come from the aerial surface mask's WOODS cells (jittered,
+// hash-thinned) or, without a mask, a seeded scatter inside the OSM woods
+// polygons. Built once per course; drawn as pre-rendered canopy sprites that
+// rise with the tilt (lift = ws(h)·kz), painter-sorted by screen y.
+let _treeSprites = null;
+function treeSprites() {
+  if (_treeSprites) return _treeSprites;
+  _treeSprites = [];
+  const shades = [["#3a7a40", "#16351c"], ["#457f3b", "#1b3d1e"], ["#3c7448", "#173920"], ["#4c8442", "#204322"]];
+  for (const [lite, dark] of shades) {
+    const S = 48, c = document.createElement("canvas");
+    c.width = S; c.height = S;
+    const g = c.getContext("2d");
+    const rg = g.createRadialGradient(S * 0.40, S * 0.32, S * 0.05, S * 0.5, S * 0.46, S * 0.48);
+    rg.addColorStop(0, lite);
+    rg.addColorStop(1, dark);
+    g.fillStyle = rg;
+    g.beginPath(); g.ellipse(S * 0.5, S * 0.46, S * 0.44, S * 0.42, 0, 0, Math.PI * 2); g.fill();
+    // two offset lobes break the perfect-ellipse silhouette
+    g.globalAlpha = 0.8;
+    g.beginPath(); g.ellipse(S * 0.32, S * 0.56, S * 0.20, S * 0.17, 0.4, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(S * 0.68, S * 0.58, S * 0.17, S * 0.15, -0.5, 0, Math.PI * 2); g.fill();
+    _treeSprites.push(c);
+  }
+  return _treeSprites;
+}
+function buildTrees() {
+  const out = [];
+  const rnd = mulberry32(0xa11ce);
+  const hMin = TUNE.treeHMin, hSpan = TUNE.treeHMax - TUNE.treeHMin;
+  const mk = (x, y) => out.push({ x, y, h: hMin + rnd() * hSpan, r: 1.1 + rnd() * 0.9, s: (rnd() * 4) | 0 });
+  const m = HOLE._mask;
+  if (m && m.lab) {
+    const src = m.canopy || m.lab; // pre-erosion woods = the canopy you see
+    let woods = 0;
+    for (let i = 0; i < src.length; i++) if (src[i] === 3) woods++;
+    const keep = Math.min(1, TUNE.treeMax / Math.max(1, woods));
+    const t = m.toWorld;
+    for (let py = 0; py < m.h; py++) for (let px = 0; px < m.w; px++) {
+      if (src[py * m.w + px] !== 3 || rnd() > keep) continue;
+      const jx = px + rnd(), jy = py + rnd();
+      mk(t[0] * jx + t[1] * jy + t[2], t[3] * jx + t[4] * jy + t[5]);
+    }
+  } else {
+    // OSM woods fallback: distribute the budget across ALL stands (not
+    // first-come), and keep trees inside the playable world rect — global
+    // courses keep surrounding forest polys that extend past it.
+    const polys = ((HOLE.surfaces && HOLE.surfaces.woods) || []).map((poly) => {
+      const bb = polyBBox(poly);
+      return { poly, bb, area: (bb.maxx - bb.minx) * (bb.maxy - bb.miny) };
+    });
+    const total = polys.reduce((s, p) => s + p.area, 0);
+    const density = total > 0 ? Math.min(0.22, TUNE.treeMax / total) : 0;
+    const W = HOLE.world || WORLD;
+    for (const { poly, bb } of polys) {
+      const n = Math.ceil((bb.maxx - bb.minx) * (bb.maxy - bb.miny) * density);
+      for (let i = 0; i < n && out.length < TUNE.treeMax; i++) {
+        const x = bb.minx + rnd() * (bb.maxx - bb.minx);
+        const y = bb.miny + rnd() * (bb.maxy - bb.miny);
+        if (x < 0 || y < 0 || x > W.w || y > W.h) continue;
+        if (pointInPoly(x, y, poly)) mk(x, y);
+      }
+      if (out.length >= TUNE.treeMax) break;
+    }
+  }
+  return out;
+}
+const TREE_DRAW_CAP = 900; // visible-per-frame ceiling (stride-thinned above it)
+function drawTrees() {
+  const kz = view.kz;
+  if (!kz || !HOLE || HOLE.isRange || greenView || cine) return;
+  if (ws(TUNE.treeHMax) * kz < 2.5) return; // too zoomed-out to read as height
+  const holder = course || HOLE;
+  // The mask decodes async — don't bake trees from the OSM fallback while a
+  // mask is still on its way; rebuild once it lands (mask wins on quality).
+  const hasMask = !!(HOLE._mask && HOLE._mask.lab);
+  if (!hasMask && HOLE._maskExpected) return;
+  if (!holder._trees || holder._treesFromMask !== hasMask) {
+    holder._trees = buildTrees();
+    holder._treesFromMask = hasMask;
+  }
+  const trees = holder._trees;
+  if (!trees.length) return;
+  const v = _viewAABB, cssW = window.innerWidth, cssH = window.innerHeight;
+  const arr = [];
+  for (const t of trees) {
+    if (t.x < v.minx || t.x > v.maxx || t.y < v.miny || t.y > v.maxy) continue;
+    arr.push(t);
+  }
+  const stride = Math.max(1, Math.ceil(arr.length / TREE_DRAW_CAP));
+  const sprites = treeSprites();
+  const drawn = [];
+  for (let i = 0; i < arr.length; i += stride) {
+    const t = arr[i];
+    const sx = wx(t.x, t.y);
+    if (sx < -30 || sx > cssW + 30) continue;
+    const sy = wyg(t.x, t.y);
+    if (sy < -60 || sy > cssH + 60) continue;
+    drawn.push({ t, sx, sy });
+  }
+  drawn.sort((a, b) => a.sy - b.sy); // painter: far (upper) trees first
+  ctx.save();
+  for (const { t, sx, sy } of drawn) {
+    const rr = ws(t.r), lift = ws(t.h) * kz;
+    ctx.globalAlpha = 0.32;
+    ctx.fillStyle = "#08170c";
+    ctx.beginPath();
+    ctx.ellipse(sx + rr * 0.35, sy + rr * 0.12, rr * 0.95, rr * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.92;
+    const d = rr * 2.3;
+    ctx.drawImage(sprites[t.s], sx - d / 2, sy - lift - d * 0.52, d, d);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// --- DEM hillshade (tilted view) ------------------------------------------
+// One grayscale light/shadow raster per course at DEM resolution, composited
+// over the ground while tilted so slopes read even where the photo is flat-lit.
+function buildDEMShade(dem) {
+  const { nx, ny, data } = dem;
+  const c = document.createElement("canvas");
+  c.width = nx; c.height = ny;
+  const g = c.getContext("2d"), id = g.createImageData(nx, ny);
+  const dx = (dem.x1 - dem.x0) / (nx - 1), dy = (dem.y1 - dem.y0) / (ny - 1);
+  // slope -> signed NW-light shade, normalized to the course's own relief
+  const shade = new Float32Array(nx * ny);
+  let mx = 0;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const i0 = Math.max(0, i - 1), i1 = Math.min(nx - 1, i + 1);
+    const j0 = Math.max(0, j - 1), j1 = Math.min(ny - 1, j + 1);
+    const gx = (data[j * nx + i1] - data[j * nx + i0]) / ((i1 - i0) * dx || 1);
+    const gy = (data[j1 * nx + i] - data[j0 * nx + i]) / ((j1 - j0) * dy || 1);
+    const s = (gx + gy) * 0.7071; // light from world NW
+    shade[j * nx + i] = s;
+    const a = Math.abs(s); if (a > mx) mx = a;
+  }
+  const inv = mx > 1e-6 ? 1 / mx : 0;
+  for (let k = 0; k < nx * ny; k++) {
+    const s = Math.max(-1, Math.min(1, shade[k] * inv * 1.4));
+    const o = k * 4;
+    if (s < 0) { id.data[o] = id.data[o + 1] = id.data[o + 2] = 255; id.data[o + 3] = -s * 255; }
+    else { id.data[o] = id.data[o + 1] = id.data[o + 2] = 0; id.data[o + 3] = s * 255; }
+  }
+  g.putImageData(id, 0, 0);
+  return { canvas: c, m: [dx, 0, dem.x0, 0, dy, dem.y0] };
+}
+function drawDEMShade() {
+  if (!view.kz || !HOLE._dem || !HOLE._demRec) return;
+  const holder = course || HOLE;
+  if (!holder._demShade) holder._demShade = buildDEMShade(HOLE._demRec);
+  const sh = holder._demShade;
+  const kzFull = Math.sqrt(Math.max(0.01, 1 - TUNE.tiltCos * TUNE.tiltCos)) * TUNE.tExag;
+  const alpha = TUNE.tHillAlpha * Math.min(1, view.kz / kzFull);
+  if (alpha < 0.01) return;
+  const t = sh.m, dpr = window.devicePixelRatio || 1;
+  const A = view.a * t[0] + view.b * t[3], C = view.a * t[1] + view.b * t[4], E = view.a * t[2] + view.b * t[5] + view.c;
+  const B = view.d * t[0] + view.e * t[3], D = view.d * t[1] + view.e * t[4], F = view.d * t[2] + view.e * t[5] + view.f;
+  ctx.save();
+  ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
+  ctx.globalAlpha = alpha;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(sh.canvas, 0, 0);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
 // Photoreal rendering: real aerial base + translucent play-surface overlays.
 function drawPhotoSurfaces() {
   const s = HOLE.surfaces;
   drawAerial(); // grade + course-green wash are baked into the image (processAerial)
   drawDetailGrain(); // zoom-ramped turf grain over the stretched photo
+  drawDEMShade();    // tilted only: DEM light/shadow so slopes read on the photo
   ctx.globalAlpha = 0.16;                          // gentle fairway tint
   fillPolys(s.fairway, "#8ad98f");
   ctx.globalAlpha = 1;
@@ -3446,7 +3756,7 @@ function drawTeeMarkers() {
   const r = Math.max(ws(0.4), 5);                   // marker radius (screen px floor)
   for (const sgn of [-1, 1]) {
     const mx = wx(t.x + px * off * sgn, t.y + py * off * sgn);
-    const my = wy(t.x + px * off * sgn, t.y + py * off * sgn);
+    const my = wyg(t.x + px * off * sgn, t.y + py * off * sgn);
     ctx.beginPath();
     ctx.arc(mx, my, r, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0,0,0,0.25)";   // soft drop shadow
@@ -3463,7 +3773,18 @@ function drawTeeMarkers() {
 
 function draw() {
   const cssW = window.innerWidth, cssH = window.innerHeight;
+  // Tilted 3D: measure this frame's terrain displacement; a nonzero pad routes
+  // the whole ground stack through the offscreen capture + column-band warp.
+  _warpPad = (view.kz && !HOLE.isRange && !greenView && !cine)
+    ? estimateWarpPad(cssW, cssH) : 0;
   computeViewAABB(); // for off-screen polygon culling this frame
+  const warp = _warpPad > 0;
+  const wSig = warp ? warpSig(cssW, cssH) : null;
+  if (warp && _warpCache && _warpCache.sig === wSig) {
+    // parked camera: the warped ground is identical to last frame — one blit
+    ctx.drawImage(_warpCache.canvas, 0, 0, cssW, cssH);
+  } else {
+  if (warp) startGroundCapture(cssW, cssH);
   if (HOLE._imgReady && HOLE.aerial) {
     // surround the aerial with a dark course-green wash (a gradient that reads as
     // the rest of the course) rather than a hard black box.
@@ -3474,7 +3795,7 @@ function draw() {
       _surround = { w: cssW, h: cssH, grad: g };
     }
     ctx.fillStyle = _surround.grad;
-    ctx.fillRect(0, 0, cssW, cssH);
+    ctx.fillRect(0, 0, cssW, cssH + 2 * _capPad);
     drawPhotoSurfaces();
   } else {
     drawVectorSurfaces();
@@ -3486,8 +3807,17 @@ function draw() {
     for (const g of greensInPlay()) {
       if (!polyVisible(g.poly)) continue;
       drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope && breakArrows);
-      // inspect view advects + draws this green's dots itself (under its scrim here)
-      if (showSlope && !breakArrows && !greenView) { updateFlowDots(g); drawFlowDots(g); }
+    }
+  }
+  if (warp) finishGroundWarp(cssW, cssH, wSig);
+  }  // end of ground rebuild (skipped entirely on a warp-cache hit)
+  if (!warp) drawTrees(); // no-DEM courses: trees live (nothing to warp/cache)
+  // animated flow dots draw ABOVE the (possibly cached) ground so they never
+  // force a ground re-render; wyg() keeps them glued to the displaced turf
+  if (!HOLE.isRange && showSlope && !breakArrows && !greenView) {
+    for (const g of greensInPlay()) {
+      if (!polyVisible(g.poly)) continue;
+      updateFlowDots(g); drawFlowDots(g);
     }
   }
 
@@ -3508,7 +3838,7 @@ function draw() {
   } else {
   drawTeeMarkers();   // flank the tee box so it reads clearly
   // hole cup — dark hole with a bright rim so it reads on the photo
-  const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wy(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
+  const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
   ctx.beginPath();
   ctx.arc(hx, hy, hr, 0, Math.PI * 2);
   ctx.fillStyle = "#0a1f0f";
@@ -3557,7 +3887,7 @@ function draw() {
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
   if (!state.inHole) {
     const b = state.ball;
-    const gx = wx(b.x, b.y), gy = wy(b.x, b.y); // ground (shadow) position
+    const gx = wx(b.x, b.y), gy = wyg(b.x, b.y); // ground (shadow) position
     const lift = ws(b.z);             // screen pixels the ball floats above ground
     // Keep the ball clearly visible at every zoom (floor in screen px); real
     // scale only takes over when zoomed in far enough to exceed the floor.
@@ -3639,7 +3969,7 @@ function draw() {
     // the cup so the near rim occludes it as it falls and darkens into the hole. That
     // occlusion (not a shrink-to-nothing) is what reads as a real hole-out.
     const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
-    const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wy(HOLE.holePos.x, HOLE.holePos.y);
+    const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y);
     const hr = Math.max(ws(HOLE.holeRadius), 3);
     const p = Math.min(1, (performance.now() - holeDrop.t0) / HOLE_DROP_MS);
     const easeOut = (x) => 1 - Math.pow(1 - x, 3), easeIn = (x) => x * x * x;
@@ -3698,9 +4028,9 @@ function draw() {
   // range finder: dashed lines ball->marker and marker->pin with yard labels
   if (measurePoint) {
     const b = state.ball;
-    const bx = wx(b.x, b.y), by = wy(b.x, b.y);
-    const mx = wx(measurePoint.x, measurePoint.y), my = wy(measurePoint.x, measurePoint.y);
-    const px = wx(HOLE.holePos.x, HOLE.holePos.y), py = wy(HOLE.holePos.x, HOLE.holePos.y);
+    const bx = wx(b.x, b.y), by = wyg(b.x, b.y);
+    const mx = wx(measurePoint.x, measurePoint.y), my = wyg(measurePoint.x, measurePoint.y);
+    const px = wx(HOLE.holePos.x, HOLE.holePos.y), py = wyg(HOLE.holePos.x, HOLE.holePos.y);
     // pressed a green (ball off it): show front/middle/back of that green instead
     // of the marker->pin readout
     const gHit = (HOLE._greens || []).find((g) => pointInPoly(measurePoint.x, measurePoint.y, g.poly));
@@ -3867,7 +4197,7 @@ function hideHint() {
 // on how a given hole's tee frames.
 function positionHint() {
   if (!elHint) return;
-  const bx = wx(state.ball.x, state.ball.y), by = wy(state.ball.x, state.ball.y);
+  const bx = wx(state.ball.x, state.ball.y), by = wyg(state.ball.x, state.ball.y);
   const r = elHint.getBoundingClientRect();
   elHint.style.transform = "none";
   placeHudEl(elHint, bx - r.width / 2, by - r.height - 28);
@@ -4343,12 +4673,14 @@ function setHole(rec) {
     _boundary: (src.boundary && src.boundary.length) ? src.boundary : null, // real OB line
   };
   roundGreens(HOLE.surfaces); // organic green edges (once per surfaces object)
+  HOLE._maskExpected = !!(src.surfaceMask && src.surfaceMask.file); // decode may still be in flight
   if (glob) {
     // share precomputed DEM + topo + aerial across every hole (load once)
     if (!course._dem && course.dem) course._dem = buildDEM(course.dem);
     if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green, null, course.greenTopo);  // always synthetic — DEM too coarse for green topo
     HOLE._greens = course._greens;
     HOLE._dem = course._dem || null;
+    HOLE._demRec = course.dem || null; // raw grid — hillshade bakes from it
     if (course._img === undefined) {
       course._img = null; course._imgReady = false;
       if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
@@ -4373,6 +4705,7 @@ function setHole(rec) {
     HOLE._mask = course._mask;
   } else {
     HOLE._dem = rec.dem ? buildDEM(rec.dem) : null;
+    HOLE._demRec = rec.dem || null; // raw grid — hillshade bakes from it
     HOLE._greens = buildGreenTopo(HOLE.surfaces.green, null, rec.greenTopo || (course && course.greenTopo));  // always synthetic
     HOLE._img = null; HOLE._imgReady = false;
     if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
@@ -8484,7 +8817,7 @@ function oppGhostPos() {
 function drawOppGhost() {
   const g = oppGhostPos();
   if (!g) return;
-  const gx = wx(g.x, g.y), gy = wy(g.x, g.y);
+  const gx = wx(g.x, g.y), gy = wyg(g.x, g.y);
   const lift = ws(g.z || 0);
   const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
   // shadow on the ground
