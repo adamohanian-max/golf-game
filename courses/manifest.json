@@ -1150,5 +1150,19 @@
     "tags": [
       "imageryTest"
     ]
+  },
+  {
+    "id": "hogwarts-grounds",
+    "name": "Hogwarts Grounds",
+    "sub": "Original design \u00b7 Par 72",
+    "par": 72,
+    "yards": 7105,
+    "holes": 18,
+    "location": "Northumberland (fictional)",
+    "region": "Originals",
+    "tags": [
+      "original",
+      "fan-made"
+    ]
   }
 ]
