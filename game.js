@@ -100,7 +100,7 @@ const TUNE = {
   // Slightly-3D tilted course view (the HUD 3D toggle): the whole scene is
   // y-squashed in screen space (affine axonometric lean), so the aerial,
   // overlays, input inversion and culling all follow the one view transform.
-  tiltCos: 0.70,         // ground-plane squash when ON (cos of the lean; 1 = flat top-down)
+  tiltCos: 0.55,         // ground-plane squash when ON (cos of the lean; 1 = flat top-down)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
