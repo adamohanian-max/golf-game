@@ -322,6 +322,11 @@ function adsAvailable() {
   if (!ADS.enabled) return false;
   if (lsGet("golf.noAds", false)) return false;         // future "remove ads" entitlement
   if (lsGet("golf.under13", false)) return false;        // never serve ads to minors
+  // Esri World Imagery terms forbid monetized use — only NAIP (public-domain) or
+  // vector-only (no baked aerial) courses are ad-legal. Non-US/Originals courses
+  // still on Esri (st-andrews-old, arabian-ranches, faldo-course, blackwater-vale,
+  // crystal-lake-haverhill) stay ad-free until re-sourced.
+  if (course && course.aerial && course.aerial.src !== "naip") return false;
   return true;
 }
 
@@ -5033,15 +5038,6 @@ const FALLBACK_COURSES = [
 ];
 let COURSES = FALLBACK_COURSES.slice();
 
-// Esri World Imagery terms forbid monetized (ad-supported) use — only NAIP-sourced
-// courses (public domain, commercial-OK) are eligible to show ads. Checked against
-// the manifest's per-course `aerial` field so ad code doesn't need the full course
-// JSON just to decide. Range/no-manifest-entry courses are treated as ineligible
-// (fail closed) rather than assumed clean.
-function courseAdsEligible(courseId) {
-  const meta = COURSES.find((c) => c.id === courseId);
-  return !!meta && meta.aerial === "naip";
-}
 let selectedCourseId = COURSES[0].id;
 // Replace COURSES from courses/manifest.json (admin bakes append to it). Falls
 // back silently to FALLBACK_COURSES on any error so the menu always works.

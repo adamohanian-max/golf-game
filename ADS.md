@@ -5,7 +5,10 @@
 > reward ("Watch to replay this hole") are live behind a labelled placeholder ad
 > (`ADS.provider = "stub"`). Swap `ADS.provider` to `"crazygames"` or `"gam"` and
 > fill the branch in `showRewarded()` to go real. US imagery is now NAIP
-> (license-clean); non-US courses still on Esri are not ad-legal yet.
+> (license-clean); non-US courses still on Esri are not ad-legal yet —
+> `adsAvailable()` enforces this by checking the loaded course's `aerial.src`
+> (fails closed: any non-`"naip"` aerial, i.e. Esri or a legacy untagged file,
+> blocks ads for that course; no-aerial vector-only courses are unaffected).
 >
 > **How it's wired:**
 > - `ADS` config + `adsAvailable()` (respects a future `golf.noAds` purchase and
