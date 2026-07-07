@@ -100,7 +100,7 @@ const TUNE = {
   // Slightly-3D tilted course view (the HUD 3D toggle): the whole scene is
   // y-squashed in screen space (affine axonometric lean), so the aerial,
   // overlays, input inversion and culling all follow the one view transform.
-  tiltCos: 0.86,         // ground-plane squash when ON (cos of the lean; 1 = flat top-down)
+  tiltCos: 0.70,         // ground-plane squash when ON (cos of the lean; 1 = flat top-down)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
@@ -166,7 +166,9 @@ const TUNE = {
   // Backspin grip on landing, by surface (greens grab hardest -> can spin back;
   // rough is a flyer with little spin). 0..1 multiplier on the club's spin.
   spinGrip: { green: 1.0, fairway: 0.5, tee: 0.5, rough: 0.12, bunker: 0.3, woods: 0, water: 0, ob: 0 },
-  rolloutK: 7.0,    // base release distance scale (× landing speed) with no spin
+  rolloutK: 7.0,    // CHIP release distance scale (× landing speed) — low skidding balls release more
+  rolloutKFull: 4.0,// FULL-shot release scale: calibrated so totals match tour (driver ~305,
+                    // hybrid ~246, 7i ~184); 7 made everything run ~2× real fairway rollout
   spinCheckK: 1.35, // how strongly the landing check kills/reverses the release (>1 can back up)
   // Landing check = weighted blend of backspin AND descent steepness. A tour 5-iron
   // holds because it lands at ~50°, not because it spins like a wedge (TrackMan: every
@@ -784,7 +786,8 @@ function landingRelease(fl, spin, surf) {
   const spinW = fl.noLandCheck ? 1 : TUNE.checkSpinW;
   const check = Math.min(1.1,
     (spinW * fl.spinN + TUNE.checkLandW * steep) * backspinRetained * grip);
-  let Dr = fl.vh * TUNE.rolloutK * (1 - check * TUNE.spinCheckK); // <0 = spins back
+  const rollK = fl.noLandCheck ? TUNE.rolloutK : TUNE.rolloutKFull; // chips skid & release more
+  let Dr = fl.vh * rollK * (1 - check * TUNE.spinCheckK); // <0 = spins back
   Dr = Math.max(Dr, -TUNE.spinBackMax); // a spun-back wedge sucks back a few yards, not off the green
   if (surf === "green") return Math.sign(Dr) * Math.sqrt(2 * TUNE.greenDecel * Math.abs(Dr));
   const fr = TUNE.friction[surf] ?? 0.9;
