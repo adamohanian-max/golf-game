@@ -1216,6 +1216,7 @@ function ensureAudio() {
     if (AC) audioCtx = new AC();
   }
   if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  if (audioCtx) loadSfxSamples();
   return audioCtx;
 }
 // Browsers gate audio until a user gesture — unlock the context on first interaction.
@@ -1284,10 +1285,51 @@ function noiseHit(ac, when, dur, vol, hp) {
   src.connect(f).connect(g).connect(ac.destination);
   src.start(when); src.stop(when + dur + 0.02);
 }
-// Crisp "crack" off the clubface — brighter/louder with swing power (0..1).
+// --- Real recorded swing/strike (sounds/*.wav — Pixabay Content License,
+// commercial-OK, no attribution). Decoded lazily on the first user gesture;
+// until then (or if the fetch/decode fails, e.g. an offline file:// run)
+// playStrike falls back to the old synth crack.
+const SFX_SAMPLES = { whoosh: "sounds/swing-whoosh.wav", strike: "sounds/strike.wav" };
+const sfxBuf = {};
+let _sfxLoadStarted = false;
+function loadSfxSamples() {
+  if (_sfxLoadStarted || !audioCtx) return;
+  _sfxLoadStarted = true;
+  for (const [key, url] of Object.entries(SFX_SAMPLES)) {
+    fetch(url)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+      .then((ab) => audioCtx.decodeAudioData(ab))
+      .then((buf) => { sfxBuf[key] = buf; })
+      .catch(() => {});
+  }
+}
+function playSample(buf, when, vol, rate) {
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = rate || 1;
+  const g = audioCtx.createGain();
+  g.gain.value = vol;
+  src.connect(g).connect(audioCtx.destination);
+  src.start(when);
+}
+// Strike off the clubface: real club whoosh swelling into the recorded contact
+// crack, both scaled by swing power. Synth fallback until samples decode.
 function playStrike(power) {
   if (muted) return; const ac = ensureAudio(); if (!ac) return;
   const t = ac.currentTime, p = Math.max(0.2, Math.min(1, power || 0.6));
+  if (sfxBuf.strike) {
+    const jitter = 0.97 + Math.random() * 0.06;   // never the exact same hit twice
+    if (sfxBuf.whoosh && p > 0.45) {
+      const wRate = (0.9 + 0.35 * p) * jitter;    // faster swing = quicker, brighter whoosh
+      playSample(sfxBuf.whoosh, t, 0.10 + 0.5 * p, wRate);
+      const impact = t + (sfxBuf.whoosh.duration / wRate) * 0.7; // crack rides the whoosh peak
+      playSample(sfxBuf.strike, impact, 0.35 + 0.65 * p, (0.94 + 0.12 * p) * jitter);
+    } else {
+      // soft swing / chip: contact only, duller and quieter
+      playSample(sfxBuf.strike, t, 0.25 + 0.5 * p, 0.9 * jitter);
+    }
+    return;
+  }
   noiseHit(ac, t, 0.05, 0.22 * p, 1200 + 2600 * p);
   tone(ac, t, 220 + 120 * p, 0.06, 0.10 * p, "square", 90);
 }
