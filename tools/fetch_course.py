@@ -276,20 +276,23 @@ def _otsu(values, default):
 def _classify_px(r, g, b, edge, fw_cut, inside, near=False):
     """One aerial pixel -> MASK_OB / FAIRWAY / ROUGH / WOODS.
     fw_cut: fairway/rough brightness boundary; inside: pixel within the playing
-    envelope (if so, non-turf is rough, never out of bounds); near: within
-    sand-rescue reach of the envelope."""
+    envelope. The envelope decides OB for EVERY pixel — color only classifies
+    inside it. (Green turf outside used to stay playable, which held up only
+    because Esri's captures were dormant/brown off-course; on lush NAIP imagery
+    neighborhood lawns read as fairway.) near: within sand-rescue reach of the
+    envelope — dunes/waste sand is never OB."""
     h, s, v = _rgb_to_hsv(r, g, b)
     hue = h * 360.0
-    is_green = (s >= MASK_SAT_MIN and v >= MASK_VAL_MIN
-                and MASK_HUE_LO <= hue <= MASK_HUE_HI)
-    if not is_green:
-        if inside:
-            return MASK_ROUGH                      # sand/path/dirt inside the course
+    if not inside:
         if (near and hue <= MASK_SAND_HUE_MAX
                 and MASK_SAND_SAT_LO <= s <= MASK_SAND_SAT_HI
                 and v >= MASK_SAND_VAL_MIN):
             return MASK_ROUGH                      # dunes/waste sand is never OB
         return MASK_OB
+    is_green = (s >= MASK_SAT_MIN and v >= MASK_VAL_MIN
+                and MASK_HUE_LO <= hue <= MASK_HUE_HI)
+    if not is_green:
+        return MASK_ROUGH                          # sand/path/dirt inside the course
     if v < MASK_WOODS_VAL_MAX and edge >= MASK_WOODS_EDGE_MIN:
         return MASK_WOODS                          # dark + textured green canopy = trees
     return MASK_FAIRWAY if v >= fw_cut else MASK_ROUGH
@@ -379,9 +382,12 @@ def build_surface_mask(img_path, aerial, world, woods_world, corridors, out_path
         ins, nr = inside_im.load(), near_im.load()
 
         # adaptive fairway/rough brightness split from the green-turf pixels only
+        # (inside the envelope only — off-course lawns would skew the cut)
         turf_vals = []
         for y in range(mh):
             for x in range(mw):
+                if not ins[x, y]:
+                    continue
                 r, g, b = px[x, y]
                 hh, ss, vv = _rgb_to_hsv(r, g, b)
                 if (ss >= MASK_SAT_MIN and vv >= MASK_VAL_MIN
