@@ -89,7 +89,7 @@ St Andrews Old is also baked (`--boundary-way 1019045811 --id st-andrews-old`, f
 | `slopeAccel` | Putting break: downhill accel per unit of green-field gradient (folds vertical scale + gravity into one knob) |
 | `slopeStopSpeed` | Below this roll speed slope is ignored, so a settled ball rests instead of creeping |
 | `checkSpinW` / `checkLandW` / `checkLandRef` / `checkLandSpan` | Landing check = blend of backspin AND descent steepness (TrackMan: irons land 46–52°, which is why a tour 5i holds). `steep = (land° − ref)/span` clamped 0..1; chips opt out (`fl.noLandCheck`, spin-slider only) |
-| `spinCheckK` / `rolloutK` / `spinBackMax` | Check strength on the release `Dr = vh·rolloutK·(1 − check·spinCheckK)` (<0 spins back, capped at `spinBackMax` units) |
+| `spinCheckK` / `rolloutK` / `rolloutKFull` / `spinBackMax` | Release `Dr = vh·K·(1 − check·spinCheckK)` (<0 spins back, capped at `spinBackMax` units). `K` = `rolloutKFull` (4) on full shots — calibrated so totals match tour (driver ~305, hybrid ~246, 7i ~184) — and `rolloutK` (7) on chips, which skid and release more |
 | `lieLand` | Per-lie land-angle multiplier — flyers from rough come in shallower AND lower-spin, so they release |
 | `flightHi*` | Flighted high spinner via the right-gutter **FLIGHT slider** (0 stock → 1 high; the `#chip-spin` widget relabeled by `syncSpinSlider()` outside chip range). Knobs are the t=1 endpoints, lerped by the slider: apex×`flightHiApex`, land+`flightHiLand`°, spin×`flightHiSpin`, carry×`flightHiCarry`, wind×`flightHiWind`. One-shot — `flightBias` resets after the swing |
 
