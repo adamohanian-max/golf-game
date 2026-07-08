@@ -3,7 +3,7 @@
   "appName": "Golf",
   "webDir": "capacitor-shell",
   "server": {
-    "url": "https://adamohanian-max.github.io/golf-game/",
+    "url": "https://yo-golf.com/",
     "cleartext": false
   },
   "ios": {

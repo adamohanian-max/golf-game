@@ -90,6 +90,25 @@
   padding: 13px var(--s-2);
   font-size: var(--t-cap);
 }
+#open-progress { grid-column: 1 / -1; }
+
+/* Progress chips under the menu grid: streak + today's featured course */
+.menu-chips {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+}
+.menu-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--w-70, rgba(244,246,243,0.7));
+  border: 1px solid var(--brass-soft, rgba(176,141,74,0.14));
+  background: rgba(0,0,0,0.18);
+  border-radius: var(--r-pill, 999px);
+  padding: 4px 10px;
+}
 
 /* Small text-link rows (account / admin) */
 .menu-links {
@@ -235,7 +254,7 @@
 /* ---- Name-entry / auth / add-course / admin / account: scrim */
 #name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer,
 #play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select,
-#friends-modal, #friend-profile, #username-modal, #onboarding, #ad-stub {
+#friends-modal, #friend-profile, #username-modal, #onboarding, #ad-stub, #progress {
   position: fixed;
   inset: 0;
   display: flex;
@@ -283,12 +302,12 @@
 #username-modal { z-index: 55; }   /* above friends, below the name gate */
 #add-course { z-index: 30; }
 #auth-modal, #admin-settings, #account-viewer { z-index: 40; }
-#play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select { z-index: 40; }
+#play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select, #progress { z-index: 40; }
 #friends-modal { z-index: 42; }
 #friend-profile { z-index: 44; }   /* above the friends list it opens from */
 #name-entry.hidden, #add-course.hidden, #auth-modal.hidden, #admin-settings.hidden, #account-viewer.hidden,
 #play-menu.hidden, #match-menu.hidden, #match-lobby.hidden, #match-setup.hidden, #quick-match.hidden, #bot-select.hidden,
-#friends-modal.hidden, #friend-profile.hidden, #username-modal.hidden { display: none; }
+#friends-modal.hidden, #friend-profile.hidden, #username-modal.hidden, #progress.hidden { display: none; }
 
 /* Friends */
 .av-uname { color: var(--text-dim); font-size: var(--t-cap); margin-top: 2px; }

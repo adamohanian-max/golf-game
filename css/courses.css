@@ -156,6 +156,7 @@
 }
 .cs-badge.pga { background: rgba(46,125,79,0.92); }
 .cs-badge.major { background: rgba(207,168,94,0.95); color: #1c1508; }
+.cs-badge.featured { background: var(--brass-bright, #cfa85e); color: #1c1508; }
 .cs-card-best {
   position: absolute; top: 8px; right: 8px;
   font-size: 11px; font-weight: 700;
@@ -186,6 +187,36 @@
   color: var(--white, #f4f6f3);
   border-color: rgba(255,255,255,0.16) !important;
 }
+
+/* Locked courses: dimmed card, lock overlay, requirement chip instead of Play */
+.cs-card--locked .cs-card-img img { filter: grayscale(0.9) brightness(0.55); }
+.cs-card--locked .cs-card-name { color: rgba(244,246,243,0.55); }
+.cs-lock-ic {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+}
+.cs-lock-ic .ic { width: 18px; height: 18px; }
+.cs-req {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brass-bright, #cfa85e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cs-req .ic { flex: none; width: 13px; height: 13px; opacity: 0.8; }
 
 /* Mobile: filters collapse to a horizontal scroll strip above the grid */
 @media (max-width: 640px) {

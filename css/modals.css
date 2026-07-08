@@ -341,6 +341,40 @@
 .bot-lock { flex: none; color: var(--text-dim); padding: 0 8px; }
 .bot-check { color: var(--accent); font-size: 12px; }
 
+/* Trophy Room — progress overview (courses / ladder / achievements / daily) */
+.pr-box { width: min(420px, 92vw); }
+#pr-body {
+  max-height: 58vh; overflow-y: auto;
+  margin-top: var(--s-3); text-align: left;
+}
+.pr-section { margin-bottom: var(--s-3); }
+.pr-title {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--brass-bright, #cfa85e);
+  margin-bottom: 6px;
+}
+.pr-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; font-size: 13px; color: var(--text);
+}
+.pr-row .ic { flex: none; width: 14px; height: 14px; }
+.pr-dim, .pr-locked { color: var(--text-dim); }
+.pr-locked .ic { opacity: 0.6; }
+.pr-earned .ic { color: var(--accent); }
+.pr-ms { display: flex; flex-direction: column; min-width: 0; }
+.pr-ms b { font-size: 13px; font-weight: 700; }
+.pr-ms i { font-style: normal; font-size: 11px; color: var(--text-dim); }
+.pr-bar {
+  height: 6px; border-radius: var(--r-pill, 999px);
+  background: var(--w-08, rgba(255,255,255,0.08));
+  overflow: hidden; margin: 4px 0 6px;
+}
+.pr-bar-fill {
+  height: 100%; border-radius: inherit;
+  background: var(--brass-bright, #cfa85e);
+}
+
 /* Match results footer (Rematch / Next bot appear only after ladder matches) */
 .mr-actions { display: flex; gap: var(--s-2); }
 .mr-actions .menu-btn { flex: 1; margin: 0; }

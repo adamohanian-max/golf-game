@@ -13,12 +13,21 @@
   <link rel="icon" type="image/png" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=56">
-  <link rel="stylesheet" href="css/base.css?v=62">
+  <link rel="stylesheet" href="css/base.css?v=66">
   <link rel="stylesheet" href="css/hud.css?v=79">
   <link rel="stylesheet" href="css/menu.css?v=71">
   <link rel="stylesheet" href="css/courses.css?v=6">
   <link rel="stylesheet" href="css/modals.css?v=72">
   <link rel="stylesheet" href="css/tournament.css?v=55">
+
+  <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
+       Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
+  <script type="importmap">
+  { "imports": {
+      "three": "./vendor/three/three.module.min.js",
+      "three/addons/": "./vendor/three/addons/"
+  }}
+  </script>
 
   <!-- Analytics: PostHog, cookieless (localStorage id, no cookies -> no consent
        banner needed). Only measures product usage for retention/funnels; no ads,
@@ -42,6 +51,12 @@
   </script>
 </head>
 <body>
+  <!-- Four Oaks 3D (three.js) course render. Must come BEFORE #game in the DOM:
+       both are position:fixed with no z-index, so plain DOM order decides
+       stacking (same pattern #scorecard already relies on to sit above #game)
+       — #game needs to paint on top since swing input is bound to it. Inert
+       unless render3D is on (see game.js update3DMode). -->
+  <canvas id="c3d"></canvas>
   <canvas id="game"></canvas>
 
   <!-- iOS web-haptic hack: toggling a <input switch> emits a system tick on iOS 17.4+
@@ -114,6 +129,7 @@
     <button class="hm-item active" id="hm-slope"><span class="ic ic-slope"></span>Slope</button>
     <button class="hm-item" id="hm-arrows"><span class="ic ic-chev-down"></span>Break arrows</button>
     <button class="hm-item active" id="hm-cine"><span class="ic ic-green3d"></span>Cinematic landings</button>
+    <button class="hm-item" id="hm-render"><span class="ic ic-green3d"></span>Rendered look</button>
     <button class="hm-item active" id="hm-oob"><span class="ic ic-ob"></span>OB areas</button>
     <button class="hm-item active" id="hm-sound"><span class="ic ic-sound"></span>Sound</button>
     <div class="hm-sep"></div>
@@ -645,6 +661,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="game.js?v=174"></script>
+  <script type="module" src="./three3d/course3d.js?v=9"></script>
+  <script src="game.js?v=184"></script>
 </body>
 </html>

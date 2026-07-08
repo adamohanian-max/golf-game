@@ -21,6 +21,24 @@ html, body {
   width: 100vw;
   height: 100vh;
   touch-action: none;   /* stop browser hijacking swipes (scroll/zoom) */
+  position: fixed;
+  inset: 0;
+}
+
+/* Four Oaks 3D (three.js). Sits BEHIND #game (DOM order — see index.html),
+   not instead of it: every swing input listener (touch/mouse/wheel — see
+   game.js "Input" section) is bound to #game, so it must stay in the layout
+   and on top to keep receiving events. In 3D mode game.js's draw() skips
+   painting and clears #game to transparent (see update3DMode) so #c3d shows
+   through underneath; DOM HUD (scorecard, buttons — separate, later, already-
+   positioned elements) still paints above both either way. */
+#c3d {
+  display: block;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;
 }
 
 /* iOS haptic switch — present but off-screen (display:none would disable the haptic) */

@@ -113,6 +113,15 @@ const TUNE = {
   // on screen (column-band warp), trees stand up from the woods mask, and a
   // hillshade overlay sells the slopes. All of it fades in with camera.tilt.
   tExag: 1.6,            // terrain relief exaggeration (1 = true DEM scale)
+  // Synthetic elevation fed into terrainZ so the tilted view actually rolls even
+  // on DEM-less courses (nearly all of them). Greens get a real, exaggerated
+  // undulation you can read break off; the whole course gets gentle cosmetic swells.
+  gUndOn: true,          // master switch: green vertical relief in the tilted view
+  gUndScale: 0.18,       // world-units per abstract green-h unit (~1.5ft realistic; 1 unit = 9ft)
+  gUndExag: 2.5,         // readability exaggeration atop realistic (net on-green ~4ft)
+  gUndFall: 6.0,         // world-unit smoothstep falloff outside a green bbox -> 0 (no fairway distortion)
+  gBroadAmp: 0.25,       // broad COSMETIC terrain amplitude, world units (~2ft); 0 disables. Physics ignores it.
+  gBroadWL: 130,         // broad value-noise wavelength, world units (long gentle swells)
   tWarpCol: 10,          // warp column width, css px (×1.3 on mobile) — narrow
                          // enough that lift steps between columns don't tear
                          // the high-contrast lifted canopy texture
@@ -121,6 +130,24 @@ const TUNE = {
   treeHMin: 3.5, treeHMax: 6.5, // tree height range, world units (~30–60 ft)
   canopyH: 4.6,          // photo-canopy extrusion height, world units (~40 ft)
   tHillAlpha: 0.22,      // DEM hillshade overlay strength when fully tilted
+  tPlanarTol: 3.0,       // css px: max plane-fit residual to warp with ONE affine draw
+  tPadMax: 320,          // capture pad ceiling (putt-zoom canopy lift can reach ~250px)
+  tPadQuant: 32,         // pad quantum — stops per-frame capture reallocs while zooming
+  canopyTiers: [0.75, 1.0, 1.25], // staggered clump heights ×canopyH (breaks the flat slab)
+  canopyFeather: 0.7,    // mask-px alpha feather baked at canopy build
+  tWallLayers: 2,        // smeared wall copies per tier parked; 1 while camera moves
+  tMotionCoarse: 2,      // warp band size multiplier while the camera is moving
+  // Angle-bucket warp cache: while aim-holding rotates the camera, pre-baked
+  // ground rasters at discrete angles are cross-dissolved instead of a full
+  // recapture every frame (see bakeBucket/warpSig split near _bucketCache).
+  tAngleBuckets: 32,       // buckets around the full circle (~11.25° each)
+  tBucketMax: 12,          // resident bucket canvases before LRU eviction (desktop; mobile halves this)
+  tBucketPrebakeRadius: 2, // idle prebake warms this many buckets each side of the parked angle
+  tBucketIdleGapMs: 400,   // camera must be parked+idle this long before idle prebaking starts
+  punchBallR: 4.5,       // world units: canopy punch-out radius around the ball
+  punchCupR: 3.5,        // world units: around the cup
+  punchGreenFeather: 2.0,// world units: soft falloff outside green-in-play polys
+  flowFadeLo: 8, flowFadeHi: 14, // view.scale ramp: flow dots fade out zoomed-out (tilted)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
@@ -352,7 +379,7 @@ function showRewarded(reason) {
 // =====================================================================
 // The public game URL every share points at (NOT location.origin — a share from
 // a localhost/dev build should still send people to the real game).
-const SHARE_URL = "https://adamohanian-max.github.io/golf-game/";
+const SHARE_URL = "https://yo-golf.com/";
 
 // Share a result via the OS share sheet (navigator.share, mobile) → clipboard
 // fallback (desktop). Must be called from a user gesture (a button click).
@@ -442,6 +469,32 @@ function resetState() {
 
 // Game mode: "menu" (home) | "course" | "range". Input is off in the menu.
 let mode = "menu";
+// Four Oaks 3D (three.js) — true only on that course, in course mode, opted in.
+// Gates the whole course-render half of draw() off; ball physics/HUD/scoring
+// are untouched either way (see window.GolfBridge + update3DMode below).
+let render3D = false;
+function render3DWanted() {
+  if (!course || course.id !== "four-oaks-dracut") return false;
+  if (mode !== "course" || (typeof HOLE !== "undefined" && HOLE && HOLE.isRange)) return false;
+  try {
+    if (/[?&]3d=1\b/.test(location.search)) return true;
+    return localStorage.getItem("golf.render3D") === "1";
+  } catch (e) { return false; }
+}
+function update3DMode() {
+  const want = render3DWanted();
+  if (want === render3D) return;
+  render3D = want;
+  // #game stays visible+in-layout either way (swing input is bound to it —
+  // see the "Input" section); go transparent so #c3d (behind it, z-index -1
+  // in base.css) shows through. draw() early-returns while render3D is true,
+  // so nothing repaints over this until we leave 3D (then draw() resumes and
+  // naturally overwrites it every frame — no explicit un-clear needed).
+  if (render3D) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (window.Course3D) {
+    if (render3D) window.Course3D.enter(); else window.Course3D.leave();
+  }
+}
 // Tournament state — set when player enters a tournament round via the lobby.
 let activeTournament = null;     // full tournament row from Supabase
 let activeTournamentRound = null; // 1-4, which round the player is currently playing
@@ -475,6 +528,7 @@ let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt,
 let cine = null;           // active cinematic — { g, mesh, t0, yaw0, tilt, restT } or null
 let cinePending = null;    // armed at launch by a great predicted shot; opens on the descent
 let cineEnabled = lsGet("golf.cineLanding", true); // per-device toggle (HUD menu)
+let renderLook = lsGet("golf.renderLook", false); // per-device "rendered look": flat stylized map instead of the aerial photo
 // Slope-mode style: false = flow dots (default), true = static fall-line arrows.
 // Per-device cosmetic preference (localStorage), not a tournament setting.
 let breakArrows = lsGet("golf.breakArrows", false);
@@ -532,6 +586,24 @@ function inAnyPoly(x, y, polys) {
 // A baked per-pixel label raster classified straight from the aerial photo
 // (fairway / rough / woods / out-of-bounds), so OOB + fairway/rough match what
 // the player SEES instead of patchy OSM polygons. surfaceAt() samples it.
+// Classy stylized-map palette ("Rendered look" toggle → drawVectorSurfaces). Muted,
+// distinct colors per surface with clear dark edge strokes; the surround reads as
+// ROUGH (default lie), fairway/green sit obviously lighter, trees/water obviously darker.
+const MAP_PAL = {
+  roughHi: "#315e39", roughLo: "#264a2d",  // rough base gradient (the whole surround)
+  grass:   "#356b3c",                       // mown turf between holes
+  rough:   "#264a2d",                       // mapped rough polys
+  fairway: "#6fa64f",                       // distinctly lighter warm green
+  tee:     "#7cb85f",
+  sand:    "#e4d6a4",
+  woods:   "#173318",                       // darkest — tree stands
+  water:   "#2b6d90",
+  cartpath:   "rgba(230,224,206,0.85)",
+  edgeGrass:  "rgba(14,32,16,0.55)",        // crisp dark turf edges
+  edgeSand:   "rgba(120,100,55,0.85)",
+  edgeWoods:  "rgba(8,22,10,0.7)",
+  edgeWater:  "rgba(12,50,72,0.9)",
+};
 const MASK_CLASS = ["ob", "fairway", "rough", "woods"];   // palette index -> surface
 // palette RGB — MUST match MASK_PALETTE in tools/fetch_course.py
 const MASK_PALETTE = [[200, 40, 40], [150, 210, 90], [60, 130, 55], [25, 60, 30]];
@@ -1991,26 +2063,34 @@ let aimKey = 0;           // +1 left / -1 right while an arrow key is held (smoo
 const AIM_RATE = 1.4 * Math.PI / 180;  // radians/frame while held (~84°/s)
 const AIM_NUDGE = 3 * Math.PI / 180;   // fixed step for a single arrow tap
 
-// Target framing (focus = ball↔pin midpoint; scale = fit ball↔pin + pad at the
-// target angle). Tight near the cup (putts), wide off the tee.
-function frameTarget(fx, fy) {
-  // Focus point defaults to my ball; live spectating passes the opponent's ball.
-  const ox = (fx == null) ? state.ball.x : fx, oy = (fy == null) ? state.ball.y : fy;
-  const a = camera.tAngle, cos = Math.cos(a), sin = Math.sin(a);
+// Pure span/scale math for framing ball<->pin at an arbitrary angle. NOT
+// rotation-invariant (the bounding box is measured in the rotated frame), so
+// the angle-bucket warp cache calls this per-bucket to get each bucket's own
+// correct scale rather than reusing whatever camera.scale happens to be live.
+function frameScaleForAngle(angle, ox, oy) {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
   const bx = cos * ox - sin * oy, by = sin * ox + cos * oy;
   const px = cos * HOLE.holePos.x - sin * HOLE.holePos.y, py = sin * HOLE.holePos.x + cos * HOLE.holePos.y;
   const span = Math.max(Math.abs(bx - px), Math.abs(by - py));
   const pad = Math.max(VIEW_PAD_MIN, span * VIEW_PAD_FRAC);
   const w = Math.max(Math.abs(bx - px) + 2 * pad, VIEW_MIN);
   const h = Math.max(Math.abs(by - py) + 2 * pad, VIEW_MIN);
-  camera._w = w; camera._h = h;
   // Fit into the play area between the HUD bands (not the full screen).
   // The tilt squash shrinks screen height by tTilt, so the vertical fit gains
   // that headroom back — the leaned hole still fills the play area.
   const rsv = hudReserve();
   const availW = Math.max(120, window.innerWidth - rsv.left - rsv.right);
   const availH = Math.max(120, window.innerHeight - rsv.top - rsv.bot);
-  camera.tScale = Math.min(availW / w, availH / (h * camera.tTilt));
+  return { w, h, scale: Math.min(availW / w, availH / (h * camera.tTilt)) };
+}
+// Target framing (focus = ball↔pin midpoint; scale = fit ball↔pin + pad at the
+// target angle). Tight near the cup (putts), wide off the tee.
+function frameTarget(fx, fy) {
+  // Focus point defaults to my ball; live spectating passes the opponent's ball.
+  const ox = (fx == null) ? state.ball.x : fx, oy = (fy == null) ? state.ball.y : fy;
+  const r = frameScaleForAngle(camera.tAngle, ox, oy);
+  camera._w = r.w; camera._h = r.h;
+  camera.tScale = r.scale;
   camera.tFocus.x = (ox + HOLE.holePos.x) / 2;
   camera.tFocus.y = (oy + HOLE.holePos.y) / 2;
 }
@@ -2025,34 +2105,43 @@ function snapCamera() {
 }
 
 // world->screen affine: screen = scale * R(angle) * (world - focus) + screenCenter.
-// With the slightly-3D toggle on, the second row is scaled by camera.tilt — a
+// With the slightly-3D toggle on, the second row is scaled by tilt — a
 // screen-space y-squash (axonometric lean). Staying affine means the aerial
 // blit, screenToWorld and the view AABB all keep working unchanged.
-function applyView() {
-  const cssW = window.innerWidth, cssH = window.innerHeight;
-  const s = camera.scale * (1 + camPunch), cos = Math.cos(camera.angle), sin = Math.sin(camera.angle);
-  view.scale = s; view.angle = camera.angle; view.tilt = camera.tilt;
-  view.a = s * cos; view.b = -s * sin;
-  view.d = s * sin * camera.tilt; view.e = s * cos * camera.tilt;
+// Pure builder (no globals touched) so the angle-bucket warp cache can bake a
+// ground raster at an arbitrary discrete angle without disturbing the live
+// `view` the rest of draw() reads every frame.
+function computeViewMatrix(angle, tilt, scale, focusX, focusY, cssW, cssH) {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const m = { scale, angle, tilt };
+  m.a = scale * cos; m.b = -scale * sin;
+  m.d = scale * sin * tilt; m.e = scale * cos * tilt;
   // Terrain relief factor: 0 when flat, sin(lean)·tExag when fully tilted;
   // fades with the toggle tween. zFocus centers displacement on the camera
   // focus so the framing never jumps between holes or as the ball advances.
-  const t = camera.tilt;
-  view.kz = t >= 0.999 ? 0
-          : Math.sqrt(Math.max(0, 1 - t * t)) * TUNE.tExag
-            * Math.min(1, (1 - t) / Math.max(1e-6, 1 - TUNE.tiltCos));
-  view.zFocus = view.kz ? terrainZ(camera.focus.x, camera.focus.y) : 0;
+  m.kz = tilt >= 0.999 ? 0
+       : Math.sqrt(Math.max(0, 1 - tilt * tilt)) * TUNE.tExag
+         * Math.min(1, (1 - tilt) / Math.max(1e-6, 1 - TUNE.tiltCos));
+  m.zFocus = m.kz ? terrainZ(focusX, focusY) : 0;
   // Center the focus in the play area between the HUD bands, not the raw screen.
   const rsv = hudReserve();
   const cx = (rsv.left + (cssW - rsv.right)) / 2;
   const cy = (rsv.top + (cssH - rsv.bot)) / 2;
-  view.c = cx - (view.a * camera.focus.x + view.b * camera.focus.y);
-  view.f = cy - (view.d * camera.focus.x + view.e * camera.focus.y);
+  m.c = cx - (m.a * focusX + m.b * focusY);
+  m.f = cy - (m.d * focusX + m.e * focusY);
+  return m;
+}
+function applyView() {
+  const cssW = window.innerWidth, cssH = window.innerHeight;
+  Object.assign(view, computeViewMatrix(
+    camera.angle, camera.tilt, camera.scale * (1 + camPunch),
+    camera.focus.x, camera.focus.y, cssW, cssH));
 }
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
 
 // Ease focus, scale and (while aiming) angle toward their targets each frame.
+let _camEaseT = 0;  // last updateCamera timestamp (time-based ease below)
 function updateCamera() {
   if (aimKey && (mode === "course" || mode === "range") && canSwing()) {
     camera.tAngle += aimKey * AIM_RATE;     // hold arrow -> rotate directly (stops on release)
@@ -2064,11 +2153,24 @@ function updateCamera() {
     if (Math.abs(d) < 0.004) { camera.angle = camera.tAngle; cameraAiming = false; }
     else camera.angle += d * 0.16;
   }
-  const s = 0.12;
-  camera.focus.x += (camera.tFocus.x - camera.focus.x) * s;
-  camera.focus.y += (camera.tFocus.y - camera.focus.y) * s;
-  camera.scale += (camera.tScale - camera.scale) * s;
-  camera.tilt += (camera.tTilt - camera.tilt) * s;
+  // Time-based ease with a snap. Frame-based easing (+= diff*0.12 per frame)
+  // converges per FRAME, so when tilted rebuilds drop fps the tween stretches
+  // out in wall time — and every eased frame crosses warpSig's 1/8px quanta,
+  // forcing another full ground rebuild (capture + warp + canopy): a death
+  // spiral that keeps the warp cache from ever parking. dt-scaled rate keeps
+  // convergence wall-clock constant at any fps; the snap ends the asymptotic
+  // tail once the residual is sub-visible, so the view matrix goes exactly
+  // static and parked tilted frames cost one cache blit.
+  const now = performance.now();
+  const dt = _camEaseT ? Math.min(now - _camEaseT, 100) : 16.7;
+  _camEaseT = now;
+  const s = 1 - Math.pow(0.88, dt / 16.7);   // 0.12/frame at 60fps, fps-independent
+  const eps = 0.05 / Math.max(camera.scale, 0.001);  // ~1/20 css px in world units
+  const ease = (v, t, e) => Math.abs(t - v) < e ? t : v + (t - v) * s;
+  camera.focus.x = ease(camera.focus.x, camera.tFocus.x, eps);
+  camera.focus.y = ease(camera.focus.y, camera.tFocus.y, eps);
+  camera.scale = ease(camera.scale, camera.tScale, camera.scale * 1e-4);
+  camera.tilt = ease(camera.tilt, camera.tTilt, 1e-4);
   if (camPunch > 0.0005) camPunch *= 0.82; else camPunch = 0;  // ease the punch back
   applyView();
 }
@@ -2171,7 +2273,59 @@ function screenToWorld(sx, sy) {
 // DEM elevation in WORLD UNITS (1 unit = 3 yds = 2.743 m). 0 without a DEM.
 const M_PER_UNIT = 2.7432;
 function terrainZ(x, y) {
-  return HOLE && HOLE._dem ? HOLE._dem.elevAt(x, y) / M_PER_UNIT : 0;
+  if (!HOLE) return 0;
+  // Real baked DEM if the course has one (metres -> world units); else 0.
+  let z = HOLE._dem ? HOLE._dem.elevAt(x, y) / M_PER_UNIT : 0;
+  z += broadTerrainZ(x, y);   // low-freq cosmetic swells (0 = off)
+  z += greenUndZ(x, y);       // per-green roll, bbox short-circuit
+  return z;
+}
+// Green undulation as real vertical elevation (world units). The green field
+// (g.h) already exists for contours/shading — here it also physically rolls the
+// surface in the tilted view so break can be read by eye. Mean subtracted so the
+// green rolls in place (doesn't pop up/down as a slab); smoothstep falloff past
+// the bbox so surrounding fairway isn't creased. Loops greens with an AABB reject
+// (usually 0-1 hits); expanded bbox memoized per green.
+function greenUndZ(x, y) {
+  const gs = HOLE && HOLE._greens;
+  if (!gs || !TUNE.gUndOn) return 0;
+  let z = 0;
+  for (const g of gs) {
+    let b = g._zbb;
+    if (!b) {
+      const p = polyBBox(g.poly), f = TUNE.gUndFall;
+      b = g._zbb = { minx: p.minx - f, maxx: p.maxx + f, miny: p.miny - f, maxy: p.maxy + f,
+                     ix0: p.minx, ix1: p.maxx, iy0: p.miny, iy1: p.maxy,
+                     hmid: (g.hmin + g.hmax) * 0.5 };
+    }
+    if (x < b.minx || x > b.maxx || y < b.miny || y > b.maxy) continue;
+    // Smoothstep weight: 1 inside the green bbox, easing to 0 at the expanded edge.
+    const dx = Math.max(0, b.ix0 - x, x - b.ix1);
+    const dy = Math.max(0, b.iy0 - y, y - b.iy1);
+    const d = Math.hypot(dx, dy);
+    if (d >= TUNE.gUndFall) continue;
+    const t = 1 - d / TUNE.gUndFall, w = t * t * (3 - 2 * t); // smoothstep, C1
+    z += (g.h(x, y) - b.hmid) * TUNE.gUndScale * TUNE.gUndExag * w;
+  }
+  return z;
+}
+// Broad, gentle, deterministic terrain swells course-wide (world units). Purely
+// COSMETIC — off-green ball roll never reads terrainZ, so these swells add 3D feel
+// to fairways without changing play. Seeded value noise (hashSeed lattice, bilinear
+// + smoothstep interp). gBroadAmp <= 0 disables entirely.
+function broadTerrainZ(x, y) {
+  const amp = TUNE.gBroadAmp;
+  if (!(amp > 0)) return 0;
+  const wl = TUNE.gBroadWL || 130;
+  const gx = x / wl, gy = y / wl;
+  const x0 = Math.floor(gx), y0 = Math.floor(gy);
+  const fx = gx - x0, fy = gy - y0;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const n00 = hashSeed(x0, y0), n10 = hashSeed(x0 + 1, y0);
+  const n01 = hashSeed(x0, y0 + 1), n11 = hashSeed(x0 + 1, y0 + 1);
+  const nx0 = n00 + (n10 - n00) * sx, nx1 = n01 + (n11 - n01) * sx;
+  const v = nx0 + (nx1 - nx0) * sy; // 0..1
+  return (v - 0.5) * 2 * amp;
 }
 // Screen-y lift of the ground at a world point. view.kz (set each frame in
 // applyView) folds sin(lean)·tExag·tilt-fade into one factor; zero when flat,
@@ -2241,6 +2395,31 @@ function fillPoly(poly, color) {
 function fillPolys(polys, color) {
   if (!polys) return;
   for (let i = 0; i < polys.length; i++) fillPoly(polys[i], color);
+}
+// Fill many polygons as ONE path (single fill, nonzero winding) so overlapping
+// polys don't stack translucent alpha into bands — the union reads as one flat
+// wash. Off-screen polys are culled. Use for translucent surface tints where
+// per-poly fillPolys would double-paint the overlaps.
+function fillPolysUnion(polys, color, feather) {
+  if (!polys || !polys.length) return;
+  ctx.beginPath();
+  let any = false;
+  for (const poly of polys) {
+    if (!poly || poly.length < 2 || !polyVisible(poly)) continue;
+    ctx.moveTo(wx(poly[0].x, poly[0].y), wy(poly[0].x, poly[0].y));
+    for (let i = 1; i < poly.length; i++) ctx.lineTo(wx(poly[i].x, poly[i].y), wy(poly[i].x, poly[i].y));
+    ctx.closePath();
+    any = true;
+  }
+  if (!any) return;
+  ctx.fillStyle = color;
+  // feather (css px): soften the union outline so a synthesized-corridor
+  // boundary reads as a gradient, not a sawtooth. Guarded — Safari <18 no-ops
+  // ctx.filter, which just falls back to a crisp (still band-free) edge.
+  const canFeather = feather && "filter" in ctx;
+  if (canFeather) ctx.filter = "blur(" + feather + "px)";
+  ctx.fill();  // nonzero winding: each pixel painted once, overlaps included
+  if (canFeather) ctx.filter = "none";
 }
 
 // --- Aesthetic helpers --------------------------------------------------
@@ -2643,6 +2822,8 @@ function grainTile() {
 function drawDetailGrain() {
   const a = HOLE.aerial;
   if (!a || !HOLE._img) return;
+  if (_warpMotion) return; // full-screen soft-light fill: skip while the camera
+                           // moves (subtle layer, invisible pop, big fill save)
   const dpr = window.devicePixelRatio || 1;
   // Magnification k = device px per SOURCE aerial px (the 1.5x bake adds no
   // real detail, so it doesn't count). Below the ramp the photo still has
@@ -2681,29 +2862,28 @@ function drawDetailGrain() {
 // Green: collar + fill + topo contours. `photo` => translucent over the aerial.
 function drawGreen(photo) {
   const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
-  ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(90,165,99,0.35)";
-  ctx.lineWidth = ws(photo ? 1.2 : 1.5);
+  // Vector map: bright green fill sits obviously above the darker fairway/rough,
+  // ringed by a crisp dark collar edge.
+  ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(20,54,26,0.6)";
+  ctx.lineWidth = photo ? ws(1.2) : Math.max(ws(0.7), 1.6);
   ctx.lineJoin = "round";
   for (const poly of s.green || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
   for (const g of HOLE._greens || []) {
     if (!polyVisible(g.poly)) continue; // skip off-screen greens (incl. their topo)
     withClip(g.poly, () => {
       if (photo) {
-        ctx.globalAlpha = 0.16;          // light tint — let the real turf show through
+        ctx.globalAlpha = 0.13;          // light tint — let the real turf show through
         ctx.fillStyle = "#7ecb86";
         ctx.fillRect(0, 0, cssW, cssH);
         ctx.globalAlpha = 1;
       } else {
         const lg = ctx.createLinearGradient(wx(g.hi.x, g.hi.y), wy(g.hi.x, g.hi.y), wx(g.lo.x, g.lo.y), wy(g.lo.x, g.lo.y));
-        lg.addColorStop(0, "#92d398");
-        lg.addColorStop(1, "#6fbb79");
+        lg.addColorStop(0, "#95d56b");
+        lg.addColorStop(1, "#7cc258");
         ctx.fillStyle = lg;
         ctx.fillRect(0, 0, cssW, cssH);
-        ctx.globalAlpha = 0.5;
-        stripes("rgba(255,255,255,0.10)", "rgba(0,0,0,0.06)", 3, "x");
-        ctx.globalAlpha = 1;
       }
-      ctx.strokeStyle = photo ? "rgba(30,60,35,0.32)" : "rgba(32,74,38,0.40)";
+      ctx.strokeStyle = photo ? "rgba(30,60,35,0.26)" : "rgba(32,74,38,0.40)";
       ctx.lineWidth = 1;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
@@ -2734,14 +2914,20 @@ function drawFallArrow(x, y, grad, t) {
   const sx = wx(x, y), sy = wy(x, y), ex = wx(hx, hy), ey = wy(hx, hy);
   const ux = ex - sx, uy = ey - sy, ul = Math.hypot(ux, uy) || 1;
   const nx = ux / ul, ny = uy / ul, head = Math.min(3, ul * 0.4);
-  ctx.strokeStyle = "rgba(20,20,20,0.6)";
-  ctx.lineWidth = 0.7;                                // fixed px, zoom-independent
   ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.beginPath();
-  ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);             // shaft
-  ctx.moveTo(ex, ey); ctx.lineTo(ex - head * (nx * 0.87 - ny * 0.5), ey - head * (ny * 0.87 + nx * 0.5));
-  ctx.moveTo(ex, ey); ctx.lineTo(ex - head * (nx * 0.87 + ny * 0.5), ey - head * (ny * 0.87 - nx * 0.5));
-  ctx.stroke();
+  const path = () => {
+    ctx.beginPath();
+    ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);             // shaft
+    ctx.moveTo(ex, ey); ctx.lineTo(ex - head * (nx * 0.87 - ny * 0.5), ey - head * (ny * 0.87 + nx * 0.5));
+    ctx.moveTo(ex, ey); ctx.lineTo(ex - head * (nx * 0.87 + ny * 0.5), ey - head * (ny * 0.87 - nx * 0.5));
+  };
+  // pale halo first so the dark arrow still pops on dark/shadowed turf
+  ctx.strokeStyle = "rgba(255,250,235,0.55)";
+  ctx.lineWidth = 1.9;
+  path(); ctx.stroke();
+  ctx.strokeStyle = "rgba(20,20,20,0.7)";
+  ctx.lineWidth = 0.7;                                // fixed px, zoom-independent
+  path(); ctx.stroke();
 }
 // Build (once, cached) a small hillshade raster for a green. Pixel -> world is the
 // axis-aligned affine g.relief.m; drawn later through the view transform (bilinear)
@@ -2830,18 +3016,25 @@ function flowDotAlpha(d) {
   const fade = Math.min(1, u / 0.15, (1 - u) / 0.3);
   return fade * TUNE.flowAlpha * (0.55 + 0.45 * d.t);
 }
-function drawFlowDots(g) {
-  if (!g._flow) return;
+// Dark halo + warm-cream core so a streak reads against turf of ANY shade —
+// a single flat color (esp. green) disappears on greens close to that hue.
+function strokeFlowSeg(x1, y1, x2, y2, a) {
+  ctx.strokeStyle = `rgba(0,0,0,${(a * 0.4).toFixed(3)})`;
+  ctx.lineWidth = 3.6;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,244,200,${a.toFixed(3)})`;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+}
+function drawFlowDots(g, fade = 1) {
+  if (!g._flow || fade <= 0) return;
   ctx.lineCap = "round";
-  ctx.lineWidth = 2.4;
   for (const d of g._flow.dots) {
     // streak from pos back along velocity: direction reads even in a still frame
-    ctx.strokeStyle = `rgba(10,105,48,${flowDotAlpha(d).toFixed(3)})`;
-    ctx.beginPath();
-    ctx.moveTo(wx(d.x, d.y), wyg(d.x, d.y));
-    ctx.lineTo(wx(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail),
-               wyg(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail));
-    ctx.stroke();
+    strokeFlowSeg(wx(d.x, d.y), wyg(d.x, d.y),
+      wx(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail),
+      wyg(d.x - d.vx * TUNE.flowTrail, d.y - d.vy * TUNE.flowTrail),
+      flowDotAlpha(d) * fade);
   }
 }
 // Draw a green's shaded relief (clipped, through the view transform) at `intensity`,
@@ -3069,13 +3262,11 @@ function paintGreen3D(g, m, yaw, tilt, kMul, opts) {
     updateFlowDots(g);
     if (g._flow) {
       ctx.lineCap = "round";
-      ctx.lineWidth = 2.4;
       for (const d of g._flow.dots) {
         const a = proj(d.x - m.cx, d.y - m.cy, m.zOf(d.x, d.y));
         const bx = d.x - d.vx * TUNE.flowTrail, by = d.y - d.vy * TUNE.flowTrail;
         const b = proj(bx - m.cx, by - m.cy, m.zOf(bx, by));
-        ctx.strokeStyle = `rgba(10,105,48,${flowDotAlpha(d).toFixed(3)})`;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        strokeFlowSeg(a.x, a.y, b.x, b.y, flowDotAlpha(d));
       }
     }
   }
@@ -3288,60 +3479,52 @@ function drawOOBOverlay(s) {
 
 function drawVectorSurfaces() {
   const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
+  // Classy stylized "course map": flat, distinct colors per surface with clear dark
+  // edge strokes (golf-GPS look) — the whole surround reads as ROUGH (the default
+  // lie), fairway/green sit obviously lighter on top, trees + water obviously darker.
+  const P = MAP_PAL, edgeW = Math.max(ws(0.55), 1.4);
   const bg = ctx.createLinearGradient(0, 0, 0, cssH);
-  bg.addColorStop(0, "#236425");
-  bg.addColorStop(1, "#2c7e2f");
+  bg.addColorStop(0, P.roughHi);
+  bg.addColorStop(1, P.roughLo);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, cssW, cssH);
-  ctx.globalAlpha = 0.5;
-  stripes("#2a7a2c", "#266e28", 9, "y");
-  ctx.globalAlpha = 1;
 
-  fillPolys(s.grass, "#3a9440");                 // mown turf between holes
-  fillPolys(s.rough, "#2c6e30");                 // mapped rough — a touch darker than base
+  fillPolys(s.grass, P.grass);                    // mown turf between holes
+  fillPolys(s.rough, P.rough);                    // mapped rough — a touch darker than base
 
-  for (const poly of s.fairway || []) withClip(poly, () => stripes("#4eb053", "#46a44b", 7, "y"));
-  ctx.strokeStyle = "rgba(28,66,30,0.45)"; ctx.lineWidth = 1.5;
-  for (const poly of s.fairway || []) { tracePoly(poly); ctx.stroke(); }
+  // Fairway: flat, distinctly lighter than rough, with a crisp dark edge.
+  fillPolys(s.fairway, P.fairway);
+  ctx.strokeStyle = P.edgeGrass; ctx.lineWidth = edgeW; ctx.lineJoin = "round";
+  for (const poly of s.fairway || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
 
-  for (const poly of s.tee || []) withClip(poly, () => stripes("#5cbf61", "#54b659", 3, "x"));
+  fillPolys(s.tee, P.tee);
+  ctx.strokeStyle = P.edgeGrass; ctx.lineWidth = edgeW;
+  for (const poly of s.tee || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
 
-  for (const poly of s.bunker || []) {
-    const bb = polyBBox(poly);
-    withClip(poly, () => {
-      const scx = wx(bb.cx, bb.cy), scy = wy(bb.cx, bb.cy);
-      const rad = ws(Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2) || 1;
-      const rg = ctx.createRadialGradient(scx, scy, rad * 0.1, scx, scy, rad * 1.05);
-      rg.addColorStop(0, "#f1e6c4");
-      rg.addColorStop(1, "#d4be8a");
-      ctx.fillStyle = rg;
-      ctx.fillRect(0, 0, cssW, cssH);
-    });
-    tracePoly(poly);
-    ctx.strokeStyle = "rgba(120,100,58,0.85)"; ctx.lineWidth = 1.5; ctx.stroke();
-  }
+  // Bunkers: flat sand with a warm dark rim.
+  fillPolys(s.bunker, P.sand);
+  ctx.strokeStyle = P.edgeSand; ctx.lineWidth = edgeW;
+  for (const poly of s.bunker || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
 
-  fillPolys(s.woods, "#2f5d34");                  // tree stands
+  // Woods: darkest green with a near-black edge so tree stands read as clear blobs.
+  fillPolys(s.woods, P.woods);
+  ctx.strokeStyle = P.edgeWoods; ctx.lineWidth = edgeW;
+  for (const poly of s.woods || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+
   drawDEMShade();                                  // tilted only: DEM light/shadow
-  if (showOOB) drawOOBOverlay(s);                  // red OOB tint on top
-  ctx.strokeStyle = "rgba(225,220,205,0.8)";       // cart paths
+  // Skip the red OB debug tint in map mode — woods/OB already read by their dark
+  // color here; the red wash only muddies the classy palette.
+  if (showOOB && !renderLook) drawOOBOverlay(s);
+  ctx.strokeStyle = P.cartpath;                    // cart paths
   ctx.lineWidth = Math.max(ws(0.8), 1);
   for (const poly of s.cartpath || []) strokePolyline(poly);
 
   drawGreen(false);
 
-  for (const poly of s.water || []) {
-    const r = visibleRect();
-    withClip(poly, () => {
-      const lg = ctx.createLinearGradient(0, wy(0, r.y), 0, wy(0, r.y + r.h));
-      lg.addColorStop(0, "#34b3f1");
-      lg.addColorStop(1, "#1666c1");
-      ctx.fillStyle = lg;
-      ctx.fillRect(0, 0, cssW, cssH);
-    });
-    tracePoly(poly);
-    ctx.strokeStyle = "rgba(12,64,150,0.9)"; ctx.lineWidth = 1.5; ctx.stroke();
-  }
+  // Water: flat classy blue with a dark shoreline edge.
+  fillPolys(s.water, P.water);
+  ctx.strokeStyle = P.edgeWater; ctx.lineWidth = edgeW;
+  for (const poly of s.water || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
 }
 
 // --- True-3D tilted ground: the flat ground render is captured (with vertical
@@ -3357,26 +3540,134 @@ let _mainCtx = null, _savedViewF = 0;
 // frames cost one full-screen blit. Animated bits (flow dots, ball, flag) draw
 // above the cache.
 let _warpCache = null; // { sig, canvas, g }
-function warpSig(cssW, cssH) {
+let _warpMotion = false; // camera moving: coarser bands / fewer wall layers / no grain
+let _sigStreak = 0;      // consecutive rebuild frames (2+ = real motion, not a one-off)
+// Angle-bucket cache: pre-baked ground rasters at discrete camera angles, kept
+// warm by idle prebaking (maybePrebakeBucket) and cross-dissolved while the
+// camera sweeps (arrow-key aiming) so a sustained aim-hold doesn't force a
+// full recapture every frame. Keyed by baseWarpKey()+"#"+bucketIndex ->
+// {canvas, g, baseKey, bucketIndex, scale, ts}. Each entry costs the same as
+// _warpCache.canvas (full viewport-sized offscreen) — bounded + LRU-evicted.
+let _bucketCache = new Map();
+function evictBucketsIfOverCap() {
+  const cap = IS_DESKTOP ? TUNE.tBucketMax : Math.ceil(TUNE.tBucketMax / 2);
+  while (_bucketCache.size > cap) {
+    let oldestKey = null, oldestTs = Infinity;
+    for (const [k, v] of _bucketCache) if (v.ts < oldestTs) { oldestTs = v.ts; oldestKey = k; }
+    _bucketCache.delete(oldestKey);
+  }
+}
+// Ball only affects the baked ground via its canopy punch-out — keep it out of
+// the sig on open ground so putts/rolls never churn the cache.
+function ballNearCanopy() {
+  const b = state.ball;
+  if (!b || !HOLE._mask) return false;
+  const r = TUNE.punchBallR;
+  for (const [ox, oy] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r],
+                          [r * 0.7, r * 0.7], [-r * 0.7, r * 0.7], [r * 0.7, -r * 0.7], [-r * 0.7, -r * 0.7]]) {
+    if (canopyCellAt(b.x + ox, b.y + oy)) return true;
+  }
+  return false;
+}
+// Everything the cache key needs EXCEPT the rotation-derived matrix terms
+// (view.a/b/c/d/e/f) — i.e. the part that's angle-invariant given a fixed
+// tilt/focus/scale. Shared by the exact single-slot cache (warpSig) and the
+// angle-bucket cache (which swaps in a discrete-angle matrix per bucket).
+// NOTE: no greens-in-play term. Relief now bakes for ALL visible greens (see
+// draw()), so the baked ground is shot-independent — a settled shot on/near a
+// green no longer invalidates the ground+tree cache. ballTerm only changes in
+// the woods (canopy punch follow), not on green/fairway. It's computed in
+// WORLD space (not wx/wyg screen space) so it stays angle-invariant too —
+// otherwise it would churn on every frame of an aim sweep just like the
+// matrix terms it's meant to be independent of.
+function baseWarpKey(cssW, cssH) {
   const q = (v) => Math.round(v * 8) / 8; // 1/8px quantum ends the ease-tail churn
-  const gids = !HOLE.isRange && HOLE._greens
-    ? greensInPlay().map((g) => HOLE._greens.indexOf(g)).join(".") : "";
-  return q(view.a) + "," + q(view.b) + "," + q(view.c) + "," + q(view.d) + "," +
-         q(view.e) + "," + q(view.f) + "," + q(view.kz * 100) + "," + q(view.zFocus * 50) + "," +
+  const b = state.ball;
+  const ballTerm = ballNearCanopy()
+    ? Math.round(b.x / 2) + "." + Math.round(b.y / 2) : "-";
+  return q(view.kz * 100) + "," + q(view.zFocus * 50) + "," +
          HOLE.num + "," + (showOOB ? 1 : 0) + (showSlope ? 1 : 0) + (breakArrows ? 1 : 0) +
          (HOLE._imgReady ? 1 : 0) + (HOLE._mask && HOLE._mask.lab ? 1 : 0) + "," +
-         gids + "," + cssW + "x" + cssH + "," + _warpPad;
+         cssW + "x" + cssH + "," + _warpPad + "," + ballTerm;
+}
+function warpSig(cssW, cssH) {
+  const q = (v) => Math.round(v * 8) / 8; // 1/8px quantum ends the ease-tail churn
+  return q(view.a) + "," + q(view.b) + "," + q(view.c) + "," + q(view.d) + "," +
+         q(view.e) + "," + q(view.f) + "," + baseWarpKey(cssW, cssH);
+}
+// Angle-bucket helpers: discretize camera.angle into TUNE.tAngleBuckets steps
+// around the full circle so the warp cache can pre-bake a handful of angles
+// and cross-dissolve between the two nearest while the camera is sweeping
+// (arrow-key aiming), instead of a full recapture every frame.
+function angleBucketIndex(angle) {
+  const N = TUNE.tAngleBuckets, step = (Math.PI * 2) / N;
+  const raw = angle / step;
+  return ((Math.floor(raw) % N) + N) % N; // wraps negative angles correctly
+}
+function angleBucketFrac(angle) {
+  const step = (Math.PI * 2) / TUNE.tAngleBuckets;
+  const raw = angle / step;
+  return raw - Math.floor(raw); // 0..1 blend weight toward the next bucket
+}
+function bucketAngle(i) { return i * (Math.PI * 2 / TUNE.tAngleBuckets); }
+// Pre-erosion canopy (woods) cell at a world point — the cells the canopy
+// extrusion and standing trees are built from.
+function canopyCellAt(x, y) {
+  const m = HOLE && HOLE._mask;
+  if (!m || !m.w2p) return false;
+  const src = m.canopy || m.lab;
+  const t = m.w2p;
+  const px = Math.round(t[0] * x + t[1] * y + t[2]);
+  const py = Math.round(t[3] * x + t[4] * y + t[5]);
+  if (px < 0 || py < 0 || px >= m.w || py >= m.h) return false;
+  return src[py * m.w + px] === 3;
 }
 // Max |lift| on screen this frame, from a coarse screen grid (+slack).
 function estimateWarpPad(cssW, cssH) {
-  if (!view.kz || !HOLE || !HOLE._dem) return 0;
+  if (!view.kz || !HOLE) return 0;  // synthetic terrainZ lifts even without a DEM
   let mx = 0;
   for (let i = 0; i <= 4; i++) for (let j = 0; j <= 3; j++) {
     const p = screenToWorld(cssW * i / 4, cssH * j / 3);
     const l = Math.abs((terrainZ(p.x, p.y) - view.zFocus) * view.scale * view.kz);
     if (l > mx) mx = l;
   }
-  return mx < 1 ? 0 : Math.min(220, Math.ceil(mx) + 10);
+  // The coarse 5x4 grid can step over a small green bump -> pad too short ->
+  // clipped green tops. Sample each visible green's own extremes explicitly.
+  const gs = HOLE._greens;
+  if (gs && TUNE.gUndOn) {
+    for (const g of gs) {
+      const p = polyBBox(g.poly);
+      const pts = [[p.cx, p.cy], [p.minx, p.miny], [p.maxx, p.miny],
+                   [p.minx, p.maxy], [p.maxx, p.maxy]];
+      if (g.hi) pts.push([g.hi.x, g.hi.y]);
+      if (g.lo) pts.push([g.lo.x, g.lo.y]);
+      for (const [wxx, wyy] of pts) {
+        const sx = wx(wxx, wyy), sy = wy(wxx, wyy);
+        if (sx < -cssW * 0.2 || sx > cssW * 1.2 || sy < -cssH || sy > cssH * 1.2) continue;
+        const l = Math.abs((terrainZ(wxx, wyy) - view.zFocus) * view.scale * view.kz);
+        if (l > mx) mx = l;
+      }
+    }
+  }
+  // Canopy lifts trees ABOVE the terrain pad: forest just past the top screen
+  // edge must be inside the capture or its tops clip into smear streaks. Add
+  // the tallest tier's lift when woods cells sit in that band.
+  const tiers = TUNE.canopyTiers;
+  const canopyLift = ws(TUNE.canopyH * tiers[tiers.length - 1]) * view.kz;
+  if (canopyLift >= 2 && HOLE._mask && HOLE._imgReady) {
+    let hit = false;
+    for (let i = 0; i <= 8 && !hit; i++) {
+      for (const yy of [0, canopyLift / 2, canopyLift]) {
+        const p = screenToWorld(cssW * i / 8, -yy + cssH * 0.02);
+        if (canopyCellAt(p.x, p.y)) { hit = true; break; }
+      }
+    }
+    if (hit) mx += canopyLift;
+  }
+  if (mx < 1) return 0;
+  // Quantized: an unquantized pad changes every zoom frame, which resizes (and
+  // reallocates) the full-screen capture canvas per frame and churns warpSig.
+  return Math.min(TUNE.tPadMax, Math.ceil((mx + 10) / TUNE.tPadQuant) * TUNE.tPadQuant);
 }
 function startGroundCapture(cssW, cssH) {
   const dpr = window.devicePixelRatio || 1;
@@ -3395,18 +3686,26 @@ function startGroundCapture(cssW, cssH) {
 }
 // Restore the real context/view, then displace: dest band [y0,y1] samples the
 // capture at [y0+l0, y1+l1] — lift pulls pixels up, bands stay contiguous.
-function finishGroundWarp(cssW, cssH, sig) {
+// `target` defaults to _warpCache (today's single-slot parked cache); the
+// angle-bucket cache passes its own bucket entry instead so bakeBucket() can
+// reuse this whole pipeline without disturbing the live parked cache. Unlike
+// the default-target path, a bucket bake does NOT blit here — the caller
+// decides if/when a baked bucket is actually drawn (cross-dissolve).
+function finishGroundWarp(cssW, cssH, sig, target) {
   const dpr = window.devicePixelRatio || 1;
   const pad = _capPad;
   ctx = _mainCtx; _mainCtx = null;
   view.f = _savedViewF; _capPad = 0;
+  const usingDefault = target === undefined;
+  if (usingDefault) target = _warpCache;
   const w = Math.round(cssW * dpr), h = Math.round(cssH * dpr);
-  if (!_warpCache || _warpCache.canvas.width !== w || _warpCache.canvas.height !== h) {
+  if (!target || target.canvas.width !== w || target.canvas.height !== h) {
     const c = document.createElement("canvas");
     c.width = w; c.height = h;
-    _warpCache = { sig: null, canvas: c, g: c.getContext("2d") };
+    target = { sig: null, canvas: c, g: c.getContext("2d") };
   }
-  const g = _warpCache.g;
+  if (usingDefault) _warpCache = target;
+  const g = target.g;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, cssW, cssH);
   g.imageSmoothingEnabled = true;
@@ -3415,7 +3714,40 @@ function finishGroundWarp(cssW, cssH, sig) {
     // frame — copy it straight into the cache, skip the band loop entirely
     g.drawImage(_groundC, 0, 0, _groundC.width, _groundC.height, 0, 0, cssW, cssH);
   } else {
-  const mul = IS_DESKTOP ? 1 : 1.3;
+  // Planar fast path: sample the lift field on a coarse grid and fit a plane
+  // lift ≈ L0 + gx·x + gy·y. Zoomed near a green the field is locally planar
+  // (a green spans 2-3 DEM cells), so one sheared drawImage renders the SAME
+  // displacement as the bands with zero band seams — exactly where per-column
+  // sampling fragments worst — and costs 1 draw instead of ~900.
+  let planar = null;
+  {
+    const L = [];
+    for (let j = 0; j <= 3; j++) for (let i = 0; i <= 4; i++) {
+      const p = screenToWorld(cssW * i / 4, cssH * j / 3);
+      L.push(liftAt(p.x, p.y));
+    }
+    const at = (i, j) => L[j * 5 + i];
+    const gx = ((at(4, 0) + at(4, 3)) - (at(0, 0) + at(0, 3))) / (2 * cssW);
+    const gy = ((at(0, 3) + at(4, 3)) - (at(0, 0) + at(4, 0))) / (2 * cssH);
+    const c0 = (at(0, 0) + at(4, 0) + at(0, 3) + at(4, 3)) / 4 - gx * cssW / 2 - gy * cssH / 2;
+    let res = 0;
+    for (let j = 0; j <= 3; j++) for (let i = 0; i <= 4; i++) {
+      const r = Math.abs(at(i, j) - (c0 + gx * cssW * i / 4 + gy * cssH * j / 3));
+      if (r > res) res = r;
+    }
+    if (res <= TUNE.tPlanarTol && 1 + gy > 0.2) planar = { L0: c0, gx, gy };
+  }
+  if (planar) {
+    // Invert y_cap = y + lift(x,y) + pad for the dest pixel:
+    // y = (y_cap − pad − L0 − gx·x) / (1+gy) — one affine, seam-free.
+    const { L0, gx, gy } = planar;
+    const k = 1 / (1 + gy);
+    g.setTransform(dpr, -dpr * gx * k, 0, dpr * k, 0, -dpr * (pad + L0) * k);
+    g.drawImage(_groundC, 0, 0, _groundC.width, _groundC.height,
+                0, 0, cssW, cssH + 2 * pad);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  } else {
+  const mul = (IS_DESKTOP ? 1 : 1.3) * (_warpMotion ? TUNE.tMotionCoarse : 1);
   const colW = Math.max(TUNE.tWarpCol * mul, cssW / 32);
   const rowH = Math.max(TUNE.tWarpRow * mul, cssH / 28);
   for (let x = 0; x < cssW; x += colW) {
@@ -3426,22 +3758,60 @@ function finishGroundWarp(cssW, cssH, sig) {
       const y1 = Math.min(y0 + rowH, cssH);
       p = screenToWorld(cx, y1);
       const l1 = liftAt(p.x, p.y);
-      const sh = (y1 + l1) - (y0 + l0);
-      if (sh > 0.01) {
-        g.drawImage(_groundC,
-          x * dpr, (y0 + l0 + pad) * dpr, cw * dpr, sh * dpr,
-          x, y0, cw, y1 - y0);
-      }
+      // clamp, never skip: a folded band renders a thin stretched slice instead
+      // of a transparent hole (the "fragmented rows" the skip used to leave)
+      const sh = Math.max((y1 + l1) - (y0 + l0), 1);
+      g.drawImage(_groundC,
+        x * dpr, (y0 + l0 + pad) * dpr, cw * dpr, sh * dpr,
+        x, y0, cw, y1 - y0);
       y0 = y1; l0 = l1;
     }
+  }
   }
   }
   // trees are static under the same sig — bake them into the cache so parked
   // frames are one blit
   const real = ctx;
   ctx = g; drawTrees(); ctx = real;
-  _warpCache.sig = sig;
-  ctx.drawImage(_warpCache.canvas, 0, 0, cssW, cssH);
+  target.sig = sig;
+  target.degraded = _warpMotion;
+  if (usingDefault) ctx.drawImage(target.canvas, 0, 0, cssW, cssH);
+  return target;
+}
+
+// Bake one angle-bucket ground raster: same capture+warp+tree pipeline as a
+// live rebuild, but with `view` temporarily substituted to the bucket's
+// discrete angle (and its own angle-correct scale, since camera.scale isn't
+// rotation-invariant while aiming — see frameScaleForAngle). Only ever called
+// from a macrotask (idle prebake, or a same-tick fill when a bucket is
+// missing) that runs AFTER draw() has fully returned for the frame — it
+// shares the singleton capture scratch state (_groundC/_mainCtx/_capPad/
+// _savedViewF) with draw()'s own startGroundCapture/finishGroundWarp calls,
+// so it must never run nested inside draw()'s call stack.
+function bakeBucket(bucketIndex, baseKey, cssW, cssH) {
+  const angle = bucketAngle(bucketIndex);
+  const { scale } = frameScaleForAngle(angle, state.ball.x, state.ball.y);
+  const savedView = Object.assign({}, view);
+  const savedAABB = _viewAABB, savedPad = _warpPad;
+  Object.assign(view, computeViewMatrix(angle, camera.tilt, scale, camera.focus.x, camera.focus.y, cssW, cssH));
+  _warpPad = estimateWarpPad(cssW, cssH);
+  computeViewAABB();
+  const key = baseKey + "#" + bucketIndex;
+  let entry = _bucketCache.get(key);
+  if (!entry) {
+    const dpr = window.devicePixelRatio || 1;
+    const c = document.createElement("canvas");
+    c.width = Math.round(cssW * dpr); c.height = Math.round(cssH * dpr);
+    entry = { canvas: c, g: c.getContext("2d"), baseKey, bucketIndex, scale, ts: 0 };
+  }
+  startGroundCapture(cssW, cssH);
+  drawGroundStack(cssW, cssH, true);
+  finishGroundWarp(cssW, cssH, key, entry);
+  entry.ts = performance.now();
+  _bucketCache.set(key, entry);
+  evictBucketsIfOverCap();
+  Object.assign(view, savedView);
+  _viewAABB = savedAABB; _warpPad = savedPad;
 }
 
 // --- Standing trees (tilted view) ----------------------------------------
@@ -3584,9 +3954,17 @@ function drawTrees() {
   }
   const stride = Math.max(1, Math.ceil(arr.length / TREE_DRAW_CAP));
   const sprites = treeSprites();
+  // viewpoint parity with the photo-canopy punch-outs: no tree may cover the
+  // ball, the cup, or the green in play
+  const b = state.ball, hp = HOLE.holePos;
+  const clearR = TUNE.punchBallR * 1.2;
+  const gip = HOLE.isRange ? [] : greensInPlay();
   const drawn = [];
   for (let i = 0; i < arr.length; i += stride) {
     const t = arr[i];
+    if (b && Math.hypot(t.x - b.x, t.y - b.y) < clearR) continue;
+    if (hp && Math.hypot(t.x - hp.x, t.y - hp.y) < TUNE.punchCupR * 1.2) continue;
+    if (gip.some((g) => pointInPoly(t.x, t.y, g.poly))) continue;
     const sx = wx(t.x, t.y);
     if (sx < -30 || sx > cssW + 30) continue;
     const sy = wyg(t.x, t.y);
@@ -3617,24 +3995,37 @@ function drawTrees() {
 // silhouettes from the ground up form the side wall, then the full-color
 // cutout drawn lifted by ws(canopyH)·kz is the canopy top. The forest rises
 // out of the photo with its own texture, color and real sun shadows intact.
+// Layer = { mask, img, tiers } where tiers = [{ c, dark, hMul }] (null → sprite
+// fallback). Cells are despeckled (isolated shadow-noise cells die) and split
+// into 3 clump-scale height tiers so the silhouette breaks into staggered
+// clumps instead of one uniform-height slab. Tops bake at half aerial res,
+// walls at quarter res with an omni-directional smear (rotation-safe) so two
+// stacked copies read as a continuous soft wall.
 function buildCanopyLayer(m, img, a) {
-  const out = { mask: m, img, c: null, dark: null };
+  const out = { mask: m, img, tiers: null };
   try {
     const w = Math.round(a.w), h = Math.round(a.h);   // source aerial px
     if (!w || !h) return out;
-    // 1. feathered alpha of the canopy cells, painted in mask px
-    const am = document.createElement("canvas");
-    am.width = m.w; am.height = m.h;
-    const ag = am.getContext("2d");
-    const id = ag.createImageData(m.w, m.h);
     const src = m.canopy || m.lab;
-    for (let i = 0; i < src.length; i++) {
+    // 1. despeckle: keep a woods cell only with ≥2 of 8 woods neighbors —
+    // isolated cells (tree shadows, classifier noise) otherwise become
+    // floating 3-yd slabs once extruded.
+    const kept = new Uint8Array(src.length);
+    for (let py = 0; py < m.h; py++) for (let px = 0; px < m.w; px++) {
+      const i = py * m.w + px;
       if (src[i] !== 3) continue;
-      const o = i * 4;
-      id.data[o] = id.data[o + 1] = id.data[o + 2] = id.data[o + 3] = 255;
+      let n = 0;
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+        if (!ox && !oy) continue;
+        const qx = px + ox, qy = py + oy;
+        if (qx >= 0 && qy >= 0 && qx < m.w && qy < m.h && src[qy * m.w + qx] === 3) n++;
+      }
+      if (n >= 2) kept[i] = 1;
     }
-    ag.putImageData(id, 0, 0);
-    // 2. mask px -> aerial px = inv(aerial.toWorld) ∘ mask.toWorld
+    // 2. tier per cell by clump-scale hash (2×2 mask cells ≈ 6yd clumps)
+    const tiers = TUNE.canopyTiers;
+    const tierOf = (px, py) => Math.min(tiers.length - 1, (hashSeed(px >> 1, py >> 1) * tiers.length) | 0);
+    // 3. mask px -> aerial px affine = inv(aerial.toWorld) ∘ mask.toWorld
     const A = a.toWorld, M = m.toWorld;
     const det = A[0] * A[4] - A[1] * A[3];
     if (Math.abs(det) < 1e-12) return out;
@@ -3644,28 +4035,75 @@ function buildCanopyLayer(m, img, a) {
     const m22 = (-A[3] * M[1] + A[0] * M[4]) / det;
     const dx = (A[4] * (M[2] - A[2]) - A[1] * (M[5] - A[5])) / det;
     const dy = (-A[3] * (M[2] - A[2]) + A[0] * (M[5] - A[5])) / det;
-    const c = document.createElement("canvas");
-    c.width = w; c.height = h;
-    const g = c.getContext("2d");
-    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
-    g.setTransform(m11, m12, m21, m22, dx, dy);
-    g.drawImage(am, 0, 0);
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    // 3. keep the graded aerial only where the alpha says canopy
-    g.globalCompositeOperation = "source-in";
-    g.drawImage(img, 0, 0, img.width, img.height, 0, 0, w, h);
-    // probe: oversize canvases fail silently on iOS — bail to sprite fallback
-    if (!g.getImageData(w >> 1, h >> 1, 1, 1)) return out;
-    // 4. half-res darkened copy for the extrusion side walls
-    const d = document.createElement("canvas");
-    d.width = Math.max(1, w >> 1); d.height = Math.max(1, h >> 1);
-    const dg = d.getContext("2d");
-    dg.imageSmoothingEnabled = true;
-    dg.drawImage(c, 0, 0, d.width, d.height);
-    dg.globalCompositeOperation = "source-atop";
-    dg.fillStyle = "rgba(10,26,12,0.88)";
-    dg.fillRect(0, 0, d.width, d.height);
-    out.c = c; out.dark = d;
+    // world units per aerial px (for the wall smear radius)
+    const wpp = Math.hypot(A[0], A[3]) || 1;
+    const built = [];
+    for (let t = 0; t < tiers.length; t++) {
+      // alpha of this tier's cells, mask res
+      const am = document.createElement("canvas");
+      am.width = m.w; am.height = m.h;
+      const ag = am.getContext("2d");
+      const id = ag.createImageData(m.w, m.h);
+      for (let py = 0; py < m.h; py++) for (let px = 0; px < m.w; px++) {
+        const i = py * m.w + px;
+        if (!kept[i] || tierOf(px, py) !== t) continue;
+        const o = i * 4;
+        id.data[o] = id.data[o + 1] = id.data[o + 2] = id.data[o + 3] = 255;
+      }
+      ag.putImageData(id, 0, 0);
+      // feather the hard cell squares (blur filter when supported, else a
+      // 5-draw offset composite — build-time, mask-res, cheap either way)
+      const fm = document.createElement("canvas");
+      fm.width = m.w; fm.height = m.h;
+      const fg = fm.getContext("2d");
+      fg.filter = "blur(" + TUNE.canopyFeather + "px)";
+      if (fg.filter && fg.filter.indexOf("blur") !== -1) {
+        fg.drawImage(am, 0, 0);
+        fg.filter = "none";
+      } else {
+        const o = TUNE.canopyFeather;
+        fg.globalAlpha = 0.4;
+        for (const [ox, oy] of [[-o, 0], [o, 0], [0, -o], [0, o]]) fg.drawImage(am, ox, oy);
+        fg.globalAlpha = 1;
+        fg.drawImage(am, 0, 0);
+      }
+      // color top: half aerial res, aerial pixels kept where the alpha says so
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, w >> 1); c.height = Math.max(1, h >> 1);
+      const g = c.getContext("2d");
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+      g.setTransform(m11 / 2, m12 / 2, m21 / 2, m22 / 2, dx / 2, dy / 2);
+      g.drawImage(fm, 0, 0);
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalCompositeOperation = "source-in";
+      g.drawImage(img, 0, 0, img.width, img.height, 0, 0, c.width, c.height);
+      // probe: oversize canvases fail silently on iOS — bail to sprite fallback
+      if (!g.getImageData(c.width >> 1, c.height >> 1, 1, 1)) return out;
+      // wall: quarter res, darkened, omni-smeared (camera rotates per hole, so
+      // the smear must be direction-free)
+      const q = document.createElement("canvas");
+      q.width = Math.max(1, w >> 2); q.height = Math.max(1, h >> 2);
+      const qg = q.getContext("2d");
+      qg.imageSmoothingEnabled = true;
+      qg.drawImage(c, 0, 0, q.width, q.height);
+      qg.globalCompositeOperation = "source-atop";
+      qg.fillStyle = "rgba(10,26,12,0.88)";
+      qg.fillRect(0, 0, q.width, q.height);
+      const d = document.createElement("canvas");
+      d.width = q.width; d.height = q.height;
+      const dg = d.getContext("2d");
+      dg.imageSmoothingEnabled = true;
+      const sm = Math.max(1, (TUNE.canopyH / 3) / wpp / 4);
+      dg.globalAlpha = 0.35;
+      for (let k = 0; k < 8; k++) {
+        const ang = (k / 8) * Math.PI * 2;
+        dg.drawImage(q, Math.cos(ang) * sm, Math.sin(ang) * sm);
+      }
+      dg.globalAlpha = 1;
+      dg.drawImage(q, 0, 0);
+      built.push({ c, dark: d, hMul: tiers[t] });
+    }
+    out.tiers = built;
   } catch (e) { /* no canopy layer -> sprite fallback */ }
   return out;
 }
@@ -3677,14 +4115,17 @@ function ensureCanopyLayer() {
   if (!L || L.mask !== m || L.img !== img) {
     L = holder._canopyLayer = buildCanopyLayer(m, img, a);
   }
-  return L.c ? L : null;
+  return L.tiers ? L : null;
 }
+let _canopyScratch = null; // reused capture-aligned canvas: tiers paint here,
+                           // viewpoint punch-outs erase, then one composite
 function drawCanopy() {
   if (!view.kz || !HOLE || HOLE.isRange || greenView || cine) return;
   const L = ensureCanopyLayer();
   if (!L) return;
-  const liftPx = ws(TUNE.canopyH) * view.kz;   // css px the canopy rises
-  if (liftPx < 2) return;                      // too zoomed out to read
+  const tiers = L.tiers;
+  const topLift = ws(TUNE.canopyH * tiers[tiers.length - 1].hMul) * view.kz;
+  if (topLift < 2) return;                     // too zoomed out to read
   // compose source-aerial px -> screen, same pattern as drawAerial (up = 1)
   const m = HOLE.aerial.toWorld, dpr = window.devicePixelRatio || 1;
   const A = view.a * m[0] + view.b * m[3];
@@ -3697,7 +4138,8 @@ function drawCanopy() {
   if (Math.abs(det) < 1e-9) return;
   // visible source rect: screen corners (viewport + capture pad + lift head-
   // room below, since every layer shifts content UP) back through the inverse
-  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad + liftPx;
+  const cssW = window.innerWidth, cssHFull = window.innerHeight + 2 * _capPad;
+  const cssH = cssHFull + topLift;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [scx, scy] of [[0, 0], [cssW, 0], [0, cssH], [cssW, cssH]]) {
     const ddx = scx - E, ddy = scy - F;
@@ -3706,26 +4148,75 @@ function drawCanopy() {
     if (px < minX) minX = px; if (px > maxX) maxX = px;
     if (py < minY) minY = py; if (py > maxY) maxY = py;
   }
+  const aw = tiers[0].c.width * 2, ah = tiers[0].c.height * 2;  // full aerial px
   const sx = Math.max(0, Math.floor(minX) - 1);
   const sy = Math.max(0, Math.floor(minY) - 1);
-  const sw = Math.min(L.c.width, Math.ceil(maxX) + 1) - sx;
-  const sh = Math.min(L.c.height, Math.ceil(maxY) + 1) - sy;
+  const sw = Math.min(aw, Math.ceil(maxX) + 1) - sx;
+  const sh = Math.min(ah, Math.ceil(maxY) + 1) - sy;
   if (sw <= 0 || sh <= 0) return;
+  // tiers paint into a capture-aligned scratch so the viewpoint punch-outs
+  // (destination-out) erase CANOPY only, never the ground under it
+  const devW = Math.round(cssW * dpr), devH = Math.round(cssHFull * dpr);
+  if (!_canopyScratch || _canopyScratch.width !== devW || _canopyScratch.height !== devH) {
+    _canopyScratch = document.createElement("canvas");
+    _canopyScratch.width = devW; _canopyScratch.height = devH;
+  }
+  const g = _canopyScratch.getContext("2d");
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, devW, devH);
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = "high";
+  const layer = (cnv, offY, sc, alpha) => {
+    g.globalAlpha = alpha;
+    g.setTransform(dpr * A * sc, dpr * B * sc, dpr * C * sc, dpr * D * sc, dpr * E, dpr * (F - offY));
+    g.drawImage(cnv, sx / sc, sy / sc, sw / sc, sh / sc, sx / sc, sy / sc, sw / sc, sh / sc);
+  };
+  // staggered clumps: all walls first, then tops shortest -> tallest so taller
+  // clumps overdraw — the broken silhouette is what kills the "raised platform"
+  const walls = _warpMotion ? 1 : TUNE.tWallLayers;
+  for (const t of tiers) {
+    const liftT = ws(TUNE.canopyH * t.hMul) * view.kz;
+    for (let k = 0; k < walls; k++) layer(t.dark, liftT * (k + 0.5) / walls, 4, 0.8);
+  }
+  for (const t of tiers) layer(t.c, ws(TUNE.canopyH * t.hMul) * view.kz, 2, 1);
+  // Viewpoint punch-outs: the canopy must never hide the ball, the cup, or the
+  // green in play. view.f is pad-shifted during capture, so wx/wyg land in
+  // scratch space directly.
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.globalCompositeOperation = "destination-out";
+  const punch = (px, py, r) => {
+    const rg = g.createRadialGradient(px, py, r * 0.55, px, py, r);
+    rg.addColorStop(0, "rgba(0,0,0,1)");
+    rg.addColorStop(1, "rgba(0,0,0,0)");
+    g.globalAlpha = 1;
+    g.fillStyle = rg;
+    g.beginPath();
+    g.arc(px, py, r, 0, Math.PI * 2);
+    g.fill();
+  };
+  const b = state.ball;
+  punch(wx(b.x, b.y), wyg(b.x, b.y), Math.max(ws(TUNE.punchBallR), 48));
+  punch(wx(HOLE.holePos.x, HOLE.holePos.y), wyg(HOLE.holePos.x, HOLE.holePos.y),
+        Math.max(ws(TUNE.punchCupR), 40));
+  for (const gr of greensInPlay()) {
+    g.beginPath();
+    gr.poly.forEach((pt, i) => {
+      const px = wx(pt.x, pt.y), py = wyg(pt.x, pt.y);
+      i ? g.lineTo(px, py) : g.moveTo(px, py);
+    });
+    g.closePath();
+    g.fillStyle = "#000";
+    g.fill();
+    g.lineWidth = ws(TUNE.punchGreenFeather * 2);
+    g.strokeStyle = "rgba(0,0,0,0.55)";
+    g.stroke();
+  }
+  g.globalCompositeOperation = "source-over";
+  g.globalAlpha = 1;
   ctx.save();
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  const layer = (cnv, offY, sc, alpha) => {
-    ctx.globalAlpha = alpha;
-    ctx.setTransform(dpr * A * sc, dpr * B * sc, dpr * C * sc, dpr * D * sc, dpr * E, dpr * (F - offY));
-    ctx.drawImage(cnv, sx / sc, sy / sc, sw / sc, sh / sc, sx / sc, sy / sc, sw / sc, sh / sc);
-  };
-  // side wall: stacked dark silhouettes ground -> top (bounded layer count;
-  // canopy blobs are far taller on screen than the step, so no banding)
-  const step = Math.max(3, liftPx / 10);
-  for (let o = 0; o < liftPx; o += step) layer(L.dark, o, 2, 0.85);
-  layer(L.c, liftPx, 1, 1);                    // full-color canopy top
+  ctx.drawImage(_canopyScratch, 0, 0, devW, devH, 0, 0, cssW, cssHFull);
   ctx.restore();
-  ctx.globalAlpha = 1;
 }
 
 // --- DEM hillshade (tilted view) ------------------------------------------
@@ -3785,9 +4276,9 @@ function drawPhotoSurfaces() {
   drawAerial(); // grade + course-green wash are baked into the image (processAerial)
   drawDetailGrain(); // zoom-ramped turf grain over the stretched photo
   drawDEMShade();    // tilted only: DEM light/shadow so slopes read on the photo
-  ctx.globalAlpha = 0.16;                          // gentle fairway tint
-  fillPolys(s.fairway, "#8ad98f");
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = 0.12;                          // gentle fairway tint — one flat
+  fillPolysUnion(s.fairway, "#8ad98f", 6);         // feathered wash (no α-stacked
+  ctx.globalAlpha = 1;                             // bands, soft edge not a sawtooth)
   ctx.strokeStyle = "rgba(60,48,18,0.45)";          // bunkers: outline (sand visible)
   ctx.lineWidth = 1.2;
   for (const poly of s.bunker || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
@@ -3953,23 +4444,11 @@ function drawTeeMarkers() {
   }
 }
 
-function draw() {
-  const cssW = window.innerWidth, cssH = window.innerHeight;
-  // Tilted 3D: route the whole ground stack through the offscreen capture +
-  // cache whenever tilted — with a DEM the column-band warp displaces it (pad
-  // = measured max lift), without one (pad 0) it's a straight cached copy, so
-  // heavy tilt layers (photo-canopy extrusion) still cost one blit parked.
-  const tilt3d = !!(view.kz && !HOLE.isRange && !greenView && !cine);
-  _warpPad = tilt3d ? estimateWarpPad(cssW, cssH) : 0;
-  computeViewAABB(); // for off-screen polygon culling this frame
-  const warp = tilt3d;
-  const wSig = warp ? warpSig(cssW, cssH) : null;
-  if (warp && _warpCache && _warpCache.sig === wSig) {
-    // parked camera: the warped ground is identical to last frame — one blit
-    ctx.drawImage(_warpCache.canvas, 0, 0, cssW, cssH);
-  } else {
-  if (warp) startGroundCapture(cssW, cssH);
-  if (HOLE._imgReady && HOLE.aerial) {
+// The ground-surface draw sequence between startGroundCapture/finishGroundWarp
+// (or straight to screen when flat/untilted) — shared by draw()'s own rebuild
+// path and bakeBucket() so the two can't drift apart.
+function drawGroundStack(cssW, cssH, warp) {
+  if (HOLE._imgReady && HOLE.aerial && !renderLook) {
     // surround the aerial with a dark course-green wash (a gradient that reads as
     // the rest of the course) rather than a hard black box.
     if (!_surround || _surround.w !== cssW || _surround.h !== cssH) {
@@ -3985,24 +4464,90 @@ function draw() {
     drawVectorSurfaces();
   }
 
-  // shaded-relief topo: ball's green + the pin's green only. Whisper-faint always;
-  // the slope button boosts intensity and adds downhill flow dots.
+  // shaded-relief topo. Whisper-faint always; the slope button boosts it. In
+  // tilted mode this is baked INTO the warp cache, so it must NOT depend on the
+  // ball's green (that's what forced a full ground+tree rebuild after every
+  // shot) — bake it for ALL visible greens so the cache is shot-independent.
+  // Flat mode has no cache, so keep the in-play-only look there.
   if (!HOLE.isRange) {
-    for (const g of greensInPlay()) {
+    const reliefGreens = warp ? (HOLE._greens || []) : greensInPlay();
+    for (const g of reliefGreens) {
       if (!polyVisible(g.poly)) continue;
       drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope && breakArrows);
     }
   }
+}
+
+function draw() {
+  // Four Oaks 3D: three.js owns the whole frame (course, ball, flag, camera) via
+  // window.Course3D.render() in loop(); the 2D canvas is hidden (update3DMode)
+  // so there is nothing to paint here. Every other course is unaffected.
+  if (render3D) return;
+  const cssW = window.innerWidth, cssH = window.innerHeight;
+  // Tilted 3D: route the whole ground stack through the offscreen capture +
+  // cache whenever tilted — with a DEM the column-band warp displaces it (pad
+  // = measured max lift), without one (pad 0) it's a straight cached copy, so
+  // heavy tilt layers (photo-canopy extrusion) still cost one blit parked.
+  const tilt3d = !!(view.kz && !HOLE.isRange && !greenView && !cine);
+  _warpPad = tilt3d ? estimateWarpPad(cssW, cssH) : 0;
+  computeViewAABB(); // for off-screen polygon culling this frame
+  const warp = tilt3d;
+  const wSig = warp ? warpSig(cssW, cssH) : null;
+  // Sweeping = the camera is actively rotating via arrow-key aiming (the one
+  // sustained, pure-rotation motion source — see angle-bucket cache above).
+  // Excludes two-finger touch-rotate (camTouch, moves scale/focus too every
+  // frame — ghosting a translated blend is much worse than a rotated one) and
+  // mid tilt-toggle-transition (brief, already fast via the camEaseT snap).
+  let bucketBlend = null;
+  if (warp && (aimKey !== 0 || cameraAiming) && !camTouch && camera.tilt === camera.tTilt) {
+    const bKey = baseWarpKey(cssW, cssH);
+    const i0 = angleBucketIndex(camera.angle), i1 = (i0 + 1) % TUNE.tAngleBuckets;
+    const e0 = _bucketCache.get(bKey + "#" + i0), e1 = _bucketCache.get(bKey + "#" + i1);
+    if (e0 && e1) bucketBlend = { e0, e1, frac: angleBucketFrac(camera.angle) };
+  }
+  // Camera parked but the last rebuild was a degraded motion frame → rebuild
+  // once at full quality so the parked cache never shows the coarse version.
+  const settle = warp && _warpCache && _warpCache.sig === wSig && _warpCache.degraded;
+  if (bucketBlend) {
+    // Cross-dissolve the two bracketing pre-baked angle buckets — zero
+    // recapture. Never touches _warpCache/sig, so the instant the sweep ends
+    // the very next frame falls straight into an ordinary (undegraded,
+    // _sigStreak still 0) rebuild at full quality.
+    const now = performance.now();
+    bucketBlend.e0.ts = bucketBlend.e1.ts = now;
+    ctx.drawImage(bucketBlend.e0.canvas, 0, 0, cssW, cssH);
+    ctx.globalAlpha = bucketBlend.frac;
+    ctx.drawImage(bucketBlend.e1.canvas, 0, 0, cssW, cssH);
+    ctx.globalAlpha = 1;
+    _sigStreak = 0; _warpMotion = false;
+  } else if (warp && _warpCache && _warpCache.sig === wSig && !settle) {
+    // parked camera: the warped ground is identical to last frame — one blit
+    ctx.drawImage(_warpCache.canvas, 0, 0, cssW, cssH);
+    _sigStreak = 0; _warpMotion = false;
+  } else {
+  if (warp) {
+    // 2+ consecutive rebuilds = the camera is really moving (not a one-off
+    // invalidation): drop to coarser bands / thinner canopy / no grain.
+    _sigStreak = settle ? 0 : _sigStreak + 1;
+    _warpMotion = _sigStreak >= 2;
+  }
+  if (warp) startGroundCapture(cssW, cssH);
+  drawGroundStack(cssW, cssH, warp);
   if (warp) finishGroundWarp(cssW, cssH, wSig);
-  }  // end of ground rebuild (skipped entirely on a warp-cache hit)
+  }  // end of ground rebuild (skipped entirely on a warp-cache hit or bucket blend)
   // (tilted always goes through the capture+cache now, so trees/canopy are
   // baked in there; nothing draws live here when flat — kz=0 no-ops drawTrees)
   // animated flow dots draw ABOVE the (possibly cached) ground so they never
   // force a ground re-render; wyg() keeps them glued to the displaced turf
   if (!HOLE.isRange && showSlope && !breakArrows && !greenView) {
-    for (const g of greensInPlay()) {
+    // Tilted + zoomed out, the dots shrink into dark grit on the greens —
+    // fade them out below the readable-zoom ramp (flat mode unchanged).
+    const fFade = view.kz
+      ? Math.min(1, Math.max(0, (view.scale - TUNE.flowFadeLo) / (TUNE.flowFadeHi - TUNE.flowFadeLo)))
+      : 1;
+    if (fFade > 0) for (const g of greensInPlay()) {
       if (!polyVisible(g.poly)) continue;
-      updateFlowDots(g); drawFlowDots(g);
+      updateFlowDots(g); drawFlowDots(g, fFade);
     }
   }
 
@@ -4973,6 +5518,7 @@ function setHole(rec) {
     positionHint();
   }
   if (!HOLE.isRange) maybeShowOnboarding();
+  update3DMode();
 }
 
 // First-run "How to play" card — shown once, the first time a player reaches a
@@ -5059,6 +5605,13 @@ async function loadManifest() {
 //  server entitlements table (like _profile) and purchases just work.
 // ---------------------------------------------------------------------
 const FREE_COURSE_IDS = FALLBACK_COURSES.map((c) => c.id); // offline fallback must stay playable
+// Admin-only courses: excluded from every picker/pool/random-rotation and
+// blocked outright in courseUnlocked() for non-admins (real access control,
+// not just UI declutter — a stale selectedCourseId can't sneak a player in).
+const HIDDEN_COURSE_IDS = new Set(["four-oaks-dracut"]);
+function visibleCourses() {
+  return isTournamentAdmin() ? COURSES : COURSES.filter((c) => !HIDDEN_COURSE_IDS.has(c.id));
+}
 // Marquee courses earned by deed, not ladder position.
 const ACHIEVEMENT_COURSES = {
   "pebble-beach-golf-course":   { milestone: "first-ace", label: "Make a hole-in-one" },
@@ -5098,11 +5651,13 @@ function unlockReq(id) {
   return { type: "bot", botId: BOTS[t].id, label: "Beat " + BOTS[t].name, met: botBeaten(BOTS[t].id) };
 }
 function courseUnlocked(id) {
+  if (HIDDEN_COURSE_IDS.has(id)) return isTournamentAdmin();
   return isTournamentAdmin() || purchasedCourse(id) || isDailyFeatured(id) || unlockReq(id).met;
 }
-function unlockedCourseIds() { return COURSES.filter((c) => courseUnlocked(c.id)).map((c) => c.id); }
+function unlockedCourseIds() { return visibleCourses().filter((c) => courseUnlocked(c.id)).map((c) => c.id); }
 function courseUnlockCount() {
-  return { unlocked: COURSES.filter((c) => courseUnlocked(c.id)).length, total: COURSES.length };
+  const vis = visibleCourses();
+  return { unlocked: vis.filter((c) => courseUnlocked(c.id)).length, total: vis.length };
 }
 // ---------------------------------------------------------------------
 //  Course-select page: search + filter rail + card grid
@@ -5136,19 +5691,20 @@ function courseMatchesSearch(c, q) {
 
 function buildFilterRail() {
   if (!elCsFilters) return;
-  const regions = [...new Set(COURSES.map((c) => c.region).filter(Boolean))]
-    .sort((a, b) => COURSES.filter((c) => c.region === b).length - COURSES.filter((c) => c.region === a).length);
+  const vis = visibleCourses();
+  const regions = [...new Set(vis.map((c) => c.region).filter(Boolean))]
+    .sort((a, b) => vis.filter((c) => c.region === b).length - vis.filter((c) => c.region === a).length);
   let html = `<div class="cs-fgroup"><div class="cs-fgroup-title">Show</div>`;
-  html += `<button class="cs-chip" data-ft="all">All<span class="cs-chip-n">${COURSES.length}</span></button></div>`;
+  html += `<button class="cs-chip" data-ft="all">All<span class="cs-chip-n">${vis.length}</span></button></div>`;
   html += `<div class="cs-fgroup"><div class="cs-fgroup-title">Featured</div>`;
   for (const t of FILTER_TAGS) {
-    const n = COURSES.filter((c) => (c.tags || []).includes(t.value)).length;
+    const n = vis.filter((c) => (c.tags || []).includes(t.value)).length;
     if (!n) continue;
     html += `<button class="cs-chip" data-ft="tag" data-fv="${t.value}">${t.label}<span class="cs-chip-n">${n}</span></button>`;
   }
   html += `</div><div class="cs-fgroup"><div class="cs-fgroup-title">Region</div>`;
   for (const r of regions) {
-    const n = COURSES.filter((c) => c.region === r).length;
+    const n = vis.filter((c) => c.region === r).length;
     html += `<button class="cs-chip" data-ft="region" data-fv="${esc(r)}">${esc(r)}<span class="cs-chip-n">${n}</span></button>`;
   }
   html += `</div>`;
@@ -5165,7 +5721,7 @@ function buildFilterRail() {
 function renderCourseCards() {
   if (!elCsGrid) return;
   const q = (elCsSearch && elCsSearch.value || "").trim().toLowerCase();
-  const list = COURSES.filter((c) => courseMatchesFilter(c) && courseMatchesSearch(c, q));
+  const list = visibleCourses().filter((c) => courseMatchesFilter(c) && courseMatchesSearch(c, q));
   // sync active chip
   if (elCsFilters) elCsFilters.querySelectorAll(".cs-chip").forEach((chip) => {
     const on = courseFilter.type === "all" ? chip.dataset.ft === "all"
@@ -5516,6 +6072,16 @@ elCineBtn.addEventListener("click", () => {
   cineEnabled = !cineEnabled;
   lsSet("golf.cineLanding", cineEnabled);
   elCineBtn.classList.toggle("active", cineEnabled);
+});
+// "Rendered look": per-device cosmetic — flat stylized course map instead of the aerial photo.
+const elRenderBtn = document.getElementById("hm-render");
+elRenderBtn.classList.toggle("active", renderLook);
+elRenderBtn.addEventListener("click", () => {
+  renderLook = !renderLook;
+  lsSet("golf.renderLook", renderLook);
+  elRenderBtn.classList.toggle("active", renderLook);
+  _warpCache = null; // tilted ground cache bakes the photo/map — force a rebuild
+  _bucketCache.clear(); // renderLook isn't in baseWarpKey — buckets would show the stale look
 });
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
@@ -6277,9 +6843,12 @@ function todayStr() {
   return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
 }
 function dailyCourseFor(dateStr) {
-  const list = COURSES.length ? COURSES : FALLBACK_COURSES;
+  // Unconditional exclusion (not the viewer's-own-admin-status visibleCourses()
+  // filter) — the daily pick is the same course for every player that day, so
+  // it can't depend on who's asking.
+  const pool = (COURSES.length ? COURSES : FALLBACK_COURSES).filter((c) => !HIDDEN_COURSE_IDS.has(c.id));
   const rnd = mulberry32(strSeed(dateStr));
-  return list[Math.floor(rnd() * list.length)];
+  return pool[Math.floor(rnd() * pool.length)];
 }
 
 // Daily featured course: one normally-locked course is free for everyone
@@ -6453,7 +7022,10 @@ function storeTokens(tok, user) {
   });
 }
 
-// Email a 6-digit OTP code to the email (no magic link). Returns true on success.
+// Email an OTP code to the email (no magic link). Returns true on success.
+// Digit count is a Supabase Auth dashboard setting (Authentication -> Providers
+// -> Email -> OTP length), not controlled from this file — the client regex
+// below just needs to accept whatever length is actually configured there.
 // NOTE: we deliberately omit email_redirect_to — we verify the code via /verify
 // (see verifyOtp), never a redirect link (broken on GitHub Pages). The email's
 // link-vs-code content is controlled by the Supabase email TEMPLATES: both the
@@ -6471,7 +7043,7 @@ async function sendMagicLink(email) {
   } catch (e) { console.warn("OTP send failed:", e); return false; }
 }
 
-// Verify a 6-digit email OTP → returns a session with no redirect needed.
+// Verify the emailed OTP code → returns a session with no redirect needed.
 // Sidesteps magic-link redirect entirely. Returns true on success.
 async function verifyOtp(email, code) {
   if (!LB_ON()) return false;
@@ -6771,7 +7343,7 @@ function closeAuthModal() {
   async function doVerify() {
     const c = (code.value || "").trim();
     codeErr.classList.add("hidden");
-    if (!/^\d{6,10}$/.test(c)) {
+    if (!/^\d{5,10}$/.test(c)) {
       codeErr.textContent = "Enter the code from your email."; codeErr.classList.remove("hidden"); return;
     }
     verify.disabled = true; verify.textContent = "Verifying…";
@@ -7049,7 +7621,7 @@ function populateLbCourses() {
   if (!sel) return;
   const today = todayStr();
   const daily = `<option value="daily_${today}">Daily Challenge (${today})</option>`;
-  sel.innerHTML = daily + COURSES.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+  sel.innerHTML = daily + visibleCourses().map(c => `<option value="${c.id}">${c.name}</option>`).join("");
 }
 
 let _lbReturn = "menu";  // where Close goes back to
@@ -7795,7 +8367,7 @@ function closeUsernamePrompt() {
     document.getElementById("lb-close").addEventListener("click", closeLeaderboard);
     const sel = document.getElementById("lb-course");
     if (sel) {
-      sel.innerHTML = COURSES.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+      sel.innerHTML = visibleCourses().map(c => `<option value="${c.id}">${c.name}</option>`).join("");
       sel.addEventListener("change", () => renderLeaderboard(sel.value));
     }
   }
@@ -10724,8 +11296,73 @@ async function openManageDetail(t) {
 // =====================================================================
 //  Main loop
 // =====================================================================
+// Physics runs on a FIXED timestep, decoupled from render framerate. All TUNE
+// constants (gravity, friction, powerFactor…) are calibrated at 60 Hz, and every
+// step advances the ball by a per-FRAME velocity increment (b.x += b.vx). With the
+// old "one update() per rAF" the ball's wall-clock speed was fps × units/frame — so
+// in the heavy tilted-3D path (fps swings 7→60 as the warp cache parks) the ball
+// visibly sped up and slowed down. The accumulator runs however many fixed 16.667ms
+// substeps real time demands, so ball speed is now framerate-independent. Trajectory
+// is unchanged (step math is identical and already step-count deterministic) — only
+// the wall-clock duration is now stable. Substeps are pure arithmetic (cheap), and
+// update() early-returns when the ball isn't moving.
+const PHYS_DT = 1000 / 60;   // physics tick length (ms) — TUNE constants live at 60 Hz
+const PHYS_MAX_STEPS = 5;    // spiral-of-death guard: cap catch-up per rendered frame
+let _physAccum = 0;
+let _physLast = performance.now();
+
+// Idle prebake: while the tilted camera is parked (no active aim/touch/tilt
+// transition), warm the angle buckets adjacent to the current one in the
+// background so the next aim sweep starts mostly cache-hot. Budget-limited to
+// one bucket bake per idle opportunity so it never causes a visible hitch.
+let _prebakeIdleSince = 0;   // performance.now() of when "parked" began; 0 = not parked
+let _prebakePending = false; // one bake request in flight
+function maybePrebakeBucket() {
+  const tilt3d = !!(view.kz && !HOLE.isRange && !greenView && !cine);
+  const parked = tilt3d && aimKey === 0 && !cameraAiming && !camTouch &&
+                 camera.tilt === camera.tTilt && !_warpMotion;
+  if (!parked) { _prebakeIdleSince = 0; return; }
+  const now = performance.now();
+  if (!_prebakeIdleSince) { _prebakeIdleSince = now; return; }
+  if (now - _prebakeIdleSince < TUNE.tBucketIdleGapMs || _prebakePending) return;
+  _prebakePending = true;
+  const schedule = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
+  schedule(() => { _prebakePending = false; prebakeOneBucket(); });
+}
+function prebakeOneBucket() {
+  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const tilt3d = !!(view.kz && !HOLE.isRange && !greenView && !cine);
+  // Re-check: parked state may have changed since this was scheduled.
+  if (!tilt3d || aimKey !== 0 || cameraAiming || camTouch || camera.tilt !== camera.tTilt) return;
+  const baseKey = baseWarpKey(cssW, cssH);
+  const center = angleBucketIndex(camera.angle);
+  const N = TUNE.tAngleBuckets, R = TUNE.tBucketPrebakeRadius;
+  for (let d = 0; d <= R; d++) {
+    const candidates = d === 0 ? [center] : [(center + d) % N, (center - d + N) % N];
+    for (const i of candidates) {
+      if (!_bucketCache.has(baseKey + "#" + i)) { bakeBucket(i, baseKey, cssW, cssH); return; }
+    }
+  }
+}
+
 function loop() {
-  update();
+  const now = performance.now();
+  let elapsed = now - _physLast;
+  _physLast = now;
+  // Backgrounded tab / GC stall / first frame after load: don't fast-forward the
+  // ball through a huge gap — clamp to a single tick.
+  if (elapsed > 250) elapsed = PHYS_DT;
+  _physAccum += elapsed;
+  let steps = 0;
+  while (_physAccum >= PHYS_DT && steps < PHYS_MAX_STEPS) {
+    update();
+    _physAccum -= PHYS_DT;
+    steps++;
+  }
+  // Hit the cap (fps so low we can't keep up) — drop the backlog instead of
+  // letting it grow unbounded (which would spiral into permanent catch-up).
+  if (steps === PHYS_MAX_STEPS) _physAccum = 0;
+
   tickHoleDrop();
   tickCine();         // cinematic landing: cut in on the descent, close after rest
   cpuDriverTick();    // drive the live CPU opponent's shots (no-op unless in one)
@@ -10736,9 +11373,46 @@ function loop() {
   updateWindChip();
   updateGreenViewBtn();
   updateTiltBtn();
+  update3DMode();  // cheap — no-ops unless mode/course actually changed
+  if (render3D && window.Course3D) window.Course3D.render();
   draw();
+  maybePrebakeBucket();
   requestAnimationFrame(loop);
 }
+
+// Bridge for three3d/course3d.js (an ES module — it can't see this classic
+// script's top-level `let`/`const`s directly). Render-only: Course3D never
+// mutates physics state, only reads it each frame to place meshes/camera.
+// Accessors (not snapshots) because `state`/`HOLE`/`course` are reassigned
+// wholesale on every resetState()/setHole().
+window.GolfBridge = {
+  getCourse: () => course,
+  getHole: () => HOLE,
+  getWorld: () => WORLD,
+  getState: () => state,
+  getCamera: () => camera,
+  getView: () => view,
+  M_PER_UNIT,
+  getYardsPerUnit: () => YARDS_PER_UNIT,
+  BALL_RADIUS_UNITS,
+  terrainZ,
+  surfaceAt,
+  isRender3D: () => render3D,
+  // Mirrors drawTrees()'s own cache/guard exactly (game.js ~3938-3947) so the
+  // 3D renderer shares the identical tree list the 2D renderer already
+  // computed — no duplicate compute, no divergent placement. Mask decodes
+  // async; don't bake from the OSM fallback while a real mask is still en route.
+  getTrees: () => {
+    const holder = course || HOLE;
+    const hasMask = !!(HOLE._mask && HOLE._mask.lab);
+    if (!hasMask && HOLE._maskExpected) return [];
+    if (!holder._trees || holder._treesFromMask !== hasMask) {
+      holder._trees = buildTrees();
+      holder._treesFromMask = hasMask;
+    }
+    return holder._trees || [];
+  },
+};
 
 // Boot to the home menu over a course backdrop. Pinehurst loads in the
 // background so "Play Course" starts instantly (keeps the fallback on error).
