@@ -12,11 +12,11 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
   <link rel="icon" type="image/png" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/tokens.css?v=56">
-  <link rel="stylesheet" href="css/base.css?v=66">
-  <link rel="stylesheet" href="css/hud.css?v=79">
+  <link rel="stylesheet" href="css/tokens.css?v=57">
+  <link rel="stylesheet" href="css/base.css?v=67">
+  <link rel="stylesheet" href="css/hud.css?v=80">
   <link rel="stylesheet" href="css/menu.css?v=71">
-  <link rel="stylesheet" href="css/courses.css?v=6">
+  <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=72">
   <link rel="stylesheet" href="css/tournament.css?v=55">
 
@@ -129,7 +129,6 @@
     <button class="hm-item active" id="hm-slope"><span class="ic ic-slope"></span>Slope</button>
     <button class="hm-item" id="hm-arrows"><span class="ic ic-chev-down"></span>Break arrows</button>
     <button class="hm-item active" id="hm-cine"><span class="ic ic-green3d"></span>Cinematic landings</button>
-    <button class="hm-item" id="hm-render"><span class="ic ic-green3d"></span>Rendered look</button>
     <button class="hm-item active" id="hm-oob"><span class="ic ic-ob"></span>OB areas</button>
     <button class="hm-item active" id="hm-sound"><span class="ic ic-sound"></span>Sound</button>
     <div class="hm-sep"></div>
@@ -138,8 +137,8 @@
     <div class="hm-sep"></div>
     <div class="hs-sub">Swing sensitivity</div>
     <div class="range-row hs-sens">
-      <input id="sens-slider" type="range" min="50" max="200" step="5" value="100">
-      <span id="sens-val">100</span><span class="unit">%</span>
+      <input id="sens-slider" type="range" min="50" max="300" step="5" value="300">
+      <span id="sens-val">300</span><span class="unit">%</span>
     </div>
     <div class="hm-sep"></div>
     <button class="hm-item hud-mobile-only" id="hm-movehud"><span class="ic ic-menu"></span>Move HUD</button>
@@ -660,8 +659,12 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./three3d/course3d.js?v=9"></script>
-  <script src="game.js?v=184"></script>
+  <!-- defer on both classic scripts: lets the browser fetch the CDN bundle and
+       game.js in parallel instead of blocking game.js's fetch behind supabase-js's
+       full download+execute; defer still preserves this document order for when
+       they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="./three3d/course3d.js?v=12"></script>
+  <script defer src="game.js?v=190"></script>
 </body>
 </html>

@@ -478,8 +478,8 @@ function render3DWanted() {
   if (mode !== "course" || (typeof HOLE !== "undefined" && HOLE && HOLE.isRange)) return false;
   try {
     if (/[?&]3d=1\b/.test(location.search)) return true;
-    return localStorage.getItem("golf.render3D") === "1";
-  } catch (e) { return false; }
+  } catch (e) { /* location unavailable, fall through to the stored toggle */ }
+  return lsGet("golf.render3D", false); // set by the "Play in 3D" course-card badge (renderCourseCards)
 }
 function update3DMode() {
   const want = render3DWanted();
@@ -528,7 +528,6 @@ let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt,
 let cine = null;           // active cinematic — { g, mesh, t0, yaw0, tilt, restT } or null
 let cinePending = null;    // armed at launch by a great predicted shot; opens on the descent
 let cineEnabled = lsGet("golf.cineLanding", true); // per-device toggle (HUD menu)
-let renderLook = lsGet("golf.renderLook", false); // per-device "rendered look": flat stylized map instead of the aerial photo
 // Slope-mode style: false = flow dots (default), true = static fall-line arrows.
 // Per-device cosmetic preference (localStorage), not a tournament setting.
 let breakArrows = lsGet("golf.breakArrows", false);
@@ -586,24 +585,6 @@ function inAnyPoly(x, y, polys) {
 // A baked per-pixel label raster classified straight from the aerial photo
 // (fairway / rough / woods / out-of-bounds), so OOB + fairway/rough match what
 // the player SEES instead of patchy OSM polygons. surfaceAt() samples it.
-// Classy stylized-map palette ("Rendered look" toggle → drawVectorSurfaces). Muted,
-// distinct colors per surface with clear dark edge strokes; the surround reads as
-// ROUGH (default lie), fairway/green sit obviously lighter, trees/water obviously darker.
-const MAP_PAL = {
-  roughHi: "#315e39", roughLo: "#264a2d",  // rough base gradient (the whole surround)
-  grass:   "#356b3c",                       // mown turf between holes
-  rough:   "#264a2d",                       // mapped rough polys
-  fairway: "#6fa64f",                       // distinctly lighter warm green
-  tee:     "#7cb85f",
-  sand:    "#e4d6a4",
-  woods:   "#173318",                       // darkest — tree stands
-  water:   "#2b6d90",
-  cartpath:   "rgba(230,224,206,0.85)",
-  edgeGrass:  "rgba(14,32,16,0.55)",        // crisp dark turf edges
-  edgeSand:   "rgba(120,100,55,0.85)",
-  edgeWoods:  "rgba(8,22,10,0.7)",
-  edgeWater:  "rgba(12,50,72,0.9)",
-};
 const MASK_CLASS = ["ob", "fairway", "rough", "woods"];   // palette index -> surface
 // palette RGB — MUST match MASK_PALETTE in tools/fetch_course.py
 const MASK_PALETTE = [[200, 40, 40], [150, 210, 90], [60, 130, 55], [25, 60, 30]];
@@ -1961,7 +1942,7 @@ function swingEnd(e) {
   launchShot(ang, frac, curveFromPath(path), onGreen);
 }
 
-canvas.addEventListener("touchstart", swingStart, { passive: false });
+canvas.addEventListener("touchstart", swingStart, { passive: true }); // never calls preventDefault — passive avoids blocking on it
 canvas.addEventListener("touchmove", swingMove, { passive: false });
 canvas.addEventListener("touchend", swingEnd);
 // system gesture stole the touch (notification pull, app switch): drop all
@@ -2862,10 +2843,8 @@ function drawDetailGrain() {
 // Green: collar + fill + topo contours. `photo` => translucent over the aerial.
 function drawGreen(photo) {
   const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
-  // Vector map: bright green fill sits obviously above the darker fairway/rough,
-  // ringed by a crisp dark collar edge.
-  ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(20,54,26,0.6)";
-  ctx.lineWidth = photo ? ws(1.2) : Math.max(ws(0.7), 1.6);
+  ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(90,165,99,0.35)";
+  ctx.lineWidth = ws(photo ? 1.2 : 1.5);
   ctx.lineJoin = "round";
   for (const poly of s.green || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
   for (const g of HOLE._greens || []) {
@@ -2878,10 +2857,13 @@ function drawGreen(photo) {
         ctx.globalAlpha = 1;
       } else {
         const lg = ctx.createLinearGradient(wx(g.hi.x, g.hi.y), wy(g.hi.x, g.hi.y), wx(g.lo.x, g.lo.y), wy(g.lo.x, g.lo.y));
-        lg.addColorStop(0, "#95d56b");
-        lg.addColorStop(1, "#7cc258");
+        lg.addColorStop(0, "#92d398");
+        lg.addColorStop(1, "#6fbb79");
         ctx.fillStyle = lg;
         ctx.fillRect(0, 0, cssW, cssH);
+        ctx.globalAlpha = 0.5;
+        stripes("rgba(255,255,255,0.10)", "rgba(0,0,0,0.06)", 3, "x");
+        ctx.globalAlpha = 1;
       }
       ctx.strokeStyle = photo ? "rgba(30,60,35,0.26)" : "rgba(32,74,38,0.40)";
       ctx.lineWidth = 1;
@@ -3479,52 +3461,60 @@ function drawOOBOverlay(s) {
 
 function drawVectorSurfaces() {
   const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
-  // Classy stylized "course map": flat, distinct colors per surface with clear dark
-  // edge strokes (golf-GPS look) — the whole surround reads as ROUGH (the default
-  // lie), fairway/green sit obviously lighter on top, trees + water obviously darker.
-  const P = MAP_PAL, edgeW = Math.max(ws(0.55), 1.4);
   const bg = ctx.createLinearGradient(0, 0, 0, cssH);
-  bg.addColorStop(0, P.roughHi);
-  bg.addColorStop(1, P.roughLo);
+  bg.addColorStop(0, "#236425");
+  bg.addColorStop(1, "#2c7e2f");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, cssW, cssH);
+  ctx.globalAlpha = 0.5;
+  stripes("#2a7a2c", "#266e28", 9, "y");
+  ctx.globalAlpha = 1;
 
-  fillPolys(s.grass, P.grass);                    // mown turf between holes
-  fillPolys(s.rough, P.rough);                    // mapped rough — a touch darker than base
+  fillPolys(s.grass, "#3a9440");                 // mown turf between holes
+  fillPolys(s.rough, "#2c6e30");                 // mapped rough — a touch darker than base
 
-  // Fairway: flat, distinctly lighter than rough, with a crisp dark edge.
-  fillPolys(s.fairway, P.fairway);
-  ctx.strokeStyle = P.edgeGrass; ctx.lineWidth = edgeW; ctx.lineJoin = "round";
-  for (const poly of s.fairway || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+  for (const poly of s.fairway || []) withClip(poly, () => stripes("#4eb053", "#46a44b", 7, "y"));
+  ctx.strokeStyle = "rgba(28,66,30,0.45)"; ctx.lineWidth = 1.5;
+  for (const poly of s.fairway || []) { tracePoly(poly); ctx.stroke(); }
 
-  fillPolys(s.tee, P.tee);
-  ctx.strokeStyle = P.edgeGrass; ctx.lineWidth = edgeW;
-  for (const poly of s.tee || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+  for (const poly of s.tee || []) withClip(poly, () => stripes("#5cbf61", "#54b659", 3, "x"));
 
-  // Bunkers: flat sand with a warm dark rim.
-  fillPolys(s.bunker, P.sand);
-  ctx.strokeStyle = P.edgeSand; ctx.lineWidth = edgeW;
-  for (const poly of s.bunker || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+  for (const poly of s.bunker || []) {
+    const bb = polyBBox(poly);
+    withClip(poly, () => {
+      const scx = wx(bb.cx, bb.cy), scy = wy(bb.cx, bb.cy);
+      const rad = ws(Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2) || 1;
+      const rg = ctx.createRadialGradient(scx, scy, rad * 0.1, scx, scy, rad * 1.05);
+      rg.addColorStop(0, "#f1e6c4");
+      rg.addColorStop(1, "#d4be8a");
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, cssW, cssH);
+    });
+    tracePoly(poly);
+    ctx.strokeStyle = "rgba(120,100,58,0.85)"; ctx.lineWidth = 1.5; ctx.stroke();
+  }
 
-  // Woods: darkest green with a near-black edge so tree stands read as clear blobs.
-  fillPolys(s.woods, P.woods);
-  ctx.strokeStyle = P.edgeWoods; ctx.lineWidth = edgeW;
-  for (const poly of s.woods || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
-
+  fillPolys(s.woods, "#2f5d34");                  // tree stands
   drawDEMShade();                                  // tilted only: DEM light/shadow
-  // Skip the red OB debug tint in map mode — woods/OB already read by their dark
-  // color here; the red wash only muddies the classy palette.
-  if (showOOB && !renderLook) drawOOBOverlay(s);
-  ctx.strokeStyle = P.cartpath;                    // cart paths
+  if (showOOB) drawOOBOverlay(s);                  // red OOB tint on top
+  ctx.strokeStyle = "rgba(225,220,205,0.8)";       // cart paths
   ctx.lineWidth = Math.max(ws(0.8), 1);
   for (const poly of s.cartpath || []) strokePolyline(poly);
 
   drawGreen(false);
 
-  // Water: flat classy blue with a dark shoreline edge.
-  fillPolys(s.water, P.water);
-  ctx.strokeStyle = P.edgeWater; ctx.lineWidth = edgeW;
-  for (const poly of s.water || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+  for (const poly of s.water || []) {
+    const r = visibleRect();
+    withClip(poly, () => {
+      const lg = ctx.createLinearGradient(0, wy(0, r.y), 0, wy(0, r.y + r.h));
+      lg.addColorStop(0, "#34b3f1");
+      lg.addColorStop(1, "#1666c1");
+      ctx.fillStyle = lg;
+      ctx.fillRect(0, 0, cssW, cssH);
+    });
+    tracePoly(poly);
+    ctx.strokeStyle = "rgba(12,64,150,0.9)"; ctx.lineWidth = 1.5; ctx.stroke();
+  }
 }
 
 // --- True-3D tilted ground: the flat ground render is captured (with vertical
@@ -4219,6 +4209,53 @@ function drawCanopy() {
   ctx.restore();
 }
 
+// --- Fairway wash (baked once per hole) -----------------------------------
+// The feathered fairway tint used to be re-filled + ctx.filter-blurred every
+// single frame in drawPhotoSurfaces — a full-screen software blur pass 60x/sec
+// in the default (flat, photoreal) mode. The polygons and their blur are
+// static per hole, so bake them once into a world-space raster (same
+// pixel-space-affine + composed-transform trick as buildDEMShade below) and
+// blit it each frame — one drawImage instead of one blur-fill.
+const FAIRWAY_WASH_RES = 4; // raster px per world unit
+function buildFairwayWash(surfaces) {
+  const res = FAIRWAY_WASH_RES;
+  const w = Math.max(1, Math.round(WORLD.w * res)), h = Math.max(1, Math.round(WORLD.h * res));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  g.beginPath();
+  let any = false;
+  for (const poly of surfaces.fairway || []) {
+    if (!poly || poly.length < 2) continue;
+    g.moveTo(poly[0].x * res, poly[0].y * res);
+    for (let i = 1; i < poly.length; i++) g.lineTo(poly[i].x * res, poly[i].y * res);
+    g.closePath();
+    any = true;
+  }
+  if (!any) return null;
+  g.fillStyle = "#8ad98f";
+  if ("filter" in g) g.filter = `blur(${FAIRWAY_FEATHER_UNITS * res}px)`;
+  g.fill();
+  return { canvas: c, m: [1 / res, 0, 0, 0, 1 / res, 0] };
+}
+const FAIRWAY_FEATHER_UNITS = 6 / 12; // ~ old 6css-px feather at a typical ~12 screen-px/world-unit zoom
+function drawFairwayWash() {
+  const s = HOLE.surfaces;
+  if (!HOLE._fairwayWash) HOLE._fairwayWash = buildFairwayWash(s) || false;
+  const wash = HOLE._fairwayWash;
+  if (!wash) return;
+  const t = wash.m, dpr = window.devicePixelRatio || 1;
+  const A = view.a * t[0] + view.b * t[3], C = view.a * t[1] + view.b * t[4], E = view.a * t[2] + view.b * t[5] + view.c;
+  const B = view.d * t[0] + view.e * t[3], D = view.d * t[1] + view.e * t[4], F = view.d * t[2] + view.e * t[5] + view.f;
+  ctx.save();
+  ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
+  ctx.globalAlpha = 0.12;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(wash.canvas, 0, 0);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
 // --- DEM hillshade (tilted view) ------------------------------------------
 // One grayscale light/shadow raster per course at DEM resolution, composited
 // over the ground while tilted so slopes read even where the photo is flat-lit.
@@ -4276,9 +4313,7 @@ function drawPhotoSurfaces() {
   drawAerial(); // grade + course-green wash are baked into the image (processAerial)
   drawDetailGrain(); // zoom-ramped turf grain over the stretched photo
   drawDEMShade();    // tilted only: DEM light/shadow so slopes read on the photo
-  ctx.globalAlpha = 0.12;                          // gentle fairway tint — one flat
-  fillPolysUnion(s.fairway, "#8ad98f", 6);         // feathered wash (no α-stacked
-  ctx.globalAlpha = 1;                             // bands, soft edge not a sawtooth)
+  drawFairwayWash();                               // gentle feathered fairway tint, baked once per hole
   ctx.strokeStyle = "rgba(60,48,18,0.45)";          // bunkers: outline (sand visible)
   ctx.lineWidth = 1.2;
   for (const poly of s.bunker || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
@@ -4448,7 +4483,7 @@ function drawTeeMarkers() {
 // (or straight to screen when flat/untilted) — shared by draw()'s own rebuild
 // path and bakeBucket() so the two can't drift apart.
 function drawGroundStack(cssW, cssH, warp) {
-  if (HOLE._imgReady && HOLE.aerial && !renderLook) {
+  if (HOLE._imgReady && HOLE.aerial) {
     // surround the aerial with a dark course-green wash (a gradient that reads as
     // the rest of the course) rather than a hard black box.
     if (!_surround || _surround.w !== cssW || _surround.h !== cssH) {
@@ -5750,6 +5785,17 @@ function renderCourseCards() {
     if (featured && !isTournamentAdmin()) badges += `<span class="cs-badge featured">Free today</span>`;
     if (tags.includes("pgaTour")) badges += `<span class="cs-badge pga">PGA Tour</span>`;
     if (tags.includes("major")) badges += `<span class="cs-badge major">Major</span>`;
+    // Four Oaks 3D (three.js) is WIP — still hidden from the public picker via
+    // HIDDEN_COURSE_IDS (only admins reach this card at all, see
+    // visibleCourses()). This toggle replaces the dev-only `?3d=1` URL param
+    // as the real entry point; render3DWanted() (top of file) already reads
+    // this same localStorage key every frame, so flipping it takes effect
+    // immediately, no reload needed.
+    const is3D = c.id === "four-oaks-dracut";
+    if (is3D) {
+      const on = lsGet("golf.render3D", false);
+      badges += `<span class="cs-badge cs-badge-3d${on ? " on" : ""}" data-three-d-toggle>${on ? "3D ✓" : "Play in 3D"}</span>`;
+    }
     const par = c.par != null ? c.par : "—";
     const yds = c.yards ? c.yards.toLocaleString() + " yds" : "";
     const loc = c.location && c.location !== "Unknown" ? esc(c.location) : "";
@@ -5773,6 +5819,14 @@ function renderCourseCards() {
     const play = card.querySelector(".cs-play");
     if (play) play.addEventListener("click", () => { selectedCourseId = c.id; startCourse(); });
     card.querySelector(".cs-preview").addEventListener("click", () => openPreview(c.id));
+    if (is3D) {
+      const toggle = card.querySelector("[data-three-d-toggle]");
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        lsSet("golf.render3D", !lsGet("golf.render3D", false));
+        renderCourseCards(); // re-render so the badge label/state reflects the flip immediately
+      });
+    }
     frag.appendChild(card);
   }
   elCsGrid.innerHTML = "";
@@ -5809,7 +5863,13 @@ function showCourseSelect() {
 }
 function hideCourseSelect() { elCourseSelect.classList.add("hidden"); }
 
-if (elCsSearch) elCsSearch.addEventListener("input", renderCourseCards);
+if (elCsSearch) {
+  let _csSearchDebounce = null;
+  elCsSearch.addEventListener("input", () => {
+    clearTimeout(_csSearchDebounce);
+    _csSearchDebounce = setTimeout(renderCourseCards, 150); // avoid rebuilding all ~100 cards per keystroke
+  });
+}
 document.getElementById("cs-back").addEventListener("click", () => {
   hideCourseSelect();
   // Host picking a course for a match → back returns to the settings step.
@@ -5918,6 +5978,7 @@ const elWindChip = document.getElementById("wind-chip");
 const elWindArrow = document.getElementById("wind-arrow");
 const elWindMph = document.getElementById("wind-mph");
 let _windMphShown = null;
+let _windAngShown = null;
 
 // Wind readout as a DOM chip in the top HUD card. The arrow rotates with the
 // camera (same projection the old canvas pill used). Gating matches the old
@@ -5933,7 +5994,11 @@ function updateWindChip() {
   const pwx = -Math.sin(wind.dir), pwy = Math.cos(wind.dir);
   const svx = view.a * pwx + view.b * pwy;
   const svy = view.d * pwx + view.e * pwy;
-  elWindArrow.style.transform = "rotate(" + Math.atan2(svy, svx) + "rad)";
+  const ang = Math.atan2(svy, svx);
+  if (_windAngShown === null || Math.abs(ang - _windAngShown) > 1e-3) {
+    elWindArrow.style.transform = "rotate(" + ang + "rad)";
+    _windAngShown = ang;
+  }
   const spd = Math.round(wind.speed);
   if (spd !== _windMphShown) { elWindMph.textContent = spd + " mph"; _windMphShown = spd; }
 }
@@ -5965,7 +6030,20 @@ function lieNote(label) {
 // swing reads ~175 mph (tour driver) and scales down with power.
 
 // Shot stats HUD. Yards normally; feet (carry omitted) once on the green.
+// Dirty-checked: everything read below (mode/moving/ball pos/club/sliders/shot)
+// is idle almost all the time the ball is at rest, but this used to run in full
+// — including surfaceAt/playsLikeYards poly hit-tests and ~8 DOM writes — every
+// single frame via loop(), 60x/sec, regardless of whether any of it changed.
+let _statsSig = null;
 function updateStats() {
+  const b0 = state.ball;
+  const sig = mode + "|" + (state.moving ? 1 : 0) + "|" + (state.inHole ? 1 : 0) + "|" +
+    Math.round(b0.x * 100) + "|" + Math.round(b0.y * 100) + "|" +
+    (HOLE ? HOLE.num : -1) + "|" + selectedClub + "|" + flightBias + "|" + chipSpinBias + "|" +
+    (lieEffectEnabled ? 1 : 0) + "|" + (chipEnabled ? 1 : 0) + "|" +
+    shot.mph + "|" + shot.carry + "|" + shot.total;
+  if (sig === _statsSig) return;
+  _statsSig = sig;
   // Gutter slider (SPIN greenside / FLIGHT on full shots): shown only with the ball
   // at rest off the green (so it never blocks a swing-in-progress). Off in menu/range.
   syncSpinSlider();
@@ -6072,16 +6150,6 @@ elCineBtn.addEventListener("click", () => {
   cineEnabled = !cineEnabled;
   lsSet("golf.cineLanding", cineEnabled);
   elCineBtn.classList.toggle("active", cineEnabled);
-});
-// "Rendered look": per-device cosmetic — flat stylized course map instead of the aerial photo.
-const elRenderBtn = document.getElementById("hm-render");
-elRenderBtn.classList.toggle("active", renderLook);
-elRenderBtn.addEventListener("click", () => {
-  renderLook = !renderLook;
-  lsSet("golf.renderLook", renderLook);
-  elRenderBtn.classList.toggle("active", renderLook);
-  _warpCache = null; // tilted ground cache bakes the photo/map — force a rebuild
-  _bucketCache.clear(); // renderLook isn't in baseWarpKey — buckets would show the stale look
 });
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
@@ -6551,7 +6619,7 @@ renderHudVisToggles();
 // Multiplies swipe speed before the power mapping, so higher = softer flick
 // reaches full power. Applied in swingEnd() (touch/mouse) and launch() (wheel).
 const SENS_KEY = "golf.swingSensitivity";
-let swingSens = Math.min(2, Math.max(0.5, +lsGet(SENS_KEY, 1) || 1));
+let swingSens = Math.min(3, Math.max(0.5, +lsGet(SENS_KEY, 3) || 3));
 (() => {
   const slider = document.getElementById("sens-slider");
   const val = document.getElementById("sens-val");
@@ -9869,7 +9937,10 @@ async function checkMatchCloseout() {
 async function renderMatchBoard() {
   if (!activeMatch) return;
   const rows = await fetchMatchPlayers(activeMatch.id);
-  onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync
+  onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync — needed every
+                      // poll regardless of panel visibility, so this always runs
+  const panel = document.getElementById("match-standings");
+  if (!panel || panel.classList.contains("hidden")) return; // board UI closed — skip the innerHTML rebuild below
   const title = document.getElementById("mb-title");
   const body = document.getElementById("mb-list");
   if (!body) return;
