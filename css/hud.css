@@ -11,8 +11,8 @@
   width: max-content;
   padding: 9px 14px;
   background: var(--surface-hud);
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  backdrop-filter: blur(var(--blur-xs));
   border: var(--border-hair);
   color: var(--text);
   border-radius: var(--r-md);
@@ -65,7 +65,7 @@
    hole 1's tee and floats above the ball. */
 #live-turn {
   position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 34px);
   left: var(--s-3);
   max-width: 46vw;
   box-sizing: border-box;
@@ -86,8 +86,40 @@
 #live-turn.hidden { opacity: 0; pointer-events: none; }
 #live-turn.lt-mine { background: rgba(46, 125, 79, 0.92); }   /* your turn — go */
 #live-turn.lt-wait { background: rgba(0, 0, 0, 0.55); }       /* watching opponent */
-/* Mobile: the shot-info strip moved up to the top bar, so the corner is free. */
-body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4)); }
+/* Mobile: scorecard now sits in the bottom-left corner, so lift the turn banner above it
+   (and above the match-mini compare pill, which sits just above the scorecard). */
+body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 162px); }
+
+/* ---- Live match: compact head-to-head compare (bottom-left pill) ---- */
+#match-mini {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4));
+  left: var(--s-3);
+  max-width: 62vw;
+  box-sizing: border-box;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  white-space: nowrap;
+  overflow: hidden;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 5px 11px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  pointer-events: none;
+  z-index: 40;
+  transition: opacity 0.25s;
+}
+#match-mini.hidden { opacity: 0; pointer-events: none; }
+#match-mini .mm-vs { overflow: hidden; text-overflow: ellipsis; }
+#match-mini .mm-thru { color: rgba(255, 255, 255, 0.6); font-weight: var(--fw-med); }
+#match-mini .mm-up { color: #63b98b; }
+#match-mini .mm-dn { color: #ff9b9b; }
+#match-mini .mm-ev { color: #fff; }
+/* Mobile: sit just above the bottom-left scorecard card. */
+body.is-mobile #match-mini { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 128px); }
 
 /* ---- Transient toast (milestones, near-miss, daily, share) -------- */
 #toast {
@@ -179,8 +211,8 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
   border: var(--border-edge);
   border-radius: var(--r-md);
   background: var(--surface-hud);
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  backdrop-filter: blur(var(--blur-xs));
   color: var(--text);
   font-size: 18px;
   letter-spacing: -1px;
@@ -206,8 +238,8 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
   border: var(--border-edge);
   border-radius: var(--r-md);
   background: var(--surface-hud);
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  backdrop-filter: blur(var(--blur-xs));
   color: var(--text);
   cursor: pointer;
   z-index: 15;
@@ -229,8 +261,8 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
   border: var(--border-edge);
   border-radius: var(--r-md);
   background: var(--surface-hud);
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  backdrop-filter: blur(var(--blur-xs));
   color: var(--text);
   cursor: pointer;
   z-index: 15;
@@ -260,8 +292,8 @@ body.gv-open #hint { display: none; }
   gap: 6px;
   padding: var(--s-2);
   background: var(--surface-hud);
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  backdrop-filter: blur(var(--blur-xs));
   border: var(--border-edge);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-1);
@@ -541,10 +573,14 @@ body.is-mobile #range-ui .range-row { flex-wrap: wrap; justify-content: center; 
 
 /* ---- Top HUD card spans as a slim top bar on mobile -------- */
 body.is-mobile #scorecard {
-  width: auto; /* the desktop corner card is width:max-content; the bar spans */
+  /* bottom-left corner card (was a full-width top bar) */
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4));
   left: var(--s-3);
-  /* stop short of the HUD button so the bar never slides under it */
-  right: calc(env(safe-area-inset-right, 0px) + 60px);
+  right: auto;
+  width: max-content;
+  /* stop short of the bottom-right club selector column */
+  max-width: calc(100vw - 24px - 128px);
   box-sizing: border-box;
   padding: 7px 11px;
 }
@@ -554,6 +590,10 @@ body.is-mobile #scorecard #course { display: none; } /* name lives in the hole p
 body.is-mobile #scorecard .sc-hole .line,
 body.is-mobile #scorecard .sc-wind { font-size: 12px; }
 body.is-mobile #scorecard .sc-right { column-gap: 12px; }
+
+/* lift the left-column view buttons above the bottom-left scorecard card */
+body.is-mobile #green-view-btn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 158px); }
+body.is-mobile #tilt-view-btn  { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 214px); }
 
 body.is-mobile #stats { column-gap: 12px; }
 body.is-mobile #stats .slabel { font-size: 9px; letter-spacing: 0.6px; }
@@ -601,8 +641,8 @@ body.is-mobile #hud-edit-bar {
   padding: var(--s-2) var(--s-1);
   width: 44px;
   background: var(--surface-hud);
-  backdrop-filter: blur(var(--blur-sm));
-  -webkit-backdrop-filter: blur(var(--blur-sm));
+  backdrop-filter: blur(var(--blur-xs));
+  -webkit-backdrop-filter: blur(var(--blur-xs));
   border: var(--border-hair);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-1);

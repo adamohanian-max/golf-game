@@ -375,6 +375,10 @@
   background: var(--brass-bright, #cfa85e);
 }
 
+/* Post-round opponent scorecard (reuses the .re-sc table look) */
+.mr-sc-wrap { overflow-x: auto; margin-top: var(--s-2); }
+.mr-sc-wrap:empty { display: none; }
+
 /* Match results footer (Rematch / Next bot appear only after ladder matches) */
 .mr-actions { display: flex; gap: var(--s-2); }
 .mr-actions .menu-btn { flex: 1; margin: 0; }

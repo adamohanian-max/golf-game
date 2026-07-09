@@ -4937,6 +4937,11 @@ function updateScorecard() {
     elScore.textContent = formatToPar(round.score);
     elScore.className = round.score < 0 ? "under" : round.score > 0 ? "over" : "even";
   }
+  // Instant per-shot refresh of the bottom-left compare pill (the board poll also
+  // drives it, but this keeps the 1v1 status live between polls).
+  updateMatchMini(matchLive()
+    ? (cpuMatch ? cpuMatchRows() : [meSnapshot(), lastOpp].filter(Boolean))
+    : null);
   positionStatsBar();
 }
 
@@ -5237,6 +5242,81 @@ function buildScorecardSection(holes, showTot) {
   const sRow = `<tr><td class="re-label">YOU</td>${scores.map((s, i) => `<td class="${scoreClass(s, pars[i])}">${s}</td>`).join("")}<td class="re-sep">${sumScr}</td>${showTot ? `<td class="re-sep ${totCls}">${totScr}</td>` : ""}</tr>`;
 
   return `<table class="re-sc"><thead>${hRow}</thead><tbody>${pRow}${sRow}</tbody></table>`;
+}
+
+// Combined post-round match card: HOLE / PAR / one row per player (YOU first,
+// then opponents). Reuses scoreClass + the .re-sc look. Par comes from my own
+// round.holeStats (shared course); each opponent's strokes from its hole_scores
+// map (bots: cpuOpp.hole_scores; humans: match_players.hole_scores). Gated to
+// match end by the caller, so cards are complete.
+function buildMatchScorecard(rows) {
+  if (!rows || !rows.length || !round.holeStats.length) return "";
+  const parOf = {}, holeNums = [];
+  for (const h of round.holeStats) { parOf[h.hole] = h.par; holeNums.push(h.hole); }
+  holeNums.sort((a, b) => a - b);
+  const totPar = holeNums.reduce((a, n) => a + (parOf[n] || 0), 0);
+  // Me first, then opponents. isMeEntry may miss a nameless guest, so fall back
+  // to the first row (cpuMatchRows/fetchMatchPlayers list me first).
+  const meRow = rows.find(isMeEntry) || rows[0];
+  const ordered = rows.slice().sort((a, b) => (b === meRow ? 1 : 0) - (a === meRow ? 1 : 0));
+
+  function section(nums, showTot) {
+    const secLabel = nums[0] > 9 ? "IN" : "OUT";
+    const sumPar = nums.reduce((a, n) => a + (parOf[n] || 0), 0);
+    const hRow = `<tr><th class="re-label">HOLE</th>${nums.map(n => `<th>${n}</th>`).join("")}<th class="re-sep">${secLabel}</th>${showTot ? `<th class="re-sep">TOT</th>` : ""}</tr>`;
+    const pRow = `<tr><td class="re-label">PAR</td>${nums.map(n => `<td>${parOf[n]}</td>`).join("")}<td class="re-sep">${sumPar}</td>${showTot ? `<td class="re-sep">${totPar}</td>` : ""}</tr>`;
+    const rowsHtml = ordered.map(r => {
+      const hs = r.hole_scores || {};
+      const plab = r === meRow ? "YOU" : esc((r.player_name || "Opp").slice(0, 8));
+      let sum = 0, tot = 0;
+      const cells = nums.map(n => {
+        const s = hs[n];
+        if (s == null) return `<td>·</td>`;
+        sum += s | 0;
+        return `<td class="${scoreClass(s, parOf[n])}">${s}</td>`;
+      }).join("");
+      for (const n of holeNums) if (hs[n] != null) tot += hs[n] | 0;
+      const totCls = scoreClass(tot, totPar);
+      return `<tr><td class="re-label">${plab}</td>${cells}<td class="re-sep">${sum || "·"}</td>${showTot ? `<td class="re-sep ${totCls}">${tot || "·"}</td>` : ""}</tr>`;
+    }).join("");
+    return `<table class="re-sc"><thead>${hRow}</thead><tbody>${pRow}${rowsHtml}</tbody></table>`;
+  }
+
+  const front = holeNums.filter(n => n <= 9);
+  const back  = holeNums.filter(n => n > 9);
+  let html = "";
+  if (front.length) html += section(front, back.length === 0);
+  if (back.length)  html += section(back, true);
+  return html;
+}
+
+// Compact live head-to-head pill (bottom-left) shown during a match — the full
+// per-hole card waits for match end. Fed by the board poll (renderMatchBoard,
+// every 3–5s) and updateScorecard (instant per-shot). Hidden outside live matches.
+function updateMatchMini(rows) {
+  const el = document.getElementById("match-mini");
+  if (!el) return;
+  // isMeEntry can miss a nameless guest; fall back to first row as me.
+  const me = rows && (rows.find(isMeEntry) || rows[0]);
+  const opp = rows && rows.find(r => r !== me);
+  if (!matchLive() || !me || !opp) { el.classList.add("hidden"); return; }
+  const oppName = esc((opp.player_name || "Opp").slice(0, 10)) +
+    (cpuMatch ? ' <span class="cpu-chip">CPU</span>' : "");
+  let html;
+  if (matchPlay()) {
+    const mp = computeMatchPlay(me, opp, matchHoleCount);
+    const cls = mp.diff > 0 ? "mm-up" : mp.diff < 0 ? "mm-dn" : "mm-ev";
+    html = `<span class="mm-vs">vs ${oppName}</span>` +
+           `<span class="mm-stat ${cls}">${esc(mp.status)}</span>` +
+           `<span class="mm-thru">thru ${mp.thru}</span>`;
+  } else {
+    const myTP = me.score != null ? me.score : round.score;
+    const opTP = opp.score != null ? opp.score : 0;
+    html = `<span class="mm-vs">You ${formatToPar(myTP | 0)}</span>` +
+           `<span class="mm-stat">${oppName} ${formatToPar(opTP | 0)}</span>`;
+  }
+  el.innerHTML = html;
+  el.classList.remove("hidden");
 }
 
 function buildRoundScorecard() {
@@ -9939,6 +10019,7 @@ async function renderMatchBoard() {
   const rows = await fetchMatchPlayers(activeMatch.id);
   onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync — needed every
                       // poll regardless of panel visibility, so this always runs
+  updateMatchMini(rows);   // compact bottom-left compare — also independent of panel visibility
   const panel = document.getElementById("match-standings");
   if (!panel || panel.classList.contains("hidden")) return; // board UI closed — skip the innerHTML rebuild below
   const title = document.getElementById("mb-title");
@@ -10074,6 +10155,10 @@ async function renderMatchResults() {
     ? "Match complete"
     : `${rows.filter(r => r.finished).length}/${rows.length} in the clubhouse`;
 
+  // Full per-hole scorecard only once everyone's holed out; live poll fills it in.
+  const scEl = document.getElementById("mr-scorecard");
+  if (scEl) scEl.innerHTML = allDone ? buildMatchScorecard(rows) : "";
+
   // 1v1 match-play has its own win/loss verdict.
   if (matchPlay()) {
     const me = rows.find(isMeEntry), opp = rows.find(r => !isMeEntry(r));
@@ -10141,6 +10226,7 @@ function leaveMatch() {
   cpuMatch = false;
   cpuOpp = null;
   toggleMatchBoard(false);
+  updateMatchMini(null);
 }
 
 // =====================================================================
