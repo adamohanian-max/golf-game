@@ -4937,11 +4937,6 @@ function updateScorecard() {
     elScore.textContent = formatToPar(round.score);
     elScore.className = round.score < 0 ? "under" : round.score > 0 ? "over" : "even";
   }
-  // Instant per-shot refresh of the bottom-left compare pill (the board poll also
-  // drives it, but this keeps the 1v1 status live between polls).
-  updateMatchMini(matchLive()
-    ? (cpuMatch ? cpuMatchRows() : [meSnapshot(), lastOpp].filter(Boolean))
-    : null);
   positionStatsBar();
 }
 
@@ -5288,35 +5283,6 @@ function buildMatchScorecard(rows) {
   if (front.length) html += section(front, back.length === 0);
   if (back.length)  html += section(back, true);
   return html;
-}
-
-// Compact live head-to-head pill (bottom-left) shown during a match — the full
-// per-hole card waits for match end. Fed by the board poll (renderMatchBoard,
-// every 3–5s) and updateScorecard (instant per-shot). Hidden outside live matches.
-function updateMatchMini(rows) {
-  const el = document.getElementById("match-mini");
-  if (!el) return;
-  // isMeEntry can miss a nameless guest; fall back to first row as me.
-  const me = rows && (rows.find(isMeEntry) || rows[0]);
-  const opp = rows && rows.find(r => r !== me);
-  if (!matchLive() || !me || !opp) { el.classList.add("hidden"); return; }
-  const oppName = esc((opp.player_name || "Opp").slice(0, 10)) +
-    (cpuMatch ? ' <span class="cpu-chip">CPU</span>' : "");
-  let html;
-  if (matchPlay()) {
-    const mp = computeMatchPlay(me, opp, matchHoleCount);
-    const cls = mp.diff > 0 ? "mm-up" : mp.diff < 0 ? "mm-dn" : "mm-ev";
-    html = `<span class="mm-vs">vs ${oppName}</span>` +
-           `<span class="mm-stat ${cls}">${esc(mp.status)}</span>` +
-           `<span class="mm-thru">thru ${mp.thru}</span>`;
-  } else {
-    const myTP = me.score != null ? me.score : round.score;
-    const opTP = opp.score != null ? opp.score : 0;
-    html = `<span class="mm-vs">You ${formatToPar(myTP | 0)}</span>` +
-           `<span class="mm-stat">${oppName} ${formatToPar(opTP | 0)}</span>`;
-  }
-  el.innerHTML = html;
-  el.classList.remove("hidden");
 }
 
 function buildRoundScorecard() {
@@ -10019,7 +9985,6 @@ async function renderMatchBoard() {
   const rows = await fetchMatchPlayers(activeMatch.id);
   onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync — needed every
                       // poll regardless of panel visibility, so this always runs
-  updateMatchMini(rows);   // compact bottom-left compare — also independent of panel visibility
   const panel = document.getElementById("match-standings");
   if (!panel || panel.classList.contains("hidden")) return; // board UI closed — skip the innerHTML rebuild below
   const title = document.getElementById("mb-title");
@@ -10226,7 +10191,6 @@ function leaveMatch() {
   cpuMatch = false;
   cpuOpp = null;
   toggleMatchBoard(false);
-  updateMatchMini(null);
 }
 
 // =====================================================================

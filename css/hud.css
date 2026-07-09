@@ -65,7 +65,7 @@
    hole 1's tee and floats above the ball. */
 #live-turn {
   position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 34px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4));
   left: var(--s-3);
   max-width: 46vw;
   box-sizing: border-box;
@@ -86,40 +86,8 @@
 #live-turn.hidden { opacity: 0; pointer-events: none; }
 #live-turn.lt-mine { background: rgba(46, 125, 79, 0.92); }   /* your turn — go */
 #live-turn.lt-wait { background: rgba(0, 0, 0, 0.55); }       /* watching opponent */
-/* Mobile: scorecard now sits in the bottom-left corner, so lift the turn banner above it
-   (and above the match-mini compare pill, which sits just above the scorecard). */
-body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 162px); }
-
-/* ---- Live match: compact head-to-head compare (bottom-left pill) ---- */
-#match-mini {
-  position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4));
-  left: var(--s-3);
-  max-width: 62vw;
-  box-sizing: border-box;
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  white-space: nowrap;
-  overflow: hidden;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.55);
-  padding: 5px 11px;
-  border-radius: var(--r-pill);
-  font-size: 11px;
-  font-weight: var(--fw-bold);
-  pointer-events: none;
-  z-index: 40;
-  transition: opacity 0.25s;
-}
-#match-mini.hidden { opacity: 0; pointer-events: none; }
-#match-mini .mm-vs { overflow: hidden; text-overflow: ellipsis; }
-#match-mini .mm-thru { color: rgba(255, 255, 255, 0.6); font-weight: var(--fw-med); }
-#match-mini .mm-up { color: #63b98b; }
-#match-mini .mm-dn { color: #ff9b9b; }
-#match-mini .mm-ev { color: #fff; }
-/* Mobile: sit just above the bottom-left scorecard card. */
-body.is-mobile #match-mini { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 128px); }
+/* Mobile: scorecard now sits in the bottom-left corner, so lift the turn banner above it. */
+body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 128px); }
 
 /* ---- Transient toast (milestones, near-miss, daily, share) -------- */
 #toast {
