@@ -417,6 +417,38 @@ end $$;
 revoke all on function delete_account() from public, anon;
 grant execute on function delete_account() to authenticated;
 
+-- =====================================================================
+--  BOOKINGS + ENTITLEMENTS: "book a real tee time -> unlock that course"
+--  (PRODUCT_STRATEGY.md §4). booking-engine (Supabase Edge Function) writes
+--  `bookings` with the service-role key after a provider confirms, then
+--  PATCHes the booker's profiles.entitlements so the unlock syncs across
+--  devices. Guests (no auth.uid()) still unlock locally via golf.entitlements
+--  in localStorage — entitlements here is purely the cross-device mirror.
+-- =====================================================================
+alter table profiles add column if not exists entitlements jsonb not null default '{}'::jsonb;
+-- shape: { courses: { "<courseId>": { via: "booking", bookingId, at } } }
+-- Client already reads/writes this shape locally (golf.entitlements) — see
+-- getEntitlements()/purchasedCourse() in game.js. This column just mirrors it.
+
+create table if not exists bookings (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid references auth.users(id) on delete set null,  -- null for guest bookings
+  course_id     text not null,
+  course_name   text,
+  provider      text not null,                 -- 'mock' | 'golfnow' | 'lightspeed' | ...
+  provider_ref  text,                           -- provider's own booking id, if any
+  bookable      boolean not null default false, -- true = provider completed booking; false = deep-link-out only
+  tee_time      timestamptz,
+  status        text not null default 'pending', -- 'pending' | 'confirmed' | 'redirected' | 'failed' | 'cancelled'
+  created_at    timestamptz default now()
+);
+alter table bookings enable row level security;
+-- a booker may read their own bookings; guests (user_id null) have none to read via RLS
+-- (their booking lives client-side only) — fine, this table is the sync layer, not the source of truth.
+create policy "bookings read own" on bookings for select using (auth.uid() = user_id);
+-- writes happen from the booking-engine Edge Function using the service-role key,
+-- which bypasses RLS entirely — no insert/update policy needed for anon/authenticated.
+
 -- ---- Phase-2 scaffold (NOT enabled): drop blanket match UPDATE -------------
 -- The correct long-term fix is to treat the 6-char match `code` as a shared
 -- secret and route all guest writes through a security-definer RPC that checks
@@ -427,3 +459,24 @@ grant execute on function delete_account() to authenticated;
 --
 -- and then: drop policy "matches update" on matches;  (repeat for the others).
 -- Deferred so today's change can't break live guest matches.
+
+-- =====================================================================
+--  New match formats: skins + closest-to-pin (ctp), alongside stroke/match
+--  (PRODUCT_STRATEGY.md §5/§7.2 — "match play, skins, closest-to-pin...").
+--  computeSkins()/computeClosestToPin() live in game.js next to
+--  computeMatchPlay(). CTP needs per-hole proximity synced live, hence
+--  hole_prox alongside the existing hole_scores.
+-- =====================================================================
+alter table matches drop constraint if exists matches_format_enum;
+alter table matches add constraint matches_format_enum
+  check (format in ('stroke', 'match', 'skins', 'ctp'));
+
+alter table match_players add column if not exists hole_prox jsonb not null default '{}'::jsonb; -- {holeNum: yardsToPin}
+
+-- =====================================================================
+--  Trash talk: canned-phrase taunts only (fixed picker list client-side,
+--  no free text — no moderation surface). Rides the existing match_players
+--  realtime subscription; opponent toasts when last_taunt_at changes.
+-- =====================================================================
+alter table match_players add column if not exists last_taunt    text;
+alter table match_players add column if not exists last_taunt_at timestamptz;

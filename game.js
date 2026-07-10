@@ -538,6 +538,7 @@ let chipEnabled = true;    // greenside chip mode: near the pin, swipe power map
 let chipSpinBias = 0;      // chip spin slider (-1 run .. 0 neutral .. +1 bite); resets to 0 each hole
 let flightBias = 0;        // full-shot FLIGHT slider (0 stock .. 1 high spinner); one-shot, resets after the swing
 let lieEffectEnabled = true; // rough/sand cost power + spin (off = every lie plays clean, easier)
+let shotPreviewEnabled = false; // live predicted-landing marker while swinging (HUD menu, tournament-synced)
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let markerDropT = 0;       // when the marker was tap-dropped (grace vs insta-dismiss)
 let measureDragging = false;
@@ -776,16 +777,23 @@ function flightStep(b) {
 // Set up a per-club arc to hit `C` carry, `H` max height, `L` land angle (world
 // units / radians). Two parabolas (ascent->apex->descent) make the descent
 // steeper than the ascent, exactly like a real spinning ball.
-function setupFlight(b, ang, C, H, L, spinN) {
+// Pure half of setupFlight: computes the flight descriptor + initial ball
+// velocity/height WITHOUT touching state.flight or the ball. Used both by
+// setupFlight below (the real, committed launch) and by buildTrialShot (a
+// hypothetical, discarded-after-simShotRest preview).
+function buildFlight(ang, C, H, L, spinN) {
   H = Math.max(H, 0.001);
   let xa = C - 2 * H / Math.tan(L);          // apex horizontal position
   xa = Math.max(xa, C * 0.15);               // guard (steep, short shots)
   const T = 2 * Math.sqrt(2 * H / TUNE.gravity); // hang time in frames (apex-based)
   const vh = C / Math.max(T, 1);             // constant horizontal speed
-  state.flight = { ang, C, H, xa, L, vh, d: 0, spinN: spinN || 0 };
-  b.vx = Math.cos(ang) * vh;
-  b.vy = Math.sin(ang) * vh;
-  b.z = 0.0001; b.vz = 0;
+  return { flight: { ang, C, H, xa, L, vh, d: 0, spinN: spinN || 0 },
+           vx: Math.cos(ang) * vh, vy: Math.sin(ang) * vh, z: 0.0001, vz: 0 };
+}
+function setupFlight(b, ang, C, H, L, spinN) {
+  const r = buildFlight(ang, C, H, L, spinN);
+  state.flight = r.flight;
+  b.vx = r.vx; b.vy = r.vy; b.z = r.z; b.vz = r.vz;
 }
 
 function arcFlightStep(b) {
@@ -1146,7 +1154,7 @@ function simShotRest(ball0, flight0) {
   const b = { x: ball0.x, y: ball0.y, vx: ball0.vx, vy: ball0.vy,
               z: ball0.z, vz: ball0.vz, spin: ball0.spin };
   let fl = Object.assign({}, flight0);
-  let airborne = true, lipped = false;
+  let airborne = !!flight0, lipped = false; // matches update()'s real dispatch: putts start grounded (flight0=null)
   for (let i = 0; i < TUNE.cineSimSteps; i++) {
     if (airborne && fl) {
       // --- arc phase (mirrors arcFlightStep) ---
@@ -1566,6 +1574,18 @@ function swipeVelocity(path, lookMs) {
   return { dxs: vx * span, dys: vy * span, dt: span };
 }
 
+// Pure: screen-space swipe velocity vector -> (ang, frac). Shared by the real
+// release path (swingEnd/launch) and the live pre-release preview, so both
+// derivations can never drift apart. `powerScale` differs by input method
+// (TUNE.touchPowerSwipe vs TUNE.fullPowerSwipe) — that asymmetry is existing
+// tuning, not something to unify here.
+function swipeToShot(dxs, dys, dt, powerScale) {
+  const speed = (Math.hypot(dxs, dys) / refScale) / Math.max(dt, 0.001);
+  const frac = Math.min(speed * swingSens / powerScale, 1);
+  const ang = Math.atan2(dys / view.tilt, dxs) - view.angle; // undo tilt squash, then rotation
+  return { ang, frac };
+}
+
 // Putt power fraction with a widened control band: the first puttControlFrac of
 // input covers 0..puttControlYds (gentle, easy to lag), the top covers the rest
 // up to YARDS.maxPutt. Returns a 0..1 multiplier on puttMaxPower.
@@ -1615,6 +1635,7 @@ function swingStart(e) {
   if (ghostMouse(e)) return;
   if (cine) { closeCine(); return; }              // cinematic landing: tap = skip
   if (greenView) { gvPointerStart(e); return; }   // inspect view owns the pointer
+  shotPreview = null; // fresh gesture — any stale preview marker must not survive into it
   // Pin this gesture to whichever touch just landed (undefined for mouse —
   // pointerPos falls back to touches[0]/the event itself in that case).
   activeTouchId = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].identifier : null;
@@ -1701,6 +1722,7 @@ function swingMove(e) {
   e.preventDefault();
   const p = pointerPos(e, activeTouchId);
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
+  maybeUpdateShotPreview();
 }
 
 // Fire the ball: `ang` direction, `frac` 0..1 swing fullness, `spin` (-1..1).
@@ -1744,15 +1766,16 @@ function chipSpinParams() {
   return { landFrac, spinScale };
 }
 
-function launchShot(ang, frac, spin, onGreen) {
-  if (!canSwing() || frac <= 0.05) return;
-  measurePoint = null; // shot fired — clear the rangefinder marker
-  if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
-  const b = state.ball;
-  shot.startX = b.x; shot.startY = b.y;
-  shot.carry = null; shot.total = null; shot.carried = onGreen; shot._landed = false;
-  state.flight = null;
-  state._lippedThisShot = false;
+// Pure: given a swing vector, compute what the shot WOULD do — club/putter
+// selection, carry/height/spin, initial ball velocity, and (for full shots) a
+// flight descriptor — WITHOUT mutating state.ball/state.flight/shot/etc. Used
+// by launchShot (real, committed shot — applies the result to state) and by
+// the live pre-release preview (hypothetical, fed into simShotRest and
+// discarded). Returns null if the swing wouldn't produce a shot at all.
+function buildTrialShot(ang, frac, spin, onGreen) {
+  if (frac <= 0.05) return null;
+  if (slottedMode && !HOLE.isRange && !onGreen) return null; // slotted mode has its own fixed-target launch — no meaningful preview
+  const b = state.ball; // read position only
   const f = Math.min(frac, 1);
   // Putter mode: on the green (normal putt) OR player manually selected putter off-green
   // (bump-and-run). Both stay on the deck; power scale differs to account for surface friction.
@@ -1808,69 +1831,83 @@ function launchShot(ang, frac, spin, onGreen) {
       const lieMul = (onGreen || !lieEffectEnabled) ? 1 : (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1);  // bump from rough/sand loses pace
       power = maxPow * TUNE.puttSensitivity * ramp * lieMul;
     }
-    shot.mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
-    b.vx = Math.cos(ang) * power; b.vy = Math.sin(ang) * power;
-    b.vz = 0; b.z = 0; b.spin = 0;
-    state.airborne = false;
-  } else {
-    // full shot: follow the selected club's real arc, scaled by how full the swing is
-    const c = TUNE.clubs[selectedClub];
-    // Greenside chip mode: when enabled and within range of the pin, map swing power to a
-    // tight band around the pin — softest swipe flies chipReachLo×pin, hardest chipReachHi×pin
-    // (capped at club carry), so a chip is never very short or very far from the hole. Outside
-    // chip mode every club flies its rated carry at full swing, floored at clubMinFrac. The
-    // club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
-    const chipActive = chipActiveNow();  // chip mode on, off green, within pin range
-    let ef;
-    if (chipActive) {
-      // Tight band: f=0 -> chipReachLo, f=1 -> chipReachHi of pin distance. chipLandFrac
-      // lands the CARRY short of that so the ball releases and rolls out the rest (the spin
-      // drop below makes it run), with the total still finishing in the band. Reach uses
-      // plays-like distance so an uphill chip flies/rolls longer (downhill shorter).
-      const toPin = playsLikeYards(b.x, b.y).plays;
-      const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * f;
-      ef = Math.min(1, (toPin * reach * chipSpinParams().landFrac) / c.carry);
-    } else {
-      // Min power floor for every full-swing club (incl. LW): an imprecise weak read can't
-      // dribble it — always flies ≥ clubMinFrac of its rated carry.
-      ef = Math.max(f, TUNE.clubMinFrac);
-    }
-    // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
-    const lieSurf = surfaceAt(b.x, b.y);
-    const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
-    // Flight slider (right gutter, full shots): 0 = stock, 1 = full high spinner.
-    // Continuous — each flightHi* knob is the t=1 endpoint, lerped by the slider.
-    const hiT = chipActive ? 0 : flightBias;
-    let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul * (1 - (1 - TUNE.flightHiCarry) * hiT); // carry (world units)
-    // Elevation: make a full shot finish at the plays-like distance (uphill shorter,
-    // downhill longer). Chips already fold plays-like into their reach, so skip them.
-    if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
-    const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul * (1 + (TUNE.flightHiApex - 1) * hiT); // apex height (scales with the swing)
-    shot.mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
-    // Slight amplification so deliberate hooks/slices still register.
-    b.spin = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
-    // Full-shot pitches: partial swings with lofted clubs still impart near-full spin rpm
-    // (scale up as f drops below 0.6, short shots check hard). Greenside CHIPS do the
-    // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
-    const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
-    const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[lieSurf] ?? 1) : 1;  // rough flyer / sand kill backspin
-    const spinScale = chipActive ? chipSpinParams().spinScale : chipBoost;
-    const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (1 + (TUNE.flightHiSpin - 1) * hiT));
-    // Flyer descent: rough/sand shots also come in shallower (less lift), so the
-    // steepness half of the landing check fades too and the ball releases. Chips skip it.
-    const lieLandMul = (lieEffectEnabled && !chipActive) ? (TUNE.lieLand[lieSurf] ?? 1) : 1;
-    const landDeg = c.land * lieLandMul + TUNE.flightHiLand * hiT;
-    setupFlight(b, ang, C, H, landDeg * Math.PI / 180, effectiveSpinN);
-    state.flight.noLandCheck = chipActive; // chips: release tuned by the spin slider alone
-    if (hiT > 0) {
-      state.flight.windMul = 1 + (TUNE.flightHiWind - 1) * hiT; // a high ball rides the wind
-      resetFlightBias(); // one-shot: the slider never silently carries to the next swing
-    }
-    state.airborne = true;
+    const mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
+    return { usePutter: true, onGreen, f, mph,
+             vx: Math.cos(ang) * power, vy: Math.sin(ang) * power, z: 0, vz: 0, spin: 0, flight: null };
   }
+  // full shot: follow the selected club's real arc, scaled by how full the swing is
+  const c = TUNE.clubs[selectedClub];
+  // Greenside chip mode: when enabled and within range of the pin, map swing power to a
+  // tight band around the pin — softest swipe flies chipReachLo×pin, hardest chipReachHi×pin
+  // (capped at club carry), so a chip is never very short or very far from the hole. Outside
+  // chip mode every club flies its rated carry at full swing, floored at clubMinFrac. The
+  // club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
+  const chipActive = chipActiveNow();  // chip mode on, off green, within pin range
+  let ef;
+  if (chipActive) {
+    // Tight band: f=0 -> chipReachLo, f=1 -> chipReachHi of pin distance. chipLandFrac
+    // lands the CARRY short of that so the ball releases and rolls out the rest (the spin
+    // drop below makes it run), with the total still finishing in the band. Reach uses
+    // plays-like distance so an uphill chip flies/rolls longer (downhill shorter).
+    const toPin = playsLikeYards(b.x, b.y).plays;
+    const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * f;
+    ef = Math.min(1, (toPin * reach * chipSpinParams().landFrac) / c.carry);
+  } else {
+    // Min power floor for every full-swing club (incl. LW): an imprecise weak read can't
+    // dribble it — always flies ≥ clubMinFrac of its rated carry.
+    ef = Math.max(f, TUNE.clubMinFrac);
+  }
+  // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
+  const lieSurf = surfaceAt(b.x, b.y);
+  const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
+  // Flight slider (right gutter, full shots): 0 = stock, 1 = full high spinner.
+  // Continuous — each flightHi* knob is the t=1 endpoint, lerped by the slider.
+  const hiT = chipActive ? 0 : flightBias;
+  let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul * (1 - (1 - TUNE.flightHiCarry) * hiT); // carry (world units)
+  // Elevation: make a full shot finish at the plays-like distance (uphill shorter,
+  // downhill longer). Chips already fold plays-like into their reach, so skip them.
+  if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
+  const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul * (1 + (TUNE.flightHiApex - 1) * hiT); // apex height (scales with the swing)
+  const mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
+  // Slight amplification so deliberate hooks/slices still register.
+  const spinVal = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
+  // Full-shot pitches: partial swings with lofted clubs still impart near-full spin rpm
+  // (scale up as f drops below 0.6, short shots check hard). Greenside CHIPS do the
+  // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
+  const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
+  const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[lieSurf] ?? 1) : 1;  // rough flyer / sand kill backspin
+  const spinScale = chipActive ? chipSpinParams().spinScale : chipBoost;
+  const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (1 + (TUNE.flightHiSpin - 1) * hiT));
+  // Flyer descent: rough/sand shots also come in shallower (less lift), so the
+  // steepness half of the landing check fades too and the ball releases. Chips skip it.
+  const lieLandMul = (lieEffectEnabled && !chipActive) ? (TUNE.lieLand[lieSurf] ?? 1) : 1;
+  const landDeg = c.land * lieLandMul + TUNE.flightHiLand * hiT;
+  const flr = buildFlight(ang, C, H, landDeg * Math.PI / 180, effectiveSpinN);
+  flr.flight.noLandCheck = chipActive; // chips: release tuned by the spin slider alone
+  if (hiT > 0) flr.flight.windMul = 1 + (TUNE.flightHiWind - 1) * hiT; // a high ball rides the wind
+  return { usePutter: false, onGreen, f, hiT, mph,
+           vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
+}
+
+function launchShot(ang, frac, spin, onGreen) {
+  if (!canSwing() || frac <= 0.05) return;
+  measurePoint = null; // shot fired — clear the rangefinder marker
+  shotPreview = null;  // shot fired — clear the live preview marker
+  if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
+  const trial = buildTrialShot(ang, frac, spin, onGreen);
+  if (!trial) return;
+  const b = state.ball;
+  shot.startX = b.x; shot.startY = b.y;
+  shot.carry = null; shot.total = null; shot.carried = onGreen; shot._landed = false;
+  state._lippedThisShot = false;
+  state.flight = trial.flight;
+  b.vx = trial.vx; b.vy = trial.vy; b.vz = trial.vz; b.z = trial.z; b.spin = trial.spin;
+  shot.mph = trial.mph;
+  state.airborne = !trial.usePutter;
+  if (trial.hiT > 0) resetFlightBias(); // one-shot: the slider never silently carries to the next swing
   state.moving = true;
-  haptic(usePutter ? 3 : 9);  // light tick for putter, firm buzz for full shot
-  if (usePutter) playPutt(); else playStrike(f);  // crack/tap on contact
+  haptic(trial.usePutter ? 3 : 9);  // light tick for putter, firm buzz for full shot
+  if (trial.usePutter) playPutt(); else playStrike(trial.f);  // crack/tap on contact
   if (onGreen) {
     state.putts++;
   } else {
@@ -1889,13 +1926,9 @@ function launchShot(ang, frac, spin, onGreen) {
 function launch(dxs, dys, dt, spin = 0) {
   if (!canSwing()) return;
   swingIsMouse = false;   // trackpad/wheel path — not a mouse drag
-  // Convert via the fixed reference scale (NOT view.scale) so sensitivity is the
-  // same regardless of how far the camera is zoomed in.
-  const swipeSpeed = (Math.hypot(dxs, dys) / refScale) / Math.max(dt, 0.001);
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  const frac = Math.min(swipeSpeed * swingSens / TUNE.fullPowerSwipe, 1); // full swing at fullPowerSwipe
-  // screen direction -> world direction (undo the tilt squash, then the camera rotation)
-  launchShot(Math.atan2(dys / view.tilt, dxs) - view.angle, frac, spin, onGreen);
+  const { ang, frac } = swipeToShot(dxs, dys, dt, TUNE.fullPowerSwipe); // full swing at fullPowerSwipe
+  launchShot(ang, frac, spin, onGreen);
 }
 
 function swingEnd(e) {
@@ -1928,6 +1961,7 @@ function swingEnd(e) {
   const fdist = Math.hypot(dxs, dys);
   if (fdist < 5) {
     // not a swing — treat as a tap: drop the rangefinder marker at the tap point
+    shotPreview = null;
     measurePoint = screenToWorldGround(end.x, end.y);
     markerDropT = performance.now();
     if (earnMilestone("hint-marker"))
@@ -1935,9 +1969,7 @@ function swingEnd(e) {
     return;
   }
 
-  const speed = (fdist / refScale) / dt;
-  const frac = Math.min(speed * swingSens / TUNE.touchPowerSwipe, 1);
-  const ang = Math.atan2(dys / view.tilt, dxs) - view.angle; // undo tilt squash, then rotation
+  const { ang, frac } = swipeToShot(dxs, dys, dt, TUNE.touchPowerSwipe);
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
   launchShot(ang, frac, curveFromPath(path), onGreen);
 }
@@ -1949,7 +1981,7 @@ canvas.addEventListener("touchend", swingEnd);
 // in-flight input state so the next tap starts clean
 canvas.addEventListener("touchcancel", () => {
   swipe = null; swipePath = null; camTouch = null; markerDrag = null; measureDragging = false;
-  activeTouchId = null;
+  activeTouchId = null; shotPreview = null;
   if (greenView) greenView.drag = null;
 });
 canvas.addEventListener("mousedown", swingStart);
@@ -1988,6 +2020,7 @@ function onWheel(e) {
   wheelGesture.sx += e.deltaX;
   wheelGesture.sy += e.deltaY;
   wheelGesture.path.push({ x: wheelGesture.sx, y: wheelGesture.sy, t: now });
+  maybeUpdateShotPreview();
 }
 
 function finishWheelSwing() {
@@ -2004,6 +2037,57 @@ function finishWheelSwing() {
 }
 
 canvas.addEventListener("wheel", onWheel, { passive: false });
+
+// =====================================================================
+//  Live shot preview — while the player is still dragging/swiping (before
+//  release), forward-simulate the swing-in-progress with simShotRest() and
+//  show a marker + yardage at the predicted landing/rest spot. Opt-in
+//  (shotPreviewEnabled, HUD menu "Shot preview") — a pure feedback overlay,
+//  same physics as the real shot, no change to how power/spin/club work.
+// =====================================================================
+let shotPreview = null;   // { holed, lipped, rest:{x,y}, yards } | null
+let lastPreviewT = 0;
+const PREVIEW_INTERVAL_MS = 50; // ~20Hz — well under raw pointermove/wheel event rate
+
+// Throttled entry point, called from swingMove/onWheel after each new sample.
+function maybeUpdateShotPreview() {
+  if (!shotPreviewEnabled) { shotPreview = null; return; }
+  const now = performance.now();
+  if (now - lastPreviewT < PREVIEW_INTERVAL_MS) return;
+  lastPreviewT = now;
+  updateShotPreview();
+}
+
+function updateShotPreview() {
+  if (!canSwing() || measureMode) { shotPreview = null; return; }
+  let ang, frac, spin;
+  if (swipePath && swipePath.length >= 2) {
+    const p0 = swipePath[0], pl = swipePath[swipePath.length - 1];
+    if (Math.hypot(pl.x - p0.x, pl.y - p0.y) <= 12) { shotPreview = null; return; } // same gate as the direction tick
+    const v = swipeVelocity(swipePath, 80);
+    ({ ang, frac } = swipeToShot(v.dxs, v.dys, v.dt, TUNE.touchPowerSwipe));
+    spin = curveFromPath(swipePath);
+  } else if (wheelGesture && wheelGesture.path.length >= 3) {
+    const sign = (TUNE.wheelInvert ? 1 : -1) * TUNE.wheelSensitivity;
+    const v = swipeVelocity(wheelGesture.path, WHEEL_WINDOW_MS + WHEEL_TAIL_MS);
+    ({ ang, frac } = swipeToShot(sign * v.dxs, sign * v.dys, v.dt, TUNE.fullPowerSwipe));
+    spin = curveFromPath(wheelGesture.path);
+  } else {
+    shotPreview = null;
+    return;
+  }
+  const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
+  const trial = buildTrialShot(ang, frac, spin, onGreen);
+  if (!trial) { shotPreview = null; return; }
+  // Hypothetical ball state fed into the side-effect-free simulator — never touches state.ball.
+  const b0 = { x: state.ball.x, y: state.ball.y, vx: trial.vx, vy: trial.vy,
+               z: trial.z, vz: trial.vz, spin: trial.spin };
+  const r = simShotRest(b0, trial.flight);
+  if (!r) { shotPreview = null; return; }
+  if (r.holed) { shotPreview = { holed: true, rest: { x: HOLE.holePos.x, y: HOLE.holePos.y }, yards: 0 }; return; }
+  shotPreview = { holed: false, lipped: r.lipped, rest: { x: r.x, y: r.y },
+                  yards: dist(state.ball.x, state.ball.y, r.x, r.y) * YARDS_PER_UNIT };
+}
 
 // =====================================================================
 //  Rendering
@@ -4676,9 +4760,26 @@ function draw() {
       ctx.stroke();
     }
 
-    // live swipe: thin direction-only tick from the ball — echoes that input is
-    // registering without giving any power/landing assist
-    if (swipePath && swipePath.length >= 2 && !state.moving) {
+    // live shot preview: marker + yardage at the predicted landing/rest spot,
+    // forward-simulated from the swing-in-progress (opt-in, shotPreviewEnabled).
+    // Falls back to a plain direction-only tick while below the swing threshold
+    // or before the first preview resolves.
+    if (shotPreview && !state.moving && !cine && !greenView) {
+      const mx = wx(shotPreview.rest.x, shotPreview.rest.y), my = wyg(shotPreview.rest.x, shotPreview.rest.y);
+      ctx.setLineDash([3, 6]);                     // tighter dash than the range-finder's [6,5] — visually distinct
+      ctx.strokeStyle = "rgba(120,200,255,0.55)";   // cool blue vs range-finder's white/gold — never confused with a manual measurement
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(mx, my); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(120,200,255,0.25)"; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = "rgba(120,200,255,0.95)"; ctx.stroke();
+      ctx.beginPath(); ctx.arc(mx, my, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(120,200,255,0.95)"; ctx.fill();
+      drawLabel(mx, my - 18, shotPreview.holed ? "IN!" : Math.round(shotPreview.yards) + " yds", "#7cc8ff");
+    } else if (swipePath && swipePath.length >= 2 && !state.moving) {
+      // live swipe: thin direction-only tick from the ball — echoes that input is
+      // registering without giving any power/landing assist
       const p0 = swipePath[0], pl = swipePath[swipePath.length - 1];
       const sdx = pl.x - p0.x, sdy = pl.y - p0.y, sm = Math.hypot(sdx, sdy);
       if (sm > 12) {
@@ -5024,6 +5125,7 @@ function announceMilestoneUnlocks(msId, delayMs) {
     if (ACHIEVEMENT_COURSES[cid].milestone !== msId) continue;
     const c = COURSES.find((x) => x.id === cid);
     const name = c ? c.name : cid;
+    track("course_unlocked", { course: cid, via: "milestone" });
     setTimeout(() => showToast(name + " unlocked!", 2600, "gold"), delayMs);
   }
 }
@@ -5064,11 +5166,15 @@ function showResult() {
   if (matchLive()) {
     const finished = round.holesPlayed >= roundHoleCount();
     const holeScores = {};
-    for (const h of round.holeStats) holeScores[h.hole] = h.strokes;
+    const holeProx = {};
+    for (const h of round.holeStats) {
+      holeScores[h.hole] = h.strokes;
+      if (h.proximity != null) holeProx[h.hole] = h.proximity;   // yards, for closest-to-pin
+    }
     const patch = {
       score: round.score, holes_played: round.holesPlayed, finished,
       updated_at: new Date().toISOString(),
-      hole_scores: holeScores, cur_hole: HOLE.num, cur_strokes: state.strokes,
+      hole_scores: holeScores, hole_prox: holeProx, cur_hole: HOLE.num, cur_strokes: state.strokes,
       cur_to_pin: -1, cur_at_rest: true,
       cur_x: HOLE.holePos.x, cur_y: HOLE.holePos.y,
     };
@@ -5244,6 +5350,35 @@ function buildScorecardSection(holes, showTot) {
   return `<table class="re-sc"><thead>${hRow}</thead><tbody>${pRow}${sRow}</tbody></table>`;
 }
 
+// Compact live head-to-head pill (bottom-left) shown during a match — the full
+// per-hole card waits for match end. Fed by the board poll (renderMatchBoard,
+// every 3–5s) and updateScorecard (instant per-shot). Hidden outside live matches.
+function updateMatchMini(rows) {
+  const el = document.getElementById("match-mini");
+  if (!el) return;
+  // isMeEntry can miss a nameless guest; fall back to first row as me.
+  const me = rows && (rows.find(isMeEntry) || rows[0]);
+  const opp = rows && rows.find(r => r !== me);
+  if (!matchLive() || !me || !opp) { el.classList.add("hidden"); return; }
+  const oppName = esc((opp.player_name || "Opp").slice(0, 10)) +
+    (cpuMatch ? ' <span class="cpu-chip">CPU</span>' : "");
+  let html;
+  if (matchPlay()) {
+    const mp = computeMatchPlay(me, opp, matchHoleCount);
+    const cls = mp.diff > 0 ? "mm-up" : mp.diff < 0 ? "mm-dn" : "mm-ev";
+    html = `<span class="mm-vs">vs ${oppName}</span>` +
+           `<span class="mm-stat ${cls}">${esc(mp.status)}</span>` +
+           `<span class="mm-thru">thru ${mp.thru}</span>`;
+  } else {
+    const myTP = me.score != null ? me.score : round.score;
+    const opTP = opp.score != null ? opp.score : 0;
+    html = `<span class="mm-vs">You ${formatToPar(myTP | 0)}</span>` +
+           `<span class="mm-stat">${oppName} ${formatToPar(opTP | 0)}</span>`;
+  }
+  el.innerHTML = html;
+  el.classList.remove("hidden");
+}
+
 // Combined post-round match card: HOLE / PAR / one row per player (YOU first,
 // then opponents). Reuses scoreClass + the .re-sc look. Par comes from my own
 // round.holeStats (shared course); each opponent's strokes from its hole_scores
@@ -5288,35 +5423,6 @@ function buildMatchScorecard(rows) {
   if (front.length) html += section(front, back.length === 0);
   if (back.length)  html += section(back, true);
   return html;
-}
-
-// Compact live head-to-head pill (bottom-left) shown during a match — the full
-// per-hole card waits for match end. Fed by the board poll (renderMatchBoard,
-// every 3–5s) and updateScorecard (instant per-shot). Hidden outside live matches.
-function updateMatchMini(rows) {
-  const el = document.getElementById("match-mini");
-  if (!el) return;
-  // isMeEntry can miss a nameless guest; fall back to first row as me.
-  const me = rows && (rows.find(isMeEntry) || rows[0]);
-  const opp = rows && rows.find(r => r !== me);
-  if (!matchLive() || !me || !opp) { el.classList.add("hidden"); return; }
-  const oppName = esc((opp.player_name || "Opp").slice(0, 10)) +
-    (cpuMatch ? ' <span class="cpu-chip">CPU</span>' : "");
-  let html;
-  if (matchPlay()) {
-    const mp = computeMatchPlay(me, opp, matchHoleCount);
-    const cls = mp.diff > 0 ? "mm-up" : mp.diff < 0 ? "mm-dn" : "mm-ev";
-    html = `<span class="mm-vs">vs ${oppName}</span>` +
-           `<span class="mm-stat ${cls}">${esc(mp.status)}</span>` +
-           `<span class="mm-thru">thru ${mp.thru}</span>`;
-  } else {
-    const myTP = me.score != null ? me.score : round.score;
-    const opTP = opp.score != null ? opp.score : 0;
-    html = `<span class="mm-vs">You ${formatToPar(myTP | 0)}</span>` +
-           `<span class="mm-stat">${oppName} ${formatToPar(opTP | 0)}</span>`;
-  }
-  el.innerHTML = html;
-  el.classList.remove("hidden");
 }
 
 function buildRoundScorecard() {
@@ -5416,6 +5522,11 @@ function showRoundSummary(midRound = false) {
   // Share: only a finished solo/daily round is worth sharing (not mid-round peeks
   // or the single-flow match end). The viral "I played X" hook.
   document.getElementById("re-share").classList.toggle("hidden", midRound || matchEnd);
+  // Book CTA: only a finished round on a real (bookable) course — no CTA mid-round,
+  // no CTA for fictional Originals, no CTA on the single-flow match end.
+  const showBookCta = !midRound && !matchEnd && courseIsReal(selectedCourseId);
+  document.getElementById("re-book").classList.toggle("hidden", !showBookCta);
+  if (showBookCta) track("book_cta_shown", { course: selectedCourseId });
   // reset to scorecard tab each open
   document.querySelectorAll(".re-tab").forEach(t => t.classList.toggle("active", t.dataset.panel === "re-card"));
   document.querySelectorAll(".re-panel").forEach(p => p.classList.toggle("hidden", p.id !== "re-card"));
@@ -5424,6 +5535,11 @@ function showRoundSummary(midRound = false) {
   document.getElementById("re-tournament-row").classList.add("hidden");
   document.getElementById("round-end").classList.remove("hidden");
   if (!midRound) {
+    // The booking-conversion funnel's top-of-funnel event (PRODUCT_STRATEGY.md §8).
+    if (courseIsReal(selectedCourseId)) {
+      track("round_completed_real_course", { course: selectedCourseId,
+        courseName: course ? course.name : selectedCourseId, strokes: totStrk, to_par: round.score });
+    }
     // Personal best for the whole round → the "one more round" return hook.
     if (!dailyMode) {
       const cb = recordCourseBest(round.score, totStrk);
@@ -5488,6 +5604,12 @@ document.getElementById("re-replay").addEventListener("click", () => {
     startCourse();
   }
 });
+
+document.getElementById("re-book").addEventListener("click", () => {
+  track("book_cta_clicked", { course: selectedCourseId });
+  openBookSheet(selectedCourseId);
+});
+document.getElementById("bk-close").addEventListener("click", closeBookSheet);
 
 // =====================================================================
 //  Course loading & hole setup
@@ -5774,6 +5896,153 @@ function courseUnlockCount() {
   const vis = visibleCourses();
   return { unlocked: vis.filter((c) => courseUnlocked(c.id)).length, total: vis.length };
 }
+
+// A course record is "real" (bookable) unless it's a fictional Original or a
+// dev imagery-test entry — those have no real-world tee sheet to book.
+function courseIsReal(id) {
+  const c = COURSES.find((x) => x.id === id);
+  if (!c) return true;   // unknown id — never hide the CTA over a lookup miss
+  return c.region !== "Originals" && c.region !== "Imagery test";
+}
+
+// Booking confirmed a real-world tee time -> unlock that course, permanently,
+// via the same golf.entitlements bucket the future paid seam already uses
+// (PRODUCT_STRATEGY.md §4). Optimistic local write; the booking-engine Edge
+// Function mirrors it server-side (profiles.entitlements) for logged-in users
+// so the unlock follows them across devices.
+function unlockCourseFromBooking(courseId, bookingId) {
+  const ent = getEntitlements();
+  ent.courses = ent.courses || {};
+  ent.courses[courseId] = { via: "booking", bookingId: bookingId || null, at: Date.now() };
+  lsSet("golf.entitlements", ent);
+  track("course_unlocked", { course: courseId, via: "booking" });
+}
+
+// Pull in any server-side entitlements (booked from another device) without
+// ever dropping locally-earned ones — union merge, local wins on conflict.
+function mergeServerEntitlements(serverEnt) {
+  if (!serverEnt || !serverEnt.courses) return;
+  const ent = getEntitlements();
+  ent.courses = ent.courses || {};
+  let changed = false;
+  for (const cid in serverEnt.courses) {
+    if (!ent.courses[cid]) { ent.courses[cid] = serverEnt.courses[cid]; changed = true; }
+  }
+  if (changed) lsSet("golf.entitlements", ent);
+}
+
+// ---------------------------------------------------------------------
+//  Booking — "book a real tee time -> unlock that course" (PRODUCT_STRATEGY.md
+//  §4). Client never talks to a provider directly (secrets stay server-side);
+//  it calls the booking-engine Supabase Edge Function, which fans out across
+//  providers (mock display-only today; GolfNow/Lightspeed behind a flag once
+//  credentialed — see supabase/functions/booking-engine/index.ts). If the
+//  function isn't deployed yet (dev, or before the Supabase side is set up),
+//  BOOKING_FN fetch fails and callers fall back to a local mock so the CTA is
+//  fully testable without any deploy.
+// ---------------------------------------------------------------------
+function bookingFnUrl() { return LB_URL + "/functions/v1/booking-engine"; }   // LB_URL is declared later in this file — resolve lazily
+
+function localMockTeeTimes(courseId, courseName, location) {
+  const q = encodeURIComponent(`book tee time ${courseName}${location ? " " + location : ""}`);
+  const base = new Date();
+  return [7, 8, 9.5, 11, 13, 14.5, 16].map((h, i) => {
+    const t = new Date(base);
+    t.setHours(Math.floor(h), (h % 1) * 60, 0, 0);
+    if (t < base) t.setDate(t.getDate() + 1);
+    return {
+      id: `mock-${courseId}-${i}`, provider: "mock", courseId, courseName,
+      time: t.toISOString(), players: 4, priceCents: null,
+      bookable: false, deepLink: `https://www.google.com/search?q=${q}`,
+    };
+  });
+}
+
+async function searchTeeTimes(courseId, courseName, location) {
+  track("teetimes_viewed", { course: courseId });
+  try {
+    const res = await fetch(bookingFnUrl(), {
+      method: "POST", headers: { "Content-Type": "application/json", apikey: LB_KEY, Authorization: "Bearer " + LB_KEY },
+      body: JSON.stringify({ action: "search", courseId, courseName, location }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (Array.isArray(data.teeTimes) && data.teeTimes.length) return data.teeTimes;
+    throw new Error("empty");
+  } catch (e) {
+    return localMockTeeTimes(courseId, courseName, location);   // booking-engine not deployed yet / offline
+  }
+}
+
+// Deep-link-only tee time (bookable:false, the mock/scrape path today): just
+// track + open, and count it as an unlock — the golfer's intent to book
+// through the game is the value exchange, not us watching them complete a
+// checkout on someone else's site.
+async function bookTeeTime(teeTime) {
+  track("booking_started", { course: teeTime.courseId, provider: teeTime.provider });
+  if (!teeTime.bookable) {
+    if (teeTime.deepLink) window.open(teeTime.deepLink, "_blank", "noopener");
+    track("booking_redirected", { course: teeTime.courseId, provider: teeTime.provider });
+    unlockCourseFromBooking(teeTime.courseId, null);
+    return { ok: true, redirected: true };
+  }
+  try {
+    const u = currentUser();
+    const res = await fetch(bookingFnUrl(), {
+      method: "POST", headers: { "Content-Type": "application/json", apikey: LB_KEY, Authorization: "Bearer " + LB_KEY },
+      body: JSON.stringify({ action: "book", teeTime, player: { name: getPlayerName() || "Guest" }, userId: u ? u.id : null }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      track("booking_confirmed", { course: teeTime.courseId, provider: teeTime.provider });
+      unlockCourseFromBooking(teeTime.courseId, data.bookingId);
+      return { ok: true };
+    }
+    track("booking_failed", { course: teeTime.courseId, provider: teeTime.provider, reason: data.reason });
+    return { ok: false, reason: data.reason };
+  } catch (e) {
+    track("booking_failed", { course: teeTime.courseId, provider: teeTime.provider, reason: "network" });
+    return { ok: false, reason: "network error" };
+  }
+}
+
+// Non-blocking, dismissible booking sheet — opened from the round-end CTA.
+async function openBookSheet(courseId) {
+  const c = COURSES.find((x) => x.id === courseId);
+  const name = c ? c.name : courseId;
+  const location = c ? c.location : "";
+  document.getElementById("bk-course-name").textContent = name;
+  const list = document.getElementById("bk-list");
+  list.innerHTML = `<div class="bk-loading">Finding tee times…</div>`;
+  document.getElementById("book-sheet").classList.remove("hidden");
+  const teeTimes = await searchTeeTimes(courseId, name, location);
+  if (!teeTimes.length) { list.innerHTML = `<div class="bk-loading">No tee times found right now.</div>`; return; }
+  list.innerHTML = teeTimes.map((t, i) => {
+    const time = new Date(t.time).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+    const price = t.priceCents != null ? `$${(t.priceCents / 100).toFixed(0)}` : "";
+    const label = t.bookable ? "Book" : "View";
+    return `<button class="bk-row" data-i="${i}"><span class="bk-time">${esc(time)}</span>` +
+           `<span class="bk-meta">${t.players} players${price ? " · " + price : ""}</span>` +
+           `<span class="bk-go">${label}</span></button>`;
+  }).join("");
+  list.querySelectorAll(".bk-row").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const t = teeTimes[+btn.dataset.i];
+      btn.disabled = true; btn.querySelector(".bk-go").textContent = "…";
+      const res = await bookTeeTime(t);
+      if (res.ok) {
+        showToast(t.bookable ? "Tee time booked — course unlocked!" : "Course unlocked!", 2600, "gold");
+        closeBookSheet();
+      } else {
+        btn.disabled = false; btn.querySelector(".bk-go").textContent = label_(t);
+        showToast(res.reason || "Couldn't book — try again.", 2200);
+      }
+    });
+  });
+  function label_(t) { return t.bookable ? "Book" : "View"; }
+}
+function closeBookSheet() { document.getElementById("book-sheet").classList.add("hidden"); }
+
 // ---------------------------------------------------------------------
 //  Course-select page: search + filter rail + card grid
 // ---------------------------------------------------------------------
@@ -6259,7 +6528,11 @@ function updateGreenViewBtn() {
   if (show !== _gvBtnShown) { _gvBtnShown = show; elGreenViewBtn.classList.toggle("hidden", !show); }
 }
 
-function openHud() { elHudMenu.classList.remove("hidden"); elHudBtn.classList.add("open"); }
+function openHud() {
+  elHudMenu.classList.remove("hidden"); elHudBtn.classList.add("open");
+  const hmForfeit = document.getElementById("hm-forfeit");
+  if (hmForfeit) hmForfeit.classList.toggle("hidden", !canForfeitHole());
+}
 function closeHud() {
   elHudMenu.classList.add("hidden");
   elHudBtn.classList.remove("open");
@@ -6365,6 +6638,12 @@ function setLieEffect(on) {
   if (btn) btn.classList.toggle("active", on);
   updateStats(); // refresh the lie-effect HUD row immediately
 }
+function setShotPreview(on) {
+  shotPreviewEnabled = on;
+  if (!on) shotPreview = null; // drop any live marker the instant it's turned off
+  const btn = document.getElementById("hm-preview");
+  if (btn) btn.classList.toggle("active", on);
+}
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
 document.getElementById("hm-wind").addEventListener("click", () => setWind(!windEnabled));
 const elSlottedBtn = document.getElementById("hm-slotted");
@@ -6373,6 +6652,8 @@ const elAutoAimBtn = document.getElementById("hm-autoaim");
 if (elAutoAimBtn) elAutoAimBtn.addEventListener("click", () => setAutoAim(!autoAimEnabled));
 const elChipBtn = document.getElementById("hm-chip");
 if (elChipBtn) elChipBtn.addEventListener("click", () => setChip(!chipEnabled));
+const elShotPreviewBtn = document.getElementById("hm-preview");
+if (elShotPreviewBtn) elShotPreviewBtn.addEventListener("click", () => setShotPreview(!shotPreviewEnabled));
 
 // =====================================================================
 //  Movable HUD (mobile) — let players drag corner panels out of the way.
@@ -6582,12 +6863,13 @@ const SETTING_DEFS = [
   { key: "slotted",     label: "Slotted mode",    icon: "ic-target", get: () => slottedMode,     set: (v) => setSlotted(v) },
   { key: "chip",        label: "Chip mode",       icon: "ic-chip",   get: () => chipEnabled,     set: (v) => setChip(v) },
   { key: "lieEffect",   label: "Lie effect",      icon: "ic-slope",  get: () => lieEffectEnabled, set: (v) => setLieEffect(v) },
+  { key: "shotPreview", label: "Shot preview",    icon: "ic-target", get: () => shotPreviewEnabled, set: (v) => setShotPreview(v) },
 ];
 // Effective defaults: hardcoded fallback until the global row loads.
 // Immutable fallback for each setting — used when a saved/loaded settings row
 // predates a key (e.g. a global Supabase row baked before "chip" existed). A
 // MISSING key falls back to this default, NOT to false.
-const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true, lieEffect: true };
+const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true, lieEffect: true, shotPreview: false };
 let gameDefaults = Object.assign({}, SETTING_DEFAULTS);
 let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
 
@@ -7335,6 +7617,7 @@ async function ensureProfile() {
   }
   _profile = prof;
   if (prof.display_name) { try { localStorage.setItem("golf.playerName", prof.display_name); } catch (e) {} }
+  mergeServerEntitlements(prof.entitlements);   // pull in courses booked from another device
   updateMenuPlayerLine();
   refreshFriendBadges();   // light up the Friends menu dot if requests/invites wait
   // first run with no name → prompt (reuses the name-entry overlay)
@@ -8210,6 +8493,7 @@ async function inviteFriendToMatch(friendUid) {
       method: "POST", headers: authHeaders({ Prefer: "return=minimal" }),
       body: JSON.stringify({ match_id: m.id, code: m.code, from_user: myUid(), to_user: friendUid, status: "pending" }),
     });
+    track("friend_challenge_sent");
   } catch (e) {}
   if (btn) { btn.disabled = false; btn.textContent = "Invite to match"; }
   closeFriendProfile(); closeFriends();
@@ -9219,7 +9503,7 @@ async function createMatch() {
         headers: authHeaders({ Prefer: "return=representation" }),
         body: JSON.stringify(body),
       });
-      if (res.ok) { const rows = await res.json(); return rows[0] || null; }
+      if (res.ok) { const rows = await res.json(); track("match_created"); return rows[0] || null; }
       if (res.status === 409) { body.code = genMatchCode(); continue; }  // code collision
       return null;
     } catch (e) { console.warn("createMatch failed:", e); return null; }
@@ -9283,13 +9567,13 @@ async function fetchMatchPlayers(matchId) {
 async function beginMatch(courseId, holeCount, settings, format, live) {
   if (!LB_ON() || !activeMatch) return false;
   track("match_start", { kind: live ? "live" : "async", format, holes: holeCount });
-  const isMatch = format === "match";
+  const validFormat = ["match", "skins", "ctp"].includes(format) ? format : "stroke";
   const patch = {
     course_id: courseId,
     hole_count: holeCount,
     settings: normalizeSettings(settings),
-    format: isMatch ? "match" : "stroke",
-    live: !!live,   // 1v1 turn-based; works for both match play and stroke play
+    format: validFormat,
+    live: !!live,   // 1v1 turn-based; works for any format
     status: "live",
     started_at: new Date().toISOString(),
   };
@@ -9431,21 +9715,52 @@ async function hostStartMatch() {
   openMatchLobby();
 }
 
-async function joinMatchFlow() {
-  if (!LB_ON()) { mmError("Online play isn't configured."); return; }
-  const code = (document.getElementById("mm-code").value || "").trim().toUpperCase();
-  if (code.length < 4) { mmError("Enter the code from the host."); return; }
-  mmError("");
+// Shared join path: the code-entry field (joinMatchFlow) and the challenge-
+// link deep link (maybeJoinFromLink) both funnel through here — one place
+// that knows what "join by code" means.
+async function joinMatchByCode(code) {
+  if (!LB_ON()) return { ok: false, reason: "Online play isn't configured." };
+  if (!code || code.length < 4) return { ok: false, reason: "Enter the code from the host." };
   const m = await fetchMatchByCode(code);
-  if (!m) { mmError("No match with that code."); return; }
-  if (m.status !== "lobby") { mmError("That match has already started."); return; }
+  if (!m) return { ok: false, reason: "No match with that code." };
+  if (m.status !== "lobby") return { ok: false, reason: "That match has already started." };
   const ok = await addMatchPlayer(m.id);
-  if (!ok) { mmError("Couldn't join. Try again."); return; }
+  if (!ok) return { ok: false, reason: "Couldn't join. Try again." };
   activeMatch = m;
   _matchIsHost = (currentUser() && m.host_user_id === currentUser().id);
   _matchEntered = false;
+  return { ok: true };
+}
+
+async function joinMatchFlow() {
+  const code = (document.getElementById("mm-code").value || "").trim().toUpperCase();
+  mmError("");
+  const res = await joinMatchByCode(code);
+  if (!res.ok) { mmError(res.reason); return; }
   closeMatchMenu();
   openMatchLobby();
+}
+
+// Frictionless "challenge a friend" link (PRODUCT_STRATEGY.md §7.2): the
+// match lobby's "Invite link" button shares this URL; maybeJoinFromLink()
+// (called once at boot) picks up ?m=CODE on the receiving end.
+function matchInviteUrl(code) { return SHARE_URL + "?m=" + code; }
+
+async function maybeJoinFromLink() {
+  const p = new URLSearchParams(location.search);
+  const code = (p.get("m") || "").trim().toUpperCase();
+  if (!code) return;
+  // Strip the param either way so a refresh/share-forward doesn't re-prompt.
+  p.delete("m");
+  const rest = p.toString();
+  history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
+  if (activeMatch || !confirm(`Join match ${code}?`)) return;
+  ensureNameThen(async () => {
+    const res = await joinMatchByCode(code);
+    if (!res.ok) { showToast(res.reason, 2400); return; }
+    track("match_joined_via_link", { code });
+    openMatchLobby();
+  });
 }
 
 // --- Match lobby (roster + begin/waiting), polled every 2s ---
@@ -9575,7 +9890,7 @@ function confirmMatchSetup() {
 async function startConfiguredMatch() {
   const ov = document.getElementById("match-setup");
   const holes = parseInt(ov.dataset.holes, 10) || 18;
-  const format = ov.dataset.format === "match" ? "match" : "stroke";
+  const format = ["match", "skins", "ctp"].includes(ov.dataset.format) ? ov.dataset.format : "stroke";
   const live = ov.dataset.live === "1";   // any format, gated to 1v1 by the toggle
   hideCourseSelect();
   showToast("Starting match…", 1500);
@@ -9698,6 +10013,53 @@ function computeMatchPlay(me, opp, holesTotal) {
   return { diff, thru, remaining, status, decided, result };
 }
 
+// Skins: each hole is worth one skin. Strict lowest score wins it outright;
+// a tie carries the skin's value into the next hole's pot (a later untied
+// hole clears the whole accumulated pot, standard skins rule). N players,
+// unlike match play's fixed 1v1 — reuses the same match_players rows the
+// ranked stroke-play list already has.
+function computeSkins(rows, holesTotal) {
+  const won = {};
+  for (const r of rows) won[r.player_name] = 0;
+  let pot = 0;
+  const perHole = [];
+  for (let h = 1; h <= holesTotal; h++) {
+    const scores = rows.map((r) => ({ r, s: (r.hole_scores || {})[h] }));
+    if (scores.some((x) => x.s == null)) { perHole.push({ hole: h, winner: null, pot: null }); continue; } // not everyone in yet
+    pot++;
+    const min = Math.min(...scores.map((x) => x.s));
+    const winners = scores.filter((x) => x.s === min);
+    if (winners.length === 1) {
+      won[winners[0].r.player_name] += pot;
+      perHole.push({ hole: h, winner: winners[0].r.player_name, pot });
+      pot = 0;
+    } else {
+      perHole.push({ hole: h, winner: null, pot }); // tie — pot carries to the next hole
+    }
+  }
+  return { perHole, won, carry: pot };
+}
+
+// Closest-to-pin: per hole, whoever's approach finished nearest the cup (first
+// time reaching the green that hole — state.proximity, synced as hole_prox)
+// wins that hole's point. Holes nobody has a recorded proximity for (missed
+// the green, or a bot opponent with no proximity data) are skipped, not
+// scored zero.
+function computeClosestToPin(rows, holesTotal) {
+  const won = {};
+  for (const r of rows) won[r.player_name] = 0;
+  const perHole = [];
+  for (let h = 1; h <= holesTotal; h++) {
+    const entries = rows.map((r) => ({ r, p: (r.hole_prox || {})[h] })).filter((x) => x.p != null);
+    if (!entries.length) { perHole.push({ hole: h, winner: null }); continue; }
+    const min = Math.min(...entries.map((x) => x.p));
+    const winner = entries.find((x) => x.p === min).r;
+    won[winner.player_name]++;
+    perHole.push({ hole: h, winner: winner.player_name, prox: min });
+  }
+  return { perHole, won };
+}
+
 // Match play: end-of-hole outcome + resulting match status ("Hole won · 2 up").
 // Null until both players have a recorded score for hole h.
 function matchHoleOutcomeText(h) {
@@ -9723,6 +10085,26 @@ function checkHoleConcede() {
   state._conceded = true;
   state.strokes += 1;   // the pickup: best-case stroke that still loses the hole
   state.inHole = true;  // hole is over — no more swings
+  showResult();
+}
+
+// Match play: player-initiated pickup, offered any time mid-hole (not just once
+// the hole is mathematically dead) — the real "I'm picking up" call, for a lie
+// with no realistic recovery or just not worth playing out. Always registers as
+// a loss: at least one more stroke than already taken, and strictly worse than
+// the opponent's posted score if they've already finished the hole, so it can
+// never accidentally read as a win or halve.
+function canForfeitHole() {
+  return matchPlay() && mode === "course" && !!HOLE && !HOLE.isRange &&
+    !state.inHole && !state.moving && !holeTransition && !matchDecided &&
+    !round.holeStats.some(s => s.hole === HOLE.num);
+}
+function forfeitHole() {
+  if (!canForfeitHole()) return;
+  const theirs = lastOpp && (lastOpp.hole_scores || {})[HOLE.num];
+  state._conceded = true;
+  state.strokes = theirs != null ? Math.max(state.strokes + 1, theirs + 1) : state.strokes + 1;
+  state.inHole = true;
   showResult();
 }
 
@@ -9772,6 +10154,30 @@ function oppResponsive() {
 
 function sameName(a, b) { return (a || "").toLowerCase() === (b || "").toLowerCase(); }
 function oppName() { return (lastOpp && lastOpp.player_name) || "opponent"; }
+
+// ---------------------------------------------------------------------
+//  Trash talk (§5/§7.2): canned phrases only, no free text — no moderation
+//  surface. Rides the existing match_players write/poll/realtime path, same
+//  as hole_scores. _seenTaunts baselines each opponent row on first sight so
+//  rejoining a match never replays an old taunt as if it just happened.
+// ---------------------------------------------------------------------
+const TAUNTS = ["Nice shot 👏", "Ouch 😬", "Choke.", "Too easy.", "Feeling the pressure yet?", "GG"];
+let _seenTaunts = {};   // match_players.id -> last last_taunt_at we've already shown
+
+function checkIncomingTaunts(rows) {
+  for (const r of rows) {
+    if (isMeEntry(r) || !r.last_taunt_at) continue;
+    const prev = _seenTaunts[r.id];
+    _seenTaunts[r.id] = r.last_taunt_at;
+    if (prev === undefined || prev === r.last_taunt_at) continue;   // baseline, or unchanged
+    if (r.last_taunt) showToast(esc(r.player_name) + ": " + r.last_taunt, 2600);
+  }
+}
+
+async function sendTaunt(text) {
+  if (!matchLive()) return;
+  await patchMyMatchRow({ last_taunt: text, last_taunt_at: new Date().toISOString() });
+}
 
 // My live shot state from the LOCAL game (no poll lag → input locks instantly
 // after I swing, without waiting for my own row to round-trip).
@@ -10020,6 +10426,7 @@ async function renderMatchBoard() {
   onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync — needed every
                       // poll regardless of panel visibility, so this always runs
   updateMatchMini(rows);   // compact bottom-left compare — also independent of panel visibility
+  checkIncomingTaunts(rows);   // canned-phrase trash talk — toast a fresh one from any opponent
   const panel = document.getElementById("match-standings");
   if (!panel || panel.classList.contains("hidden")) return; // board UI closed — skip the innerHTML rebuild below
   const title = document.getElementById("mb-title");
@@ -10102,9 +10509,9 @@ function closeMatchResults() {
   stopResultsPoll();
   const ov = document.getElementById("match-results");
   if (ov) ov.classList.add("hidden");
-  // Ladder buttons are per-match — never leak into human match results.
+  // Rematch button state is per-match — never leak into the next match's results.
   const rm = document.getElementById("mr-rematch"), nb = document.getElementById("mr-next-bot");
-  if (rm) rm.classList.add("hidden");
+  if (rm) { rm.classList.add("hidden"); delete rm.dataset.human; }
   if (nb) nb.classList.add("hidden");
 }
 
@@ -10121,7 +10528,7 @@ function settleBotMatch() {
     // This bot's course tier just opened — tell the player what they won.
     const tier = botIndex(activeMatch._bot);
     let n = 0;
-    courseTierMap().forEach((t) => { if (t === tier) n++; });
+    courseTierMap().forEach((t, cid) => { if (t === tier) { n++; track("course_unlocked", { course: cid, via: "bot" }); } });
     if (n) setTimeout(() => showToast(n + " new course" + (n === 1 ? "" : "s") + " unlocked", 2600, "gold"), 3200);
   }
   if (won && earnMilestone("match-win")) announceMilestoneUnlocks("match-win", 6000);
@@ -10141,6 +10548,25 @@ function startBotFromResults(bot) {
   startCpuMatch("match", holes, bot);
 }
 
+// Rematch for a finished human-vs-human match (§5/§7.2 "rematch loop" — the
+// bot ladder already had one, human matches didn't). No assumption the
+// opponent is a known friend: opens a fresh lobby under a new code so the
+// host can re-share it (Copy code / Invite link, both already live there)
+// with whoever they just played.
+async function rematchHumanMatch() {
+  leaveMatch();
+  closeHud();
+  elScorecard.style.display = "none";
+  if (!LB_ON()) { showToast("Online play isn't configured.", 2000); return; }
+  const m = await createMatch();
+  if (!m) { showToast("Couldn't start a rematch. Try again.", 2200); return; }
+  await addMatchPlayer(m.id);   // host is a competitor too → own roster/score row
+  activeMatch = m;
+  _matchIsHost = true;
+  _matchEntered = false;
+  openMatchLobby();
+}
+
 async function renderMatchResults() {
   if (!activeMatch) return;
   const rows = await fetchMatchPlayers(activeMatch.id);
@@ -10154,6 +10580,14 @@ async function renderMatchResults() {
   if (subEl) subEl.textContent = allDone
     ? "Match complete"
     : `${rows.filter(r => r.finished).length}/${rows.length} in the clubhouse`;
+  // Human rematch (§5/§7.2 "rematch loop"): a finished human-vs-human match
+  // (not the bot ladder, not a Quick Match CPU fallback — both set cpuMatch)
+  // gets a plain Rematch button. settleBotMatch() handles the ladder's own
+  // Rematch/Next-bot visibility separately when activeMatch._bot is set.
+  if (allDone && !cpuMatch) {
+    const rm = document.getElementById("mr-rematch");
+    if (rm) { rm.dataset.human = "1"; rm.classList.remove("hidden"); }
+  }
 
   // Full per-hole scorecard only once everyone's holed out; live poll fills it in.
   const scEl = document.getElementById("mr-scorecard");
@@ -10197,6 +10631,28 @@ async function renderMatchResults() {
     showToast("First match win!", 2200, "gold");
     announceMilestoneUnlocks("match-win", 2600);
   }
+  // Skins / closest-to-pin: same ranked stroke-play list as the base game,
+  // plus a pot/point leader banner and a per-hole breakdown appended under
+  // the scorecard once the match ends (§5/§7.2 new formats).
+  if (activeMatch.format === "skins" || activeMatch.format === "ctp") {
+    const isSkins = activeMatch.format === "skins";
+    const calc = isSkins ? computeSkins(rows, matchHoleCount) : computeClosestToPin(rows, matchHoleCount);
+    const leaderName = Object.keys(calc.won).sort((a, b) => calc.won[b] - calc.won[a])[0];
+    const leaderCount = calc.won[leaderName] || 0;
+    if (bannerEl && allDone) {
+      bannerEl.textContent = leaderCount
+        ? `${leaderName} leads ${isSkins ? "skins" : "closest-to-pin"} — ${leaderCount}`
+        : (isSkins ? "No skins won — every hole tied" : "No proximity data recorded");
+    }
+    if (scEl && allDone) {
+      const label = isSkins ? "Skins" : "Closest-to-pin";
+      const won = calc.perHole.filter((h) => h.winner);
+      scEl.innerHTML += won.length ? `<div class="mr-fmt-breakdown"><div class="mr-fmt-title">${label} by hole</div>` +
+        won.map((h) =>
+          `<div class="mr-fmt-row"><span>Hole ${h.hole}</span><span>${esc(h.winner)}${isSkins && h.pot > 1 ? " ×" + h.pot : ""}</span></div>`
+        ).join("") + `</div>` : "";
+    }
+  }
   listEl.innerHTML = ranked.map(r => {
     const meCls = isMeEntry(r) ? " mr-me" : "";
     const win = allDone && r.pos === 1;
@@ -10227,6 +10683,7 @@ function leaveMatch() {
   cpuOpp = null;
   toggleMatchBoard(false);
   updateMatchMini(null);
+  _seenTaunts = {};
 }
 
 // =====================================================================
@@ -10498,14 +10955,17 @@ function cpuRecomputeScore() {
 }
 // Synthesize the two match_players rows for a CPU match from local state.
 function cpuMatchRows() {
-  const hs = {};
-  for (const h of round.holeStats) hs[h.hole] = h.strokes;
+  const hs = {}, hp = {};
+  for (const h of round.holeStats) {
+    hs[h.hole] = h.strokes;
+    if (h.proximity != null) hp[h.hole] = h.proximity;
+  }
   const me = {
     user_id: (currentUser() || {}).id || null,
     player_name: getPlayerName() || "You",
     score: round.score, holes_played: round.holesPlayed,
     finished: round.holesPlayed >= roundHoleCount(),
-    hole_scores: hs,
+    hole_scores: hs, hole_prox: hp,
     cur_hole: (typeof HOLE !== "undefined" && HOLE && HOLE.num) || null,
     cur_to_pin: -1, cur_at_rest: true,
   };
@@ -11180,6 +11640,19 @@ function renderProgress() {
     if (navigator.clipboard) navigator.clipboard.writeText(code).then(done).catch(done);
     else done();
   });
+  const mlShare = document.getElementById("ml-share");
+  if (mlShare) mlShare.addEventListener("click", async () => {
+    const code = activeMatch ? activeMatch.code : "";
+    if (!code) return;
+    const url = matchInviteUrl(code);
+    const text = "Join my match on YoGolf — code " + code;
+    const done = () => showToast("Invite link copied", 1600);
+    try {
+      if (navigator.share) { await navigator.share({ text, url }); return; }
+    } catch (e) { return; }   // user cancelled the share sheet — not an error
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(done).catch(done);
+    else done();
+  });
 
   const ms = document.getElementById("match-setup");
   if (ms) ms.querySelectorAll(".ms-len").forEach(b => b.addEventListener("click", () => {
@@ -11204,6 +11677,18 @@ function renderProgress() {
   if (mbClose) mbClose.addEventListener("click", () => toggleMatchBoard(false));
   const hmMatch = document.getElementById("hm-match");
   if (hmMatch) hmMatch.addEventListener("click", () => { toggleMatchBoard(); closeHud(); });
+  const hmForfeit = document.getElementById("hm-forfeit");
+  if (hmForfeit) hmForfeit.addEventListener("click", () => { forfeitHole(); closeHud(); });
+  const mbTaunts = document.getElementById("mb-taunts");
+  if (mbTaunts) {
+    mbTaunts.innerHTML = TAUNTS.map((t, i) => `<button class="mb-taunt-btn" data-i="${i}">${esc(t)}</button>`).join("");
+    mbTaunts.addEventListener("click", (e) => {
+      const btn = e.target.closest(".mb-taunt-btn");
+      if (!btn) return;
+      sendTaunt(TAUNTS[+btn.dataset.i]);
+      showToast("Sent", 1000);
+    });
+  }
 
   const reConfirm = document.getElementById("re-confirm-match");
   if (reConfirm) reConfirm.addEventListener("click", openMatchResults);
@@ -11217,10 +11702,12 @@ function renderProgress() {
     closeHud();
     elScorecard.style.display = "none";
   });
-  // Ladder: read _bot BEFORE leaveMatch (it nulls activeMatch).
+  // Ladder: read _bot BEFORE leaveMatch (it nulls activeMatch). Human rematch
+  // (renderMatchResults tags the button data-human="1") takes the other path.
   const mrRematch = document.getElementById("mr-rematch");
   if (mrRematch) mrRematch.addEventListener("click", () => {
-    startBotFromResults(botById(activeMatch && activeMatch._bot));
+    if (mrRematch.dataset.human) rematchHumanMatch();
+    else startBotFromResults(botById(activeMatch && activeMatch._bot));
   });
   const mrNextBot = document.getElementById("mr-next-bot");
   if (mrNextBot) mrNextBot.addEventListener("click", () => {
@@ -11578,6 +12065,7 @@ buildCourseList();
 updateMenuPlayerLine();   // reflect saved player name (leaderboard identity)
 loop();
 showMenu();
+maybeJoinFromLink();      // ?m=CODE challenge link — prompt to join, no-op if absent
 probeBakeApi();           // reveal admin "Add course" only if the bake server is up
 loadManifest().then(() => {
   buildCourseList();      // refresh list from courses/manifest.json (admin-baked courses)

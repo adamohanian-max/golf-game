@@ -157,6 +157,15 @@
 .cs-badge.pga { background: rgba(46,125,79,0.92); }
 .cs-badge.major { background: rgba(207,168,94,0.95); color: #1c1508; }
 .cs-badge.featured { background: var(--brass-bright, #cfa85e); color: #1c1508; }
+/* Four Oaks 3D (three.js) opt-in — the only clickable badge, so it needs its
+   own affordance (cursor, hover) unlike the purely informational ones above. */
+.cs-badge-3d {
+  cursor: pointer;
+  background: rgba(46,90,125,0.92);
+  transition: background 0.15s ease;
+}
+.cs-badge-3d:hover { background: rgba(58,112,156,0.95); }
+.cs-badge-3d.on { background: var(--brass-bright, #cfa85e); color: #1c1508; }
 .cs-card-best {
   position: absolute; top: 8px; right: 8px;
   font-size: 11px; font-weight: 700;

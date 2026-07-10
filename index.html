@@ -14,10 +14,10 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=57">
   <link rel="stylesheet" href="css/base.css?v=67">
-  <link rel="stylesheet" href="css/hud.css?v=85">
+  <link rel="stylesheet" href="css/hud.css?v=87">
   <link rel="stylesheet" href="css/menu.css?v=71">
   <link rel="stylesheet" href="css/courses.css?v=7">
-  <link rel="stylesheet" href="css/modals.css?v=73">
+  <link rel="stylesheet" href="css/modals.css?v=75">
   <link rel="stylesheet" href="css/tournament.css?v=55">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
@@ -119,7 +119,9 @@
       <button class="hm-item" id="hm-measure"><span class="ic ic-ruler"></span>Range finder</button>
       <button class="hm-item" id="hm-aim"><span class="ic ic-target"></span>Aim at pin</button>
       <button class="hm-item active" id="hm-chip"><span class="ic ic-chip"></span>Chip mode</button>
+      <button class="hm-item" id="hm-preview"><span class="ic ic-target"></span>Shot preview</button>
       <button class="hm-item hidden" id="hm-match"><span class="ic ic-trophy"></span>Match board</button>
+      <button class="hm-item hidden" id="hm-forfeit"><span class="ic ic-x"></span>Forfeit hole</button>
     </div>
     <div class="hm-sep"></div>
     <div class="hs-sub">Settings</div>
@@ -284,9 +286,22 @@
         <button id="re-home" class="menu-btn secondary">Home</button>
         <button id="re-share" class="menu-btn secondary hidden"><span class="ic ic-clipboard"></span>Share</button>
         <button id="re-leaderboard" class="menu-btn secondary"><span class="ic ic-trophy"></span>View leaderboard</button>
+        <button id="re-book" class="menu-btn secondary hidden">Book a real tee time</button>
         <button id="re-replay" class="menu-btn">Play Again</button>
         <button id="re-confirm-match" class="menu-btn hidden">Confirm scorecard</button>
       </div>
+    </div>
+  </div>
+
+  <div id="book-sheet" class="hidden">
+    <div class="bk-box">
+      <div class="bk-header">
+        <h2>Book a tee time</h2>
+        <p id="bk-course-name"></p>
+        <button id="bk-close" class="bk-x" aria-label="Close">&times;</button>
+      </div>
+      <div id="bk-list" class="bk-list"><div class="bk-loading">Finding tee times…</div></div>
+      <p class="bk-foot">Booking unlocks this course to play, permanently.</p>
     </div>
   </div>
 
@@ -603,6 +618,7 @@
         <span class="ml-code-row">
           <span id="ml-code" class="ml-code">——————</span>
           <button id="ml-copy" class="ml-copy" type="button" title="Copy code" aria-label="Copy code">Copy</button>
+          <button id="ml-share" class="ml-copy" type="button" title="Copy invite link" aria-label="Copy invite link">Invite link</button>
         </span>
       </div>
       <div id="ml-field" class="tl-field"></div>
@@ -620,6 +636,10 @@
       <div class="ms-len-row">
         <button class="menu-btn secondary ms-fmt" data-format="stroke">Stroke play</button>
         <button class="menu-btn secondary ms-fmt" data-format="match">Match play</button>
+      </div>
+      <div class="ms-len-row">
+        <button class="menu-btn secondary ms-fmt" data-format="skins">Skins</button>
+        <button class="menu-btn secondary ms-fmt" data-format="ctp">Closest to pin</button>
       </div>
       <div id="ms-fmt-note" class="ne-sub ms-note"></div>
       <div class="ms-len-row">
@@ -642,6 +662,7 @@
       <button id="mb-close" class="mb-x" aria-label="Close"><span class="ic ic-x"></span></button>
     </div>
     <div id="mb-list" class="mb-list"></div>
+    <div id="mb-taunts" class="mb-taunts"></div>
   </div>
 
   <div id="match-results" class="hidden">
@@ -666,7 +687,7 @@
        full download+execute; defer still preserves this document order for when
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./three3d/course3d.js?v=12"></script>
-  <script defer src="game.js?v=191"></script>
+  <script type="module" src="./three3d/course3d.js?v=14"></script>
+  <script defer src="game.js?v=195"></script>
 </body>
 </html>

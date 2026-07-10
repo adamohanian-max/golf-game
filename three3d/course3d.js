@@ -89,6 +89,8 @@ let contextLost = false;
 
 let skirtMesh = null;
 let terrainMesh = null;
+let terrainMat = null;     // shared with buildGreenPatchesForCourse — same texture/shader, just denser mesh
+let greenPatchMeshes = []; // dense per-green overlays — see buildGreenPatchesForCourse
 let teeMesh = null;
 let pinPoleMesh = null;
 let pinFlagMesh = null;
@@ -308,22 +310,30 @@ function worldToAerialPx(aerial, wx_, wy_) {
   };
 }
 
-function buildTerrainGeometry(aerial) {
+// `bbox` (world units) + explicit `cols`/`rows` let this same function build
+// both the coarse course-wide terrain (default: full world, ~4-unit cells)
+// AND small dense patches over an arbitrary sub-rect (used for greens below —
+// a green is only ~6-10 world units across, so the coarse mesh gives it 2-3
+// vertices total, nowhere near enough to visibly show the real break even
+// though terrainZ() already computes it correctly at any point).
+function buildTerrainGeometry(aerial, bbox, colsOverride, rowsOverride) {
   const gb = window.GolfBridge;
   const world = gb.getWorld();
+  const b = bbox || { minx: 0, miny: 0, maxx: world.w, maxy: world.h };
+  const bw = b.maxx - b.minx, bh = b.maxy - b.miny;
   // ~4 world units (~11m) per cell — the raw DEM is ~2 units/cell (105k
   // vertices); this decimates ~4x, still resolves Four Oaks' 55m of relief
   // fine and keeps one course-wide mesh cheap to rebuild/hold on a phone.
-  const cols = Math.max(8, Math.round(world.w / 4));
-  const rows = Math.max(8, Math.round(world.h / 4));
+  const cols = colsOverride || Math.max(8, Math.round(bw / 4));
+  const rows = rowsOverride || Math.max(8, Math.round(bh / 4));
   const positions = new Float32Array((cols + 1) * (rows + 1) * 3);
   const uvs = new Float32Array((cols + 1) * (rows + 1) * 2);
   const bunkerMask = new Float32Array((cols + 1) * (rows + 1));
   let p = 0, u = 0, bi = 0;
   for (let j = 0; j <= rows; j++) {
-    const wy_ = (j / rows) * world.h;
+    const wy_ = b.miny + (j / rows) * bh;
     for (let i = 0; i <= cols; i++) {
-      const wx_ = (i / cols) * world.w;
+      const wx_ = b.minx + (i / cols) * bw;
       let z = gb.terrainZ(wx_, wy_);
       // Bunkers as an actual depression, not just whatever the aerial photo
       // shows flush with the fairway. surfaceAt is the same physics-shared
@@ -369,7 +379,7 @@ function buildGroundForCourse() {
   if (terrainMesh) { scene.remove(terrainMesh); terrainMesh.geometry.dispose(); terrainMesh.material.dispose(); }
   const aerial = course && course.aerial;
   const terrainGeo = buildTerrainGeometry(aerial);
-  const terrainMat = new THREE.MeshStandardMaterial({ color: 0x4c8a4f, flatShading: false });
+  terrainMat = new THREE.MeshStandardMaterial({ color: 0x4c8a4f, flatShading: false });
   patchGroundDetailShader(terrainMat);
   terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
   scene.add(terrainMesh);
@@ -403,6 +413,41 @@ function buildGroundForCourse() {
 
   buildWaterForCourse(course);
   buildTreesForCourse(course.id);
+  buildGreenPatchesForCourse(aerial);
+}
+
+// Dense per-green overlay meshes — same material/texture as the main terrain
+// (patchGroundDetailShader already wired onto `terrainMat`), just sampled at
+// ~10x the resolution over each green's own small footprint. terrainZ()
+// already computes the real break correctly everywhere (confirmed: it folds
+// in the synthetic putting-green field the 2D contour/break physics uses) —
+// the coarse course-wide mesh just can't SHOW it, since a green (~6-10 world
+// units across) only gets 2-3 vertices from a ~4-unit-cell mesh. This is
+// purely a visual fix; the ball already breaks correctly either way.
+function buildGreenPatchesForCourse(aerial) {
+  for (const mesh of greenPatchMeshes) { scene.remove(mesh); mesh.geometry.dispose(); }
+  greenPatchMeshes = [];
+  const gb = window.GolfBridge;
+  const hole = gb.getHole();
+  const greens = (hole && hole._greens) || [];
+  for (const g of greens) {
+    if (!g.poly || g.poly.length < 3) continue;
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for (const pt of g.poly) {
+      if (pt.x < minx) minx = pt.x; if (pt.x > maxx) maxx = pt.x;
+      if (pt.y < miny) miny = pt.y; if (pt.y > maxy) maxy = pt.y;
+    }
+    const pad = 4; // world units — comfortably inside TUNE.gUndFall's smoothstep, so the seam blends via terrainZ itself rather than a hard edge
+    const bbox = { minx: minx - pad, miny: miny - pad, maxx: maxx + pad, maxy: maxy + pad };
+    const cellSize = 0.5; // world units (~1.4m) vs. the coarse mesh's 4 — ~8x denser, enough to show 1-3% grades
+    const cols = Math.max(6, Math.round((bbox.maxx - bbox.minx) / cellSize));
+    const rows = Math.max(6, Math.round((bbox.maxy - bbox.miny) / cellSize));
+    const geo = buildTerrainGeometry(aerial, bbox, cols, rows);
+    geo.translate(0, 0.03, 0); // tiny lift so it wins depth vs. the coarse mesh underneath instead of z-fighting
+    const mesh = new THREE.Mesh(geo, terrainMat);
+    scene.add(mesh);
+    greenPatchMeshes.push(mesh);
+  }
 }
 
 // ---- water: real Water.js planar-reflection hazards instead of nothing ----
@@ -494,11 +539,15 @@ function loadTreeSpecies() {
 // course-wide, which is cheap to instance outright on any 2020+ mobile GPU.
 // A far-distance billboard LOD (reusing game.js's treeSprites() canvases,
 // per the plan) is a fast-follow if on-device perf testing ever calls for it.
+let treesBuildInFlight = false;
 function buildTreesForCourse(courseId) {
+  if (treesBuildInFlight) return; // already mid-build for this attempt — render()'s retry calls this every frame until it lands
   const gb = window.GolfBridge;
   const trees = gb.getTrees();
-  if (!trees.length) return; // WOODS mask may still be decoding — syncFromHole retries this on the next hole/enter
+  if (!trees.length) return; // WOODS mask may still be decoding — render()'s per-frame retry (mirrors game.js's own drawTrees() guard) picks it up the instant it's ready
+  treesBuildInFlight = true;
   loadTreeSpecies().then((species) => {
+    treesBuildInFlight = false;
     for (const mesh of treeMeshes) { scene.remove(mesh); mesh.geometry.dispose(); }
     treeMeshes = [];
     const bySpecies = species.map(() => []);
@@ -527,10 +576,19 @@ function buildTreesForCourse(courseId) {
       }
     }
     treesBuiltForCourseId = courseId;
+  }).catch((e) => {
+    treesBuildInFlight = false; // let render()'s retry try again next frame instead of getting stuck forever
+    console.warn("[Course3D] tree model load failed:", e);
   });
 }
 
+// Bound once, ever — init() re-runs this on every context-restore, and without
+// this guard each restore stacked another pair of lost/restored listeners on
+// canvasEl (permanent, never removed) on top of leaking the prior renderer.
+let contextHandlersBound = false;
 function markContextHandlers() {
+  if (contextHandlersBound) return;
+  contextHandlersBound = true;
   canvasEl.addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
     contextLost = true;
@@ -538,10 +596,37 @@ function markContextHandlers() {
   });
   canvasEl.addEventListener("webglcontextrestored", () => {
     console.warn("[Course3D] WebGL context restored — rebuilding");
+    const wasActive = active;
+    // Release OrbitControls' own pointer/wheel listeners on canvasEl before
+    // init() creates a fresh instance — otherwise the old one is orphaned,
+    // doing dead work forever. Do NOT call renderer.dispose() here: the
+    // browser already discarded the old GL context and everything tied to
+    // it (confirmed via WEBGL_lose_context testing) — dispose() tries to
+    // gl.deleteTexture/deleteBuffer/deleteVertexArray those now-stale handles
+    // through the canvas's CURRENT (new, post-restore) context, which fires
+    // "object does not belong to this context" for every cached resource
+    // (100+ warnings on a scene this size). Just drop the reference and let
+    // it GC; init() builds an entirely new renderer + re-uploads everything.
+    if (controls) controls.dispose();
+    renderer = null;
+    // Same reasoning as renderer above, one level deeper: syncFromHole(true)
+    // below forces buildGroundForCourse()/buildWaterForCourse()/etc. to
+    // rebuild from scratch, and each of THOSE guards its rebuild with
+    // "if (oldMesh) { ...oldMesh.geometry.dispose()... }" so it doesn't leak
+    // GPU memory on a normal (context-alive) rebuild. After a context loss
+    // that dispose() is the same stale-context problem all over again — null
+    // everything out so each build function sees "nothing built yet" and
+    // skips disposing objects whose GPU-side buffers are already gone.
+    terrainMesh = null;
+    skirtMesh = null;
+    waterMeshes = [];
+    treeMeshes = [];
+    greenPatchMeshes = [];
     contextLost = false;
     initialized = false;
     builtForCourseId = null;
     init();
+    active = wasActive;
     syncFromHole(true);
   });
 }
@@ -702,6 +787,18 @@ function render() {
     const bh = gb.terrainZ ? gb.terrainZ(b.x, b.y) : 0;
     worldToScene(b.x, b.y, bh + (b.z || 0), ballMesh.position);
     updateShotCamera();
+
+    // Trees retry: the WOODS mask decodes async, and syncFromHole (which
+    // calls buildTreesForCourse) only runs once per hole/enter — a player
+    // sitting on hole 1 the whole time the mask is still loading would never
+    // see trees appear otherwise. Cheap per-frame check (two property reads)
+    // mirrors game.js's own drawTrees() guard; buildTreesForCourse itself
+    // no-ops once built or mid-build (treesBuildInFlight).
+    const courseNow = gb.getCourse();
+    if (courseNow && treesBuiltForCourseId !== courseNow.id) {
+      const hole = gb.getHole();
+      if (hole && hole._mask && hole._mask.lab) buildTreesForCourse(courseNow.id);
+    }
   }
   controls.update();
   renderer.render(scene, camera);
@@ -711,8 +808,10 @@ function dispose() {
   if (renderer) renderer.dispose();
   for (const w of waterMeshes) { w.geometry.dispose(); w.material.dispose(); }
   for (const t of treeMeshes) t.geometry.dispose();
+  for (const g of greenPatchMeshes) g.geometry.dispose(); // shares terrainMat — don't dispose the material twice
   waterMeshes = [];
   treeMeshes = [];
+  greenPatchMeshes = [];
   treesBuiltForCourseId = null;
   initialized = false;
   active = false;
@@ -733,7 +832,7 @@ window.Course3D = {
       aspect: camera.aspect, fov: camera.fov,
       treeInstancedMeshes: treeMeshes.length,
       treeInstancesTotal: treeMeshes.reduce((s, m) => s + m.count, 0),
-      treesBuiltForCourseId, waterMeshCount: waterMeshes.length,
+      treesBuiltForCourseId, waterMeshCount: waterMeshes.length, greenPatchCount: greenPatchMeshes.length,
     };
   },
 };

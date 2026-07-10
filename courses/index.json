@@ -13619,6 +13619,16 @@
   "source": "osm",
   "type": "way"
  },
+ "overlook-golf-club": {
+  "boundaryWay": 160545912,
+  "center": [
+   42.717893,
+   -71.5461
+  ],
+  "name": "Overlook Golf Club",
+  "source": "osm",
+  "type": "way"
+ },
  "owl-creek-country-club": {
   "boundaryWay": 242210673,
   "center": [

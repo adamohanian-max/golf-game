@@ -253,6 +253,61 @@
 .lb-empty.hidden { display: none; }
 .lb-box .menu-btn { margin: var(--s-4) auto 0; }
 
+/* ---- Booking sheet ("Book a real tee time" CTA) ------------ */
+#book-sheet {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-scrim);
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  backdrop-filter: blur(var(--blur-sm));
+  z-index: 40;
+  padding: var(--s-4);
+}
+#book-sheet.hidden { display: none; }
+.bk-box {
+  width: min(420px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-panel);
+  border: var(--border-hair);
+  border-radius: var(--r-lg);
+  padding: var(--s-5) var(--s-4) var(--s-4);
+  box-shadow: var(--shadow-3);
+  animation: panelIn var(--dur-modal) var(--ease) both;
+}
+.bk-header { position: relative; text-align: center; margin-bottom: var(--s-3); flex-shrink: 0; }
+.bk-header h2 { color: var(--text); font-family: var(--font-display); font-size: var(--t-h2); font-weight: var(--fw-bold); }
+#bk-course-name { color: var(--text-dim); font-size: var(--t-cap); margin-top: 3px; }
+.bk-x {
+  position: absolute; top: -6px; right: -4px;
+  background: transparent; border: none; color: var(--text-dim);
+  font-size: 24px; line-height: 1; padding: var(--s-2); cursor: pointer;
+}
+.bk-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 60px; display: flex; flex-direction: column; gap: var(--s-2); }
+.bk-loading { text-align: center; color: var(--text-dim); padding: var(--s-5) var(--s-2); font-size: 14px; }
+.bk-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+  width: 100%; text-align: left;
+  padding: var(--s-3) var(--s-4);
+  border: var(--border-edge);
+  border-radius: var(--r-md);
+  background: var(--w-05);
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color var(--dur-fast), transform var(--dur-fast);
+}
+.bk-row:hover { background: var(--w-08); }
+.bk-row:active { transform: scale(0.99); }
+.bk-row:disabled { opacity: 0.6; cursor: default; }
+.bk-time { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }
+.bk-meta { color: var(--text-dim); font-size: var(--t-cap); flex: 1; margin-left: var(--s-3); }
+.bk-go { color: var(--brass); font-weight: var(--fw-bold); font-size: var(--t-cap); text-transform: uppercase; letter-spacing: 0.4px; }
+.bk-foot { text-align: center; color: var(--text-faint); font-size: 11px; margin-top: var(--s-3); flex-shrink: 0; }
+
 /* ===== Multiplayer matches ===== */
 .mm-or { text-align: center; color: var(--text-dim); font-size: 13px; margin: var(--s-3) 0 var(--s-2); }
 #match-menu input#mm-code {
@@ -379,6 +434,12 @@
 .mr-sc-wrap { overflow-x: auto; margin-top: var(--s-2); }
 .mr-sc-wrap:empty { display: none; }
 
+/* Skins / closest-to-pin per-hole breakdown, appended under the scorecard */
+.mr-fmt-breakdown { margin-top: var(--s-3); font-size: 13px; }
+.mr-fmt-title { font-weight: 600; color: var(--text-dim); margin-bottom: var(--s-1); }
+.mr-fmt-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--border-soft, rgba(0,0,0,.06)); }
+.mr-fmt-row:last-child { border-bottom: none; }
+
 /* Match results footer (Rematch / Next bot appear only after ladder matches) */
 .mr-actions { display: flex; gap: var(--s-2); }
 .mr-actions .menu-btn { flex: 1; margin: 0; }
@@ -405,6 +466,13 @@ body.is-mobile #match-standings { width: min(240px, 60vw); min-width: 0; box-siz
 #mb-resync { font-size: 15px; line-height: 1; }
 #mb-resync:active { color: var(--accent); }
 .mb-list { padding: 6px; max-height: 50vh; overflow-y: auto; }
+/* Canned-phrase trash talk (§5/§7.2) — fixed picker, no free text */
+.mb-taunts { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px 10px; }
+.mb-taunt-btn {
+  padding: 5px 10px; border-radius: var(--r-pill); border: var(--border-edge);
+  background: var(--w-05); color: var(--text); font-size: 12px; cursor: pointer;
+}
+.mb-taunt-btn:active { background: var(--w-08); }
 .mb-row {
   display: grid; grid-template-columns: 38px 1fr auto auto; gap: 8px; align-items: center;
   padding: 6px 8px; border-radius: var(--r-sm); font-size: 14px; color: var(--text);

@@ -75,6 +75,11 @@
   --blur-sm: 8px;
   --blur-md: 12px;
   --blur-lg: 16px;
+  /* Lighter blur for HUD chrome that sits permanently over the live canvas
+     (scorecard, HUD buttons, club row, spin slider) — backdrop-filter cost
+     scales with kernel size and these recomposite every animation frame the
+     canvas repaints, so they get a smaller radius than one-off/modal glass. */
+  --blur-xs: 4px;
 
   /* ---- Accent -------------------------------------------- */
   --accent: var(--green-500);
