@@ -300,6 +300,35 @@ def main():
               f"surfaces cropped to {CROP/MPY:.0f}y of the routing "
               f"(greens={len(greens)} fairways={len(fairways)} bunkers={len(bunkers)})")
 
+    # --- orient each hole tee->pin, and stretch the tee back when a scorecard
+    # yardage disagrees with the mapped geometry (OSM hole lines are often
+    # drawn from a forward/member tee, not the tips) -> real play distance
+    # matches the real card. Done before the bbox so the stretched tee lands
+    # inside the world rect.
+    gc = [(fc.centroid(projall(g["geometry"])), g) for g in greens]
+    def nearest_green(pt): return min(gc, key=lambda c: fc.dist(pt, c[0]))
+    scorecard = fc.load_scorecard(args.scorecard, args.id)
+    geom_yards_by_hole = {}
+    oriented_lines = []
+    for n, lm in hole_lines:
+        lm = list(lm)
+        d0 = fc.dist(lm[0], nearest_green(lm[0])[0])
+        d1 = fc.dist(lm[-1], nearest_green(lm[-1])[0])
+        if d0 < d1:
+            lm = lm[::-1]
+        tee_m, pin_m = lm[0], lm[-1]
+        length_m = sum(fc.dist(lm[i], lm[i + 1]) for i in range(len(lm) - 1))
+        geom_yards_by_hole[n] = round(length_m / MPY)
+        h = best[n]
+        card = scorecard.get(str(n), {})
+        _, _, yov, _ = fc.resolve_card(h["tags"], card)
+        if yov and abs(yov - geom_yards_by_hole[n]) > fc.TEE_STRETCH_MIN_YDS:
+            u = fc.unit(fc.sub(pin_m, tee_m))
+            d = yov * MPY
+            lm[0] = (pin_m[0] - u[0] * d, pin_m[1] - u[1] * d)
+        oriented_lines.append((n, lm))
+    hole_lines = oriented_lines
+
     bbox_pts = [p for _, lm in hole_lines for p in lm]
     for el in greens + fairways + tees + bunkers + waters:
         bbox_pts += projall(el["geometry"])
@@ -346,15 +375,11 @@ def main():
     world = {"w": round((MAXX - MINX) * SCALE + 2 * MARGIN, 2),
              "h": round((MAXY - MINY) * SCALE + 2 * MARGIN, 2)}
 
-    # --- per-hole tee/pin in global coords (orient: pin = end nearest a green) ---
-    gc = [(fc.centroid(projall(g["geometry"])), g) for g in greens]
-    def nearest_green(pt): return min(gc, key=lambda c: fc.dist(pt, c[0]))
+    # --- per-hole tee/pin in global coords (already oriented tee->pin above) ---
     surfaces = {"green": [], "fairway": [], "bunker": [], "water": [], "tee": [],
                 "woods": [], "cartpath": [], "grass": [], "rough": []}
     out_holes, synth = [], 0
     synth_fw_jobs = []   # (index in surfaces["fairway"], centerline world pts, half_w units)
-    # Scorecard override (par/yards/si): manual -> OSM tag -> par=4 / geom yards.
-    scorecard = fc.load_scorecard(args.scorecard, args.id)
     card_count = 0
     # which holes have a real mapped fairway nearby (else synthesize a corridor)
     fw_assigned = {n: [] for n, _ in hole_lines}
@@ -368,14 +393,9 @@ def main():
         h = best[n]
         card = scorecard.get(str(n), {})
         par, si, yov, _csrc = fc.resolve_card(h["tags"], card)
-        d0 = fc.dist(lm[0], nearest_green(lm[0])[0])
-        d1 = fc.dist(lm[-1], nearest_green(lm[-1])[0])
-        if d0 < d1:
-            lm = lm[::-1]
         tee_m, pin_m = lm[0], lm[-1]
         green_c = nearest_green(pin_m)[0]
-        length_m = sum(fc.dist(lm[i], lm[i + 1]) for i in range(len(lm) - 1))
-        geom_yards = round(length_m / MPY)
+        geom_yards = geom_yards_by_hole[n]
         rec = {"num": n, "par": par, "yards": yov if yov else geom_yards,
                "tee": W(tee_m), "pin": W(green_c)}
         if si is not None:

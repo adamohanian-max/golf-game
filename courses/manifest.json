@@ -2,7 +2,7 @@
   {
     "id": "pinehurst-no2",
     "name": "Pinehurst No. 2",
-    "sub": "Pinehurst, NC \u00b7 Par 70",
+    "sub": "Pinehurst, NC · Par 70",
     "par": 71,
     "yards": 7386,
     "holes": 18,
@@ -16,20 +16,18 @@
   {
     "id": "blackwater-vale",
     "name": "Blackwater Vale",
-    "sub": "Original design \u00b7 Par 72",
+    "sub": "Original design · Par 72",
     "par": 72,
     "yards": 7980,
     "holes": 18,
-    "location": "The Vale",
-    "region": "Originals",
-    "tags": [
-      "original"
-    ]
+    "location": "Original design",
+    "region": "Other",
+    "tags": []
   },
   {
     "id": "four-oaks-dracut",
     "name": "Four Oaks Country Club",
-    "sub": "Dracut, MA \u00b7 Par 70",
+    "sub": "Dracut, MA · Par 70",
     "par": 70,
     "yards": 6268,
     "holes": 18,
@@ -40,7 +38,7 @@
   {
     "id": "tpc-river-highlands",
     "name": "TPC River Highlands",
-    "sub": "Cromwell, CT \u00b7 Par 70",
+    "sub": "Cromwell, CT · Par 70",
     "par": 70,
     "yards": 6841,
     "holes": 18,
@@ -52,8 +50,8 @@
   },
   {
     "id": "st-andrews-old",
-    "name": "St Andrews \u2014 Old Course",
-    "sub": "St Andrews, Scotland \u00b7 Par 72",
+    "name": "St Andrews — Old Course",
+    "sub": "St Andrews, Scotland · Par 72",
     "par": 72,
     "yards": 7327,
     "holes": 18,
@@ -66,7 +64,7 @@
   {
     "id": "bethpage-black",
     "name": "Bethpage Black",
-    "sub": "Farmingdale, NY \u00b7 Par 71",
+    "sub": "Farmingdale, NY · Par 71",
     "par": 71,
     "yards": 7468,
     "holes": 18,
@@ -80,7 +78,7 @@
   {
     "id": "overlook-golf-club",
     "name": "Overlook Golf Club",
-    "sub": "Hollis, NH \u00b7 Par 71",
+    "sub": "Hollis, NH · Par 71",
     "par": 71,
     "yards": 6170,
     "holes": 18,
@@ -91,7 +89,7 @@
   {
     "id": "butter-brook-golf-club",
     "name": "Butter Brook Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.53, -71.41",
+    "sub": "Par 72 · 18 holes · 42.53, -71.41",
     "par": 72,
     "yards": 6810,
     "holes": 18,
@@ -102,7 +100,7 @@
   {
     "id": "pebble-beach-golf-course",
     "name": "Pebble Beach Golf Course",
-    "sub": "Pebble Beach, CA \u00b7 Par 72",
+    "sub": "Pebble Beach, CA · Par 72",
     "par": 72,
     "yards": 7052,
     "holes": 18,
@@ -116,7 +114,7 @@
   {
     "id": "arabian-ranches-golf-club",
     "name": "Arabian Ranches Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 25.05, 55.27",
+    "sub": "Par 72 · 18 holes · 25.05, 55.27",
     "par": 72,
     "yards": 7315,
     "holes": 18,
@@ -127,7 +125,7 @@
   {
     "id": "country-club-of-north-carolina-cardinal",
     "name": "Country Club of North Carolina - Cardinal",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 35.17, -79.45",
+    "sub": "Par 72 · 18 holes · 35.17, -79.45",
     "par": 72,
     "yards": 7129,
     "holes": 18,
@@ -138,7 +136,7 @@
   {
     "id": "country-club-of-north-carolina-dogwood",
     "name": "Country Club of North Carolina - Dogwood",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 35.16, -79.44",
+    "sub": "Par 72 · 18 holes · 35.16, -79.44",
     "par": 72,
     "yards": 6998,
     "holes": 18,
@@ -149,7 +147,7 @@
   {
     "id": "faldo-course",
     "name": "Faldo Course",
-    "sub": "Par 73 \u00b7 18 holes \u00b7 25.08, 55.16",
+    "sub": "Par 73 · 18 holes · 25.08, 55.16",
     "par": 73,
     "yards": 7199,
     "holes": 18,
@@ -160,7 +158,7 @@
   {
     "id": "crystal-lake-haverhill",
     "name": "Crystal Lake Golf Club",
-    "sub": "Haverhill, MA \u00b7 Par 72 \u00b7 18 holes",
+    "sub": "Haverhill, MA · Par 72 · 18 holes",
     "par": 72,
     "yards": 6436,
     "holes": 18,
@@ -171,7 +169,7 @@
   {
     "id": "abenaqui-country-club",
     "name": "Abenaqui Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.98, -70.78",
+    "sub": "Par 72 · 18 holes · 42.98, -70.78",
     "par": 72,
     "yards": 6560,
     "holes": 18,
@@ -182,7 +180,7 @@
   {
     "id": "andover-country-club",
     "name": "Andover Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.67, -71.17",
+    "sub": "Par 72 · 18 holes · 42.67, -71.17",
     "par": 72,
     "yards": 6588,
     "holes": 18,
@@ -193,7 +191,7 @@
   {
     "id": "apple-hill-golf-club",
     "name": "Apple Hill Golf Club",
-    "sub": "Par 67 \u00b7 17 holes \u00b7 42.92, -70.98",
+    "sub": "Par 67 · 17 holes · 42.92, -70.98",
     "par": 67,
     "yards": 5611,
     "holes": 17,
@@ -204,7 +202,7 @@
   {
     "id": "atkinson-resort-country-club",
     "name": "Atkinson Resort & Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.82, -71.18",
+    "sub": "Par 72 · 18 holes · 42.82, -71.18",
     "par": 72,
     "yards": 6509,
     "holes": 18,
@@ -215,7 +213,7 @@
   {
     "id": "black-swan-country-club",
     "name": "Black Swan Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.71, -71.01",
+    "sub": "Par 72 · 18 holes · 42.71, -71.01",
     "par": 72,
     "yards": 6820,
     "holes": 18,
@@ -226,7 +224,7 @@
   {
     "id": "bradford-country-club",
     "name": "Bradford Country Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 42.75, -71.07",
+    "sub": "Par 71 · 18 holes · 42.75, -71.07",
     "par": 71,
     "yards": 4401,
     "holes": 18,
@@ -237,7 +235,7 @@
   {
     "id": "breakfast-hill-golf-club",
     "name": "Breakfast Hill Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 43.02, -70.82",
+    "sub": "Par 72 · 18 holes · 43.02, -70.82",
     "par": 72,
     "yards": 6378,
     "holes": 18,
@@ -248,7 +246,7 @@
   {
     "id": "candia-woods",
     "name": "Candia Woods",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 43.05, -71.32",
+    "sub": "Par 71 · 18 holes · 43.05, -71.32",
     "par": 71,
     "yards": 6469,
     "holes": 18,
@@ -259,7 +257,7 @@
   {
     "id": "derryfield-country-club",
     "name": "Derryfield Country Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 42.99, -71.43",
+    "sub": "Par 70 · 18 holes · 42.99, -71.43",
     "par": 70,
     "yards": 6073,
     "holes": 18,
@@ -270,7 +268,7 @@
   {
     "id": "hickory-hill-golf-course",
     "name": "Hickory Hill Golf Course",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 42.70, -71.24",
+    "sub": "Par 71 · 18 holes · 42.70, -71.24",
     "par": 71,
     "yards": 6259,
     "holes": 18,
@@ -281,7 +279,7 @@
   {
     "id": "hidden-valley-championship-course",
     "name": "Hidden Valley Championship Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.92, -71.25",
+    "sub": "Par 72 · 18 holes · 42.92, -71.25",
     "par": 72,
     "yards": 5983,
     "holes": 18,
@@ -292,7 +290,7 @@
   {
     "id": "indian-ridge-golf-club",
     "name": "Indian Ridge Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.64, -71.17",
+    "sub": "Par 72 · 18 holes · 42.64, -71.17",
     "par": 72,
     "yards": 6408,
     "holes": 18,
@@ -303,7 +301,7 @@
   {
     "id": "ipswich-country-club",
     "name": "Ipswich Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.70, -70.90",
+    "sub": "Par 72 · 18 holes · 42.70, -70.90",
     "par": 72,
     "yards": 6880,
     "holes": 18,
@@ -314,7 +312,7 @@
   {
     "id": "londonderry-country-club",
     "name": "Londonderry Country Club",
-    "sub": "Par 62 \u00b7 18 holes \u00b7 42.89, -71.42",
+    "sub": "Par 62 · 18 holes · 42.89, -71.42",
     "par": 62,
     "yards": 3878,
     "holes": 18,
@@ -325,7 +323,7 @@
   {
     "id": "manchester-country-club",
     "name": "Manchester Country Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 42.94, -71.48",
+    "sub": "Par 70 · 18 holes · 42.94, -71.48",
     "par": 70,
     "yards": 6702,
     "holes": 18,
@@ -336,7 +334,7 @@
   {
     "id": "merrimack-valley-golf-club",
     "name": "Merrimack Valley Golf Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 42.75, -71.18",
+    "sub": "Par 70 · 18 holes · 42.75, -71.18",
     "par": 70,
     "yards": 4350,
     "holes": 18,
@@ -347,7 +345,7 @@
   {
     "id": "myopia-hunt-club",
     "name": "Myopia Hunt Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.61, -70.86",
+    "sub": "Par 72 · 18 holes · 42.61, -70.86",
     "par": 72,
     "yards": 6566,
     "holes": 18,
@@ -358,7 +356,7 @@
   {
     "id": "nashua-country-club",
     "name": "Nashua Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.74, -71.45",
+    "sub": "Par 72 · 18 holes · 42.74, -71.45",
     "par": 72,
     "yards": 6305,
     "holes": 18,
@@ -369,7 +367,7 @@
   {
     "id": "passaconaway-country-club",
     "name": "Passaconaway Country Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 42.86, -71.48",
+    "sub": "Par 71 · 18 holes · 42.86, -71.48",
     "par": 71,
     "yards": 6732,
     "holes": 18,
@@ -380,7 +378,7 @@
   {
     "id": "pease-golf-course",
     "name": "Pease Golf Course",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 43.07, -70.82",
+    "sub": "Par 71 · 18 holes · 43.07, -70.82",
     "par": 71,
     "yards": 5830,
     "holes": 18,
@@ -391,7 +389,7 @@
   {
     "id": "portsmouth-country-club",
     "name": "Portsmouth Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 43.05, -70.84",
+    "sub": "Par 72 · 18 holes · 43.05, -70.84",
     "par": 72,
     "yards": 6731,
     "holes": 18,
@@ -402,7 +400,7 @@
   {
     "id": "renaissance-golf-club",
     "name": "Renaissance Golf Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 42.78, -71.04",
+    "sub": "Par 71 · 18 holes · 42.78, -71.04",
     "par": 71,
     "yards": 6988,
     "holes": 18,
@@ -413,7 +411,7 @@
   {
     "id": "sagamore-hampton-golf-club",
     "name": "Sagamore-Hampton Golf Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 43.00, -70.84",
+    "sub": "Par 71 · 18 holes · 43.00, -70.84",
     "par": 71,
     "yards": 5688,
     "holes": 18,
@@ -424,7 +422,7 @@
   {
     "id": "scottish-highlands",
     "name": "Scottish Highlands",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 42.75, -71.24",
+    "sub": "Par 71 · 18 holes · 42.75, -71.24",
     "par": 71,
     "yards": 5942,
     "holes": 18,
@@ -435,18 +433,18 @@
   {
     "id": "sky-meadow-country-club",
     "name": "Sky Meadow Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.70, -71.47",
+    "sub": "Par 72 · 18 holes · 42.70, -71.47",
     "par": 72,
     "yards": 6283,
     "holes": 18,
-    "location": "Nashua, NH",
+    "location": "Dunstable, MA",
     "region": "USA",
     "tags": []
   },
   {
     "id": "the-golf-club-of-new-england",
     "name": "The Golf Club of New England",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 43.01, -70.86",
+    "sub": "Par 72 · 18 holes · 43.01, -70.86",
     "par": 72,
     "yards": 7295,
     "holes": 18,
@@ -457,7 +455,7 @@
   {
     "id": "trull-brook-golf-course",
     "name": "Trull Brook Golf Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.65, -71.26",
+    "sub": "Par 72 · 18 holes · 42.65, -71.26",
     "par": 72,
     "yards": 5430,
     "holes": 18,
@@ -468,7 +466,7 @@
   {
     "id": "vesper-country-club",
     "name": "Vesper Country Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 42.65, -71.39",
+    "sub": "Par 71 · 18 holes · 42.65, -71.39",
     "par": 71,
     "yards": 6474,
     "holes": 18,
@@ -479,7 +477,7 @@
   {
     "id": "windham-country-club",
     "name": "Windham Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.82, -71.31",
+    "sub": "Par 72 · 18 holes · 42.82, -71.31",
     "par": 72,
     "yards": 6352,
     "holes": 18,
@@ -490,7 +488,7 @@
   {
     "id": "augusta-national-golf-club",
     "name": "Augusta National Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 33.50, -82.02",
+    "sub": "Par 72 · 18 holes · 33.50, -82.02",
     "par": 72,
     "yards": 7619,
     "holes": 18,
@@ -501,7 +499,7 @@
   {
     "id": "baltusrol-golf-course",
     "name": "Baltusrol Golf Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 40.70, -74.33",
+    "sub": "Par 72 · 18 holes · 40.70, -74.33",
     "par": 72,
     "yards": 7349,
     "holes": 18,
@@ -512,7 +510,7 @@
   {
     "id": "bandon-dunes-golf-resort",
     "name": "Bandon Dunes Golf Resort",
-    "sub": "Par 73 \u00b7 18 holes \u00b7 43.20, -124.39",
+    "sub": "Par 73 · 18 holes · 43.20, -124.39",
     "par": 73,
     "yards": 6275,
     "holes": 18,
@@ -523,7 +521,7 @@
   {
     "id": "bandon-sheep-ranch",
     "name": "Bandon Sheep Ranch",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 43.22, -124.39",
+    "sub": "Par 72 · 18 holes · 43.22, -124.39",
     "par": 72,
     "yards": 6710,
     "holes": 18,
@@ -534,7 +532,7 @@
   {
     "id": "bandon-trails",
     "name": "Bandon Trails",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 43.18, -124.39",
+    "sub": "Par 71 · 18 holes · 43.18, -124.39",
     "par": 71,
     "yards": 6804,
     "holes": 18,
@@ -545,7 +543,7 @@
   {
     "id": "bethpage-state-park-golf-courses",
     "name": "Bethpage State Park Golf Courses",
-    "sub": "Par 75 \u00b7 18 holes \u00b7 40.75, -73.45",
+    "sub": "Par 75 · 18 holes · 40.75, -73.45",
     "par": 75,
     "yards": 8298,
     "holes": 18,
@@ -556,7 +554,7 @@
   {
     "id": "chicago-golf-club",
     "name": "Chicago Golf Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 41.85, -88.12",
+    "sub": "Par 70 · 18 holes · 41.85, -88.12",
     "par": 70,
     "yards": 6934,
     "holes": 18,
@@ -567,7 +565,7 @@
   {
     "id": "cypress-point-golf-course",
     "name": "Cypress Point Golf Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 36.58, -121.97",
+    "sub": "Par 72 · 18 holes · 36.58, -121.97",
     "par": 72,
     "yards": 6541,
     "holes": 18,
@@ -578,7 +576,7 @@
   {
     "id": "east-lake-golf-club",
     "name": "East Lake Golf Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 33.74, -84.30",
+    "sub": "Par 70 · 18 holes · 33.74, -84.30",
     "par": 70,
     "yards": 7115,
     "holes": 18,
@@ -589,7 +587,7 @@
   {
     "id": "garden-city-golf-club",
     "name": "Garden City Golf Club",
-    "sub": "Par 73 \u00b7 18 holes \u00b7 40.73, -73.65",
+    "sub": "Par 73 · 18 holes · 40.73, -73.65",
     "par": 73,
     "yards": 6911,
     "holes": 18,
@@ -600,7 +598,7 @@
   {
     "id": "harbour-town-golf-links",
     "name": "Harbour Town Golf Links",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 32.13, -80.81",
+    "sub": "Par 71 · 18 holes · 32.13, -80.81",
     "par": 71,
     "yards": 7071,
     "holes": 18,
@@ -611,7 +609,7 @@
   {
     "id": "hazeltine-national-golf-course",
     "name": "Hazeltine National Golf Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 44.83, -93.59",
+    "sub": "Par 72 · 18 holes · 44.83, -93.59",
     "par": 72,
     "yards": 7701,
     "holes": 18,
@@ -622,7 +620,7 @@
   {
     "id": "inverness-golf-club",
     "name": "Inverness Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 42.12, -88.08",
+    "sub": "Par 72 · 18 holes · 42.12, -88.08",
     "par": 72,
     "yards": 6625,
     "holes": 18,
@@ -633,7 +631,7 @@
   {
     "id": "kiawah-island-club-cassique",
     "name": "Kiawah Island Club - Cassique",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 32.60, -80.15",
+    "sub": "Par 72 · 18 holes · 32.60, -80.15",
     "par": 72,
     "yards": 6865,
     "holes": 18,
@@ -644,7 +642,7 @@
   {
     "id": "kiawah-island-club-river-course",
     "name": "Kiawah Island Club - River Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 32.61, -80.10",
+    "sub": "Par 72 · 18 holes · 32.61, -80.10",
     "par": 72,
     "yards": 6913,
     "holes": 18,
@@ -655,7 +653,7 @@
   {
     "id": "kiawah-island-golf-resort-the-ocean-course",
     "name": "Kiawah Island Golf Resort - The Ocean Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 32.61, -80.02",
+    "sub": "Par 72 · 18 holes · 32.61, -80.02",
     "par": 72,
     "yards": 7727,
     "holes": 18,
@@ -666,7 +664,7 @@
   {
     "id": "los-angeles-country-club",
     "name": "Los Angeles Country Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 34.07, -118.42",
+    "sub": "Par 71 · 18 holes · 34.07, -118.42",
     "par": 71,
     "yards": 7659,
     "holes": 18,
@@ -677,7 +675,7 @@
   {
     "id": "maidstone-club",
     "name": "Maidstone Club",
-    "sub": "Par 75 \u00b7 18 holes \u00b7 40.95, -72.18",
+    "sub": "Par 75 · 18 holes · 40.95, -72.18",
     "par": 75,
     "yards": 6526,
     "holes": 18,
@@ -688,7 +686,7 @@
   {
     "id": "merion-golf-club-east",
     "name": "Merion Golf Club East",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 40.00, -75.31",
+    "sub": "Par 70 · 18 holes · 40.00, -75.31",
     "par": 70,
     "yards": 6485,
     "holes": 18,
@@ -699,7 +697,7 @@
   {
     "id": "merion-golf-club-west",
     "name": "Merion Golf Club West",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 39.99, -75.33",
+    "sub": "Par 70 · 18 holes · 39.99, -75.33",
     "par": 70,
     "yards": 5914,
     "holes": 18,
@@ -710,7 +708,7 @@
   {
     "id": "monterey-peninsula-country-club-dunes-course",
     "name": "Monterey Peninsula Country Club - Dunes Course",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 36.60, -121.95",
+    "sub": "Par 71 · 18 holes · 36.60, -121.95",
     "par": 71,
     "yards": 6741,
     "holes": 18,
@@ -721,7 +719,7 @@
   {
     "id": "monterey-peninsula-country-club-shore-course",
     "name": "Monterey Peninsula Country Club - Shore Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 36.60, -121.96",
+    "sub": "Par 72 · 18 holes · 36.60, -121.96",
     "par": 72,
     "yards": 6899,
     "holes": 18,
@@ -732,7 +730,7 @@
   {
     "id": "muirfield-village-golf-club",
     "name": "Muirfield Village Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 40.14, -83.14",
+    "sub": "Par 72 · 18 holes · 40.14, -83.14",
     "par": 72,
     "yards": 7545,
     "holes": 18,
@@ -743,7 +741,7 @@
   {
     "id": "national-golf-links-of-america",
     "name": "National Golf Links of America",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 40.91, -72.45",
+    "sub": "Par 72 · 18 holes · 40.91, -72.45",
     "par": 72,
     "yards": 6981,
     "holes": 18,
@@ -754,7 +752,7 @@
   {
     "id": "oakmont-country-club",
     "name": "Oakmont Country Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 40.53, -79.82",
+    "sub": "Par 71 · 18 holes · 40.53, -79.82",
     "par": 71,
     "yards": 7208,
     "holes": 18,
@@ -765,7 +763,7 @@
   {
     "id": "olympic-club-golf-course",
     "name": "Olympic Club Golf Course",
-    "sub": "Par 73 \u00b7 18 holes \u00b7 37.71, -122.49",
+    "sub": "Par 73 · 18 holes · 37.71, -122.49",
     "par": 73,
     "yards": 7424,
     "holes": 18,
@@ -776,7 +774,7 @@
   {
     "id": "olympic-club-lake-course",
     "name": "Olympic Club Lake Course",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 37.71, -122.49",
+    "sub": "Par 70 · 18 holes · 37.71, -122.49",
     "par": 70,
     "yards": 7298,
     "holes": 18,
@@ -787,7 +785,7 @@
   {
     "id": "pine-valley-country-club",
     "name": "Pine Valley Country Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 39.79, -74.97",
+    "sub": "Par 70 · 18 holes · 39.79, -74.97",
     "par": 70,
     "yards": 7279,
     "holes": 18,
@@ -798,7 +796,7 @@
   {
     "id": "plainfield-country-club",
     "name": "Plainfield Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 40.59, -74.39",
+    "sub": "Par 72 · 18 holes · 40.59, -74.39",
     "par": 72,
     "yards": 6904,
     "holes": 18,
@@ -809,7 +807,7 @@
   {
     "id": "prairie-dunes",
     "name": "Prairie Dunes",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 38.09, -97.85",
+    "sub": "Par 70 · 18 holes · 38.09, -97.85",
     "par": 70,
     "yards": 6821,
     "holes": 18,
@@ -820,7 +818,7 @@
   {
     "id": "quaker-ridge-golf-club",
     "name": "Quaker Ridge Golf Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 40.97, -73.76",
+    "sub": "Par 70 · 18 holes · 40.97, -73.76",
     "par": 70,
     "yards": 6992,
     "holes": 18,
@@ -831,7 +829,7 @@
   {
     "id": "riviera-country-club",
     "name": "Riviera Country Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 34.05, -118.50",
+    "sub": "Par 71 · 18 holes · 34.05, -118.50",
     "par": 71,
     "yards": 7359,
     "holes": 18,
@@ -842,7 +840,7 @@
   {
     "id": "scioto-reserve-country-club",
     "name": "Scioto Reserve Country Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 40.20, -83.13",
+    "sub": "Par 72 · 18 holes · 40.20, -83.13",
     "par": 72,
     "yards": 6880,
     "holes": 18,
@@ -853,7 +851,7 @@
   {
     "id": "shinnecock-hills-golf-club",
     "name": "Shinnecock Hills Golf Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 40.90, -72.44",
+    "sub": "Par 71 · 18 holes · 40.90, -72.44",
     "par": 71,
     "yards": 7332,
     "holes": 18,
@@ -864,7 +862,7 @@
   {
     "id": "southern-hills-country-club",
     "name": "Southern Hills Country Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 36.07, -95.95",
+    "sub": "Par 71 · 18 holes · 36.07, -95.95",
     "par": 71,
     "yards": 7262,
     "holes": 18,
@@ -875,7 +873,7 @@
   {
     "id": "spyglass-hill-golf-course",
     "name": "Spyglass Hill Golf Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 36.59, -121.96",
+    "sub": "Par 72 · 18 holes · 36.59, -121.96",
     "par": 72,
     "yards": 6890,
     "holes": 18,
@@ -886,7 +884,7 @@
   {
     "id": "the-country-club-at-muirfield-village",
     "name": "The Country Club at Muirfield Village",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 40.14, -83.16",
+    "sub": "Par 72 · 18 holes · 40.14, -83.16",
     "par": 72,
     "yards": 6857,
     "holes": 18,
@@ -897,7 +895,7 @@
   {
     "id": "torrey-pines-north-course",
     "name": "Torrey Pines North Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 32.91, -117.25",
+    "sub": "Par 72 · 18 holes · 32.91, -117.25",
     "par": 72,
     "yards": 7026,
     "holes": 18,
@@ -908,7 +906,7 @@
   {
     "id": "torrey-pines-south-course",
     "name": "Torrey Pines South Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 32.90, -117.25",
+    "sub": "Par 72 · 18 holes · 32.90, -117.25",
     "par": 72,
     "yards": 7786,
     "holes": 18,
@@ -919,7 +917,7 @@
   {
     "id": "valhalla-golf-club",
     "name": "Valhalla Golf Club",
-    "sub": "Par 73 \u00b7 18 holes \u00b7 38.24, -85.47",
+    "sub": "Par 73 · 18 holes · 38.24, -85.47",
     "par": 73,
     "yards": 7425,
     "holes": 18,
@@ -930,7 +928,7 @@
   {
     "id": "whistling-straits",
     "name": "Whistling Straits",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 43.85, -87.73",
+    "sub": "Par 72 · 18 holes · 43.85, -87.73",
     "par": 72,
     "yards": 7541,
     "holes": 18,
@@ -941,7 +939,7 @@
   {
     "id": "winged-foot-golf-club",
     "name": "Winged Foot Golf Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 40.96, -73.75",
+    "sub": "Par 71 · 18 holes · 40.96, -73.75",
     "par": 71,
     "yards": 7444,
     "holes": 18,
@@ -952,7 +950,7 @@
   {
     "id": "bay-hill-golf-club",
     "name": "Bay Hill Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 28.46, -81.51",
+    "sub": "Par 72 · 18 holes · 28.46, -81.51",
     "par": 72,
     "yards": 7304,
     "holes": 18,
@@ -963,7 +961,7 @@
   {
     "id": "colonial-country-club",
     "name": "Colonial Country Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 32.72, -97.37",
+    "sub": "Par 70 · 18 holes · 32.72, -97.37",
     "par": 70,
     "yards": 7119,
     "holes": 18,
@@ -974,7 +972,7 @@
   {
     "id": "detroit-golf-club",
     "name": "Detroit Golf Club",
-    "sub": "Par 73 \u00b7 18 holes \u00b7 42.42, -83.12",
+    "sub": "Par 73 · 18 holes · 42.42, -83.12",
     "par": 73,
     "yards": 7217,
     "holes": 18,
@@ -985,7 +983,7 @@
   {
     "id": "liberty-national-golf-club",
     "name": "Liberty National Golf Club",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 40.69, -74.07",
+    "sub": "Par 72 · 18 holes · 40.69, -74.07",
     "par": 72,
     "yards": 7294,
     "holes": 18,
@@ -996,7 +994,7 @@
   {
     "id": "memorial-park-golf-course",
     "name": "Memorial Park Golf Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 29.77, -95.44",
+    "sub": "Par 72 · 18 holes · 29.77, -95.44",
     "par": 72,
     "yards": 7344,
     "holes": 18,
@@ -1007,7 +1005,7 @@
   {
     "id": "quail-hollow-club",
     "name": "Quail Hollow Club",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 35.11, -80.84",
+    "sub": "Par 71 · 18 holes · 35.11, -80.84",
     "par": 71,
     "yards": 7341,
     "holes": 18,
@@ -1018,7 +1016,7 @@
   {
     "id": "silverado-golf-club",
     "name": "Silverado Golf Club",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 33.53, -111.90",
+    "sub": "Par 70 · 18 holes · 33.53, -111.90",
     "par": 70,
     "yards": 6105,
     "holes": 18,
@@ -1029,7 +1027,7 @@
   {
     "id": "silverado-resort",
     "name": "Silverado Resort",
-    "sub": "Par 70 \u00b7 18 holes \u00b7 38.35, -122.26",
+    "sub": "Par 70 · 18 holes · 38.35, -122.26",
     "par": 70,
     "yards": 7107,
     "holes": 18,
@@ -1040,7 +1038,7 @@
   {
     "id": "the-country-club-at-castle-pines",
     "name": "The Country Club at Castle Pines",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 39.45, -104.90",
+    "sub": "Par 72 · 18 holes · 39.45, -104.90",
     "par": 72,
     "yards": 7261,
     "holes": 18,
@@ -1051,7 +1049,7 @@
   {
     "id": "tpc-scottsdale-champions-course",
     "name": "TPC Scottsdale Champions Course",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 33.64, -111.90",
+    "sub": "Par 71 · 18 holes · 33.64, -111.90",
     "par": 71,
     "yards": 6913,
     "holes": 18,
@@ -1062,7 +1060,7 @@
   {
     "id": "tpc-scottsdale-stadium-course",
     "name": "TPC Scottsdale Stadium Course",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 33.64, -111.92",
+    "sub": "Par 71 · 18 holes · 33.64, -111.92",
     "par": 71,
     "yards": 7340,
     "holes": 18,
@@ -1073,7 +1071,7 @@
   {
     "id": "tpc-southwind",
     "name": "TPC Southwind",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 35.05, -89.78",
+    "sub": "Par 71 · 18 holes · 35.05, -89.78",
     "par": 71,
     "yards": 7129,
     "holes": 18,
@@ -1084,7 +1082,7 @@
   {
     "id": "tpc-twin-cities",
     "name": "TPC Twin Cities",
-    "sub": "Par 71 \u00b7 18 holes \u00b7 45.18, -93.21",
+    "sub": "Par 71 · 18 holes · 45.18, -93.21",
     "par": 71,
     "yards": 7168,
     "holes": 18,
@@ -1095,7 +1093,7 @@
   {
     "id": "agawam-hunt",
     "name": "Agawam Hunt",
-    "sub": "East Providence, RI \u00b7 Par 69",
+    "sub": "East Providence, RI · Par 69",
     "par": 69,
     "yards": 6119,
     "holes": 18,
@@ -1106,7 +1104,7 @@
   {
     "id": "prairie-green",
     "name": "Prairie Green Golf Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 43.49, -96.72",
+    "sub": "Par 72 · 18 holes · 43.49, -96.72",
     "par": 72,
     "yards": 7179,
     "holes": 18,
@@ -1117,7 +1115,7 @@
   {
     "id": "elmwood-sioux-falls",
     "name": "Elmwood Golf Course",
-    "sub": "Par 72 \u00b7 18 holes \u00b7 43.57, -96.76",
+    "sub": "Par 72 · 18 holes · 43.57, -96.76",
     "par": 72,
     "yards": 7214,
     "holes": 18,
@@ -1128,41 +1126,34 @@
   {
     "id": "pinehurst-no2-naip",
     "name": "Pinehurst No. 2 (NAIP)",
-    "sub": "Imagery test \u00b7 USGS NAIP \u00b7 Par 71",
-    "par": 71,
-    "yards": 7386,
+    "sub": "Imagery test · USGS NAIP · Par 71",
+    "par": 72,
+    "yards": 7321,
     "holes": 18,
-    "location": "Pinehurst, NC",
-    "region": "Imagery test",
-    "tags": [
-      "imageryTest"
-    ]
+    "location": "Imagery test",
+    "region": "Other",
+    "tags": []
   },
   {
     "id": "atkinson-resort-country-club-naip",
     "name": "Atkinson R&CC (NAIP)",
-    "sub": "Imagery test \u00b7 USGS NAIP \u00b7 Par 72",
+    "sub": "Imagery test · USGS NAIP · Par 72",
     "par": 72,
     "yards": 6509,
     "holes": 18,
-    "location": "Atkinson, NH",
-    "region": "Imagery test",
-    "tags": [
-      "imageryTest"
-    ]
+    "location": "Imagery test",
+    "region": "Other",
+    "tags": []
   },
   {
     "id": "hogwarts-grounds",
     "name": "Hogwarts Grounds",
-    "sub": "Original design \u00b7 Par 72",
+    "sub": "Original design · Par 72",
     "par": 72,
     "yards": 7105,
     "holes": 18,
-    "location": "Northumberland (fictional)",
-    "region": "Originals",
-    "tags": [
-      "original",
-      "fan-made"
-    ]
+    "location": "Original design",
+    "region": "Other",
+    "tags": []
   }
 ]

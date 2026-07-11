@@ -56,6 +56,7 @@ FAIRWAY_NEAR_YDS = 70     # real fairway assigned to a hole if centroid within t
 BUNKER_NEAR_YDS = 50      # bunker assigned to a hole if centroid within this
 WATER_NEAR_YDS = 70
 TEE_NEAR_YDS = 35
+TEE_STRETCH_MIN_YDS = 15  # scorecard-vs-geometry gap before we push the tee back
 WOODS_NEAR_YDS = 90       # woods/grass are big & numerous -> wider catch
 GRASS_NEAR_YDS = 60
 CARTPATH_NEAR_YDS = 45
@@ -778,6 +779,17 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
 
     # Per-hole frame: u = tee->pin direction. Map u -> screen-up (-y).
     u = unit(sub(pin_m, tee_m))
+
+    # OSM hole lines are usually drawn from whichever tee the mapper stood on
+    # (often forward/member tees, not the tips) -> mapped geometry reads short.
+    # A scorecard yardage that disagrees is authoritative: push the tee back
+    # along the hole axis so actual play distance matches the real card,
+    # instead of just relabeling a short hole with a bigger number.
+    if yards_override and abs(yards_override - geom_yards) > TEE_STRETCH_MIN_YDS:
+        d = yards_override * M_PER_YARD
+        tee_m = (pin_m[0] - u[0] * d, pin_m[1] - u[1] * d)
+        line_m[0] = tee_m
+
     nrm = (-u[1], u[0])
     def to_frame(p):
         rel = sub(p, tee_m)

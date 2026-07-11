@@ -12239,6 +12239,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "miner-hills-golf-course-driving-range": {
+  "boundaryWay": 679211868,
+  "center": [
+   41.578193,
+   -72.712704
+  ],
+  "name": "Miner Hills Golf Course & Driving Range",
+  "source": "osm",
+  "type": "way"
+ },
  "mini-golf": {
   "boundaryWay": 437711466,
   "center": [
@@ -18839,6 +18849,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "timberlin-golf-course": {
+  "boundaryWay": 307822247,
+  "center": [
+   41.604331,
+   -72.808594
+  ],
+  "name": "Timberlin Golf Course",
+  "source": "osm",
+  "type": "way"
+ },
  "timberline-golf-course": {
   "boundaryWay": 43439374,
   "center": [
@@ -18986,6 +19006,16 @@
    -77.199207
   ],
   "name": "TPC Potomac at Avanel Farm",
+  "source": "osm",
+  "type": "relation"
+ },
+ "tpc-river-highlands": {
+  "boundaryWay": 4091841,
+  "center": [
+   41.629316,
+   -72.63968
+  ],
+  "name": "TPC River Highlands",
   "source": "osm",
   "type": "relation"
  },
