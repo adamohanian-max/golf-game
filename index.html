@@ -14,10 +14,10 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=57">
   <link rel="stylesheet" href="css/base.css?v=67">
-  <link rel="stylesheet" href="css/hud.css?v=87">
+  <link rel="stylesheet" href="css/hud.css?v=89">
   <link rel="stylesheet" href="css/menu.css?v=71">
   <link rel="stylesheet" href="css/courses.css?v=7">
-  <link rel="stylesheet" href="css/modals.css?v=75">
+  <link rel="stylesheet" href="css/modals.css?v=76">
   <link rel="stylesheet" href="css/tournament.css?v=55">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
@@ -150,7 +150,6 @@
 
   <div id="hint">Swipe to swing · ← → to aim · ↑ ↓ club</div>
   <div id="live-turn" class="hidden"></div>
-  <div id="match-mini" class="hidden"></div>
   <div id="hud-edit-bar" class="hidden">Drag to move · pinch or <button id="hud-zoom-out" class="hud-zoom">−</button><button id="hud-zoom-in" class="hud-zoom">+</button> to resize · <button id="hud-edit-done">Done</button></div>
   <div id="toast" class="hidden"></div>
 
@@ -662,7 +661,6 @@
       <button id="mb-close" class="mb-x" aria-label="Close"><span class="ic ic-x"></span></button>
     </div>
     <div id="mb-list" class="mb-list"></div>
-    <div id="mb-taunts" class="mb-taunts"></div>
   </div>
 
   <div id="match-results" class="hidden">
@@ -688,6 +686,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=14"></script>
-  <script defer src="game.js?v=195"></script>
+  <script defer src="game.js?v=196"></script>
 </body>
 </html>

@@ -466,13 +466,6 @@ body.is-mobile #match-standings { width: min(240px, 60vw); min-width: 0; box-siz
 #mb-resync { font-size: 15px; line-height: 1; }
 #mb-resync:active { color: var(--accent); }
 .mb-list { padding: 6px; max-height: 50vh; overflow-y: auto; }
-/* Canned-phrase trash talk (§5/§7.2) — fixed picker, no free text */
-.mb-taunts { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px 10px; }
-.mb-taunt-btn {
-  padding: 5px 10px; border-radius: var(--r-pill); border: var(--border-edge);
-  background: var(--w-05); color: var(--text); font-size: 12px; cursor: pointer;
-}
-.mb-taunt-btn:active { background: var(--w-08); }
 .mb-row {
   display: grid; grid-template-columns: 38px 1fr auto auto; gap: 8px; align-items: center;
   padding: 6px 8px; border-radius: var(--r-sm); font-size: 14px; color: var(--text);

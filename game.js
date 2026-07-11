@@ -5038,11 +5038,6 @@ function updateScorecard() {
     elScore.textContent = formatToPar(round.score);
     elScore.className = round.score < 0 ? "under" : round.score > 0 ? "over" : "even";
   }
-  // Instant per-shot refresh of the bottom-left compare pill (the board poll also
-  // drives it, but this keeps the 1v1 status live between polls).
-  updateMatchMini(matchLive()
-    ? (cpuMatch ? cpuMatchRows() : [meSnapshot(), lastOpp].filter(Boolean))
-    : null);
   positionStatsBar();
 }
 
@@ -5348,35 +5343,6 @@ function buildScorecardSection(holes, showTot) {
   const sRow = `<tr><td class="re-label">YOU</td>${scores.map((s, i) => `<td class="${scoreClass(s, pars[i])}">${s}</td>`).join("")}<td class="re-sep">${sumScr}</td>${showTot ? `<td class="re-sep ${totCls}">${totScr}</td>` : ""}</tr>`;
 
   return `<table class="re-sc"><thead>${hRow}</thead><tbody>${pRow}${sRow}</tbody></table>`;
-}
-
-// Compact live head-to-head pill (bottom-left) shown during a match — the full
-// per-hole card waits for match end. Fed by the board poll (renderMatchBoard,
-// every 3–5s) and updateScorecard (instant per-shot). Hidden outside live matches.
-function updateMatchMini(rows) {
-  const el = document.getElementById("match-mini");
-  if (!el) return;
-  // isMeEntry can miss a nameless guest; fall back to first row as me.
-  const me = rows && (rows.find(isMeEntry) || rows[0]);
-  const opp = rows && rows.find(r => r !== me);
-  if (!matchLive() || !me || !opp) { el.classList.add("hidden"); return; }
-  const oppName = esc((opp.player_name || "Opp").slice(0, 10)) +
-    (cpuMatch ? ' <span class="cpu-chip">CPU</span>' : "");
-  let html;
-  if (matchPlay()) {
-    const mp = computeMatchPlay(me, opp, matchHoleCount);
-    const cls = mp.diff > 0 ? "mm-up" : mp.diff < 0 ? "mm-dn" : "mm-ev";
-    html = `<span class="mm-vs">vs ${oppName}</span>` +
-           `<span class="mm-stat ${cls}">${esc(mp.status)}</span>` +
-           `<span class="mm-thru">thru ${mp.thru}</span>`;
-  } else {
-    const myTP = me.score != null ? me.score : round.score;
-    const opTP = opp.score != null ? opp.score : 0;
-    html = `<span class="mm-vs">You ${formatToPar(myTP | 0)}</span>` +
-           `<span class="mm-stat">${oppName} ${formatToPar(opTP | 0)}</span>`;
-  }
-  el.innerHTML = html;
-  el.classList.remove("hidden");
 }
 
 // Combined post-round match card: HOLE / PAR / one row per player (YOU first,
@@ -10155,30 +10121,6 @@ function oppResponsive() {
 function sameName(a, b) { return (a || "").toLowerCase() === (b || "").toLowerCase(); }
 function oppName() { return (lastOpp && lastOpp.player_name) || "opponent"; }
 
-// ---------------------------------------------------------------------
-//  Trash talk (§5/§7.2): canned phrases only, no free text — no moderation
-//  surface. Rides the existing match_players write/poll/realtime path, same
-//  as hole_scores. _seenTaunts baselines each opponent row on first sight so
-//  rejoining a match never replays an old taunt as if it just happened.
-// ---------------------------------------------------------------------
-const TAUNTS = ["Nice shot 👏", "Ouch 😬", "Choke.", "Too easy.", "Feeling the pressure yet?", "GG"];
-let _seenTaunts = {};   // match_players.id -> last last_taunt_at we've already shown
-
-function checkIncomingTaunts(rows) {
-  for (const r of rows) {
-    if (isMeEntry(r) || !r.last_taunt_at) continue;
-    const prev = _seenTaunts[r.id];
-    _seenTaunts[r.id] = r.last_taunt_at;
-    if (prev === undefined || prev === r.last_taunt_at) continue;   // baseline, or unchanged
-    if (r.last_taunt) showToast(esc(r.player_name) + ": " + r.last_taunt, 2600);
-  }
-}
-
-async function sendTaunt(text) {
-  if (!matchLive()) return;
-  await patchMyMatchRow({ last_taunt: text, last_taunt_at: new Date().toISOString() });
-}
-
 // My live shot state from the LOCAL game (no poll lag → input locks instantly
 // after I swing, without waiting for my own row to round-trip).
 function meSnapshot() {
@@ -10425,8 +10367,6 @@ async function renderMatchBoard() {
   const rows = await fetchMatchPlayers(activeMatch.id);
   onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync — needed every
                       // poll regardless of panel visibility, so this always runs
-  updateMatchMini(rows);   // compact bottom-left compare — also independent of panel visibility
-  checkIncomingTaunts(rows);   // canned-phrase trash talk — toast a fresh one from any opponent
   const panel = document.getElementById("match-standings");
   if (!panel || panel.classList.contains("hidden")) return; // board UI closed — skip the innerHTML rebuild below
   const title = document.getElementById("mb-title");
@@ -10682,8 +10622,6 @@ function leaveMatch() {
   cpuMatch = false;
   cpuOpp = null;
   toggleMatchBoard(false);
-  updateMatchMini(null);
-  _seenTaunts = {};
 }
 
 // =====================================================================
@@ -11679,17 +11617,6 @@ function renderProgress() {
   if (hmMatch) hmMatch.addEventListener("click", () => { toggleMatchBoard(); closeHud(); });
   const hmForfeit = document.getElementById("hm-forfeit");
   if (hmForfeit) hmForfeit.addEventListener("click", () => { forfeitHole(); closeHud(); });
-  const mbTaunts = document.getElementById("mb-taunts");
-  if (mbTaunts) {
-    mbTaunts.innerHTML = TAUNTS.map((t, i) => `<button class="mb-taunt-btn" data-i="${i}">${esc(t)}</button>`).join("");
-    mbTaunts.addEventListener("click", (e) => {
-      const btn = e.target.closest(".mb-taunt-btn");
-      if (!btn) return;
-      sendTaunt(TAUNTS[+btn.dataset.i]);
-      showToast("Sent", 1000);
-    });
-  }
-
   const reConfirm = document.getElementById("re-confirm-match");
   if (reConfirm) reConfirm.addEventListener("click", openMatchResults);
   const mrHome = document.getElementById("mr-home");
