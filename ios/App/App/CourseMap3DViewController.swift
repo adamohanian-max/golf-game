@@ -19,6 +19,15 @@ import WebKit
 class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     private var mapView: MKMapView?
     private weak var webView: WKWebView?
+    // Invisible probe annotations: MapKit positions their views through its
+    // REAL flyover render pipeline (terrain anchor state included), so their
+    // view centers are ground-truth "where does this lat/lon render" answers.
+    // MKMapView.convert(_:toPointTo:) can NOT provide this — it projects
+    // through the flat mercator viewport and knows nothing about the pitch
+    // anchor, which flyover re-samples nondeterministically from whatever
+    // mesh LOD is loaded on every camera set (measured: same MKMapCamera,
+    // renders 100-200 px apart across visits).
+    private var probeAnns: [MKPointAnnotation] = []
 
     func enter(into parent: UIView, behind webView: WKWebView) {
         self.webView = webView
@@ -81,19 +90,25 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
             heading: heading)
         mv.camera = cam // direct assignment — no animation, game.js already pushes ~30fps
         let a = mv.camera
-        // Ground truth for the JS overlay projection: where THIS view really
-        // puts each probe coordinate on screen (UIKit pts == css px). game.js
-        // fits a tiny screen-affine from its replica onto these, so overlay
-        // and map agree exactly no matter what MapKit clamps or how the
-        // flyover terrain anchors the camera. convert() answers with a STALE
-        // camera if called in the same runloop turn as the camera assignment
-        // (measured: probe points came back from the previous framing) — so
-        // hop the runloop once before converting.
+        // Ground truth for the JS overlay projection: invisible probe
+        // annotations at the requested coordinates. MapKit lays their views
+        // out through the real flyover camera — terrain anchor state and all
+        // — so view centers (UIKit pts == css px) are exactly where those
+        // coordinates render. game.js fits a screen-affine from its replica
+        // onto these (calA/calB in buildAppleProj), absorbing the flyover
+        // pitch anchor's nondeterminism. Views need a runloop hop after the
+        // camera assignment before their centers reflect the new framing.
+        syncProbeAnnotations(mv, coords: probes)
         DispatchQueue.main.async {
             var px: [Double] = [], py: [Double] = []
-            for p in probes where p.count >= 2 {
-                let pt = mv.convert(CLLocationCoordinate2D(latitude: p[0], longitude: p[1]), toPointTo: mv)
-                px.append(Double(pt.x)); py.append(Double(pt.y))
+            for ann in self.probeAnns {
+                if let v = mv.view(for: ann) {
+                    // presentation() tracks in-flight CoreAnimation repositioning
+                    let c = v.layer.presentation()?.position ?? v.center
+                    px.append(Double(c.x)); py.append(Double(c.y))
+                } else {
+                    px.append(.nan); py.append(.nan)
+                }
             }
             done([
                 "lat": a.centerCoordinate.latitude,
@@ -104,5 +119,41 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
                 "px": px, "py": py,
             ])
         }
+    }
+
+    /// Keep exactly one invisible annotation per probe coordinate (reused
+    /// across frames — coordinate assignment is cheap, add/remove is not).
+    private func syncProbeAnnotations(_ mv: MKMapView, coords: [[Double]]) {
+        let want = coords.filter { $0.count >= 2 }
+        while probeAnns.count > want.count {
+            mv.removeAnnotation(probeAnns.removeLast())
+        }
+        while probeAnns.count < want.count {
+            let ann = MKPointAnnotation()
+            probeAnns.append(ann)
+            mv.addAnnotation(ann)
+        }
+        for (i, p) in want.enumerated() {
+            let c = CLLocationCoordinate2D(latitude: p[0], longitude: p[1])
+            if probeAnns[i].coordinate.latitude != c.latitude || probeAnns[i].coordinate.longitude != c.longitude {
+                probeAnns[i].coordinate = c
+            }
+        }
+    }
+
+    /// Probe annotations render as 1x1 transparent views — invisible, but
+    /// still laid out by MapKit (isHidden could let MapKit skip positioning).
+    func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        guard let pt = annotation as? MKPointAnnotation, probeAnns.contains(pt) else { return nil }
+        let id = "cm3d-probe"
+        let v = mapView.dequeueReusableAnnotationView(withIdentifier: id)
+            ?? MKAnnotationView(annotation: annotation, reuseIdentifier: id)
+        v.annotation = annotation
+        v.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+        v.backgroundColor = .clear
+        v.canShowCallout = false
+        v.isEnabled = false
+        v.alpha = 0.02
+        return v
     }
 }

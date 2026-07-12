@@ -577,11 +577,21 @@ let applePitchT = 0;       // target — driven by the tilt toggle on Apple-grou
 // ACTUAL value, so the overlay always draws what the map really shows.
 let _appleActualCam = null;
 // Ground-truth screen positions of 3 probe coordinates under the REAL map
-// camera (MKMapView.convert, returned by each syncCamera) + the request they
-// answered. buildAppleProj fits a screen-affine from its replica onto these,
-// so the overlay matches the actual map even where the replica's camera
-// model is off (flyover terrain anchoring, georegistration, FOV drift).
+// camera + the request they answered. The Swift side anchors an invisible
+// 1x1 MKAnnotationView at each probe lat/lon — MapKit positions those views
+// through its real flyover render (terrain anchor state included), so their
+// centers are exact "where does this coordinate render" answers. This is the
+// only runtime oracle for the flyover pitch anchor, which MapKit re-samples
+// NONDETERMINISTICALLY from whatever mesh LOD is loaded on every camera set
+// (measured: identical MKMapCamera, renders 100-200 px apart across visits —
+// no constant drop can model that; the old MKMapView.convert() probes
+// projected through the flat mercator viewport and never saw it).
+// buildAppleProj fits a screen-affine from its replica onto these answers,
+// so the overlay tracks what the map ACTUALLY shows, anchor rolls and all.
 let _appleCal = null;
+// Smoothed calibration affine (eases toward each fresh fit; identity when
+// none) — raw per-sync fits would pop the whole overlay on anchor re-rolls.
+const _calS = { a: [1, 0, 0, 1], b: [0, 0] };
 function buildAppleProj(cssW, cssH) {
   // Look-at target O = the world point at the true screen center under the
   // FLAT view (game camera logic — focus/fit/aim — stays orthographic and
@@ -644,14 +654,55 @@ function buildAppleProj(cssW, cssH) {
     focal: (cssH / 2) / Math.tan(15 * Math.PI / 180),
     cx: cssW / 2, cy: cssH / 2,
   };
-  // NOTE on calibration-by-probe (tried, abandoned): MKMapView.convert(_:
-  // toPointTo:) computes through the FLAT mercator viewport, not the 3D
-  // flyover scene — at tee-framing altitudes it approximates the render
-  // well, but at the distance floor it put the camera's own centerCoordinate
-  // half a screen below the true screen center, parked. There is no public
-  // API that projects through the real flyover camera, so the replica +
-  // elevation correction above is the alignment story, and updateCamera
-  // ramps pitch out at close zoom where the residual would be visible.
+  // Calibration: fit a screen affine from the raw replica onto the probe
+  // annotations' ACTUAL rendered positions (see _appleCal). The fit input
+  // predictions use P WITHOUT calA (appleProjPt applies calA only once it's
+  // attached below), so the affine always maps raw-replica -> real-map and
+  // never feeds back through itself. Eased via _calS; decays to identity
+  // when probes go stale so a bad frame can't stick.
+  let fitA = null, fitB = null;
+  const cal = _appleCal;
+  const hdgDiff = cal ? Math.abs(((cal.heading - P.heading) % 360 + 540) % 360 - 180) : 999;
+  if (cal && cal.ll.length === 3 &&
+      Math.abs(cal.reqDistM - reqDistM) < reqDistM * 0.25 &&
+      Math.abs(cal.reqPitch - pitchDeg) < 6 && hdgDiff < 8 &&
+      performance.now() - cal.t < 1500) {
+    const g = course.geo.toLonLat;
+    const gdet = g[0] * g[4] - g[1] * g[3] || 1;
+    const S = [], D = [];
+    for (let i = 0; i < 3; i++) {
+      const lat = cal.ll[i][0], lon = cal.ll[i][1];
+      const wx = (g[4] * (lon - g[2]) - g[1] * (lat - g[5])) / gdet;
+      const wy = (g[0] * (lat - g[5]) - g[3] * (lon - g[2])) / gdet;
+      const q = appleProjPt(P, wx, wy, _apGroundZ(P, wx, wy));
+      S.push(q); D.push({ x: cal.px[i], y: cal.py[i] });
+    }
+    // Exact affine through 3 point pairs: solve [x y 1] M = [x' y'].
+    const det3 = S[0].x * (S[1].y - S[2].y) - S[0].y * (S[1].x - S[2].x) + (S[1].x * S[2].y - S[2].x * S[1].y);
+    if (Math.abs(det3) > 1e3) {  // px^2 area guard: skip near-collinear probes
+      const solve = (v0, v1, v2) => {
+        const a = (v0 * (S[1].y - S[2].y) - v1 * (S[0].y - S[2].y) + v2 * (S[0].y - S[1].y)) / det3;
+        const b = (-v0 * (S[1].x - S[2].x) + v1 * (S[0].x - S[2].x) - v2 * (S[0].x - S[1].x)) / det3;
+        const c = (v0 * (S[1].x * S[2].y - S[2].x * S[1].y) - v1 * (S[0].x * S[2].y - S[2].x * S[0].y) + v2 * (S[0].x * S[1].y - S[1].x * S[0].y)) / det3;
+        return [a, b, c];
+      };
+      const [a, b, tx] = solve(D[0].x, D[1].x, D[2].x);
+      const [d, e, ty] = solve(D[0].y, D[1].y, D[2].y);
+      const sdet = a * e - b * d;
+      // Sanity: near-identity-ish (anchor shifts translate; scale/rot stay small)
+      if (sdet > 0.5 && sdet < 2 && Math.hypot(tx, ty) < 500) {
+        fitA = [a, b, d, e]; fitB = [tx, ty];
+      }
+    }
+  }
+  // Ease toward the fit (or back to identity when none) — snap when close.
+  const tgtA = fitA || [1, 0, 0, 1], tgtB = fitB || [0, 0];
+  const k = 0.3;
+  for (let i = 0; i < 4; i++) _calS.a[i] += (tgtA[i] - _calS.a[i]) * k;
+  for (let i = 0; i < 2; i++) _calS.b[i] += (tgtB[i] - _calS.b[i]) * k;
+  const active = Math.abs(_calS.a[0] - 1) + Math.abs(_calS.a[3] - 1) + Math.abs(_calS.a[1]) + Math.abs(_calS.a[2]) > 1e-4 ||
+                 Math.abs(_calS.b[0]) + Math.abs(_calS.b[1]) > 0.05;
+  if (active) { P.calA = _calS.a.slice(); P.calB = _calS.b.slice(); }
   return P;
 }
 // Project world (x, y[, height in world units]) through the Apple pinhole,
@@ -671,8 +722,10 @@ function appleProjPt(P, x, y, z) {
   }
   return { x: sx, y: sy };
 }
-// Inverse: screen px -> ground-plane world point (undo the calibration
-// affine, then ray cast onto z=0).
+// Inverse: screen px -> world point on the TERRAIN (undo the calibration
+// affine, ray cast onto the anchor plane, then two fixed-point refinements
+// against the DEM — the same trick screenToWorldGround uses, and plenty
+// since terrain varies slowly at overlay scales).
 function appleUnproject(P, sx, sy) {
   const A = P.calA;
   if (A) {
@@ -714,23 +767,62 @@ function syncAppleGround() {
   // One camera model, one source: the same numbers the overlay projection
   // uses this frame (flat mode builds them fresh here — appleProj is null).
   const cam = view.appleProj || buildAppleProj(window.innerWidth, window.innerHeight);
+  // Pitched: pick 3 well-spread ground probes (fixed screen triangle,
+  // unprojected to world -> lat/lon). Their lat/lons are exact by
+  // construction — the Swift side answers with where MapKit REALLY renders
+  // them (invisible annotation views), and buildAppleProj fits the overlay
+  // onto those answers. Flat view needs no probes (affine already exact).
+  const probes = [];
+  if (cam.reqPitch > 0.05) {
+    const g = course.geo.toLonLat;
+    const cssW = window.innerWidth, cssH = window.innerHeight;
+    for (const [fx, fy] of [[0.5, 0.3], [0.25, 0.75], [0.75, 0.75]]) {
+      const w = appleUnproject(cam, fx * cssW, fy * cssH);
+      probes.push([g[3] * w.x + g[4] * w.y + g[5], g[0] * w.x + g[1] * w.y + g[2]]);
+    }
+  }
   // Send the REQUESTED camera; record what MapKit actually applied (its
   // clamps) so the next frame's overlay projection can match the real map.
-  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch })
+  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes })
     .then((a) => {
       if (a && typeof a.distM === "number") {
         _appleActualCam = { lat: a.lat, lon: a.lon, distM: a.distM, pitch: a.pitch, heading: a.heading,
                             reqLat: cam.reqLat, reqLon: cam.reqLon,
                             reqDistM: cam.reqDistM, reqPitch: cam.reqPitch };
       }
+      if (a && probes.length === 3 && Array.isArray(a.px) && a.px.length === 3 &&
+          a.px.every(isFinite) && a.py.every(isFinite)) {
+        _appleCal = { ll: probes, px: a.px, py: a.py, heading: cam.heading,
+                      reqDistM: cam.reqDistM, reqPitch: cam.reqPitch, t: performance.now() };
+      }
     })
     .catch(() => {});
+}
+// --- Apple-ground green detail gating ---------------------------------
+// OSM green polygons and Apple's imagery never register perfectly (different
+// georeferencing), and mid camera-move the overlay/map lag each other — a
+// half-offset green tint mid-transition reads as broken. So the full green
+// treatment (tint + contours + relief + flow dots) only draws when it can be
+// trusted AND is useful: the pin is within the current club's reach, and the
+// camera has fully settled. Out of range / in motion, the green shows just
+// cup + flag (drawn elsewhere) — also skipping the most projection-heavy
+// overlay work every frame the player is only looking at the hole.
+let _apSettleN = 0;    // consecutive settled camera frames (updateCamera)
+let _apDetailA = 0;    // green-detail fade alpha (eases in after settle)
+function appleGreenDetailWanted() {
+  if (state.moving || cine || greenView) return false;
+  const c = TUNE.clubs[selectedClub];
+  const reach = c ? c.carry + 30 : 120;   // carry + generous rollout (putter: near the green anyway)
+  const toPin = dist(state.ball.x, state.ball.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+  return toPin <= reach && _apSettleN >= 12;   // ~200ms parked before it appears
 }
 function leaveAppleGround() {
   if (!_appleGroundEntered) return;
   _appleGroundEntered = false;
   _appleActualCam = null;
   _appleCal = null;
+  _calS.a = [1, 0, 0, 1]; _calS.b = [0, 0];
+  _apSettleN = 0; _apDetailA = 0;
   document.documentElement.style.background = "";
   document.body.style.background = "";
   const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D;
