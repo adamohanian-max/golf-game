@@ -127,6 +127,19 @@ const TUNE = {
                          // the high-contrast lifted canopy texture
   tWarpRow: 24,          // warp band height, css px (×1.3 on mobile)
   treeMax: 3500,         // cap on generated trees per course (sprite fallback)
+  treeDarkLum: 92,       // aerial luma (0-255) below which an OB mask cell counts as forest
+                         // canopy (with a blue guard for water) — Four Oaks-style courses
+                         // ring the course in real forest the mask files under OB, not WOODS
+  treeTexture: 18,       // luma step to a 4-neighbor at mask res above which a green mid-
+                         // luma cell reads as textured canopy (dappled crowns) vs smooth turf
+  treeFringePasses: 6,   // dark-ROUGH fringe growth iterations (≈1 mask cell ≈ 3yd each):
+                         // lets the treeline the envelope filed under ROUGH join the
+                         // forest, but only by creeping out from confirmed canopy
+  treeEdgeR: 4,          // mask cells: woods cell within this of non-woods = forest edge
+  treeEdgeBoost: 5,      // edge cells keep trees at this × base rate — the tree WALL along
+                         // a fairway is what reads from ground level (Four Oaks 3D); deep
+                         // forest interior reads as texture, so it thins instead (below)
+  treeInteriorMul: 0.5,  // interior cells keep at this × base rate (pays for the edge boost)
   treeHMin: 3.5, treeHMax: 6.5, // tree height range, world units (~30–60 ft)
   canopyH: 4.6,          // photo-canopy extrusion height, world units (~40 ft)
   tHillAlpha: 0.22,      // DEM hillshade overlay strength when fully tilted
@@ -3970,14 +3983,126 @@ function buildTrees() {
   const m = HOLE._mask;
   if (m && m.lab) {
     const src = m.canopy || m.lab; // pre-erosion woods = the canopy you see
-    let woods = 0;
-    for (let i = 0; i < src.length; i++) if (src[i] === 3) woods++;
-    const keep = Math.min(1, TUNE.treeMax / Math.max(1, woods));
-    const t = m.toWorld;
+    // Forest field F = mask WOODS ∪ aerial-dark OB cells. The mask classifier
+    // deliberately files everything outside the playing envelope under OB —
+    // so on forest-ringed courses (Four Oaks: 2202 WOODS cells in a 402×512
+    // mask, ALL of them speckle) nearly the whole visible canopy carries no
+    // WOODS label and grew no trees. The aerial knows better: OB cells whose
+    // photo pixel is dark and not blue (water guard) are real canopy — same
+    // "trust what you SEE" call the mask itself makes for OOB. OB-only vote,
+    // so shadow streaks on playable rough (class 2) can't sprout trees.
+    const F = new Uint8Array(src.length);
+    let forest = 0;
+    for (let i = 0; i < src.length; i++) if (src[i] === 3) { F[i] = 1; forest++; }
+    const aimg = HOLE._img, aer = HOLE.aerial;
+    if (aimg && HOLE._imgReady && aer && aer.toWorld && m.w2p) {
+      try {
+        const cnv = document.createElement("canvas");
+        cnv.width = m.w; cnv.height = m.h;
+        const g2 = cnv.getContext("2d", { willReadFrequently: true });
+        // aerial px -> mask px = w2p ∘ aerial.toWorld (fold the processAerial
+        // bake upsample out of the first two columns, like drawAerial does)
+        const A = aer.toWorld, W = m.w2p, up = aimg._up || 1;
+        const Ta = W[0] * A[0] + W[1] * A[3], Tc = W[0] * A[1] + W[1] * A[4],
+              Te = W[0] * A[2] + W[1] * A[5] + W[2];
+        const Tb = W[3] * A[0] + W[4] * A[3], Td = W[3] * A[1] + W[4] * A[4],
+              Tf = W[3] * A[2] + W[4] * A[5] + W[5];
+        g2.setTransform(Ta / up, Tb / up, Tc / up, Td / up, Te, Tf);
+        g2.drawImage(aimg, 0, 0);
+        const pd = g2.getImageData(0, 0, m.w, m.h).data;
+        const lab = m.lab;
+        // Two canopy cues, because luma alone can't separate canopy from turf
+        // here (measured on Four Oaks NAIP: forest p50 luma 79-101 vs open
+        // rough p50 90 — full overlap). Sunlit canopy is MID-bright but
+        // heavily textured (dappled crowns/shadows at ~3yd/cell), mowed turf
+        // is smooth; so: "weak" = dark enough to be shadowed canopy, "strong"
+        // = green-ish + mid-luma + high local contrast. Gray car speckle in
+        // parking lots is high-contrast too but fails the green test.
+        const lum = new Float32Array(lab.length);
+        const greenish = new Uint8Array(lab.length);
+        for (let i = 0; i < lab.length; i++) {
+          const o = i * 4;
+          if (pd[o + 3] < 200) { lum[i] = 255; continue; } // outside aerial footprint: never canopy
+          const r = pd[o], g = pd[o + 1], b = pd[o + 2];
+          lum[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+          greenish[i] = (g >= b - 8 && g >= r - 6) ? 1 : 0;
+        }
+        const canopy = new Uint8Array(lab.length); // 1 = weak (creep-only), 2 = strong (self-vote)
+        for (let py = 0; py < m.h; py++) for (let px = 0; px < m.w; px++) {
+          const i = py * m.w + px;
+          if (!greenish[i] || lum[i] >= 150) continue;
+          let varN = 0; // max abs luma step to a 4-neighbor — cheap texture probe
+          if (px > 0) varN = Math.max(varN, Math.abs(lum[i] - lum[i - 1]));
+          if (px < m.w - 1) varN = Math.max(varN, Math.abs(lum[i] - lum[i + 1]));
+          if (py > 0) varN = Math.max(varN, Math.abs(lum[i] - lum[i - m.w]));
+          if (py < m.h - 1) varN = Math.max(varN, Math.abs(lum[i] - lum[i + m.w]));
+          if (varN >= TUNE.treeTexture && lum[i] < 135) canopy[i] = 2;
+          else if (lum[i] < TUNE.treeDarkLum) canopy[i] = 1;
+        }
+        for (let i = 0; i < lab.length; i++) {
+          if (F[i]) continue;
+          // OB votes on either cue; ROUGH self-votes only on the strong
+          // (textured) cue — a tree-shadow streak on open rough is dark but
+          // SMOOTH, so it needs the creep below and a forest to creep from.
+          if ((lab[i] === 0 && canopy[i]) || (lab[i] === 2 && canopy[i] === 2)) { F[i] = 1; forest++; }
+        }
+        // Fringe creep: the envelope dilation files the first ~10-30yd of real
+        // forest around every hole under ROUGH; weak-cue ROUGH cells join only
+        // by touching already-confirmed forest, one cell (~3yd) per pass.
+        // FAIRWAY cells never vote (mow-stripe shadows).
+        for (let pass = 0; pass < TUNE.treeFringePasses; pass++) {
+          let grew = 0;
+          for (let py = 0; py < m.h; py++) for (let px = 0; px < m.w; px++) {
+            const i = py * m.w + px;
+            if (F[i] || lab[i] !== 2 || !canopy[i]) continue;
+            n8: for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+              const nx = px + dx, ny = py + dy;
+              if (nx >= 0 && ny >= 0 && nx < m.w && ny < m.h && F[ny * m.w + nx] === 1) {
+                F[i] = 3; grew++; break n8; // 3 = grew this pass; promoted below so one pass ≈ one cell of creep
+              }
+            }
+          }
+          for (let i = 0; i < F.length; i++) if (F[i] === 3) F[i] = 1;
+          forest += grew;
+          if (!grew) break;
+        }
+      } catch (e) { /* tainted canvas / decode hiccup — keep mask-only forest */ }
+    }
+    // Edge-biased sampling: a uniform lottery spreads treeMax over ALL forest —
+    // most of the budget lands deep in off-course woodland and the tree line
+    // actually SEEN from the fairway comes out sparse. From ground level (3D)
+    // the boundary rows are the whole visual; the interior reads as texture.
+    // So boundary cells (any non-forest within treeEdgeR) keep trees at
+    // treeEdgeBoost × the interior's treeInteriorMul rate. Edges classified in
+    // one up-front pass (F: 1 = interior, 2 = edge) and the per-cell rate is
+    // normalized so the EXPECTED total is treeMax — an out.length cap on a
+    // row-major scan planted every tree in the top band of the map and left
+    // the rest of the course bare.
+    const boost = TUNE.treeEdgeBoost, intMul = TUNE.treeInteriorMul, eR = TUNE.treeEdgeR;
+    let edgeN = 0;
     for (let py = 0; py < m.h; py++) for (let px = 0; px < m.w; px++) {
-      if (src[py * m.w + px] !== 3 || rnd() > keep) continue;
+      const i = py * m.w + px;
+      if (!F[i]) continue;
+      let edge = false;
+      scan: for (let dy = -eR; dy <= eR; dy += 2) for (let dx = -eR; dx <= eR; dx += 2) {
+        const nx = px + dx, ny = py + dy;
+        if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h || !F[ny * m.w + nx]) { edge = true; break scan; }
+      }
+      if (edge) { F[i] = 2; edgeN++; }
+    }
+    const unit = TUNE.treeMax / Math.max(1, edgeN * boost + (forest - edgeN) * intMul);
+    const rateEdge = Math.min(1, unit * boost), rateInt = Math.min(1, unit * intMul);
+    const t = m.toWorld;
+    const water = (HOLE.surfaces && HOLE.surfaces.water) || [];
+    for (let py = 0; py < m.h; py++) for (let px = 0; px < m.w; px++) {
+      const f = F[py * m.w + px];
+      if (!f || rnd() > (f === 2 ? rateEdge : rateInt)) continue;
       const jx = px + rnd(), jy = py + rnd();
-      mk(t[0] * jx + t[1] * jy + t[2], t[3] * jx + t[4] * jy + t[5]);
+      const x = t[0] * jx + t[1] * jy + t[2], y = t[3] * jx + t[4] * jy + t[5];
+      // Murky ponds read green-ish + dark — the aerial vote can't tell them
+      // from canopy, but the OSM water polys can. No trees in the water.
+      if (inAnyPoly(x, y, water)) continue;
+      mk(x, y);
     }
   } else {
     // OSM woods fallback: distribute the budget across ALL stands (not
@@ -4012,11 +4137,14 @@ function drawTrees() {
   const holder = course || HOLE;
   // The mask decodes async — don't bake trees from the OSM fallback while a
   // mask is still on its way; rebuild once it lands (mask wins on quality).
+  // Aerial folded into the cache key too: buildTrees also reads the photo
+  // (OB-forest augmentation), so trees rebuild once when the aerial lands.
   const hasMask = !!(HOLE._mask && HOLE._mask.lab);
   if (!hasMask && HOLE._maskExpected) return;
-  if (!holder._trees || holder._treesFromMask !== hasMask) {
+  const treeSig = hasMask + ":" + !!HOLE._imgReady;
+  if (!holder._trees || holder._treesFromMask !== treeSig) {
     holder._trees = buildTrees();
-    holder._treesFromMask = hasMask;
+    holder._treesFromMask = treeSig;
   }
   const trees = holder._trees;
   if (!trees.length) return;
@@ -11977,9 +12105,15 @@ window.GolfBridge = {
     const holder = course || HOLE;
     const hasMask = !!(HOLE._mask && HOLE._mask.lab);
     if (!hasMask && HOLE._maskExpected) return [];
-    if (!holder._trees || holder._treesFromMask !== hasMask) {
+    // Course3D builds its instanced meshes ONCE per course (no per-frame cache
+    // key like drawTrees) — hold the list back until the aerial is decoded so
+    // that one build already includes the OB-forest augmentation from the
+    // photo. Same-origin static file alongside the course JSON, so it lands.
+    if (hasMask && HOLE.aerial && HOLE.aerial.file && !HOLE._imgReady) return [];
+    const treeSig = hasMask + ":" + !!HOLE._imgReady;
+    if (!holder._trees || holder._treesFromMask !== treeSig) {
       holder._trees = buildTrees();
-      holder._treesFromMask = hasMask;
+      holder._treesFromMask = treeSig;
     }
     return holder._trees || [];
   },
