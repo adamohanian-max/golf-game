@@ -1782,7 +1782,20 @@ function swipeVelocity(path, lookMs) {
 function swipeToShot(dxs, dys, dt, powerScale) {
   const speed = (Math.hypot(dxs, dys) / refScale) / Math.max(dt, 0.001);
   const frac = Math.min(speed * swingSens / powerScale, 1);
-  const ang = Math.atan2(dys / view.tilt, dxs) - view.angle; // undo tilt squash, then rotation
+  let ang;
+  if (view.appleProj) {
+    // Apple-ground 3D: the affine inverse doesn't hold under the pitched
+    // pinhole. Unproject the swipe as a short screen segment through the
+    // ball's screen position onto the ground plane — the world direction the
+    // finger actually traced across the terrain.
+    const b = state.ball;
+    const s0 = appleProjPt(view.appleProj, b.x, b.y);
+    const p0 = appleUnproject(view.appleProj, s0.x, s0.y);
+    const p1 = appleUnproject(view.appleProj, s0.x + dxs, s0.y + dys);
+    ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+  } else {
+    ang = Math.atan2(dys / view.tilt, dxs) - view.angle; // undo tilt squash, then rotation
+  }
   return { ang, frac };
 }
 
@@ -5109,7 +5122,12 @@ function draw() {
   if (!state.inHole) {
     const b = state.ball;
     const gx = wx(b.x, b.y), gy = wyg(b.x, b.y); // ground (shadow) position
-    const lift = ws(b.z);             // screen pixels the ball floats above ground
+    // Screen pixels the ball floats above ground. Under the Apple pinhole the
+    // height is projected for real (appleProjPt takes z) — flight arcs
+    // foreshorten correctly instead of using the flat screen-lift.
+    const lift = view.appleProj
+      ? gy - appleProjPt(view.appleProj, b.x, b.y, b.z).y
+      : ws(b.z);
     // Keep the ball clearly visible at every zoom (floor in screen px); real
     // scale only takes over when zoomed in far enough to exceed the floor.
     const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
