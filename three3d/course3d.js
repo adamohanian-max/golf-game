@@ -55,6 +55,17 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const FOUR_OAKS_ID = "four-oaks-dracut";
 
+// Applied to every MeshStandardMaterial in the scene. Root-caused via direct
+// testing (nulling scene.environment made shadows suddenly visible): the
+// PMREM env map baked from the sky (buildScene) includes the bright sun disc
+// itself, so at its default strength (envMapIntensity 1) its image-based
+// ambient contribution was swamping the directional light's shadow contrast
+// almost entirely — the shadow WAS rendering, just invisible under the flood
+// of ambient fill. This keeps the nice direction-aware ambient (a flat
+// AmbientLight can't tell a sky-facing slope from a shaded one) without it
+// drowning out actual cast shadows.
+const ENV_MAP_INTENSITY = 0.25;
+
 // metres per world unit (1 world unit = 3 yd, matches game.js M_PER_UNIT).
 // Read from GolfBridge once available; falls back to the known constant so
 // worldToScene still works if called before game.js has finished loading.
@@ -96,6 +107,7 @@ let pinPoleMesh = null;
 let pinFlagMesh = null;
 let ballMesh = null;
 let sunDir = new THREE.Vector3(0, 1, 0); // set for real in buildScene; shared with water's specular
+let sunLight = null; // DirectionalLight — repositioned (not resized) each frame to keep its shadow frustum centered on the camera target
 
 let builtForCourseId = null; // the ground/scene is built once per course (global map)
 let treesBuiltForCourseId = null; // separate from builtForCourseId: the WOODS mask can still be decoding the first time buildGroundForCourse runs, so this retries on later syncFromHole calls until it actually gets a tree list
@@ -220,29 +232,67 @@ function buildScene() {
   sky.scale.setScalar(8000);
   scene.add(sky);
 
-  const elevation = 35, azimuth = 200; // degrees — one fixed sunny look for now
+  // Committing hard to one crisp, sunny mood instead of the previous hazy/
+  // pale version — per review, a flat/washed-out sky was a big part of why
+  // this read as "diagram" rather than "place the sun is actually hitting."
+  // Lower turbidity + higher rayleigh = clearer, more saturated blue; a
+  // slightly stronger mieDirectionalG keeps a defined (not blown-out, now
+  // that ACESFilmic + a lower mieCoefficient tame the glare) sun glow.
+  const elevation = 38, azimuth = 200; // degrees — one fixed sunny look for now
   const phi = THREE.MathUtils.degToRad(90 - elevation);
   const theta = THREE.MathUtils.degToRad(azimuth);
-  sunDir = new THREE.Vector3().setFromSphericalCoords(1, phi, theta); // module-level: Water reuses this for its specular
+  sunDir = new THREE.Vector3().setFromSphericalCoords(1, phi, theta); // module-level: Water/shadow camera reuse this
   sky.material.uniforms.sunPosition.value.copy(sunDir);
-  sky.material.uniforms.turbidity.value = 4;
-  sky.material.uniforms.rayleigh.value = 2.2;
-  sky.material.uniforms.mieCoefficient.value = 0.003;
-  sky.material.uniforms.mieDirectionalG.value = 0.8;
+  sky.material.uniforms.turbidity.value = 2.6;
+  sky.material.uniforms.rayleigh.value = 3.2;
+  sky.material.uniforms.mieCoefficient.value = 0.0022;
+  sky.material.uniforms.mieDirectionalG.value = 0.85;
 
   // The Sky mesh itself isn't fog-affected (three.js fog only applies to normal
   // lit/lambert materials), so the terrain's fogged-out horizon will never
   // perfectly color-match the sky dome behind it — a wider near/far range keeps
-  // that seam a gradient instead of a visible line.
-  scene.fog = new THREE.Fog(0xcfe3f5, 250, 2200);
+  // that seam a gradient instead of a visible line. Pulled nearer than before
+  // (was 250-2200) so the mid-distance blur where the aerial photo runs out of
+  // real resolution reads as atmospheric haze instead of a naked texture smear
+  // — the same trick real-time renderers lean on to hide LOD/texture seams.
+  // Fog color matched empirically to the RENDERED sky just above the horizon
+  // (sampled ~(228,236,241) after ACES + exposure) — the old 0xbcd8ea tone-
+  // mapped to near-neutral white (241,242,242), so fully fogged terrain read
+  // as a white sheet against a bluer sky: a visible horizontal band seam in
+  // any elevated/low-angle view (e.g. the ball-follow camera after a shot).
+  // ACES compresses this hard on its shoulder, so the linear color has to sit
+  // noticeably bluer/darker than the target to land on it post-tonemap.
+  scene.fog = new THREE.Fog(0xa7c8e2, 160, 1700);
 
-  // Ambient dropped from 0.55 -> 0.25: the PMREM env below now supplies most
-  // of the non-directional fill, so a flat ambient on top of it would wash
-  // the shading out and flatten the rolling terrain again.
-  scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+  // Ambient dropped from 0.55 -> 0.16: real contrast (a defined lit side and
+  // shadow side) is what makes a scene read as "a place the sun is hitting"
+  // instead of "flatly lit diagram" — the PMREM env below still supplies
+  // direction-aware fill, so this isn't going fully unlit in shadow.
+  // Cool-tinted (light bluish, mimicking skylight) against a warm sun below —
+  // classic warm-key/cool-fill split reads as outdoor daylight, not a studio.
+  scene.add(new THREE.AmbientLight(0xdce8ff, 0.16));
+  const sun = new THREE.DirectionalLight(0xfff2da, 2.4); // warm-white key light, notably brighter now that it casts real shadows (see castShadow below)
   sun.position.copy(sunDir).multiplyScalar(500);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.near = 10;
+  sun.shadow.camera.far = 1200;
+  // Fixed half-extent sized for "whatever's near the camera right now," not
+  // the whole 2km course — a shadow frustum that big would spread 2048² texels
+  // over the entire map and every shadow would be a blurry smear. Repositioned
+  // (not resized) each frame in render() to stay centered under the live
+  // camera target, following OrbitControls' own target — see there.
+  const SHADOW_HALF = 220;
+  sun.shadow.camera.left = -SHADOW_HALF;
+  sun.shadow.camera.right = SHADOW_HALF;
+  sun.shadow.camera.top = SHADOW_HALF;
+  sun.shadow.camera.bottom = -SHADOW_HALF;
+  sun.shadow.bias = -0.0012;   // reduces shadow acne on the large flat terrain
+  sun.shadow.normalBias = 0.04; // reduces peter-panning/self-shadow noise on thin tree geometry
+  sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun);
+  scene.add(sun.target); // DirectionalLight aims at target.position, not a direction vector — must be in the scene graph to take effect
+  sunLight = sun; // module-level: render() repositions sun+target together each frame
 
   // Image-based ambient lighting baked from the sky itself, so slopes facing
   // the sun vs. away from it actually read differently (a flat AmbientLight
@@ -271,23 +321,51 @@ function buildScene() {
   // shot is legible; scale down to true size once phase 10 brings a golfer's-
   // eye camera close enough that real scale actually reads.
   const teeGeo = new THREE.SphereGeometry(2.2, 16, 12);
-  teeMesh = new THREE.Mesh(teeGeo, new THREE.MeshStandardMaterial({ color: 0xffffff }));
+  const teeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  teeMat.envMapIntensity = ENV_MAP_INTENSITY;
+  teeMesh = new THREE.Mesh(teeGeo, teeMat);
   scene.add(teeMesh);
 
-  pinPoleMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15, 0.15, 9, 6),
-    new THREE.MeshStandardMaterial({ color: 0xf4f4f0 })
-  );
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f0 });
+  poleMat.envMapIntensity = ENV_MAP_INTENSITY;
+  pinPoleMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 9, 6), poleMat);
   scene.add(pinPoleMesh);
+  // Segmented horizontally (not just 1x1) so the wave-in-wind shader below has
+  // vertices to actually bend — a rigid swing (rotating the whole plane) reads
+  // as "sign swinging on a hinge," not cloth; per-vertex displacement along
+  // the pole-to-tail axis reads as a flag even at this simple a level.
+  const flagMat = new THREE.MeshStandardMaterial({ color: 0xe02a25, side: THREE.DoubleSide });
+  flagMat.envMapIntensity = ENV_MAP_INTENSITY;
+  flagMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = { value: 0 };
+    flagMat.userData.shader = shader; // render() ticks uTime through this handle
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `
+        #include <common>
+        uniform float uTime;
+      `)
+      .replace("#include <begin_vertex>", `
+        #include <begin_vertex>
+        // PlaneGeometry(3,2,...) is centered at origin, x in [-1.5, 1.5]. Ramp
+        // from 0 at the pole edge (x=-1.5, pinned) to full amplitude at the
+        // tail (x=+1.5) so it reads as attached-at-one-edge cloth, not a
+        // rigid sign swinging on a center hinge.
+        float ramp = (position.x + 1.5) / 3.0;
+        float wave = sin(uTime * 6.0 - position.x * 3.0) * ramp * 0.35;
+        transformed.z += wave;
+      `);
+  };
   pinFlagMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(3, 2),
-    new THREE.MeshStandardMaterial({ color: 0xe02a25, side: THREE.DoubleSide })
+    new THREE.PlaneGeometry(3, 2, 8, 1),
+    flagMat
   );
   scene.add(pinFlagMesh);
 
+  const ballMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  ballMat.envMapIntensity = ENV_MAP_INTENSITY;
   ballMesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.0427, 12, 10), // real 1.68in golf ball radius, in metres
-    new THREE.MeshStandardMaterial({ color: 0xffffff })
+    ballMat
   );
   scene.add(ballMesh);
 }
@@ -380,8 +458,10 @@ function buildGroundForCourse() {
   const aerial = course && course.aerial;
   const terrainGeo = buildTerrainGeometry(aerial);
   terrainMat = new THREE.MeshStandardMaterial({ color: 0x4c8a4f, flatShading: false });
+  terrainMat.envMapIntensity = ENV_MAP_INTENSITY;
   patchGroundDetailShader(terrainMat);
   terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+  terrainMesh.receiveShadow = true; // no castShadow: hillside self-shadowing is a nice-to-have, not worth doubling this mesh's shadow-pass cost for v1
   scene.add(terrainMesh);
 
   if (aerial) {
@@ -403,6 +483,7 @@ function buildGroundForCourse() {
     const geo = new THREE.PlaneGeometry(span, span, 1, 1);
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshStandardMaterial({ color: 0x2f5c34 });
+    mat.envMapIntensity = ENV_MAP_INTENSITY;
     skirtMesh = new THREE.Mesh(geo, mat);
     scene.add(skirtMesh);
   }
@@ -445,6 +526,7 @@ function buildGreenPatchesForCourse(aerial) {
     const geo = buildTerrainGeometry(aerial, bbox, cols, rows);
     geo.translate(0, 0.03, 0); // tiny lift so it wins depth vs. the coarse mesh underneath instead of z-fighting
     const mesh = new THREE.Mesh(geo, terrainMat);
+    mesh.receiveShadow = true; // greens near the treeline should visibly sit in shade, not read as floodlit
     scene.add(mesh);
     greenPatchMeshes.push(mesh);
   }
@@ -482,9 +564,9 @@ function buildWaterForCourse(course) {
       textureHeight: 512,
       waterNormals,
       sunDirection: sunDir.clone(),
-      sunColor: 0xffffff,
-      waterColor: 0x1e4a52,
-      distortionScale: 2.2,
+      sunColor: 0xfff2da, // matches the warm sun light color (buildScene) so the specular glint reads as the same sun
+      waterColor: 0x2f6b74, // lighter than before — was reading as a flat dark blob; needs headroom to show the sky/sun glint
+      distortionScale: 3.4, // more visible ripple — was too calm to read as "wet" from a distance
       fog: !!scene.fog,
     });
     water.position.y = (sumZ / poly.length) * m;
@@ -523,6 +605,7 @@ function loadTreeSpecies() {
           else c.lerp(new THREE.Color(0x53422c), 0.7);                          // bark -> muted brown
           o.material.roughness = 1;
           o.material.metalness = 0;
+          o.material.envMapIntensity = ENV_MAP_INTENSITY;
         }
         parts.push({ geometry: o.geometry, material: o.material });
       });
@@ -559,6 +642,12 @@ function buildTreesForCourse(courseId) {
       const { parts, height } = species[s];
       for (const part of parts) {
         const inst = new THREE.InstancedMesh(part.geometry, part.material, list.length);
+        // Per the aesthetics review: a cast shadow anchors even simple/cartoon
+        // tree geometry to the ground far more convincingly than any texture
+        // change would — real light interacting with the object, not just
+        // being lit by it. No receiveShadow: trees shadowing other trees
+        // isn't worth the cost for this pass.
+        inst.castShadow = true;
         for (let i = 0; i < list.length; i++) {
           const t = list[i];
           const th = gb.terrainZ(t.x, t.y);
@@ -645,7 +734,14 @@ function init() {
   // anywhere near the sun. ACESFilmic is what the official Sky.js example
   // pairs it with for this reason.
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.5;
+  // Bumped from 0.5 -> 0.8: the old value was tuned back when everything was
+  // flatly, ambiently lit (no shadows) and needed taming to avoid washing
+  // out. Now that the sun casts real shadows (below) the scene has genuine
+  // contrast to work with — a darker exposure was reading as "hazy/overcast"
+  // per review rather than "sunny," so let more light back in.
+  renderer.toneMappingExposure = 0.8;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   markContextHandlers();
   buildScene();
   resize();
@@ -780,6 +876,8 @@ function render() {
   const dt = lastFrameT == null ? 1 / 60 : Math.min(0.1, (now - lastFrameT) / 1000);
   lastFrameT = now;
   for (const w of waterMeshes) w.material.uniforms["time"].value += dt;
+  const flagShader = pinFlagMesh.material.userData.shader;
+  if (flagShader) flagShader.uniforms.uTime.value = now / 1000;
 
   const gb = window.GolfBridge;
   if (gb) {
@@ -799,6 +897,16 @@ function render() {
       const hole = gb.getHole();
       if (hole && hole._mask && hole._mask.lab) buildTreesForCourse(courseNow.id);
     }
+  }
+  // Shadow frustum is a fixed ~440m box (see buildScene) that follows
+  // wherever the camera is actually looking, rather than trying to cover the
+  // whole 2km course (which would spread the shadow map's texels too thin to
+  // read as anything but a blur). Recentering is just moving a camera
+  // transform — cheap enough to do every frame even though it only needs to
+  // visibly keep up during the follow-cam chase.
+  if (sunLight && controls) {
+    sunLight.position.copy(controls.target).addScaledVector(sunDir, 500);
+    sunLight.target.position.copy(controls.target);
   }
   controls.update();
   renderer.render(scene, camera);
@@ -833,6 +941,10 @@ window.Course3D = {
       treeInstancedMeshes: treeMeshes.length,
       treeInstancesTotal: treeMeshes.reduce((s, m) => s + m.count, 0),
       treesBuiltForCourseId, waterMeshCount: waterMeshes.length, greenPatchCount: greenPatchMeshes.length,
+      shadowMapEnabled: renderer.shadowMap.enabled, sunCastShadow: sunLight && sunLight.castShadow,
+      sunPos: sunLight && sunLight.position.toArray(), sunTargetPos: sunLight && sunLight.target.position.toArray(),
+      treeCastShadow: treeMeshes.length ? treeMeshes[0].castShadow : null,
+      terrainReceiveShadow: terrainMesh && terrainMesh.receiveShadow,
     };
   },
 };
