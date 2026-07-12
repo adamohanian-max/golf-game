@@ -570,6 +570,12 @@ let applePitchT = 0;       // target — driven by the tilt toggle on Apple-grou
 // requested disagree beyond tolerance, buildAppleProj renders from the
 // ACTUAL value, so the overlay always draws what the map really shows.
 let _appleActualCam = null;
+// Ground-truth screen positions of 3 probe coordinates under the REAL map
+// camera (MKMapView.convert, returned by each syncCamera) + the request they
+// answered. buildAppleProj fits a screen-affine from its replica onto these,
+// so the overlay matches the actual map even where the replica's camera
+// model is off (flyover terrain anchoring, georegistration, FOV drift).
+let _appleCal = null;
 function buildAppleProj(cssW, cssH) {
   // Look-at target O = the world point at the true screen center under the
   // FLAT view (game camera logic — focus/fit/aim — stays orthographic and
@@ -634,20 +640,43 @@ function buildAppleProj(cssW, cssH) {
     focal: (cssH / 2) / Math.tan(15 * Math.PI / 180),
     cx: cssW / 2, cy: cssH / 2,
   };
+  // NOTE on calibration-by-probe (tried, abandoned): MKMapView.convert(_:
+  // toPointTo:) computes through the FLAT mercator viewport, not the 3D
+  // flyover scene — at tee-framing altitudes it approximates the render
+  // well, but at the distance floor it put the camera's own centerCoordinate
+  // half a screen below the true screen center, parked. There is no public
+  // API that projects through the real flyover camera, so the replica +
+  // elevation correction above is the alignment story, and updateCamera
+  // ramps pitch out at close zoom where the residual would be visible.
+  return P;
 }
-// Project world (x, y[, height in world units]) through the Apple pinhole.
+// Project world (x, y[, height in world units]) through the Apple pinhole,
+// then through the probe-calibration affine when one is fitted (P.calA/calB).
 function appleProjPt(P, x, y, z) {
   const e = (x - P.Ox) * P.m, n = (P.Oy - y) * P.m, u = (z || 0) * P.m;
   const vx = e - P.px, vy = n - P.py, vz = u - P.pz;
   const zc = vx * P.fx + vy * P.fy + vz * P.fz;          // depth along look dir
   const d = zc > 1 ? zc : 1;                              // clamp behind-camera blowups
-  return {
-    x: P.cx + P.focal * (vx * P.rx + vy * P.ry + vz * P.rz) / d,
-    y: P.cy - P.focal * (vx * P.ux + vy * P.uy + vz * P.uz) / d,
-  };
+  let sx = P.cx + P.focal * (vx * P.rx + vy * P.ry + vz * P.rz) / d;
+  let sy = P.cy - P.focal * (vx * P.ux + vy * P.uy + vz * P.uz) / d;
+  const A = P.calA;
+  if (A) {
+    const tx = A[0] * sx + A[1] * sy + P.calB[0];
+    sy = A[2] * sx + A[3] * sy + P.calB[1];
+    sx = tx;
+  }
+  return { x: sx, y: sy };
 }
-// Inverse: screen px -> ground-plane world point (ray cast onto z=0).
+// Inverse: screen px -> ground-plane world point (undo the calibration
+// affine, then ray cast onto z=0).
 function appleUnproject(P, sx, sy) {
+  const A = P.calA;
+  if (A) {
+    const det = A[0] * A[3] - A[1] * A[2] || 1;
+    const ux = sx - P.calB[0], uy = sy - P.calB[1];
+    sx = (A[3] * ux - A[1] * uy) / det;
+    sy = (A[0] * uy - A[2] * ux) / det;
+  }
   const dx = P.fx + (P.rx * (sx - P.cx) - P.ux * (sy - P.cy)) / P.focal;
   const dy = P.fy + (P.ry * (sx - P.cx) - P.uy * (sy - P.cy)) / P.focal;
   const dz = P.fz + (P.rz * (sx - P.cx) - P.uz * (sy - P.cy)) / P.focal;
@@ -690,6 +719,7 @@ function leaveAppleGround() {
   if (!_appleGroundEntered) return;
   _appleGroundEntered = false;
   _appleActualCam = null;
+  _appleCal = null;
   document.documentElement.style.background = "";
   document.body.style.background = "";
   const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D;
@@ -2457,12 +2487,19 @@ function updateCamera() {
   // canvas squash — the squash would corrupt the pinhole replica's affine base.
   if (appleGroundActive()) {
     camera.tilt = camera.tTilt = 1;
-    applePitchT = tiltView ? TUNE.applePitchDeg : 0;
     // Cap zoom so the camera never requests under flyover's minimum distance
     // (past the clamp the map drifts off the overlay — see APPLE_MIN_DIST_M).
     const sMax = window.innerHeight * M_PER_UNIT * APPLE_CAM_K / APPLE_MIN_DIST_M;
     if (camera.scale > sMax) camera.scale = sMax;
     if (camera.tScale > sMax) camera.tScale = sMax;
+    // Pitch rides the zoom: full 3D at hole-scale framings, easing to flat
+    // by putt zoom. Two reasons in one knob — top-down is the better read on
+    // the green anyway, and the replica-vs-flyover residual (terrain
+    // anchoring, no exact-projection API — see buildAppleProj) grows with
+    // tan(pitch) exactly where alignment matters most.
+    const distNow = window.innerHeight / camera.scale * M_PER_UNIT * APPLE_CAM_K;
+    const ramp = Math.min(1, Math.max(0, (distNow - 220) / (380 - 220)));
+    applePitchT = tiltView ? TUNE.applePitchDeg * ramp : 0;
   } else {
     applePitchT = 0;
   }
@@ -3350,8 +3387,25 @@ function drawFlowDots(g, fade = 1) {
 function drawGreenRelief(g, intensity, showArrows) {
   if (!g.relief) buildGreenRelief(g);
   const m = g.relief.m, dpr = window.devicePixelRatio || 1;
-  const A = view.a * m[0] + view.b * m[3], C = view.a * m[1] + view.b * m[4], E = view.a * m[2] + view.b * m[5] + view.c;
-  const B = view.d * m[0] + view.e * m[3], Dd = view.d * m[1] + view.e * m[4], F = view.d * m[2] + view.e * m[5] + view.f;
+  // Raster blit needs an affine. Under the Apple pinhole (view.appleProj),
+  // linearize the projection about the green centroid — agrees with it there
+  // and in its first derivatives, which at green scale is within a pixel or
+  // two, so the hillshade stays a single drawImage. (The clip below goes
+  // through tracePoly/wx/wy, so its outline is exactly perspective.)
+  let va = view.a, vb = view.b, vc = view.c, vd = view.d, ve = view.e, vf = view.f;
+  if (view.appleProj) {
+    const P = view.appleProj;
+    let cx = 0, cy = 0;
+    for (const p of g.poly) { cx += p.x; cy += p.y; }
+    cx /= g.poly.length; cy /= g.poly.length;
+    const h = 0.5, q0 = appleProjPt(P, cx, cy);
+    const qx = appleProjPt(P, cx + h, cy), qy = appleProjPt(P, cx, cy + h);
+    va = (qx.x - q0.x) / h; vd = (qx.y - q0.y) / h;
+    vb = (qy.x - q0.x) / h; ve = (qy.y - q0.y) / h;
+    vc = q0.x - va * cx - vb * cy; vf = q0.y - vd * cx - ve * cy;
+  }
+  const A = va * m[0] + vb * m[3], C = va * m[1] + vb * m[4], E = va * m[2] + vb * m[5] + vc;
+  const B = vd * m[0] + ve * m[3], Dd = vd * m[1] + ve * m[4], F = vd * m[2] + ve * m[5] + vf;
   ctx.save();
   tracePoly(g.poly); ctx.clip();                      // clip set in device space, survives setTransform
   ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * Dd, dpr * E, dpr * F);
@@ -5003,10 +5057,9 @@ function draw() {
     // treatment every aerial course gets, minus the aerial itself.
     if (!HOLE.isRange) {
       drawGreen(true);
-      // Relief is a raster blit through an AFFINE transform — it can't follow
-      // the pitched pinhole projection, so it only draws flat. (Contours and
-      // the green tint are per-vertex through wx/wy, so they pitch fine.)
-      if (!view.appleProj) for (const g of greensInPlay()) {
+      // Relief follows the pitched view too — drawGreenRelief linearizes the
+      // pinhole about each green's centroid for its raster blit.
+      for (const g of greensInPlay()) {
         if (!polyVisible(g.poly)) continue;
         drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope && breakArrows);
       }

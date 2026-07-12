@@ -71,8 +71,9 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     /// the game's overlay projection must render what the map really shows,
     /// not what it asked for. game.js folds these actuals back into
     /// buildAppleProj (see _appleActualCam there).
-    func syncCamera(lat: Double, lon: Double, heading: Double, distM: Double, pitch: Double) -> [String: Double] {
-        guard let mv = mapView else { return [:] }
+    func syncCamera(lat: Double, lon: Double, heading: Double, distM: Double, pitch: Double,
+                    probes: [[Double]], done: @escaping ([String: Any]) -> Void) {
+        guard let mv = mapView else { done([:]); return }
         let cam = MKMapCamera(
             lookingAtCenter: CLLocationCoordinate2D(latitude: lat, longitude: lon),
             fromDistance: max(distM, 60),
@@ -80,12 +81,28 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
             heading: heading)
         mv.camera = cam // direct assignment — no animation, game.js already pushes ~30fps
         let a = mv.camera
-        return [
-            "lat": a.centerCoordinate.latitude,
-            "lon": a.centerCoordinate.longitude,
-            "distM": a.centerCoordinateDistance,
-            "pitch": Double(a.pitch),
-            "heading": a.heading,
-        ]
+        // Ground truth for the JS overlay projection: where THIS view really
+        // puts each probe coordinate on screen (UIKit pts == css px). game.js
+        // fits a tiny screen-affine from its replica onto these, so overlay
+        // and map agree exactly no matter what MapKit clamps or how the
+        // flyover terrain anchors the camera. convert() answers with a STALE
+        // camera if called in the same runloop turn as the camera assignment
+        // (measured: probe points came back from the previous framing) — so
+        // hop the runloop once before converting.
+        DispatchQueue.main.async {
+            var px: [Double] = [], py: [Double] = []
+            for p in probes where p.count >= 2 {
+                let pt = mv.convert(CLLocationCoordinate2D(latitude: p[0], longitude: p[1]), toPointTo: mv)
+                px.append(Double(pt.x)); py.append(Double(pt.y))
+            }
+            done([
+                "lat": a.centerCoordinate.latitude,
+                "lon": a.centerCoordinate.longitude,
+                "distM": a.centerCoordinateDistance,
+                "pitch": Double(a.pitch),
+                "heading": a.heading,
+                "px": px, "py": py,
+            ])
+        }
     }
 }

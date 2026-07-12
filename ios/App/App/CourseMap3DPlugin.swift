@@ -63,9 +63,18 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
         if syncCount % 30 == 1 { // log roughly once/sec at the ~30fps throttle, not every frame
             NSLog("CourseMap3D: syncCamera #\(syncCount) lat=\(lat) lon=\(lon) heading=\(heading) distM=\(distM) pitch=\(pitch)")
         }
+        // probes: [[lat,lon],...] — coordinates the JS overlay wants ground-truth
+        // screen positions for (see CourseMap3DLayer.syncCamera).
+        let probes = (call.getArray("probes") as? [[Double]]) ?? []
         DispatchQueue.main.async {
-            let actual = self.layer.syncCamera(lat: lat, lon: lon, heading: heading, distM: distM, pitch: pitch)
-            call.resolve(actual)
+            self.layer.syncCamera(lat: lat, lon: lon, heading: heading, distM: distM, pitch: pitch, probes: probes) { actual in
+                var out = JSObject()
+                for (k, v) in actual {
+                    if let d = v as? Double { out[k] = d }
+                    else if let arr = v as? [Double] { out[k] = arr.map { $0 as JSValue } }
+                }
+                call.resolve(out)
+            }
         }
     }
 }
