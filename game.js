@@ -680,9 +680,16 @@ function appleUnproject(P, sx, sy) {
   const dx = P.fx + (P.rx * (sx - P.cx) - P.ux * (sy - P.cy)) / P.focal;
   const dy = P.fy + (P.ry * (sx - P.cx) - P.uy * (sy - P.cy)) / P.focal;
   const dz = P.fz + (P.rz * (sx - P.cx) - P.uz * (sy - P.cy)) / P.focal;
-  const t = dz < -1e-9 ? -P.pz / dz : 1e9;  // ray must descend to hit the ground
-  const e = P.px + t * dx, n = P.py + t * dy;
-  return { x: P.Ox + e / P.m, y: P.Oy - n / P.m };
+  if (dz >= -1e-9) return { x: P.Ox, y: P.Oy };  // ray never descends — degenerate
+  let uM = 0; // target plane height (metres above the anchor plane)
+  let out = { x: P.Ox, y: P.Oy };
+  for (let i = 0; i < 3; i++) {
+    const t = (uM - P.pz) / dz;
+    const e = P.px + t * dx, n = P.py + t * dy;
+    out = { x: P.Ox + e / P.m, y: P.Oy - n / P.m };
+    uM = _apGroundZ(P, out.x, out.y) * P.m;
+  }
+  return out;
 }
 function syncAppleGround() {
   const P = window.Capacitor.Plugins.CourseMap3D;
@@ -1945,11 +1952,25 @@ function swingMove(e) {
     camera.tAngle = camTouch.camAngle + dAng;
     camera.angle = camera.tAngle;
 
-    // pan: midpoint shift in world coords (accounting for rotation)
-    const dcx = cx - camTouch.cx, dcy = cy - camTouch.cy;
-    const cos = Math.cos(camera.angle), sin = Math.sin(camera.angle);
-    camera.tFocus.x = camTouch.focusX - (dcx * cos + dcy * sin) / camera.scale;
-    camera.tFocus.y = camTouch.focusY - (-dcx * sin + dcy * cos) / camera.scale;
+    // pan: midpoint shift in world coords. Under the Apple 3D pinhole the
+    // flat affine is wrong (pan speed/direction bend with pitch) — move by
+    // the world delta between the previous and current midpoint UNPROJECTED
+    // onto the terrain, incrementally per event: the ground point under the
+    // fingers stays under the fingers, exactly like panning Apple Maps.
+    if (view.appleProj) {
+      const pcx = camTouch.prevCx != null ? camTouch.prevCx : camTouch.cx;
+      const pcy = camTouch.prevCy != null ? camTouch.prevCy : camTouch.cy;
+      const w0 = appleUnproject(view.appleProj, pcx, pcy);
+      const w1 = appleUnproject(view.appleProj, cx, cy);
+      camera.tFocus.x += w0.x - w1.x;
+      camera.tFocus.y += w0.y - w1.y;
+      camTouch.prevCx = cx; camTouch.prevCy = cy;
+    } else {
+      const dcx = cx - camTouch.cx, dcy = cy - camTouch.cy;
+      const cos = Math.cos(camera.angle), sin = Math.sin(camera.angle);
+      camera.tFocus.x = camTouch.focusX - (dcx * cos + dcy * sin) / camera.scale;
+      camera.tFocus.y = camTouch.focusY - (-dcx * sin + dcy * cos) / camera.scale;
+    }
     camera.focus.x = camera.tFocus.x;
     camera.focus.y = camera.tFocus.y;
     return;
@@ -2597,10 +2618,14 @@ window.addEventListener("resize", resize);
 // the MapKit pinhole replica instead of the affine — see buildAppleProj.
 // Tiny memo: wx/wy are always called as a pair on the same point.
 let _apLast = null;
+// Terrain height under a world point, relative to the camera's anchor plane
+// (world units) — what a GROUND point's z is in the pinhole projection.
+function _apGroundZ(P, x, y) { return terrainZ(x, y) - P.zAnchor; }
 function _apPt(x, y) {
   if (_apLast && _apLast.wx === x && _apLast.wy === y && _apLast.P === view.appleProj) return _apLast;
-  const q = appleProjPt(view.appleProj, x, y);
-  _apLast = { wx: x, wy: y, P: view.appleProj, x: q.x, y: q.y };
+  const P = view.appleProj;
+  const q = appleProjPt(P, x, y, _apGroundZ(P, x, y));
+  _apLast = { wx: x, wy: y, P, x: q.x, y: q.y };
   return _apLast;
 }
 function wx(x, y) { return view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
@@ -3398,8 +3423,9 @@ function drawGreenRelief(g, intensity, showArrows) {
     let cx = 0, cy = 0;
     for (const p of g.poly) { cx += p.x; cy += p.y; }
     cx /= g.poly.length; cy /= g.poly.length;
-    const h = 0.5, q0 = appleProjPt(P, cx, cy);
-    const qx = appleProjPt(P, cx + h, cy), qy = appleProjPt(P, cx, cy + h);
+    const zc = _apGroundZ(P, cx, cy);   // drape the linearization on the terrain too
+    const h = 0.5, q0 = appleProjPt(P, cx, cy, zc);
+    const qx = appleProjPt(P, cx + h, cy, zc), qy = appleProjPt(P, cx, cy + h, zc);
     va = (qx.x - q0.x) / h; vd = (qx.y - q0.y) / h;
     vb = (qy.x - q0.x) / h; ve = (qy.y - q0.y) / h;
     vc = q0.x - va * cx - vb * cy; vf = q0.y - vd * cx - ve * cy;
@@ -5179,7 +5205,7 @@ function draw() {
     // height is projected for real (appleProjPt takes z) — flight arcs
     // foreshorten correctly instead of using the flat screen-lift.
     const lift = view.appleProj
-      ? gy - appleProjPt(view.appleProj, b.x, b.y, b.z).y
+      ? gy - appleProjPt(view.appleProj, b.x, b.y, b.z + _apGroundZ(view.appleProj, b.x, b.y)).y
       : ws(b.z);
     // Keep the ball clearly visible at every zoom (floor in screen px); real
     // scale only takes over when zoomed in far enough to exceed the floor.
