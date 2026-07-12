@@ -117,26 +117,51 @@ def main():
         sys.exit(f"Only {len(world_pts)} hole(s) matched (need >=3) — matched={matched} skipped={skipped}")
 
     import numpy as np
-    A = np.array([[wx, wy, 1.0] for wx, wy in world_pts])
-    lon_coef, *_ = np.linalg.lstsq(A, np.array(lon_targets), rcond=None)
-    lat_coef, *_ = np.linalg.lstsq(A, np.array(lat_targets), rcond=None)
 
-    # residuals, reported in meters (equirect approx around the fit's own mean lat)
     mean_lat = sum(lat_targets) / len(lat_targets)
     m_per_deg_lat = 111320.0
     m_per_deg_lon = 111320.0 * math.cos(math.radians(mean_lat))
-    max_err_m = 0.0
-    err_sum_m = 0.0
-    for (wx, wy), lon_t, lat_t in zip(world_pts, lon_targets, lat_targets):
-        lon_p = lon_coef[0] * wx + lon_coef[1] * wy + lon_coef[2]
-        lat_p = lat_coef[0] * wx + lat_coef[1] * wy + lat_coef[2]
-        err_m = math.hypot((lon_p - lon_t) * m_per_deg_lon, (lat_p - lat_t) * m_per_deg_lat)
-        max_err_m = max(max_err_m, err_m)
-        err_sum_m += err_m
-    mean_err_m = err_sum_m / len(world_pts)
+
+    def fit(idx):
+        A = np.array([[world_pts[i][0], world_pts[i][1], 1.0] for i in idx])
+        lon_c, *_ = np.linalg.lstsq(A, np.array([lon_targets[i] for i in idx]), rcond=None)
+        lat_c, *_ = np.linalg.lstsq(A, np.array([lat_targets[i] for i in idx]), rcond=None)
+        return lon_c, lat_c
+
+    def residuals(lon_c, lat_c, idx):
+        out = []
+        for i in idx:
+            (wx, wy), lon_t, lat_t = world_pts[i], lon_targets[i], lat_targets[i]
+            lon_p = lon_c[0] * wx + lon_c[1] * wy + lon_c[2]
+            lat_p = lat_c[0] * wx + lat_c[1] * wy + lat_c[2]
+            out.append(math.hypot((lon_p - lon_t) * m_per_deg_lon, (lat_p - lat_t) * m_per_deg_lat))
+        return out
+
+    # Robust fit: drop the worst correspondence while it's >2.5x the mean of the
+    # rest (a mispaired pin poisons the whole affine — every hole pays for it),
+    # keeping at least 6 points so the fit stays well-conditioned.
+    idx = list(range(len(world_pts)))
+    dropped = []
+    while True:
+        lon_coef, lat_coef = fit(idx)
+        errs = residuals(lon_coef, lat_coef, idx)
+        worst = max(range(len(errs)), key=lambda k: errs[k])
+        rest = [e for k, e in enumerate(errs) if k != worst]
+        if len(idx) <= 6 or errs[worst] <= 2.5 * (sum(rest) / len(rest)):
+            break
+        dropped.append((matched[idx[worst]] if False else [matched[i] for i in idx][worst], errs[worst]))
+        del idx[worst]
+
+    errs = residuals(lon_coef, lat_coef, idx)
+    mean_err_m = sum(errs) / len(errs)
+    max_err_m = max(errs)
 
     print(f"Matched {len(matched)}/18 holes: {matched}" + (f"  (skipped: {skipped})" if skipped else ""))
-    print(f"Fit residual: mean {mean_err_m:.2f}m, max {max_err_m:.2f}m over {len(world_pts)} pin points")
+    per_hole = residuals(lon_coef, lat_coef, range(len(world_pts)))
+    print("Per-hole residuals (m): " + ", ".join(f"{matched[i]}:{per_hole[i]:.0f}" for i in range(len(matched))))
+    if dropped:
+        print("Dropped as outliers: " + ", ".join(f"hole {n} ({e:.0f}m)" for n, e in dropped))
+    print(f"Fit residual: mean {mean_err_m:.2f}m, max {max_err_m:.2f}m over {len(idx)} pin points")
     to_lon_lat = [round(float(v), 10) for v in
                   [lon_coef[0], lon_coef[1], lon_coef[2], lat_coef[0], lat_coef[1], lat_coef[2]]]
     print(f"geo.toLonLat = {to_lon_lat}")
