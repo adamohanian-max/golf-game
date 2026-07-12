@@ -737,6 +737,8 @@ function leaveAppleGround() {
 // Tournament state — set when player enters a tournament round via the lobby.
 let activeTournament = null;     // full tournament row from Supabase
 let activeTournamentRound = null; // 1-4, which round the player is currently playing
+let tourEventName = null;         // name of the real PGA Tour event being played (Live PGA Tour)
+let _tourCourseId = null;         // baked course id of this week's tour venue — plays free (see isTourFeatured)
 // Match state — live head-to-head game with friends (see "Multiplayer matches").
 let activeMatch = null;      // full matches row from Supabase (null when not in a match)
 let matchHoleCount = 18;     // holes this match plays (9 or 18), set at Begin
@@ -6332,8 +6334,12 @@ function unlockReq(id) {
 function courseUnlocked(id) {
   if (id === "butter-brook-golf-club") return true; // TEMP debug: Apple 3D POC testing, revert before shipping
   if (HIDDEN_COURSE_IDS.has(id)) return isTournamentAdmin();
-  return isTournamentAdmin() || purchasedCourse(id) || isDailyFeatured(id) || unlockReq(id).met;
+  return isTournamentAdmin() || purchasedCourse(id) || isDailyFeatured(id) ||
+         isTourFeatured(id) || unlockReq(id).met;
 }
+// This week's real PGA Tour venue plays free (a taste, like the daily featured
+// course) — set when the Live PGA Tour panel matches the event to a baked course.
+function isTourFeatured(id) { return !!id && id === _tourCourseId; }
 function unlockedCourseIds() { return visibleCourses().filter((c) => courseUnlocked(c.id)).map((c) => c.id); }
 function courseUnlockCount() {
   const vis = visibleCourses();
@@ -9870,10 +9876,177 @@ function startTournamentRound(roundNum) {
   startCourse();
 }
 
+// ---------------------------------------------------------------------
+//  Live PGA Tour — "This Week on Tour"
+//  Pulls the real PGA Tour schedule + live status from ESPN's public,
+//  keyless, CORS-open endpoints, matches the event's venue to a baked
+//  course, and routes players in via the existing tournament infra.
+//   - scoreboard: which event(s) are live/upcoming right now
+//   - core event: the venue (course name, city, par, per-hole yardage)
+//  Both send Access-Control-Allow-Origin: * so the static client can
+//  fetch directly — no proxy. ESPN's core endpoint 502s transiently, so
+//  every fetch retries. On total failure the panel degrades gracefully.
+// ---------------------------------------------------------------------
+const TOUR_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard";
+const TOUR_CORE_EVENT = "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/";
+const TOUR_CACHE_MS = 5 * 60 * 1000;   // throttle ESPN hits within a session
+let _tourCache = null;                 // { at, data }
+
+async function fetchJSONRetry(url, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) return await res.json();
+    } catch (e) { /* transient — retry */ }
+  }
+  return null;
+}
+
+// Featured event = a live one if any, else the soonest upcoming, else the
+// most recent. Null only on total feed failure (offline / ESPN down).
+async function fetchTourNow() {
+  if (_tourCache && Date.now() - _tourCache.at < TOUR_CACHE_MS) return _tourCache.data;
+  const sb = await fetchJSONRetry(TOUR_SCOREBOARD);
+  if (!sb) return null;
+  const evs = (sb.events || []).map((e) => ({
+    id: e.id,
+    name: e.name || e.shortName,
+    state: (((e.status || {}).type) || {}).state || "pre",   // pre | in | post
+    start: e.date || e.startDate,
+  }));
+  const live = evs.find((e) => e.state === "in");
+  const pre  = evs.filter((e) => e.state === "pre").sort((a, b) => new Date(a.start) - new Date(b.start))[0];
+  const post = evs.filter((e) => e.state === "post").sort((a, b) => new Date(b.start) - new Date(a.start))[0];
+  const data = { featured: live || pre || post || evs[0] || null, all: evs };
+  _tourCache = { at: Date.now(), data };
+  return data;
+}
+
+// Venue detail for an event (course name, location, par, per-hole data).
+async function fetchTourCourse(eventId) {
+  const d = await fetchJSONRetry(TOUR_CORE_EVENT + encodeURIComponent(eventId));
+  if (!d) return null;
+  const c = (d.courses || [])[0];
+  if (!c) return null;
+  const a = c.address || {};
+  return {
+    name: c.name,
+    city: a.city, region: a.state || a.region, country: a.country,
+    par: c.shotsToPar, yards: c.totalYards,
+    holes: (c.holes || []).map((h) => ({ num: h.number, par: h.shotsToPar, yards: h.totalYards })),
+  };
+}
+
+// Generic tokens dropped before matching ESPN venue names to our manifest.
+const _COURSE_STOP = new Set(["the","golf","club","course","country","links",
+  "resort","gc","cc","no","and","at","complex","courses"]);
+function _normCourse(s) {
+  return (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/).filter((w) => w && !_COURSE_STOP.has(w));
+}
+// Match an ESPN venue name to a baked course by significant-token overlap.
+// Returns the COURSES entry or null. Threshold 0.6 of the ESPN name's tokens.
+function matchTourCourse(name) {
+  const want = _normCourse(name);
+  if (!want.length) return null;
+  let best = null, bestScore = 0;
+  for (const c of COURSES) {
+    if (HIDDEN_COURSE_IDS.has(c.id)) continue;
+    const have = new Set(_normCourse(c.name));
+    let overlap = 0;
+    for (const w of want) if (have.has(w)) overlap++;
+    const score = overlap / want.length;
+    if (score > bestScore) { bestScore = score; best = c; }
+  }
+  return bestScore >= 0.6 ? best : null;
+}
+
+function fmtEventDate(iso) {
+  if (!iso) return "soon";
+  try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+  catch (e) { return "soon"; }
+}
+
+async function openTourWeek() {
+  const modal = document.getElementById("tour-week");
+  modal.classList.remove("hidden");
+  const $ = (id) => document.getElementById(id);
+  $("tw-event").textContent = "Loading…";
+  $("tw-status").textContent = "";
+  $("tw-course").textContent = "";
+  $("tw-note").textContent = "";
+  $("tw-actions").innerHTML = "";
+  tourEventName = null;
+
+  const now = await fetchTourNow();
+  if (modal.classList.contains("hidden")) return;   // user closed while awaiting
+  if (!now || !now.featured) {
+    $("tw-event").textContent = "Schedule unavailable";
+    $("tw-status").textContent = "Couldn't reach the tour feed — try again later.";
+    return;
+  }
+  const ev = now.featured;
+  $("tw-event").textContent = ev.name;
+  $("tw-status").textContent =
+    ev.state === "in"  ? "● Live now" :
+    ev.state === "pre" ? "Starts " + fmtEventDate(ev.start) :
+                         "Final · " + fmtEventDate(ev.start);
+
+  const course = await fetchTourCourse(ev.id);
+  if (modal.classList.contains("hidden")) return;
+  if (!course) { $("tw-course").textContent = "Venue to be announced"; return; }
+  const loc = [course.city, course.region || course.country].filter(Boolean).join(", ");
+  $("tw-course").textContent = course.name +
+    (loc ? " · " + loc : "") + (course.par ? " · Par " + course.par : "");
+
+  const matched = matchTourCourse(course.name);
+  if (!matched) {
+    $("tw-note").textContent = "Not in the game yet — check back after it's added.";
+    return;
+  }
+
+  // Baked course in hand — route via the tournament infra (chosen play model).
+  selectedCourseId = matched.id;
+  tourEventName = ev.name;
+  _tourCourseId = matched.id;   // free taste — this week's venue unlocks (isTourFeatured)
+  const actions = $("tw-actions");
+  const active = LB_ON() ? await fetchActiveTournament(matched.id) : null;
+  if (modal.classList.contains("hidden")) return;
+
+  if (active) {
+    activeTournament = active;
+    actions.innerHTML = "<button class=\"menu-btn\" id=\"tw-enter\">Enter tournament</button>";
+    $("tw-enter").onclick = () => { closeTourWeek(); openTournamentLobby(); };
+  } else if (isTournamentAdmin() && LB_ON()) {
+    // Only admins can create (RLS-gated); non-admins fall through to solo below.
+    actions.innerHTML =
+      "<button class=\"menu-btn\" id=\"tw-create\">Start tour tournament</button>" +
+      "<button class=\"menu-btn secondary\" id=\"tw-solo\">Play the course solo</button>";
+    $("tw-create").onclick = async () => {
+      const b = $("tw-create"); b.disabled = true; b.textContent = "Creating…";
+      const t = await createTournament(ev.name, matched.id, gameDefaults);
+      if (t) { activeTournament = t; closeTourWeek(); openTournamentLobby(); }
+      else { b.disabled = false; b.textContent = "Start tour tournament"; showToast("Couldn't create tournament", 2000); }
+    };
+    $("tw-solo").onclick = () => { closeTourWeek(); startCourse(); };
+  } else {
+    $("tw-note").textContent = "This week's course is in the game.";
+    actions.innerHTML = "<button class=\"menu-btn\" id=\"tw-solo\">Play this course</button>";
+    $("tw-solo").onclick = () => { closeTourWeek(); startCourse(); };
+  }
+}
+
+function closeTourWeek() { document.getElementById("tour-week").classList.add("hidden"); }
+
 // --- Wire-up ---
 (function wireTournament() {
   const ot = document.getElementById("open-tournaments");
   if (ot) ot.addEventListener("click", openTournamentLobby);
+
+  const tour = document.getElementById("open-tour");
+  if (tour) tour.addEventListener("click", openTourWeek);
+  const twClose = document.getElementById("tw-close");
+  if (twClose) twClose.addEventListener("click", closeTourWeek);
 
   const tlClose = document.getElementById("tl-close");
   if (tlClose) tlClose.addEventListener("click", closeTournamentLobby);

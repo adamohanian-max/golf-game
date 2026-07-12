@@ -6,7 +6,8 @@
 #tournament-lobby,
 #tournament-cut,
 #tournament-final,
-#tournament-admin {
+#tournament-admin,
+#tour-week {
   position: fixed;
   inset: 0;
   display: flex;
@@ -21,7 +22,24 @@
 #tournament-lobby.hidden,
 #tournament-cut.hidden,
 #tournament-final.hidden,
-#tournament-admin.hidden { display: none; }
+#tournament-admin.hidden,
+#tour-week.hidden { display: none; }
+
+/* ---- This Week on Tour (ESPN live schedule) --------------- */
+.tw-note {
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+  margin-bottom: var(--s-3);
+  min-height: 0;
+}
+.tw-credit {
+  color: var(--text-faint);
+  font-size: 10px;
+  text-align: center;
+  margin: var(--s-2) 0 0;
+  opacity: 0.7;
+}
 
 /* ---- Lobby ------------------------------------------------ */
 .tl-name {

@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="css/menu.css?v=71">
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=76">
-  <link rel="stylesheet" href="css/tournament.css?v=55">
+  <link rel="stylesheet" href="css/tournament.css?v=56">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -181,6 +181,7 @@
         <button id="play-range" class="menu-btn secondary">Driving Range</button>
         <button id="open-leaderboard" class="menu-btn secondary">Leaderboard</button>
         <button id="open-tournaments" class="menu-btn secondary">Tournaments</button>
+        <button id="open-tour" class="menu-btn secondary">PGA Tour</button>
         <button id="open-progress" class="menu-btn secondary">Trophy Room</button>
       </div>
       <div id="menu-chips" class="menu-chips hidden">
@@ -451,6 +452,19 @@
     </div>
   </div>
 
+  <div id="tour-week" class="hidden">
+    <div class="lb-box">
+      <h2><span class="ic ic-flag-checkered"></span>This Week on Tour</h2>
+      <div id="tw-event" class="tl-name">Loading…</div>
+      <div id="tw-status" class="tl-status"></div>
+      <div id="tw-course" class="tl-field"></div>
+      <div id="tw-note" class="tw-note"></div>
+      <div id="tw-actions" class="tl-rounds"></div>
+      <p class="tw-credit">Schedule &amp; scores via ESPN</p>
+      <button id="tw-close" class="menu-btn secondary" style="margin-top:8px">Close</button>
+    </div>
+  </div>
+
   <div id="tournament-lobby" class="hidden">
     <div class="lb-box">
       <h2><span class="ic ic-flag-checkered"></span>Tournaments</h2>
@@ -686,6 +700,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=20"></script>
-  <script defer src="game.js?v=214"></script>
+  <script defer src="game.js?v=216"></script>
 </body>
 </html>
