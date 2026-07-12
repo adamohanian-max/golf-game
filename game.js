@@ -555,12 +555,14 @@ const APPLE_CAM_K = 1.866; // 1/(2·tan(30°/2)) — MapKit vertical FOV constan
 // on top). The game must never request closer — past the clamp MapKit both
 // clamps distance AND drifts the visual center unreported (see buildAppleProj).
 const APPLE_MIN_DIST_M = 165;
-// Pitched-center correction (buildAppleProj): fraction of the DEM's absolute
-// elevation at the look-at point that MapKit's flyover camera effectively
-// anchors below the rendered terrain. Fit visually in the simulator at putt
-// zoom (elev 59.4 m → best-fit 40 m of correction). Zero would mean "trust
-// lookingAtCenter to hit the terrain surface"; measured, it doesn't.
-const APPLE_ELEV_K = 0.673;
+// MapKit's pitch pivot sits this many metres ABOVE the flyover's rendered
+// terrain at the center coordinate (measured in the simulator: same camera at
+// pitch 0 vs 55, the center ground feature dropped ~39 css px at 400 m ⇒
+// ~23 m; magnitude matches the regional geoid/ellipsoid separation, so this
+// is region-dependent — recalibrate for courses far from New England).
+// Every ground vertex renders that far BELOW the anchor plane (_apGroundZ).
+// window.__appleDrop overrides for live re-tuning via devdrive.
+const APPLE_ANCHOR_DROP_M = 23;
 let applePitch = 0;        // current MKMapCamera pitch, degrees (tweened)
 let applePitchT = 0;       // target — driven by the tilt toggle on Apple-ground courses
 // The camera MapKit ACTUALLY applied (syncCamera's resolve value) + what we
@@ -614,20 +616,20 @@ function buildAppleProj(cssW, cssH) {
   const p = pitchDeg * Math.PI / 180;
   const h = -camera.angle;                       // compass heading, radians
   const sh = Math.sin(h), ch = Math.cos(h), sp = Math.sin(p), cp = Math.cos(p);
-  // Pitched flyover shows its visual center shifted toward the camera (flat
-  // mode aligns exactly; the offset appears with pitch and scales with the
-  // ground elevation): MapKit anchors the camera lower than the rendered 3D
-  // terrain at the look-at point. Slide the overlay's look-at the same way —
-  // effective height = APPLE_ELEV_K × DEM absolute elevation there (fit in
-  // the simulator; window.__appleFix overrides the height for re-tuning).
-  const demRec = HOLE && HOLE._demRec;
-  const elevM = typeof window.__appleFix === "number" ? window.__appleFix
-    : (demRec ? APPLE_ELEV_K * (demRec.baseElevM + terrainZ(Ox, Oy) * m) : 0);
-  const ctrFix = elevM * Math.tan(p);
-  Ox += (-sh * ctrFix) / m;
-  Oy += (ch * ctrFix) / m;
-  return {
-    Ox, Oy, m, distM, reqDistM, reqPitch, reqLat, reqLon,
+  // (An earlier lateral center-shift correction lived here — replaced by the
+  // anchor-drop model in _apGroundZ, which is what's actually happening:
+  // MapKit's pitch pivot sits a constant ~23 m ABOVE the rendered terrain,
+  // measured by screenshotting the same camera at pitch 0 vs 55 and watching
+  // the center feature drop. Likely a vertical-datum mismatch — geoid vs
+  // ellipsoid separation is ≈28 m in Massachusetts.)
+  const P = {
+    Ox, Oy, m, distM, reqDistM, reqPitch, reqLat, reqLon, cssH,
+    // Terrain reference: the camera anchors against the flyover terrain at
+    // the look-at point, so every overlay vertex projects with its DEM
+    // height RELATIVE to the terrain there (see _apPt). Without this the
+    // overlay is a flat sheet through O's altitude — greens/tees on any
+    // slope render displaced ("floating") off the 3D ground.
+    zAnchor: terrainZ(Ox, Oy),
     heading: ((h * 180 / Math.PI) % 360 + 360) % 360,
     pitch: pitchDeg,
     // camera position (ENU metres, origin at O): behind the look direction,
@@ -2620,7 +2622,13 @@ window.addEventListener("resize", resize);
 let _apLast = null;
 // Terrain height under a world point, relative to the camera's anchor plane
 // (world units) — what a GROUND point's z is in the pinhole projection.
-function _apGroundZ(P, x, y) { return terrainZ(x, y) - P.zAnchor; }
+// Two parts: local DEM relief relative to the look-at point, MINUS the
+// constant height MapKit's pivot floats above its own rendered terrain
+// (APPLE_ANCHOR_DROP_M — see there).
+function _apGroundZ(P, x, y) {
+  const dropM = typeof window.__appleDrop === "number" ? window.__appleDrop : APPLE_ANCHOR_DROP_M;
+  return terrainZ(x, y) - P.zAnchor - dropM / P.m;
+}
 function _apPt(x, y) {
   if (_apLast && _apLast.wx === x && _apLast.wy === y && _apLast.P === view.appleProj) return _apLast;
   const P = view.appleProj;
