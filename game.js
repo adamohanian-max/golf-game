@@ -555,14 +555,18 @@ const APPLE_CAM_K = 1.866; // 1/(2·tan(30°/2)) — MapKit vertical FOV constan
 // on top). The game must never request closer — past the clamp MapKit both
 // clamps distance AND drifts the visual center unreported (see buildAppleProj).
 const APPLE_MIN_DIST_M = 165;
-// MapKit's pitch pivot sits this many metres ABOVE the flyover's rendered
-// terrain at the center coordinate (measured in the simulator: same camera at
-// pitch 0 vs 55, the center ground feature dropped ~39 css px at 400 m ⇒
-// ~23 m; magnitude matches the regional geoid/ellipsoid separation, so this
-// is region-dependent — recalibrate for courses far from New England).
-// Every ground vertex renders that far BELOW the anchor plane (_apGroundZ).
+// MapKit's pitch pivot sits this many metres ABOVE the flyover's terrain at
+// the center coordinate. Re-measured 2026-07-12 (pitch-0 vs pitch-55 shots of
+// the SAME camera, cross-correlated, look-at on OPEN ground at D=600–1300 m):
+// ~0–3 m — the pivot sits essentially ON MapKit's terrain model. The earlier
+// 23 m ("geoid separation") was a measurement artifact: that calibration's
+// center feature was FOREST, and flyover renders canopy ~23 m above the
+// terrain the pivot anchors to, so the feature's pitch-shift measured tree
+// height, not pivot float. A wrong constant here is why the overlay slid
+// across the map when the camera rotated: the residual screen offset
+// unprojects to a world error that turns with the heading.
 // window.__appleDrop overrides for live re-tuning via devdrive.
-const APPLE_ANCHOR_DROP_M = 23;
+const APPLE_ANCHOR_DROP_M = 2;
 let applePitch = 0;        // current MKMapCamera pitch, degrees (tweened)
 let applePitchT = 0;       // target — driven by the tilt toggle on Apple-ground courses
 // The camera MapKit ACTUALLY applied (syncCamera's resolve value) + what we
@@ -617,11 +621,9 @@ function buildAppleProj(cssW, cssH) {
   const h = -camera.angle;                       // compass heading, radians
   const sh = Math.sin(h), ch = Math.cos(h), sp = Math.sin(p), cp = Math.cos(p);
   // (An earlier lateral center-shift correction lived here — replaced by the
-  // anchor-drop model in _apGroundZ, which is what's actually happening:
-  // MapKit's pitch pivot sits a constant ~23 m ABOVE the rendered terrain,
-  // measured by screenshotting the same camera at pitch 0 vs 55 and watching
-  // the center feature drop. Likely a vertical-datum mismatch — geoid vs
-  // ellipsoid separation is ≈28 m in Massachusetts.)
+  // anchor-drop model in _apGroundZ. The drop itself is now ~0: the pivot
+  // sits on MapKit's terrain model — see APPLE_ANCHOR_DROP_M for the
+  // measurement story and how the old 23 m constant was a canopy artifact.)
   const P = {
     Ox, Oy, m, distM, reqDistM, reqPitch, reqLat, reqLon, cssH,
     // Terrain reference: the camera anchors against the flyover terrain at
