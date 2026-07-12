@@ -20,5 +20,11 @@
       "style": "DARK",
       "overlaysWebView": true
     }
-  }
+  },
+  "packageClassList": [
+    "HapticsPlugin",
+    "SplashScreenPlugin",
+    "StatusBarPlugin",
+    "CourseMap3DPlugin"
+  ]
 }

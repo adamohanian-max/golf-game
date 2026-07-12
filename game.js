@@ -238,15 +238,25 @@ const TUNE = {
   checkLandRef: 35,   // land angle (deg) where steepness starts to grip (driver ~39° ≈ none)
   checkLandSpan: 20,  // degrees above ref for full steepness credit
   spinBackMax: 1.2,   // cap on backward roll after a spun-back landing (world units ≈ 3.6yd)
-  // Flighted high spinner (FLIGHT slider in the right gutter, full shots off the green):
-  // throws the ball higher with extra spin — steeper landing + harder check holds
-  // firm/tucked greens — at the cost of a little carry and more wind drift. Each knob
-  // is the slider's t=1 endpoint; the effect lerps continuously from stock at 0.
+  applePitchDeg: 55,  // Apple-ground 3D view: MKMapCamera pitch when the tilt toggle is on
+  // Flight selector (right gutter, full shots off the green): -1 Low .. 0 Stock .. +1
+  // High. High throws the ball higher with extra spin — steeper landing + harder check
+  // holds firm/tucked greens — at the cost of a little carry and more wind drift. Each
+  // flightHi* knob is the +1 endpoint; effect lerps continuously from stock at 0.
   flightHiApex: 1.25,   // apex height multiplier
   flightHiLand: 3,      // degrees added to the club's land angle
   flightHiSpin: 1.25,   // backspin (spinN) multiplier, capped at 1
   flightHiCarry: 0.95,  // carry multiplier (throwing it up costs distance)
   flightHiWind: 1.3,    // wind-effect multiplier while the high ball is in the air
+  // Low = the -1 endpoint: a knockdown/punch — flatter flight, shallower landing so it
+  // releases/runs instead of checking, a touch less backspin, punches through wind, at a
+  // small carry cost (the shallower landDeg already adds rollout via landingRelease()'s
+  // check/steepness term, so total distance isn't as far down as the carry hit alone).
+  flightLoApex: 0.75,   // apex height multiplier
+  flightLoLand: -8,     // degrees subtracted from the club's land angle
+  flightLoSpin: 0.8,    // backspin (spinN) multiplier
+  flightLoCarry: 0.9,   // carry multiplier
+  flightLoWind: 0.5,    // wind-effect multiplier while the low ball is in the air
 
   // powerFactor, maxPower, puttMaxPower, puttOffGreenPower, launchAngle are derived below.
   powerFactor: 0,
@@ -507,6 +517,183 @@ function update3DMode() {
   if (window.Course3D) {
     if (render3D) window.Course3D.enter(); else window.Course3D.leave();
   }
+}
+// Apple MapKit ground layer (Butter Brook) — NOT a render3D-style full-frame
+// takeover. Apple is this course's ground renderer always, the same way the
+// baked NAIP aerial is every other course's ground renderer always; there is
+// no 2D/Apple toggle. draw() (below) skips only the ground-paint calls for
+// this course and keeps drawing ball/flag/HUD/contours exactly as normal —
+// a native MKMapView sits behind the transparent-there canvas, camera synced
+// each frame to the game's own view/camera state via course.geo.toLonLat
+// (tools/geo_anchor_course.py). See CourseMap3DPlugin.swift.
+function appleGroundActive() {
+  return !!(course && course.id === "butter-brook-golf-club" && course.geo &&
+    mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
+    window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
+    window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D);
+}
+let _appleGroundEntered = false;
+let _lastAppleSync = 0;
+// Stage 3 (current): center + zoom + heading + PITCH, one camera model on
+// both sides of the bridge.
+//
+// Flat mapping (see computeViewMatrix): screen = s·R(θ)·(world − focus) +
+// playCenter, world axes north-up (x=east, y=south, from geo.toLonLat's
+// diagonal signs), so the compass heading of "screen up" is exactly −θ.
+//
+// MKMapCamera is a pinhole camera looking at centerCoordinate from a
+// line-of-sight distance, vertical FOV ~30° (APPLE_CAM_K = 1/(2·tan 15°);
+// distance = visible-vertical-span · K at pitch 0 — calibrated against
+// screenshots). When the 3D toggle pitches that camera, an affine canvas
+// can't line up with a perspective map anymore — so buildAppleProj()
+// replicates the SAME pinhole in JS each frame, and wx()/wy()/screenToWorld()
+// route every overlay vertex through it (view.appleProj). What Apple renders
+// and what the canvas draws are then the same projection by construction;
+// pitch 0 reduces to the affine exactly (px/m = cssH·K/(spanM·K·1) = scale/m).
+const APPLE_CAM_K = 1.866; // 1/(2·tan(30°/2)) — MapKit vertical FOV constant
+// Flyover's minimum camera distance (measured 155.4 m in the simulator; margin
+// on top). The game must never request closer — past the clamp MapKit both
+// clamps distance AND drifts the visual center unreported (see buildAppleProj).
+const APPLE_MIN_DIST_M = 165;
+// Pitched-center correction (buildAppleProj): fraction of the DEM's absolute
+// elevation at the look-at point that MapKit's flyover camera effectively
+// anchors below the rendered terrain. Fit visually in the simulator at putt
+// zoom (elev 59.4 m → best-fit 40 m of correction). Zero would mean "trust
+// lookingAtCenter to hit the terrain surface"; measured, it doesn't.
+const APPLE_ELEV_K = 0.673;
+let applePitch = 0;        // current MKMapCamera pitch, degrees (tweened)
+let applePitchT = 0;       // target — driven by the tilt toggle on Apple-ground courses
+// The camera MapKit ACTUALLY applied (syncCamera's resolve value) + what we
+// had requested. MapKit silently clamps — flyover enforces a minimum camera
+// distance and a zoom-dependent max pitch — and at putt zoom that pushed the
+// real map half a screen off the overlay's assumed camera. Where actual and
+// requested disagree beyond tolerance, buildAppleProj renders from the
+// ACTUAL value, so the overlay always draws what the map really shows.
+let _appleActualCam = null;
+function buildAppleProj(cssW, cssH) {
+  // Look-at target O = the world point at the true screen center under the
+  // FLAT view (game camera logic — focus/fit/aim — stays orthographic and
+  // untouched; the perspective is layered on top of it).
+  const det = view.a * view.e - view.b * view.d || 1;
+  const sx0 = cssW / 2 - view.c, sy0 = cssH / 2 - view.f;
+  let Ox = (view.e * sx0 - view.b * sy0) / det;
+  let Oy = (-view.d * sx0 + view.a * sy0) / det;
+  const m = M_PER_UNIT;
+  // Requested center in geo terms (also what syncAppleGround sends).
+  const g = course.geo.toLonLat;
+  const reqLat = g[3] * Ox + g[4] * Oy + g[5];
+  const reqLon = g[0] * Ox + g[1] * Oy + g[2];
+  // What the game WANTS (always what gets sent over the bridge — the map
+  // re-clamps for itself every frame):
+  const reqDistM = (cssH / camera.scale) * m * APPLE_CAM_K; // line-of-sight, metres
+  const reqPitch = applePitch;
+  // What the overlay RENDERS: fold in MapKit's clamps (see _appleActualCam).
+  // Only adopt an actual value when it disagrees with what we asked for —
+  // tracking actuals verbatim would add a frame of bridge lag to every
+  // pan/aim for nothing. Guard on the request still being comparable to the
+  // one the actual answered (camera may have moved since).
+  let distM = reqDistM, pitchDeg = reqPitch;
+  const ac = _appleActualCam;
+  if (ac) {
+    if (Math.abs(ac.reqDistM - reqDistM) < reqDistM * 0.2 && Math.abs(ac.distM - ac.reqDistM) > ac.reqDistM * 0.01) distM = ac.distM;
+    if (Math.abs(ac.reqPitch - reqPitch) < 3 && Math.abs(ac.pitch - ac.reqPitch) > 0.5) pitchDeg = ac.pitch;
+    // NOTE: when the distance clamp engages, MapKit ALSO drifts the visual
+    // center — and the centerCoordinate it reports does NOT match what's at
+    // the screen center (measured: reported NW while the view drifted SE).
+    // There's no trustworthy actual to adopt, so the real fix is upstream:
+    // updateCamera caps camera.scale on Apple-ground courses so the request
+    // never dips under the flyover minimum (APPLE_MIN_DIST_M). The adopts
+    // above are a second line of defense, not the primary mechanism.
+  }
+  const p = pitchDeg * Math.PI / 180;
+  const h = -camera.angle;                       // compass heading, radians
+  const sh = Math.sin(h), ch = Math.cos(h), sp = Math.sin(p), cp = Math.cos(p);
+  // Pitched flyover shows its visual center shifted toward the camera (flat
+  // mode aligns exactly; the offset appears with pitch and scales with the
+  // ground elevation): MapKit anchors the camera lower than the rendered 3D
+  // terrain at the look-at point. Slide the overlay's look-at the same way —
+  // effective height = APPLE_ELEV_K × DEM absolute elevation there (fit in
+  // the simulator; window.__appleFix overrides the height for re-tuning).
+  const demRec = HOLE && HOLE._demRec;
+  const elevM = typeof window.__appleFix === "number" ? window.__appleFix
+    : (demRec ? APPLE_ELEV_K * (demRec.baseElevM + terrainZ(Ox, Oy) * m) : 0);
+  const ctrFix = elevM * Math.tan(p);
+  Ox += (-sh * ctrFix) / m;
+  Oy += (ch * ctrFix) / m;
+  return {
+    Ox, Oy, m, distM, reqDistM, reqPitch, reqLat, reqLon,
+    heading: ((h * 180 / Math.PI) % 360 + 360) % 360,
+    pitch: pitchDeg,
+    // camera position (ENU metres, origin at O): behind the look direction,
+    // lifted by cos(pitch)
+    px: -distM * sp * sh, py: -distM * sp * ch, pz: distM * cp,
+    // orthonormal camera basis: right, up, forward
+    rx: ch, ry: -sh, rz: 0,
+    ux: sh * cp, uy: ch * cp, uz: sp,
+    fx: sp * sh, fy: sp * ch, fz: -cp,
+    focal: (cssH / 2) / Math.tan(15 * Math.PI / 180),
+    cx: cssW / 2, cy: cssH / 2,
+  };
+}
+// Project world (x, y[, height in world units]) through the Apple pinhole.
+function appleProjPt(P, x, y, z) {
+  const e = (x - P.Ox) * P.m, n = (P.Oy - y) * P.m, u = (z || 0) * P.m;
+  const vx = e - P.px, vy = n - P.py, vz = u - P.pz;
+  const zc = vx * P.fx + vy * P.fy + vz * P.fz;          // depth along look dir
+  const d = zc > 1 ? zc : 1;                              // clamp behind-camera blowups
+  return {
+    x: P.cx + P.focal * (vx * P.rx + vy * P.ry + vz * P.rz) / d,
+    y: P.cy - P.focal * (vx * P.ux + vy * P.uy + vz * P.uz) / d,
+  };
+}
+// Inverse: screen px -> ground-plane world point (ray cast onto z=0).
+function appleUnproject(P, sx, sy) {
+  const dx = P.fx + (P.rx * (sx - P.cx) - P.ux * (sy - P.cy)) / P.focal;
+  const dy = P.fy + (P.ry * (sx - P.cx) - P.uy * (sy - P.cy)) / P.focal;
+  const dz = P.fz + (P.rz * (sx - P.cx) - P.uz * (sy - P.cy)) / P.focal;
+  const t = dz < -1e-9 ? -P.pz / dz : 1e9;  // ray must descend to hit the ground
+  const e = P.px + t * dx, n = P.py + t * dy;
+  return { x: P.Ox + e / P.m, y: P.Oy - n / P.m };
+}
+function syncAppleGround() {
+  const P = window.Capacitor.Plugins.CourseMap3D;
+  if (!_appleGroundEntered) {
+    _appleGroundEntered = true;
+    // The native map sits BEHIND the WKWebView — the webview is made
+    // non-opaque on the Swift side (CourseMap3DLayer.enter), but the page's
+    // own CSS background (html/body paint --green-900, base.css) still
+    // composites over it. Clear both while the map is the ground layer or
+    // it shows as a solid pine rectangle.
+    document.documentElement.style.background = "transparent";
+    document.body.style.background = "transparent";
+    P.enter({ courseId: course.id }).catch((e) => console.error("CourseMap3D enter", e));
+  }
+  const now = performance.now();
+  if (now - _lastAppleSync < 33) return; // ~30fps cap over the native bridge
+  _lastAppleSync = now;
+  // One camera model, one source: the same numbers the overlay projection
+  // uses this frame (flat mode builds them fresh here — appleProj is null).
+  const cam = view.appleProj || buildAppleProj(window.innerWidth, window.innerHeight);
+  // Send the REQUESTED camera; record what MapKit actually applied (its
+  // clamps) so the next frame's overlay projection can match the real map.
+  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch })
+    .then((a) => {
+      if (a && typeof a.distM === "number") {
+        _appleActualCam = { lat: a.lat, lon: a.lon, distM: a.distM, pitch: a.pitch, heading: a.heading,
+                            reqLat: cam.reqLat, reqLon: cam.reqLon,
+                            reqDistM: cam.reqDistM, reqPitch: cam.reqPitch };
+      }
+    })
+    .catch(() => {});
+}
+function leaveAppleGround() {
+  if (!_appleGroundEntered) return;
+  _appleGroundEntered = false;
+  _appleActualCam = null;
+  document.documentElement.style.background = "";
+  document.body.style.background = "";
+  const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D;
+  if (P) P.leave().catch(() => {});
 }
 // Tournament state — set when player enters a tournament round via the lobby.
 let activeTournament = null;     // full tournament row from Supabase
@@ -2214,6 +2401,10 @@ function applyView() {
   Object.assign(view, computeViewMatrix(
     camera.angle, camera.tilt, camera.scale * (1 + camPunch),
     camera.focus.x, camera.focus.y, cssW, cssH));
+  // Apple-ground 3D: build this frame's pinhole (needs the fresh affine above
+  // for its look-at center). Null whenever flat — wx/wy stay pure affine.
+  view.appleProj = (applePitch > 0.05 && typeof appleGroundActive === "function" && appleGroundActive())
+    ? buildAppleProj(cssW, cssH) : null;
 }
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
@@ -2249,6 +2440,20 @@ function updateCamera() {
   camera.focus.y = ease(camera.focus.y, camera.tFocus.y, eps);
   camera.scale = ease(camera.scale, camera.tScale, camera.scale * 1e-4);
   camera.tilt = ease(camera.tilt, camera.tTilt, 1e-4);
+  // Apple-ground courses tilt the REAL camera (MKMapCamera pitch), never the
+  // canvas squash — the squash would corrupt the pinhole replica's affine base.
+  if (appleGroundActive()) {
+    camera.tilt = camera.tTilt = 1;
+    applePitchT = tiltView ? TUNE.applePitchDeg : 0;
+    // Cap zoom so the camera never requests under flyover's minimum distance
+    // (past the clamp the map drifts off the overlay — see APPLE_MIN_DIST_M).
+    const sMax = window.innerHeight * M_PER_UNIT * APPLE_CAM_K / APPLE_MIN_DIST_M;
+    if (camera.scale > sMax) camera.scale = sMax;
+    if (camera.tScale > sMax) camera.tScale = sMax;
+  } else {
+    applePitchT = 0;
+  }
+  applePitch = ease(applePitch, applePitchT, 0.05);
   if (camPunch > 0.0005) camPunch *= 0.82; else camPunch = 0;  // ease the punch back
   applyView();
 }
@@ -2338,11 +2543,22 @@ function resize() {
 }
 window.addEventListener("resize", resize);
 
-function wx(x, y) { return view.a * x + view.b * y + view.c; }
-function wy(x, y) { return view.d * x + view.e * y + view.f; }
+// Apple-ground 3D (view.appleProj set): every overlay vertex routes through
+// the MapKit pinhole replica instead of the affine — see buildAppleProj.
+// Tiny memo: wx/wy are always called as a pair on the same point.
+let _apLast = null;
+function _apPt(x, y) {
+  if (_apLast && _apLast.wx === x && _apLast.wy === y && _apLast.P === view.appleProj) return _apLast;
+  const q = appleProjPt(view.appleProj, x, y);
+  _apLast = { wx: x, wy: y, P: view.appleProj, x: q.x, y: q.y };
+  return _apLast;
+}
+function wx(x, y) { return view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
+function wy(x, y) { return view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
 function ws(v) { return v * view.scale; }
 // Inverse: screen px -> world coords (for the range finder).
 function screenToWorld(sx, sy) {
+  if (view.appleProj) return appleUnproject(view.appleProj, sx, sy);
   const det = view.a * view.e - view.b * view.d || 1;
   const x = sx - view.c, y = sy - view.f;
   return { x: (view.e * x - view.b * y) / det, y: (-view.d * x + view.a * y) / det };
@@ -4731,11 +4947,20 @@ function draw() {
   // so there is nothing to paint here. Every other course is unaffected.
   if (render3D) return;
   const cssW = window.innerWidth, cssH = window.innerHeight;
+  // Butter Brook: Apple MapKit is this course's ground layer, always (not a
+  // render3D-style full-frame mode) — see appleGroundActive()/syncAppleGround()
+  // above. Everything below (flag, ball, contours, HUD icons) still runs
+  // exactly as it does for every other course; only the ground-paint chain
+  // (tilt3d/warp/drawGroundStack) is swapped out for this course.
+  const appleGround = appleGroundActive();
+  if (!appleGround) leaveAppleGround(); // no-ops unless we just left the course/mode
   // Tilted 3D: route the whole ground stack through the offscreen capture +
   // cache whenever tilted — with a DEM the column-band warp displaces it (pad
   // = measured max lift), without one (pad 0) it's a straight cached copy, so
   // heavy tilt layers (photo-canopy extrusion) still cost one blit parked.
-  const tilt3d = !!(view.kz && !HOLE.isRange && !greenView && !cine);
+  // Butter Brook never engages this — real Apple tilt lands in a later stage
+  // (see the plan) instead of the fake canvas warp.
+  const tilt3d = !appleGround && !!(view.kz && !HOLE.isRange && !greenView && !cine);
   _warpPad = tilt3d ? estimateWarpPad(cssW, cssH) : 0;
   computeViewAABB(); // for off-screen polygon culling this frame
   const warp = tilt3d;
@@ -4755,7 +4980,25 @@ function draw() {
   // Camera parked but the last rebuild was a degraded motion frame → rebuild
   // once at full quality so the parked cache never shows the coarse version.
   const settle = warp && _warpCache && _warpCache.sig === wSig && _warpCache.degraded;
-  if (bucketBlend) {
+  if (appleGround) {
+    ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
+    syncAppleGround();
+    // The full ground stack is skipped (Apple IS the ground), but the green
+    // reading aids are gameplay, not ground: the translucent green tint +
+    // topo contours (drawGreen) and the shaded relief are what let you read
+    // break — without them putting on this course is blind. Same photo-mode
+    // treatment every aerial course gets, minus the aerial itself.
+    if (!HOLE.isRange) {
+      drawGreen(true);
+      // Relief is a raster blit through an AFFINE transform — it can't follow
+      // the pitched pinhole projection, so it only draws flat. (Contours and
+      // the green tint are per-vertex through wx/wy, so they pitch fine.)
+      if (!view.appleProj) for (const g of greensInPlay()) {
+        if (!polyVisible(g.poly)) continue;
+        drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope && breakArrows);
+      }
+    }
+  } else if (bucketBlend) {
     // Cross-dissolve the two bracketing pre-baked angle buckets — zero
     // recapture. Never touches _warpCache/sig, so the instant the sweep ends
     // the very next frame falls straight into an ordinary (undegraded,
@@ -5982,6 +6225,7 @@ function unlockReq(id) {
   return { type: "bot", botId: BOTS[t].id, label: "Beat " + BOTS[t].name, met: botBeaten(BOTS[t].id) };
 }
 function courseUnlocked(id) {
+  if (id === "butter-brook-golf-club") return true; // TEMP debug: Apple 3D POC testing, revert before shipping
   if (HIDDEN_COURSE_IDS.has(id)) return isTournamentAdmin();
   return isTournamentAdmin() || purchasedCourse(id) || isDailyFeatured(id) || unlockReq(id).met;
 }
@@ -6604,7 +6848,9 @@ elTiltBtn.addEventListener("click", (e) => {
   tiltView = !tiltView;
   lsSet("golf.tiltView", tiltView);
   elTiltBtn.classList.toggle("active", tiltView);
-  camera.tTilt = tiltView ? TUNE.tiltCos : 1;
+  // Apple-ground courses: the toggle pitches the REAL map camera instead
+  // (applePitchT in updateCamera); the canvas squash must stay off there.
+  camera.tTilt = (tiltView && !appleGroundActive()) ? TUNE.tiltCos : 1;
   if (mode === "course" || mode === "range") frameTarget(); // refit zoom for the new lean
 });
 // Camera toggle, so no ball-state gating — just not under the 3D overlays.
@@ -12074,6 +12320,8 @@ function loop() {
   updateTiltBtn();
   update3DMode();  // cheap — no-ops unless mode/course actually changed
   if (render3D && window.Course3D) window.Course3D.render();
+  // Apple ground sync (Butter Brook) happens inside draw() itself — see
+  // appleGroundActive()/syncAppleGround() above.
   draw();
   maybePrebakeBucket();
   requestAnimationFrame(loop);
@@ -12154,3 +12402,34 @@ loadManifest().then(() => {
   updateMenuPlayerLine();
   track("app_open", { signed_in: isLoggedIn() });
 })();
+
+// Dev-drive (cousin of ?course=/?3d=1): ?devdrive=1 long-polls a local relay
+// (tools/devdrive_server.py) for JS to eval and pushes the result back —
+// remote control for environments with no automation hooks (iOS simulator
+// WKWebView). Dev-only: inert without the query param, and the relay only
+// listens on 127.0.0.1.
+if (new URLSearchParams(location.search).get("devdrive") === "1") {
+  (async function devdrive() {
+    const base = "http://127.0.0.1:8787";
+    for (;;) {
+      try {
+        const r = await fetch(base + "/pull");
+        const { js } = await r.json();
+        if (!js) continue;
+        let out;
+        try {
+          out = await (0, eval)(js);           // indirect eval -> global scope
+          out = { ok: true, value: out === undefined ? null : out };
+        } catch (e) {
+          out = { ok: false, error: String(e && e.stack || e) };
+        }
+        let body;
+        try { body = JSON.stringify(out); }
+        catch (e) { body = JSON.stringify({ ok: out.ok, value: String(out.value) }); }
+        await fetch(base + "/push", { method: "POST", body });
+      } catch (e) {
+        await new Promise((res) => setTimeout(res, 2000)); // relay down — retry gently
+      }
+    }
+  })();
+}
