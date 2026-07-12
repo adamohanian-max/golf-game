@@ -82,20 +82,56 @@ export const style = {
 
 ```ts
 // map/terrain.ts
-export function addTerrain(map: maplibregl.Map) {
-  map.addSource('dem', {
-    type: 'raster-dem',
-    // AWS Open Data "Terrain Tiles" (Terrarium encoding). Free; verify endpoint.
-    // Alternative: MapTiler terrain-rgb (encoding: 'mapbox', needs key).
-    tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-    encoding: 'terrarium',
-    tileSize: 256,
-    maxzoom: 15,
-    attribution: 'Elevation: Terrain Tiles / AWS Open Data'
-  });
+//
+// TERRAIN IS THE WHOLE BALLGAME. A coarse global DEM (~10-30m effective
+// resolution) renders a golf course as a nearly flat plane. No amount of
+// shading, PBR grass, or lighting fixes flat ground. We bake our own terrain
+// tiles from LiDAR per course (see §4b) and fall back to the global DEM only
+// where we have no LiDAR.
+//
+// MapLibre's setTerrain accepts exactly ONE source. So we do NOT stack two DEM
+// sources — the bake step composites LiDAR over global fill and emits a single
+// per-course tileset with a surrounding buffer. Switching courses = switching
+// the terrain source.
+
+const GLOBAL_DEM = {
+  type: 'raster-dem' as const,
+  tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+  encoding: 'terrarium' as const,
+  tileSize: 256,
+  maxzoom: 15,
+  attribution: 'Elevation: Terrain Tiles / AWS Open Data'
+};
+
+export function addTerrain(map: maplibregl.Map, course: Course) {
+  if (course.terrainTiles) {
+    // LiDAR-baked, Terrarium-encoded, per-course. maxzoom is high because the
+    // whole point is detail — z18 is roughly sub-meter per pixel.
+    map.addSource('dem', {
+      type: 'raster-dem',
+      tiles: [course.terrainTiles],          // e.g. /tiles/{courseId}/{z}/{x}/{y}.png
+      encoding: 'terrarium',
+      tileSize: 256,
+      maxzoom: 18,
+      attribution: 'Elevation: USGS 3DEP LiDAR'
+    });
+  } else {
+    map.addSource('dem', GLOBAL_DEM);        // fallback: coarse, will look flat
+  }
+
+  // Start at 1.0. Real LiDAR terrain does NOT need exaggeration to read well —
+  // if you find yourself pushing this above ~1.3 to see relief, your DEM is
+  // wrong, not your exaggeration.
   map.setTerrain({ source: 'dem', exaggeration: 1.0 });
 }
 ```
+
+**Encoding choice matters more than it looks.** Use **Terrarium**, not Mapbox terrain-RGB.
+
+- Terrarium: `(R * 256 + G + B / 256) - 32768` → vertical quantization of **1/256 m ≈ 4mm**
+- Mapbox terrain-RGB: `-10000 + ((R * 65536 + G * 256 + B) * 0.1)` → quantization of **0.1 m**
+
+A 10cm quantization step is catastrophic on a putting surface — a green with 2% fall over 3m rises about 6cm total, which is *less than one quantization step*. It would render as a flat plateau with occasional 10cm cliffs. Terrarium's 4mm step is fine. This single line is the difference between usable green contours and garbage.
 
 ```ts
 // main.ts
@@ -110,11 +146,78 @@ const map = new maplibregl.Map({
 });
 
 map.on('style.load', () => {
-  addTerrain(map);
+  addTerrain(map, course);
   addHoleLayers(map, holeData);
   map.addLayer(makeBallLayer(holeData));
 });
 ```
+
+---
+
+## 4b. LiDAR terrain bake (offline pipeline, run once per course)
+
+This runs on your machine, not in the browser. Output is a static tile pyramid you host.
+
+### Inputs
+- **USGS 3DEP LiDAR** point clouds (free). QL2 ≈ 2 pts/m², QL1 ≈ 8 pts/m²; vertical accuracy in the ~10cm RMSE range. Available as public cloud-optimized point clouds (EPT/COPC) on AWS Open Data — query by course bounding box, don't download state-sized tiles.
+- Course boundary polygon (from OSM, `leisure=golf_course`), buffered ~200m so the horizon doesn't cliff off.
+
+### Steps
+
+```
+1. FETCH      Clip 3DEP point cloud to course bbox + 200m buffer.
+2. CLASSIFY   Keep ground returns only (ASPRS class 2). This is the step that
+              removes trees, carts, buildings, and golfers. Skipping it puts
+              tree canopy into your fairway.
+3. GRID       Rasterize ground points to a DEM GeoTIFF.
+              - 0.5m cell for the course itself (QL2 supports this comfortably)
+              - Fill gaps by IDW/TIN interpolation; bunkers and water have
+                sparse or zero returns and WILL leave holes.
+4. COMPOSITE  Merge onto the global DEM for the buffer ring, so the surrounding
+              landscape doesn't drop to zero at the LiDAR boundary. Feather the seam.
+5. SMOOTH     See "the noise problem" below. Do this BEFORE encoding.
+6. ENCODE     DEM -> Terrarium RGB PNG tiles, z10..z18.
+7. SERVE      Static tiles at /tiles/{courseId}/{z}/{x}/{y}.png
+```
+
+Tooling: **PDAL** for steps 1–3 (pipeline JSON), **GDAL** for 4, **rio-rgbify** for 6. All open source, all scriptable. This is a `Makefile`, not an application.
+
+### The noise problem (read this before trusting any slope you compute)
+
+Your per-point vertical error (~10cm) is the **same order of magnitude as your signal**. A 2% slope across 3 meters rises about 6cm. That's *below* your noise floor per point.
+
+Therefore: **never compute slope from raw point-to-point differences.** It will produce arrows that look plausible and point in essentially random directions.
+
+Instead:
+1. Fit a smoothed surface over the green polygon — moving-window plane fit, or a thin-plate spline. Averaging many points is what recovers signal from noise.
+2. Take the gradient **of the smoothed surface**, not of the raw grid.
+3. Sample the gradient on a grid (~2–3m spacing is plenty for arrow display).
+
+The smoothing is doing the real work here. It is not a cosmetic step.
+
+### Slope arrow extraction
+
+```
+For each green polygon:
+  - clip smoothed DEM to the polygon
+  - compute gradient (dz/dx, dz/dy) per cell
+  - bearing   = downhill direction, degrees from north
+  - magnitude = slope percent = 100 * sqrt((dz/dx)^2 + (dz/dy)^2)
+  - emit GeoJSON Point features { kind: 'slope', bearing, magnitude }
+```
+
+These feed the `slope-arrows` symbol layer in §5 directly. Same schema, no adapter.
+
+### Storage & scope
+
+A single course at z10–z18 over ~2km² is on the order of a few MB of tiles. Cheap per course — but 40,000 courses is not. **Bake LiDAR terrain only for courses where you have coverage and where it matters** (US 3DEP coverage, hero courses, courses with real elevation change). Everything else falls back to the global DEM. The `course.terrainTiles` field being nullable is what makes this graceful.
+
+### Known gotchas
+
+- **Check the flight date.** Greens get rebuilt and bunkers get renovated. A 2019 acquisition doesn't know about a 2023 redesign. Store the date and surface it when it's stale.
+- **Water and bunkers have sparse returns.** LiDAR doesn't reflect well off water at all. Expect voids; interpolate and move on. Don't chase perfection in a pond.
+- **3DEP is US-only.** International courses fall back to the global DEM, or to national LiDAR programs where they exist (UK EA, NL AHN, ES PNOA — all free, all different formats).
+- **Don't exaggerate.** Real terrain at 1.0 reads correctly. Cranking exaggeration to "make it pop" is a tell that the DEM is wrong.
 
 ---
 
@@ -152,7 +255,7 @@ export function addHoleLayers(map: maplibregl.Map, hole: Hole) {
 }
 ```
 
-Slope arrows come from **your** green-reading data (like Shot Pattern leaning on StrackaLine), not from the DEM — Apple's/AWS terrain mesh is too coarse for green micro-contours. Model each arrow as a point with `bearing` (downhill, degrees) and `magnitude` (slope %).
+Slope arrows are generated by the LiDAR bake (§4b), not by any commercial green-reading provider and not from the global DEM. Each arrow is a point with `bearing` (downhill, degrees from north) and `magnitude` (slope %). Tolerances are deliberately loose right now — the goal is "which way and roughly how much," not tournament-grade break reading.
 
 ---
 
@@ -308,9 +411,10 @@ Slope arrows are **your** data, not OSM.
 - **`queryTerrainElevation` returns `null` until DEM tiles for that area load.** Guard with `?? 0` and don't place the ball until tiles are in; otherwise it snaps from 0 to ground height on first load.
 - **Matrix axis conventions are the #1 source of bugs.** If the ball is mirrored, sunk into the ground, or floating, it's the `modelMatrix` — diff against the official example rather than guessing.
 - **Satellite tiles:** Esri World Imagery is fine for dev but check terms before shipping; move to MapTiler Satellite (keyed) or your own tiles for production. Keep the attribution control visible.
-- **Cost:** MapLibre lib is free; DEM (Terrain Tiles) is free; satellite tiles are the only metered line item and have free tiers before any bill.
+- **Cost:** MapLibre lib is free; LiDAR (3DEP) is free; the bake is compute-on-your-own-machine; satellite tiles are the only metered line item and have free tiers before any bill. This whole stack is effectively $0 at your scale.
 - **Don't enable globe.** Every globe/mercator transition invalidates the naive matrix path. Mercator-locked keeps this simple.
-- **Green micro-contours:** slope arrows must come from your own green data; neither the AWS DEM nor Apple's mesh resolves putting-surface break.
+- **Terrarium encoding, not Mapbox terrain-RGB.** 4mm vs 100mm vertical quantization. On greens this is the difference between contours and cliffs. See §4.
+- **If the terrain looks flat, the DEM is wrong — do not compensate with exaggeration.** Check that the LiDAR tileset actually loaded (network tab), that `maxzoom` is 18 not 15, and that ground classification ran.
 
 ---
 

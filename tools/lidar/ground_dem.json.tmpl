@@ -1,0 +1,40 @@
+{
+  "//": "PDAL pipeline template — spec web_course_viewer_spec.md §4b, steps 1-3.",
+  "//": "Placeholders {{...}} are filled by tools/bake_lidar.py. Do NOT hand-edit",
+  "//": "the filled copy; edit this template.",
+  "//": "3DEP EPT bounds are given in the EPT's own SRS (public 3DEP EPTs are",
+  "//": "EPSG:3857 Web Mercator). We crop in 3857, then reproject to a metric",
+  "//": "SRS so the 0.5 m grid cell is a real half-metre, not a mercator-stretched one.",
+  "pipeline": [
+    {
+      "type": "readers.ept",
+      "filename": "{{EPT_URL}}",
+      "bounds": "([{{MINX_3857}},{{MAXX_3857}}],[{{MINY_3857}},{{MAXY_3857}}])"
+    },
+    {
+      "//": "STEP 2 CLASSIFY — keep ground returns only (ASPRS class 2).",
+      "//": "This is what removes trees, carts, buildings, golfers. Skipping it",
+      "//": "puts canopy into the fairway. Do not remove this stage.",
+      "type": "filters.range",
+      "limits": "Classification[2:2]"
+    },
+    {
+      "//": "reproject to a metric SRS (UTM zone resolved by the driver) so the",
+      "//": "GRID resolution below is honest metres.",
+      "type": "filters.reprojection",
+      "out_srs": "{{OUT_SRS}}"
+    },
+    {
+      "//": "STEP 3 GRID — rasterize ground points to a DEM GeoTIFF.",
+      "//": "0.5 m cell (QL2 supports this). output_type idw fills small gaps;",
+      "//": "large voids over water/bunkers still need the fill pass in the driver.",
+      "type": "writers.gdal",
+      "filename": "{{OUT_TIF}}",
+      "resolution": {{RESOLUTION}},
+      "output_type": "idw",
+      "window_size": 6,
+      "gdaldriver": "GTiff",
+      "nodata": -9999
+    }
+  ]
+}
