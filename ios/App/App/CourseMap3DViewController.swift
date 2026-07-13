@@ -28,6 +28,7 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     // mesh LOD is loaded on every camera set (measured: same MKMapCamera,
     // renders 100-200 px apart across visits).
     private var probeAnns: [MKPointAnnotation] = []
+    private var lastReq: (Double, Double, Double, Double, Double)?
 
     func enter(into parent: UIView, behind webView: WKWebView) {
         self.webView = webView
@@ -65,6 +66,7 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     }
 
     func leave() {
+        lastReq = nil
         mapView?.removeFromSuperview()
         webView?.isOpaque = true
         webView?.backgroundColor = nil
@@ -83,12 +85,25 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     func syncCamera(lat: Double, lon: Double, heading: Double, distM: Double, pitch: Double,
                     probes: [[Double]], done: @escaping ([String: Any]) -> Void) {
         guard let mv = mapView else { done([:]); return }
-        let cam = MKMapCamera(
-            lookingAtCenter: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-            fromDistance: max(distM, 60),
-            pitch: CGFloat(pitch),
-            heading: heading)
-        mv.camera = cam // direct assignment — no animation, game.js already pushes ~30fps
+        // Skip the camera assignment when the request hasn't changed: every
+        // mv.camera set makes flyover RE-SAMPLE its pitch anchor from the
+        // currently loaded mesh LOD, and at rest that re-roll alternates
+        // between answers ~15 px apart — the whole scene (and the JS probe
+        // calibration chasing it) visibly bounces. A parked camera must be
+        // left alone; probes below still get read every call.
+        let req = (lat, lon, heading, distM, pitch)
+        let changed = lastReq == nil ||
+            abs(lastReq!.0 - lat) > 1e-9 || abs(lastReq!.1 - lon) > 1e-9 ||
+            abs(lastReq!.2 - heading) > 0.01 || abs(lastReq!.3 - distM) > 0.05 ||
+            abs(lastReq!.4 - pitch) > 0.01
+        if changed {
+            lastReq = req
+            mv.camera = MKMapCamera(
+                lookingAtCenter: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                fromDistance: max(distM, 60),
+                pitch: CGFloat(pitch),
+                heading: heading) // direct assignment — no animation, game.js already pushes ~30fps
+        }
         let a = mv.camera
         // Ground truth for the JS overlay projection: invisible probe
         // annotations at the requested coordinates. MapKit lays their views

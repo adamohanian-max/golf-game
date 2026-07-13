@@ -776,8 +776,15 @@ function syncAppleGround() {
   if (cam.reqPitch > 0.05) {
     const g = course.geo.toLonLat;
     const cssW = window.innerWidth, cssH = window.innerHeight;
+    // Unproject through the RAW replica — cam carries the previous fit's
+    // calA, and probing through it moves the probe points every time the
+    // fit moves: the fit then samples different local error, moves again,
+    // and the overlay visibly oscillates (~5 Hz, ±7 px measured). Cal-free
+    // probes depend only on the camera, so a parked camera asks about the
+    // SAME three coordinates every sync.
+    const raw = Object.assign({}, cam, { calA: null, calB: null });
     for (const [fx, fy] of [[0.5, 0.3], [0.25, 0.75], [0.75, 0.75]]) {
-      const w = appleUnproject(cam, fx * cssW, fy * cssH);
+      const w = appleUnproject(raw, fx * cssW, fy * cssH);
       probes.push([g[3] * w.x + g[4] * w.y + g[5], g[0] * w.x + g[1] * w.y + g[2]]);
     }
   }
