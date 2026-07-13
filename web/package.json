@@ -1,0 +1,29 @@
+{
+  "name": "golf-course-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser 3D golf hole viewer — MapLibre GL v5 + Three.js over LiDAR terrain (spec docs/web_course_viewer_spec.md)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "tsc --noEmit && vitest run && vite build",
+    "shoot": "node scripts/shoot.mjs"
+  },
+  "dependencies": {
+    "maplibre-gl": "5.24.0",
+    "three": "0.179.1"
+  },
+  "devDependencies": {
+    "@types/geojson": "7946.0.15",
+    "@types/node": "22.12.0",
+    "@types/three": "0.179.0",
+    "playwright": "1.61.1",
+    "typescript": "5.7.2",
+    "vite": "8.1.4",
+    "vitest": "4.1.10"
+  }
+}
