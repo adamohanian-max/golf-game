@@ -662,19 +662,25 @@ function buildAppleProj(cssW, cssH) {
   // when probes go stale so a bad frame can't stick.
   let fitA = null, fitB = null;
   const cal = _appleCal;
-  const hdgDiff = cal ? Math.abs(((cal.heading - P.heading) % 360 + 540) % 360 - 180) : 999;
+  const hdgDiff = cal ? Math.abs(((cal.P.heading - P.heading) % 360 + 540) % 360 - 180) : 999;
   if (cal && cal.ll.length === 3 &&
-      Math.abs(cal.reqDistM - reqDistM) < reqDistM * 0.25 &&
-      Math.abs(cal.reqPitch - pitchDeg) < 6 && hdgDiff < 8 &&
+      Math.abs(cal.P.reqDistM - reqDistM) < reqDistM * 0.25 &&
+      Math.abs(cal.P.pitch - pitchDeg) < 10 && hdgDiff < 10 &&
       performance.now() - cal.t < 1500) {
     const g = course.geo.toLonLat;
     const gdet = g[0] * g[4] - g[1] * g[3] || 1;
+    // Predict through the RAW replica of the camera the answers were made
+    // for (cal.P, calibration stripped) — not the current frame's camera.
+    // The affine then maps raw-replica -> map for that shared camera state,
+    // which transfers cleanly to this frame (anchor state is what persists
+    // between syncs; the camera itself may have moved a frame's worth).
+    const calP = Object.assign({}, cal.P, { calA: null, calB: null });
     const S = [], D = [];
     for (let i = 0; i < 3; i++) {
       const lat = cal.ll[i][0], lon = cal.ll[i][1];
       const wx = (g[4] * (lon - g[2]) - g[1] * (lat - g[5])) / gdet;
       const wy = (g[0] * (lat - g[5]) - g[3] * (lon - g[2])) / gdet;
-      const q = appleProjPt(P, wx, wy, _apGroundZ(P, wx, wy));
+      const q = appleProjPt(calP, wx, wy, _apGroundZ(calP, wx, wy));
       S.push(q); D.push({ x: cal.px[i], y: cal.py[i] });
     }
     // Exact affine through 3 point pairs: solve [x y 1] M = [x' y'].
@@ -696,8 +702,10 @@ function buildAppleProj(cssW, cssH) {
     }
   }
   // Ease toward the fit (or back to identity when none) — snap when close.
+  // Probe answers are stable at rest (jitter feeders fixed in bcdef62), so
+  // the ease is only smoothing anchor re-rolls and ramp chase — keep it firm.
   const tgtA = fitA || [1, 0, 0, 1], tgtB = fitB || [0, 0];
-  const k = 0.3;
+  const k = 0.5;
   for (let i = 0; i < 4; i++) _calS.a[i] += (tgtA[i] - _calS.a[i]) * k;
   for (let i = 0; i < 2; i++) _calS.b[i] += (tgtB[i] - _calS.b[i]) * k;
   const active = Math.abs(_calS.a[0] - 1) + Math.abs(_calS.a[3] - 1) + Math.abs(_calS.a[1]) + Math.abs(_calS.a[2]) > 1e-4 ||
@@ -762,7 +770,11 @@ function syncAppleGround() {
     P.enter({ courseId: course.id }).catch((e) => console.error("CourseMap3D enter", e));
   }
   const now = performance.now();
-  if (now - _lastAppleSync < 33) return; // ~30fps cap over the native bridge
+  // ~30fps cap over the native bridge — except mid pitch-tween, where probe
+  // answers age fastest (camera moves ~2°/sync): sync every frame there so
+  // the calibration chases the ramp instead of trailing it.
+  const tweening = Math.abs(applePitch - applePitchT) > 0.5;
+  if (now - _lastAppleSync < (tweening ? 15 : 33)) return;
   _lastAppleSync = now;
   // One camera model, one source: the same numbers the overlay projection
   // uses this frame (flat mode builds them fresh here — appleProj is null).
@@ -799,8 +811,13 @@ function syncAppleGround() {
       }
       if (a && probes.length === 3 && Array.isArray(a.px) && a.px.length === 3 &&
           a.px.every(isFinite) && a.py.every(isFinite)) {
-        _appleCal = { ll: probes, px: a.px, py: a.py, heading: cam.heading,
-                      reqDistM: cam.reqDistM, reqPitch: cam.reqPitch, t: performance.now() };
+        // Keep the REQUEST camera with the answers: the fit must compare
+        // them against predictions from THIS camera, not whatever frame the
+        // fit runs on — during the 2D->3D pitch ramp the camera moves ~2°
+        // per sync, and comparing stale answers against current-frame
+        // predictions folds that motion into the correction (measured: pin
+        // transiently ~13 css px off mid-transition, then snapping back).
+        _appleCal = { ll: probes, px: a.px, py: a.py, P: cam, t: performance.now() };
       }
     })
     .catch(() => {});
