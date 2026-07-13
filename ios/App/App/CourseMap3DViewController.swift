@@ -118,9 +118,14 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
             var px: [Double] = [], py: [Double] = []
             for ann in self.probeAnns {
                 if let v = mv.view(for: ann) {
-                    // presentation() tracks in-flight CoreAnimation repositioning
-                    let c = v.layer.presentation()?.position ?? v.center
-                    px.append(Double(c.x)); py.append(Double(c.y))
+                    // MODEL value, not layer.presentation(): MapKit implicitly
+                    // ANIMATES annotation view repositioning while the map
+                    // tiles move instantly — presentation positions lag the
+                    // real render by the animation curve, which fed a visible
+                    // overlay wobble during the pitch ramp (flag reversed
+                    // direction ±10 css px against a steady map). v.center is
+                    // the final layout target for the current camera.
+                    px.append(Double(v.center.x)); py.append(Double(v.center.y))
                 } else {
                     px.append(.nan); py.append(.nan)
                 }
@@ -148,12 +153,17 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
             probeAnns.append(ann)
             mv.addAnnotation(ann)
         }
+        // No implicit animation on coordinate moves — the views must sit at
+        // their final layout position when read (see the v.center read above).
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         for (i, p) in want.enumerated() {
             let c = CLLocationCoordinate2D(latitude: p[0], longitude: p[1])
             if probeAnns[i].coordinate.latitude != c.latitude || probeAnns[i].coordinate.longitude != c.longitude {
                 probeAnns[i].coordinate = c
             }
         }
+        CATransaction.commit()
     }
 
     /// Probe annotations render as 1x1 transparent views — invisible, but

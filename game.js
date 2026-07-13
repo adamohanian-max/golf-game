@@ -675,25 +675,61 @@ function buildAppleProj(cssW, cssH) {
     // which transfers cleanly to this frame (anchor state is what persists
     // between syncs; the camera itself may have moved a frame's worth).
     const calP = Object.assign({}, cal.P, { calA: null, calB: null });
-    const S = [], D = [];
-    for (let i = 0; i < 3; i++) {
+    let S = [], D = [];
+    for (let i = 0; i < cal.ll.length; i++) {
       const lat = cal.ll[i][0], lon = cal.ll[i][1];
       const wx = (g[4] * (lon - g[2]) - g[1] * (lat - g[5])) / gdet;
       const wy = (g[0] * (lat - g[5]) - g[3] * (lon - g[2])) / gdet;
       const q = appleProjPt(calP, wx, wy, _apGroundZ(calP, wx, wy));
       S.push(q); D.push({ x: cal.px[i], y: cal.py[i] });
     }
-    // Exact affine through 3 point pairs: solve [x y 1] M = [x' y'].
-    const det3 = S[0].x * (S[1].y - S[2].y) - S[0].y * (S[1].x - S[2].x) + (S[1].x * S[2].y - S[2].x * S[1].y);
-    if (Math.abs(det3) > 1e3) {  // px^2 area guard: skip near-collinear probes
-      const solve = (v0, v1, v2) => {
-        const a = (v0 * (S[1].y - S[2].y) - v1 * (S[0].y - S[2].y) + v2 * (S[0].y - S[1].y)) / det3;
-        const b = (-v0 * (S[1].x - S[2].x) + v1 * (S[0].x - S[2].x) - v2 * (S[0].x - S[1].x)) / det3;
-        const c = (v0 * (S[1].x * S[2].y - S[2].x * S[1].y) - v1 * (S[0].x * S[2].y - S[2].x * S[0].y) + v2 * (S[0].x * S[1].y - S[1].x * S[0].y)) / det3;
-        return [a, b, c];
+    // Least-squares affine over all probes (4 sent = overdetermined), then
+    // one round of outlier rejection: annotation answers occasionally glitch
+    // for a frame, and mesh refinement can slide ONE probe's terrain-anchored
+    // position while the ground truth at the pin never moved — an exact
+    // 3-point fit folds either straight into shear and visibly wobbles the
+    // overlay mid-transition. Drop the worst residual > 5 px and refit.
+    const lsq = (pts, ans) => {
+      let sxx = 0, sxy = 0, sx = 0, syy = 0, sy = 0, n = pts.length;
+      let bx = [0, 0, 0], by = [0, 0, 0];
+      for (let i = 0; i < n; i++) {
+        const p = pts[i], d = ans[i];
+        sxx += p.x * p.x; sxy += p.x * p.y; syy += p.y * p.y; sx += p.x; sy += p.y;
+        bx[0] += p.x * d.x; bx[1] += p.y * d.x; bx[2] += d.x;
+        by[0] += p.x * d.y; by[1] += p.y * d.y; by[2] += d.y;
+      }
+      // solve symmetric 3x3 [sxx sxy sx; sxy syy sy; sx sy n] m = b (Cramer)
+      const M = [sxx, sxy, sx, sxy, syy, sy, sx, sy, n];
+      const det = M[0] * (M[4] * M[8] - M[5] * M[7]) - M[1] * (M[3] * M[8] - M[5] * M[6]) + M[2] * (M[3] * M[7] - M[4] * M[6]);
+      if (Math.abs(det) < 1e6) return null;  // near-collinear
+      const solve3 = (b) => {
+        const r = [];
+        for (let c = 0; c < 3; c++) {
+          const T = M.slice();
+          T[c] = b[0]; T[c + 3] = b[1]; T[c + 6] = b[2];
+          r.push((T[0] * (T[4] * T[8] - T[5] * T[7]) - T[1] * (T[3] * T[8] - T[5] * T[6]) + T[2] * (T[3] * T[7] - T[4] * T[6])) / det);
+        }
+        return r;
       };
-      const [a, b, tx] = solve(D[0].x, D[1].x, D[2].x);
-      const [d, e, ty] = solve(D[0].y, D[1].y, D[2].y);
+      return { X: solve3(bx), Y: solve3(by) };
+    };
+    let f = lsq(S, D);
+    if (f && S.length > 3) {
+      let worst = -1, wr = 0;
+      for (let i = 0; i < S.length; i++) {
+        const rx = f.X[0] * S[i].x + f.X[1] * S[i].y + f.X[2] - D[i].x;
+        const ry = f.Y[0] * S[i].x + f.Y[1] * S[i].y + f.Y[2] - D[i].y;
+        const r = Math.hypot(rx, ry);
+        if (r > wr) { wr = r; worst = i; }
+      }
+      if (wr > 5) {
+        S = S.filter((_, i) => i !== worst);
+        D = D.filter((_, i) => i !== worst);
+        f = lsq(S, D) || f;
+      }
+    }
+    if (f) {
+      const [a, b, tx] = f.X, [d, e, ty] = f.Y;
       const sdet = a * e - b * d;
       // Sanity: near-identity-ish (anchor shifts translate; scale/rot stay small)
       if (sdet > 0.5 && sdet < 2 && Math.hypot(tx, ty) < 500) {
@@ -802,7 +838,10 @@ function syncAppleGround() {
     // probes depend only on the camera, so a parked camera asks about the
     // SAME three coordinates every sync.
     const raw = Object.assign({}, cam, { calA: null, calB: null });
-    for (const [fx, fy] of [[0.5, 0.3], [0.25, 0.75], [0.75, 0.75]]) {
+    // 4 probes, not 3: the fit is least-squares with one outlier-rejection
+    // round (see buildAppleProj) — a glitched or mesh-drifted answer needs
+    // redundancy to be identifiable at all.
+    for (const [fx, fy] of [[0.3, 0.33], [0.7, 0.33], [0.25, 0.75], [0.75, 0.75]]) {
       const w = appleUnproject(raw, fx * cssW, fy * cssH);
       probes.push([g[3] * w.x + g[4] * w.y + g[5], g[0] * w.x + g[1] * w.y + g[2]]);
     }
@@ -816,7 +855,7 @@ function syncAppleGround() {
                             reqLat: cam.reqLat, reqLon: cam.reqLon,
                             reqDistM: cam.reqDistM, reqPitch: cam.reqPitch };
       }
-      if (a && probes.length === 3 && Array.isArray(a.px) && a.px.length === 3 &&
+      if (a && probes.length >= 3 && Array.isArray(a.px) && a.px.length === probes.length &&
           a.px.every(isFinite) && a.py.every(isFinite)) {
         // Keep the REQUEST camera with the answers: the fit must compare
         // them against predictions from THIS camera, not whatever frame the
