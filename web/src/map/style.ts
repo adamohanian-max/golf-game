@@ -19,4 +19,13 @@ export const style: StyleSpecification = {
     },
   },
   layers: [{ id: "satellite", type: "raster", source: "satellite" }],
+  // Sky so pitched views show a horizon, not a white void (Phase 6 polish).
+  sky: {
+    "sky-color": "#8fbcff",
+    "sky-horizon-blend": 0.5,
+    "horizon-color": "#e8f0fb",
+    "horizon-fog-blend": 0.6,
+    "fog-color": "#dfe8f2",
+    "fog-ground-blend": 0.2,
+  },
 };

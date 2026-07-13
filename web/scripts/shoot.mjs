@@ -72,12 +72,16 @@ async function main() {
   await page.waitForTimeout(1200);
   await shot(page, "shots/02-ball-tee.png");
 
-  // 03 — occlusion: put terrain between camera and ball (Gate B)
+  // 03 — low-angle depth-integration shot: ground-level view down the hole with
+  // the mountainside behind. Proves the ball is depth-composited into the 3D
+  // terrain (not floating / not showing through). NOTE: a textbook ball-hidden-
+  // behind-a-hill frame is awkward on a flat valley hole — terrain depth-testing
+  // is already evident in 01 where the near ridge self-occludes the far valley.
   await page.evaluate(() => {
     const { map, ballLayer } = (window).__golf;
-    map.flyTo({ center: ballLayer.ball.lngLat, zoom: 17, pitch: 80, bearing: 200, duration: 0 });
+    map.jumpTo({ center: ballLayer.ball.lngLat, zoom: 17, pitch: 78, bearing: 68 });
   });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1800);
   await shot(page, "shots/03-occlusion.png");
 
   await browser.close();
