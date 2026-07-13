@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="css/menu.css?v=71">
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=76">
-  <link rel="stylesheet" href="css/tournament.css?v=56">
+  <link rel="stylesheet" href="css/tournament.css?v=57">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -508,6 +508,21 @@
     </div>
   </div>
 
+  <div id="tournament-standings" class="hidden">
+    <div class="lb-box">
+      <h2 id="ts-title"><span class="ic ic-flag-checkered"></span>Standings</h2>
+      <div id="ts-status" class="tc-status"></div>
+      <div class="lb-table-wrap">
+        <table class="lb-table">
+          <thead><tr><th>#</th><th>Player</th><th>Score</th><th>Thru</th></tr></thead>
+          <tbody id="ts-list"></tbody>
+        </table>
+        <div id="ts-empty" class="lb-empty hidden"></div>
+      </div>
+      <button id="ts-continue" class="menu-btn" style="margin-top:12px">Back to Menu</button>
+    </div>
+  </div>
+
   <div id="tournament-admin" class="hidden">
     <div class="lb-box tm-box">
       <h2 id="tm-title"><span class="ic ic-flag-checkered"></span>Manage Tournaments</h2>
@@ -700,6 +715,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=20"></script>
-  <script defer src="game.js?v=221"></script>
+  <script defer src="game.js?v=224"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@
 #tournament-lobby,
 #tournament-cut,
 #tournament-final,
+#tournament-standings,
 #tournament-admin,
 #tour-week {
   position: fixed;
@@ -22,6 +23,7 @@
 #tournament-lobby.hidden,
 #tournament-cut.hidden,
 #tournament-final.hidden,
+#tournament-standings.hidden,
 #tournament-admin.hidden,
 #tour-week.hidden { display: none; }
 

@@ -9432,6 +9432,20 @@ function tournamentPhase(t) {
   return "complete";
 }
 
+// Group tournament_rounds rows by player (account when present, else name) and
+// sum to_par across whatever rounds they've submitted. Sorted best-first. Shared
+// by the per-round standings recap and the final results modal.
+function standingsFromRows(rows) {
+  const byPlayer = {};
+  for (const r of rows) {
+    const key = r.user_id ? ("u:" + r.user_id) : ("n:" + (r.player_name || "").toLowerCase());
+    if (!byPlayer[key]) byPlayer[key] = { name: r.player_name, user_id: r.user_id || null, total: 0, count: 0 };
+    byPlayer[key].total += r.to_par;
+    byPlayer[key].count += 1;
+  }
+  return Object.values(byPlayer).sort((a, b) => a.total - b.total);
+}
+
 // --- Cut math ---
 function computeCut(rows) {
   const byPlayer = {};
@@ -9710,6 +9724,14 @@ function handleTournamentRoundComplete() {
           document.getElementById("round-end").classList.add("hidden");
           showTournamentFinal();
         };
+      } else {
+        // R1 / R3: show where the player stands in the field.
+        btn.innerHTML = '<span class="ic ic-flag-checkered"></span>Tournament Standings';
+        row.classList.remove("hidden");
+        btn.onclick = () => {
+          document.getElementById("round-end").classList.add("hidden");
+          showStandings(roundNum);
+        };
       }
     }
   };
@@ -9802,16 +9824,8 @@ async function showTournamentFinal() {
   if (!activeTournament) return;
   const rows = await fetchTournamentRounds(activeTournament.id);
 
-  const byPlayer = {};
-  for (const r of rows) {
-    const key = r.user_id ? ("u:" + r.user_id) : ("n:" + (r.player_name || "").toLowerCase());
-    if (!byPlayer[key]) byPlayer[key] = { name: r.player_name, user_id: r.user_id || null, total: 0, count: 0 };
-    byPlayer[key].total += r.to_par;
-    byPlayer[key].count += 1;
-  }
-  const standings = Object.values(byPlayer)
-    .filter(p => p.count >= 3)  // R3/R4 players (survivors)
-    .sort((a, b) => a.total - b.total);
+  const standings = standingsFromRows(rows)
+    .filter(p => p.count >= 3);  // R3/R4 players (survivors)
 
   document.getElementById("tf-title").textContent = activeTournament.name + " — Final";
   const tfEmpty = document.getElementById("tf-empty");
@@ -9833,6 +9847,57 @@ async function showTournamentFinal() {
   }
 
   document.getElementById("tournament-final").classList.remove("hidden");
+}
+
+// --- Per-round field standings recap (shown after R1 and R3; R2 uses the cut
+//     modal, R4 the final). Whole field ranked by cumulative to-par, me highlighted. ---
+async function showStandings(afterRound) {
+  if (!activeTournament) return;
+  const rows = await fetchTournamentRounds(activeTournament.id);
+  const standings = standingsFromRows(rows);
+
+  document.getElementById("ts-title").textContent =
+    activeTournament.name + " — Through Round " + afterRound;
+
+  const tsEmpty = document.getElementById("ts-empty");
+  const statusEl = document.getElementById("ts-status");
+  const list = document.getElementById("ts-list");
+
+  if (!standings.length) {
+    list.innerHTML = "";
+    statusEl.textContent = "";
+    if (tsEmpty) { tsEmpty.textContent = "No scores in yet."; tsEmpty.classList.remove("hidden"); }
+    document.getElementById("tournament-standings").classList.remove("hidden");
+    return;
+  }
+  if (tsEmpty) tsEmpty.classList.add("hidden");
+
+  const myIdx = standings.findIndex(isMeEntry);
+  statusEl.textContent = myIdx >= 0
+    ? "You're " + formatToPar(standings[myIdx].total) +
+      " · Pos " + (myIdx + 1) + " of " + standings.length
+    : "Your score isn't in the field yet.";
+
+  list.innerHTML = standings.map((p, i) => {
+    const isMe = isMeEntry(p);
+    return "<tr" + (isMe ? " class=\"tc-me\"" : "") + ">" +
+      "<td class=\"lb-rank\">" + (i + 1) + "</td>" +
+      "<td class=\"lb-name\">" + escapeHTML(p.name) + "</td>" +
+      "<td class=\"lb-topar\">" + formatToPar(p.total) + "</td>" +
+      "<td class=\"tc-badge\">" + p.count + "</td></tr>";
+  }).join("");
+
+  document.getElementById("tournament-standings").classList.remove("hidden");
+}
+
+function closeStandingsToMenu() {
+  document.getElementById("tournament-standings").classList.add("hidden");
+  mode = "menu";
+  elMenu.classList.remove("hidden");
+  elHudBtn.classList.add("hidden");
+  elHmClubRow.classList.add("hidden");
+  closeHud();
+  elScorecard.style.display = "none";
 }
 
 // --- Lobby ---
@@ -10199,6 +10264,9 @@ function closeTourWeek() { document.getElementById("tour-week").classList.add("h
     closeHud();
     elScorecard.style.display = "none";
   });
+
+  const tsCont = document.getElementById("ts-continue");
+  if (tsCont) tsCont.addEventListener("click", closeStandingsToMenu);
 })();
 
 // =====================================================================
