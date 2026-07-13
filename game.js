@@ -705,7 +705,12 @@ function buildAppleProj(cssW, cssH) {
   // Probe answers are stable at rest (jitter feeders fixed in bcdef62), so
   // the ease is only smoothing anchor re-rolls and ramp chase — keep it firm.
   const tgtA = fitA || [1, 0, 0, 1], tgtB = fitB || [0, 0];
-  const k = 0.5;
+  // Adaptive rate: a far target means the anchor just RE-ROLLED (the map
+  // content itself jumped) — snap most of the way in one frame so the
+  // overlay lands with it, instead of visibly sliding after it. Near
+  // targets keep the gentle rate that smooths probe answer granularity.
+  const gap = Math.hypot(tgtB[0] - _calS.b[0], tgtB[1] - _calS.b[1]);
+  const k = gap > 6 ? 0.85 : 0.5;
   for (let i = 0; i < 4; i++) _calS.a[i] += (tgtA[i] - _calS.a[i]) * k;
   for (let i = 0; i < 2; i++) _calS.b[i] += (tgtB[i] - _calS.b[i]) * k;
   const active = Math.abs(_calS.a[0] - 1) + Math.abs(_calS.a[3] - 1) + Math.abs(_calS.a[1]) + Math.abs(_calS.a[2]) > 1e-4 ||
@@ -770,10 +775,12 @@ function syncAppleGround() {
     P.enter({ courseId: course.id }).catch((e) => console.error("CourseMap3D enter", e));
   }
   const now = performance.now();
-  // ~30fps cap over the native bridge — except mid pitch-tween, where probe
-  // answers age fastest (camera moves ~2°/sync): sync every frame there so
-  // the calibration chases the ramp instead of trailing it.
-  const tweening = Math.abs(applePitch - applePitchT) > 0.5;
+  // ~30fps cap over the native bridge — except while the camera is moving
+  // (pitch tween, pan, aim, zoom: _apSettleN counts parked frames), where
+  // probe answers age fastest: sync every frame there so the calibration
+  // chases the motion instead of trailing it (measured ~27 css px pin spikes
+  // at pan onsets on 30 Hz answers; pitch ramp same story).
+  const tweening = Math.abs(applePitch - applePitchT) > 0.5 || _apSettleN < 3;
   if (now - _lastAppleSync < (tweening ? 15 : 33)) return;
   _lastAppleSync = now;
   // One camera model, one source: the same numbers the overlay projection
