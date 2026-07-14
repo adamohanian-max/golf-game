@@ -785,7 +785,7 @@ function buildTreesForCourse(courseId) {
           // per-instance material cost).
           const rnd = treeRand(t.x, t.y);
           const hMul = 0.78 + 0.52 * rnd();     // height 0.78-1.30x
-          const wMul = 0.80 + 0.40 * rnd();     // crown width 0.80-1.20x, independent of height
+          const wMul = 0.92 + 0.55 * rnd();     // crown width 0.92-1.47x — fuller so neighbours in a clump merge into a canopy mass (Apple-like), not separate cones
           const desiredH = t.h * M() * hMul;    // world units -> metres
           const scale = desiredH / height;
           scaleV.set(scale * wMul, scale, scale * wMul);
@@ -793,6 +793,47 @@ function buildTreesForCourse(courseId) {
           const lean = (rnd() - 0.5) * 0.16;    // small tilt off vertical
           const leanAz = rnd() * Math.PI * 2;
           eul.set(Math.cos(leanAz) * lean, yaw, Math.sin(leanAz) * lean);
+          quat.setFromEuler(eul);
+          m4.compose(pos, quat, scaleV);
+          inst.setMatrixAt(i, m4);
+        }
+        inst.instanceMatrix.needsUpdate = true;
+        scene.add(inst);
+        treeMeshes.push(inst);
+      }
+    }
+
+    // Understory bushes: a small rounded blob scattered near (most) trees. Two
+    // wins toward the Apple look: (a) puts low foliage ON THE GROUND, not just
+    // tall trunks, and (b) fills clump interiors so a stand of trees reads as a
+    // continuous canopy mass instead of separated cones. Anchored to tree
+    // positions, so density tracks the woods for free — dense clumps get many
+    // bushes, a lone specimen gets one. Reuses the round-pine mesh scaled small
+    // + squashed wide; deterministic per world position (stable across rebuilds).
+    const bushSp = species[3] || species[species.length - 1];
+    if (bushSp) {
+      const bushPos = [];
+      for (const t of trees) {
+        const rp = treeRand(t.x * 1.7 + 3, t.y * 1.7 - 3);
+        const n = rp() < 0.72 ? (rp() < 0.3 ? 2 : 1) : 0;
+        for (let k = 0; k < n; k++) {
+          const a = rp() * Math.PI * 2, d = 2 + 4 * rp();
+          bushPos.push([t.x + Math.cos(a) * d, t.y + Math.sin(a) * d]);
+        }
+      }
+      const eul = new THREE.Euler();
+      for (const part of bushSp.parts) {
+        const inst = new THREE.InstancedMesh(part.geometry, part.material, bushPos.length);
+        inst.castShadow = true;
+        for (let i = 0; i < bushPos.length; i++) {
+          const bx = bushPos[i][0], by = bushPos[i][1];
+          const pos = worldToScene(bx, by, gb.terrainZ(bx, by));
+          const rnd = treeRand(bx, by);
+          const hM = 1.1 + 1.6 * rnd();              // 1.1-2.7 m tall (shrub scale)
+          const v = hM / bushSp.height;
+          const wide = v * (1.4 + 0.7 * rnd());      // wider than tall -> rounded bush
+          scaleV.set(wide, v * 0.9, wide);
+          eul.set(0, rnd() * Math.PI * 2, 0);
           quat.setFromEuler(eul);
           m4.compose(pos, quat, scaleV);
           inst.setMatrixAt(i, m4);
