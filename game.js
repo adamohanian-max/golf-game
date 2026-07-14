@@ -10427,6 +10427,31 @@ function tourMyStanding() {
     today, thru, isMe: true, roundN: roundsPlayed,
   };
 }
+// Which round the board should reflect = the round the PLAYER is on. Pros are
+// shown aggregated THROUGH this round (R1 → R1 only, R2 → 1+2, …), so the field
+// always compares like-for-like against my progress. 1..4.
+function tourDisplayRound() {
+  const te = getTourEvent();
+  const banked = te && te.rounds ? te.rounds.length : 0;
+  const inRound = tourPlayMode && mode === "course";
+  let n = banked + (inRound ? 1 : 0);
+  return Math.min(Math.max(n, 1), 4);
+}
+// Re-aggregate each pro's total/today to only their rounds 1..N, then re-sort.
+function projectField(players, n) {
+  return players.map((p) => {
+    let total = 0, cnt = 0, today = null;
+    for (const r of (p.rounds || [])) {
+      if (r.n <= n && r.toPar != null) { total += r.toPar; cnt++; if (r.n === n) today = r.toPar; }
+    }
+    return Object.assign({}, p, {
+      total: cnt ? total : null,
+      today,
+      thru: (today != null) ? p.thru : (cnt ? "—" : p.thru),  // didn't reach round n
+    });
+  }).sort((a, b) => (a.total == null ? 999 : a.total) - (b.total == null ? 999 : b.total));
+}
+
 function mergeMeIntoField(players, eventId) {
   const te = getTourEvent();
   const me = tourMyStanding();
@@ -10490,11 +10515,14 @@ function _tourRowHTML(p, rank) {
 }
 
 function renderTourBoard(data) {
+  const n = tourDisplayRound();
   document.getElementById("tb-event").textContent = data.name;
-  document.getElementById("tb-status").textContent = data.roundLabel;
+  document.getElementById("tb-status").textContent =
+    (n === 1 ? "Round 1" : "Rounds 1–" + n + " · aggregate") +
+    (data.state === "in" && data.round === n ? " · Live" : "");
   document.getElementById("tb-course").textContent = data.courseName || "";
 
-  const merged = mergeMeIntoField(data.players, data.eventId);
+  const merged = mergeMeIntoField(projectField(data.players, n), data.eventId);
   const LEAD = 15;
   let shown = _tourExpanded ? merged : merged.slice(0, LEAD);
   const meIdx = merged.findIndex((p) => p.isMe);
@@ -10578,12 +10606,14 @@ function updateTourBug() {
   bug.classList.toggle("hidden", !show);
   if (!show) return;
   const data = _tourBoardData;
-  const merged = mergeMeIntoField(data.players, data.eventId);
+  const n = tourDisplayRound();
+  const merged = mergeMeIntoField(projectField(data.players, n), data.eventId);
   const meIdx = merged.findIndex((p) => p.isMe);
   const rows = [];
   for (let i = 0; i < Math.min(3, merged.length); i++) rows.push([i + 1, merged[i]]);
   if (meIdx >= 3) rows.push([meIdx + 1, merged[meIdx]]);
-  bug.querySelector(".tbug-head").textContent = data.name + " · " + data.roundLabel;
+  bug.querySelector(".tbug-head").textContent =
+    data.name + " · " + (n === 1 ? "Round 1" : "Rds 1–" + n);
   bug.querySelector(".tbug-list").innerHTML = rows.map(([r, p]) => _bugRowHTML(r, p)).join("");
 }
 
