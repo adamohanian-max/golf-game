@@ -1,0 +1,17 @@
+{
+  "courseId": "butter-brook-golf-club",
+  "imageryCorrection": {
+    "model": "B",
+    "dLat": -0.000029553368783297174,
+    "dLng": -0.000016277529873320873,
+    "meters": {
+      "north": -3.2898810129566414,
+      "east": -1.3352099388595016
+    },
+    "residualRMSE_m": 1.0379210134940462,
+    "spatialTrendR": null,
+    "fittedFrom": "traced-vs-osm",
+    "featureCount": 2,
+    "fittedOn": "2026-07-14"
+  }
+}
