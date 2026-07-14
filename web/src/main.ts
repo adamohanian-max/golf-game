@@ -1,7 +1,7 @@
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { style } from "./map/style";
-import { addTerrain } from "./map/terrain";
+import { addTerrain, addHillshade } from "./map/terrain";
 import { addHoleLayers } from "./map/holeLayers";
 import { makeBallLayer } from "./three/ballLayer";
 import { hole, course } from "./data/hole-1";
@@ -34,6 +34,7 @@ map.addControl(new maplibregl.AttributionControl({ compact: false }));
 
 map.on("style.load", () => {
   addTerrain(map, course);
+  addHillshade(map);
   addHoleLayers(map, hole);
   const ballLayer = makeBallLayer(hole);
   map.addLayer(ballLayer);

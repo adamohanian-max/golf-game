@@ -186,6 +186,77 @@ def bake_dem(Wd, Hd, MARGIN, SCALE, MINX, MAXY, lat0, lon0):
     return {"x0": 0, "y0": 0, "x1": round(Wd, 2), "y1": round(Hd, 2),
             "nx": nx, "ny": ny, "baseElevM": round(base, 2), "data": data}
 
+def sample_lidar_dem(tif_path, Wd, Hd, MARGIN, SCALE, MINX, MAXY, lat0, lon0):
+    """Sample a LiDAR ground-DEM GeoTIFF (tools/bake_lidar.py output) onto the
+    SAME world grid + dict shape bake_dem produces, so every downstream consumer
+    (game.js terrainZ/buildDEM, three3d buildTerrainGeometry/buildDEMShade,
+    downsample_dem.py) inherits sub-metre terrain with zero change. Returns the
+    dem dict, or None so the caller can fall back to AWS. GDAL required (only on
+    this --lidar-dem path)."""
+    try:
+        from osgeo import gdal, osr
+    except Exception as e:
+        print(f"--lidar-dem needs GDAL python bindings ({e}) — falling back to AWS")
+        return None
+    ds = gdal.Open(tif_path)
+    if ds is None:
+        print(f"--lidar-dem: cannot open {tif_path} — falling back to AWS")
+        return None
+    band = ds.GetRasterBand(1)
+    arr = band.ReadAsArray()
+    gt = ds.GetGeoTransform()          # (ox, px, 0, oy, 0, -py)
+    nod = band.GetNoDataValue()
+    H, W = arr.shape
+    src = osr.SpatialReference(); src.ImportFromWkt(ds.GetProjection())
+    wgs = osr.SpatialReference(); wgs.ImportFromEPSG(4326)
+    wgs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)  # TransformPoint(lon, lat)
+    ct = osr.CoordinateTransformation(wgs, src)
+
+    def world_to_latlon(wx, wy):
+        m_east = (wx - MARGIN) / SCALE + MINX
+        m_north = MAXY - (wy - MARGIN) / SCALE
+        return fc.unproject(m_east, m_north, lat0, lon0)
+
+    def sample(lon, lat):
+        mx, my, _ = ct.TransformPoint(lon, lat)
+        c = (mx - gt[0]) / gt[1]
+        r = (my - gt[3]) / gt[5]
+        c0, r0 = int(math.floor(c)), int(math.floor(r))
+        if c0 < 0 or r0 < 0 or c0 + 1 >= W or r0 + 1 >= H:
+            return None
+        fx, fy = c - c0, r - r0
+        v = [arr[r0, c0], arr[r0, c0 + 1], arr[r0 + 1, c0], arr[r0 + 1, c0 + 1]]
+        if nod is not None and any(abs(x - nod) < 1e-3 for x in v):
+            return None
+        if any(x <= -1000 for x in v):    # residual void sentinel
+            return None
+        return (v[0] * (1 - fx) * (1 - fy) + v[1] * fx * (1 - fy) +
+                v[2] * (1 - fx) * fy + v[3] * fx * fy)
+
+    nx = max(2, round(Wd / 2.0) + 1)     # match bake_dem grid density exactly
+    ny = max(2, round(Hd / 2.0) + 1)
+    elevs, missing = [], 0
+    for j in range(ny):
+        for i in range(nx):
+            wx = i / (nx - 1) * Wd
+            wy = j / (ny - 1) * Hd
+            lat, lon = world_to_latlon(wx, wy)
+            e = sample(lon, lat)
+            if e is None:
+                missing += 1
+            elevs.append(e)
+    valid = [e for e in elevs if e is not None]
+    if not valid:
+        print("LiDAR DEM: no valid samples (grid outside GeoTIFF extent) — falling back to AWS")
+        return None
+    base = min(valid)
+    data = [round((e if e is not None else base) - base, 2) for e in elevs]
+    print(f"LiDAR DEM: {nx}x{ny} grid from {os.path.basename(tif_path)}, "
+          f"base {base:.1f}m, range 0..{max(data):.1f}m, {missing}/{len(elevs)} filled", flush=True)
+    return {"x0": 0, "y0": 0, "x1": round(Wd, 2), "y1": round(Hd, 2),
+            "nx": nx, "ny": ny, "baseElevM": round(base, 2), "data": data}
+
+
 YPU = fc.YARDS_PER_UNIT          # 3 yards/unit
 MPY = fc.M_PER_YARD
 SCALE = 1.0 / (YPU * MPY)        # meters -> world units
@@ -207,6 +278,11 @@ def main():
                     help="Skip the aerial surface-classification mask (OOB/fairway/rough)")
     ap.add_argument("--no-dem", action="store_true",
                     help="Skip DEM elevation baking")
+    ap.add_argument("--lidar-dem",
+                    help="Path to a LiDAR ground-DEM GeoTIFF (from tools/bake_lidar.py) "
+                         "to sample instead of the coarse AWS Terrarium DEM. Same "
+                         "course.dem grid shape; falls back to AWS if sampling fails. "
+                         "Needs GDAL python bindings. See the lidar-terrain skill.")
     ap.add_argument("--scorecard",
                     help="Path to a scorecard override JSON (defaults to "
                          "courses/scorecard/<id>.json if present)")
@@ -483,7 +559,10 @@ def main():
     # write the JSON FIRST so geometry is saved even if the image download is slow
     dem = None
     if not args.no_dem:
-        dem = bake_dem(Wd, Hd, MARGIN, SCALE, MINX, MAXY, lat0, lon0)
+        if args.lidar_dem:
+            dem = sample_lidar_dem(args.lidar_dem, Wd, Hd, MARGIN, SCALE, MINX, MAXY, lat0, lon0)
+        if dem is None:   # no --lidar-dem, or it failed -> coarse AWS fallback
+            dem = bake_dem(Wd, Hd, MARGIN, SCALE, MINX, MAXY, lat0, lon0)
 
     course = {"id": args.id, "name": args.name, "yardsPerUnit": YPU, "global": True,
               "world": world, "aerial": aerial, "surfaces": surfaces,

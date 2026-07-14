@@ -40,3 +40,26 @@ export function addTerrain(map: MLMap, course: Course): void {
   // wrong, not your exaggeration.
   map.setTerrain({ source: "dem", exaggeration: 1.0 });
 }
+
+// Relief shading toward the Apple-Maps look. The satellite raster alone carries
+// no lighting — a flat, evenly-lit photo draped on terrain reads as flat even
+// when the mesh is 3D. A hillshade layer off the SAME dem source paints warm
+// sun/shadow onto the slopes (the cheap ~80% of "Apple lighting"; full PBR
+// shadows would need the three.js terrain-mesh path, deferred). Call AFTER
+// addTerrain (needs the 'dem' source) and BEFORE the hole overlays so tee/green
+// tints sit on top of the shading.
+export function addHillshade(map: MLMap): void {
+  map.addLayer({
+    id: "hillshade",
+    type: "hillshade",
+    source: "dem",
+    paint: {
+      "hillshade-exaggeration": 0.45,
+      "hillshade-illumination-direction": 315, // NW light, matches the relief convention
+      "hillshade-illumination-anchor": "map", // rotate the sun with the terrain, not the screen
+      "hillshade-shadow-color": "#37302b", // warm brown-grey, not flat black
+      "hillshade-highlight-color": "#fff4e0", // warm cream sun side
+      "hillshade-accent-color": "#4a3f38",
+    },
+  });
+}

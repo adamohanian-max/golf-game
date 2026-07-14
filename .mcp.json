@@ -3,6 +3,10 @@
     "playwright": {
       "command": "npx",
       "args": ["@playwright/mcp@latest", "--isolated"]
+    },
+    "cesium": {
+      "command": "npx",
+      "args": ["-y", "cesium-mcp-runtime"]
     }
   }
 }
