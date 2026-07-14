@@ -947,7 +947,6 @@ let tourEventName = null;         // name of the real PGA Tour event being playe
 let _tourCourseId = null;         // baked course id of this week's tour venue — plays free (see isTourFeatured)
 // Tour Events (spectator leaderboard + compete-against-the-pros; see "Tour Events").
 let tourPlayMode = false;         // true while playing a round that counts toward the followed tour event
-let tourFollowing = false;        // true when the bottom-left live scorebug should show during gameplay
 let _tourLbCache = null;          // { at, data } short-TTL cache of the live leaderboard
 let _tourPoll = null;             // setInterval handle for live leaderboard polling
 let _tourExpanded = false;        // full-screen board: show full field vs leaders only
@@ -10411,7 +10410,7 @@ function ensureTourEvent(eventId, name) {
 function tourMyStanding() {
   const te = getTourEvent();
   if (!te) return null;
-  const inRound = tourPlayMode && mode === "course";
+  const inRound = tourPlayMode;
   // Don't appear on the board until there's a score to show (a completed round
   // or a live one) — an empty "E" row before teeing off reads as a bug.
   if (!(te.rounds || []).length && !inRound) return null;
@@ -10433,7 +10432,7 @@ function tourMyStanding() {
 function tourDisplayRound() {
   const te = getTourEvent();
   const banked = te && te.rounds ? te.rounds.length : 0;
-  const inRound = tourPlayMode && mode === "course";
+  const inRound = tourPlayMode;
   let n = banked + (inRound ? 1 : 0);
   return Math.min(Math.max(n, 1), 4);
 }
@@ -10478,6 +10477,7 @@ async function openTourEvents() {
   const ov = document.getElementById("tour-board");
   ov.classList.remove("hidden");
   mode = "tour";
+  _tourExpanded = false;   // always open on the leaders view
   elMenu.classList.add("hidden");
   document.getElementById("play-menu") && document.getElementById("play-menu").classList.add("hidden");
   document.getElementById("tb-event").textContent = "Tour Events";
@@ -10491,18 +10491,18 @@ async function openTourEvents() {
 
   // Resolve the venue → baked course (for "Tee off").
   const course = await fetchTourCourse(data.eventId);
+  if (ov.classList.contains("hidden")) return;   // closed during the course fetch — don't start polling
   data.courseName = course ? course.name : null;
   _tourCourseMatch = course ? matchTourCourse(course.name) : null;
   _tourBoardData = data;
   ensureTourEvent(data.eventId, data.name);
-  tourFollowing = true; lsSet("golf.tourFollow", true);
 
   renderTourBoard(data);
   ensureTourPoll();
 }
 
 function _tourRowHTML(p, rank) {
-  const flag = p.flag ? '<img class="tb-flag" src="' + p.flag + '" alt="">' : '<span class="tb-flag"></span>';
+  const flag = p.flag ? '<img class="tb-flag" src="' + escapeHTML(p.flag) + '" alt="">' : '<span class="tb-flag"></span>';
   const nm = escapeHTML(p.name);
   const today = p.today == null ? "—" : '<span class="' + _parClass(p.today) + '">' + _parText(p.today) + "</span>";
   const total = '<span class="' + _parClass(p.total) + '">' + _parText(p.total) + "</span>";
@@ -10542,7 +10542,7 @@ function renderTourBoard(data) {
   }
   const tee = document.getElementById("tb-tee");
   if (tee) {
-    if (_tourCourseMatch) {
+    if (_tourCourseMatch && !tourPlayMode) {   // can't start a new round mid-round
       tee.classList.remove("hidden");
       const rn = ((getTourEvent() || {}).rounds || []).length + 1;
       tee.textContent = rn > 4 ? "Event complete" : "Tee off Round " + rn;
@@ -10556,6 +10556,9 @@ function renderTourBoard(data) {
 function hideTourBoard() { document.getElementById("tour-board").classList.add("hidden"); }
 function closeTourEvents() {
   hideTourBoard();
+  // Opened mid-round (e.g. tapped the scorebug to glance)? Resume the round
+  // instead of routing through showMenu(), which would abandon it.
+  if (tourPlayMode && mode === "tour") { mode = "course"; updateTourBug(); return; }
   stopTourPoll();
   if (mode === "tour") showMenu();
 }
@@ -10567,7 +10570,7 @@ function teeOffTourRound() {
   hideTourBoard();
   selectedCourseId = _tourCourseMatch.id;
   _tourCourseId = _tourCourseMatch.id;   // free taste — event venue plays free
-  tourPlayMode = true; tourFollowing = true; lsSet("golf.tourFollow", true);
+  tourPlayMode = true;
   ensureTourEvent(data.eventId, data.name);
   startCourse();
   ensureTourPoll();
