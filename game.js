@@ -592,6 +592,10 @@ let _appleCal = null;
 // Smoothed calibration affine (eases toward each fresh fit; identity when
 // none) — raw per-sync fits would pop the whole overlay on anchor re-rolls.
 const _calS = { a: [1, 0, 0, 1], b: [0, 0] };
+// Sticky probe coordinates (see syncAppleGround) + last 3 fit targets for
+// the median filter in buildAppleProj.
+let _probeLL = null, _probeLLW = null;
+const _fitHist = [];
 function buildAppleProj(cssW, cssH) {
   // Look-at target O = the world point at the true screen center under the
   // FLAT view (game camera logic — focus/fit/aim — stays orthographic and
@@ -737,6 +741,21 @@ function buildAppleProj(cssW, cssH) {
       }
     }
   }
+  // Median-of-3 over recent fit targets: a single garbage fit (annotation
+  // layout race, probe glitch that dodged outlier rejection) can pass every
+  // per-fit sanity gate — measured ±90-170 css px one-frame spikes during
+  // zoom. The median passes genuine anchor re-rolls after one extra sync
+  // (~30 ms) and discards loners entirely.
+  if (fitA) {
+    _fitHist.push({ a: fitA, b: fitB, t: performance.now() });
+    if (_fitHist.length > 3) _fitHist.shift();
+  }
+  const fresh = _fitHist.filter((h) => performance.now() - h.t < 400);
+  if (fitA && fresh.length === 3) {
+    const med = (v0, v1, v2) => Math.max(Math.min(v0, v1), Math.min(Math.max(v0, v1), v2));
+    fitA = fitA.map((_, i) => med(fresh[0].a[i], fresh[1].a[i], fresh[2].a[i]));
+    fitB = fitB.map((_, i) => med(fresh[0].b[i], fresh[1].b[i], fresh[2].b[i]));
+  }
   // Ease toward the fit (or back to identity when none) — snap when close.
   // Probe answers are stable at rest (jitter feeders fixed in bcdef62), so
   // the ease is only smoothing anchor re-rolls and ramp chase — keep it firm.
@@ -841,9 +860,31 @@ function syncAppleGround() {
     // 4 probes, not 3: the fit is least-squares with one outlier-rejection
     // round (see buildAppleProj) — a glitched or mesh-drifted answer needs
     // redundancy to be identifiable at all.
-    for (const [fx, fy] of [[0.3, 0.33], [0.7, 0.33], [0.25, 0.75], [0.75, 0.75]]) {
-      const w = appleUnproject(raw, fx * cssW, fy * cssH);
-      probes.push([g[3] * w.x + g[4] * w.y + g[5], g[0] * w.x + g[1] * w.y + g[2]]);
+    // STICKY coordinates: reuse the previous probe lat/lons while they still
+    // project into the mid-viewport. Respawning from the screen triangle
+    // every sync means every zoom/pan frame MOVES the annotations, and a
+    // moved annotation can be read before MapKit re-lays it out — a stale
+    // center paired with a new coordinate is a garbage answer (measured:
+    // ±90-170 css px calibration spikes during zoom). Static coordinates
+    // can't race their own layout.
+    let reuse = null;
+    if (_probeLL && _probeLL.length === 4) {
+      reuse = _probeLL;
+      for (const w of _probeLLW) {
+        const q = appleProjPt(raw, w.x, w.y, _apGroundZ(raw, w.x, w.y));
+        if (q.x < cssW * 0.08 || q.x > cssW * 0.92 || q.y < cssH * 0.12 || q.y > cssH * 0.92) { reuse = null; break; }
+      }
+    }
+    if (reuse) {
+      probes.push(...reuse);
+    } else {
+      _probeLL = []; _probeLLW = [];
+      for (const [fx, fy] of [[0.3, 0.33], [0.7, 0.33], [0.25, 0.75], [0.75, 0.75]]) {
+        const w = appleUnproject(raw, fx * cssW, fy * cssH);
+        _probeLLW.push(w);
+        _probeLL.push([g[3] * w.x + g[4] * w.y + g[5], g[0] * w.x + g[1] * w.y + g[2]]);
+      }
+      probes.push(..._probeLL);
     }
   }
   // Send the REQUESTED camera; record what MapKit actually applied (its
@@ -892,6 +933,7 @@ function leaveAppleGround() {
   _appleActualCam = null;
   _appleCal = null;
   _calS.a = [1, 0, 0, 1]; _calS.b = [0, 0];
+  _probeLL = _probeLLW = null; _fitHist.length = 0;
   _apSettleN = 0; _apDetailA = 0;
   document.documentElement.style.background = "";
   document.body.style.background = "";
