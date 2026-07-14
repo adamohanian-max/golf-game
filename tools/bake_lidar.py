@@ -40,6 +40,7 @@ import argparse
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -154,9 +155,16 @@ def resolve_ept(bbox_deg):
         blocked("no 3DEP LiDAR coverage for this bbox (US-only; international "
                 "courses fall back to the global DEM — leave terrainTiles null). "
                 "Spec §4b 'known gotchas'.")
+    # Prefer the NEWEST acquisition — modern QL2 collects (e.g. *_2021) are far
+    # denser/cleaner than legacy ARRA-era ones (~2011), and 3DEP often stacks
+    # several projects over one spot. Sort by the year embedded in the name.
+    def _year(n):
+        ys = re.findall(r"(?:19|20)\d{2}", n)
+        return max((int(y) for y in ys), default=0)
+    hits.sort(key=_year, reverse=True)
     name = hits[0]
     if len(hits) > 1:
-        print(f"FETCH: {len(hits)} overlapping projects, using newest-ish '{name}' "
+        print(f"FETCH: {len(hits)} overlapping projects, using newest '{name}' "
               f"(others: {', '.join(hits[1:])})", flush=True)
     return f"{USGS_LIDAR_BUCKET}/{name}/ept.json"
 
@@ -237,6 +245,13 @@ def fill_and_smooth(in_tif, out_tif):
         capture_output=True, text=True)
     if r.returncode != 0:
         blocked(f"gdal_fillnodata failed:\n{r.stderr.strip()}")
+    # Drop the nodata tag now that voids are filled. rio rgbify's output is uint8
+    # RGB and it inherits the source nodata (-9999), which is out of uint8 range
+    # -> rasterio rejects the write. Unsetting it here (voids already filled) lets
+    # the encode succeed. gdal_edit ships with gdal.
+    if shutil.which("gdal_edit.py"):
+        subprocess.run(["gdal_edit.py", "-unsetnodata", out_tif],
+                       capture_output=True, text=True)
     # NOTE: fillnodata's -si 2 gives light smoothing; for putting-surface slope
     # extraction the green-local plane fit in extract_slope_arrows() does the
     # heavy denoising. A course-wide gaussian here would blur real fairway relief.

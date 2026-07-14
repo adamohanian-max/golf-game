@@ -4,7 +4,7 @@ import { style } from "./map/style";
 import { addTerrain, addHillshade } from "./map/terrain";
 import { addHoleLayers } from "./map/holeLayers";
 import { makeBallLayer } from "./three/ballLayer";
-import { hole, course } from "./data/hole-1";
+import { hole, course } from "./data/four-oaks";
 import type { LngLat } from "./game/types";
 
 // Camera: frame down the hole (tee -> pin) so the green is up-screen (spec §9,
