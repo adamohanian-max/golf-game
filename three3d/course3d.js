@@ -156,6 +156,17 @@ function patchGroundDetailShader(mat) {
     shader.uniforms.uDetailRepeat = { value: 3.0 };  // metres per tile
     shader.uniforms.uBlendNear = { value: 35.0 };    // metres: pure detail texture inside this
     shader.uniforms.uBlendFar = { value: 130.0 };    // metres: pure aerial photo beyond this
+    // Unsharp-mask the aerial photo. The baked drape is ~0.56 m/px (NAIP) and
+    // goes soft/mushy under a close camera — Apple's imagery stays crisp. A GPU
+    // unsharp (recover high-freq edges: cart paths, bunker rims, mowing lines)
+    // makes ANY course's aerial read sharper without a higher-res source. Texel
+    // size comes from the loaded map's own dimensions (works in GLSL1 — no
+    // textureSize()); recomputed on the map-set recompile below.
+    shader.uniforms.uSharpAmount = { value: 0.9 };
+    shader.uniforms.uMapTexel = { value: new THREE.Vector2(1 / 4096, 1 / 4096) };
+    if (mat.map && mat.map.image) {
+      shader.uniforms.uMapTexel.value.set(1 / mat.map.image.width, 1 / mat.map.image.height);
+    }
     mat.userData.shader = shader; // handle for later live-tuning
 
     shader.vertexShader = shader.vertexShader
@@ -184,12 +195,25 @@ function patchGroundDetailShader(mat) {
         uniform sampler2D uSandMap;
         uniform float uBlendNear;
         uniform float uBlendFar;
+        uniform float uSharpAmount;
+        uniform vec2 uMapTexel;
         varying vec2 vDetailUv;
         varying float vViewDist;
         varying float vBunkerMask;
       `)
       .replace("#include <map_fragment>", `
-        #include <map_fragment>
+        #ifdef USE_MAP
+          vec4 _aer = texture2D( map, vMapUv );
+          vec3 _blur = (
+            texture2D(map, vMapUv + vec2(uMapTexel.x, 0.0)).rgb +
+            texture2D(map, vMapUv - vec2(uMapTexel.x, 0.0)).rgb +
+            texture2D(map, vMapUv + vec2(0.0, uMapTexel.y)).rgb +
+            texture2D(map, vMapUv - vec2(0.0, uMapTexel.y)).rgb) * 0.25;
+          // fade the sharpen out with distance so far-field stays mip-smooth
+          float _sf = uSharpAmount * (1.0 - smoothstep(120.0, 420.0, vViewDist));
+          _aer.rgb = clamp(_aer.rgb + (_aer.rgb - _blur) * _sf, 0.0, 1.0);
+          diffuseColor *= _aer;
+        #endif
         {
           float detailMix = 1.0 - smoothstep(uBlendNear, uBlendFar, vViewDist);
           vec3 turfColor = texture2D(uDetailMap, vDetailUv).rgb;
