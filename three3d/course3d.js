@@ -262,7 +262,13 @@ function buildScene() {
   // any elevated/low-angle view (e.g. the ball-follow camera after a shot).
   // ACES compresses this hard on its shoulder, so the linear color has to sit
   // noticeably bluer/darker than the target to land on it post-tonemap.
-  scene.fog = new THREE.Fog(0xa7c8e2, 160, 1700);
+  // Pushed the near plane way out (was 160) so the whole PLAYING area reads
+  // crisp instead of veiled — a blue-grey haze creeping onto the mid-fairway
+  // was the main reason this looked softer/"washed" than Apple's edge-to-edge
+  // sharp imagery. Fog now only does its real job: blending the far horizon
+  // into the sky (far pushed to 2100 to match). The aerial-LOD-blur it used to
+  // mask past ~130m is covered closer-in by patchGroundDetailShader's turf grain.
+  scene.fog = new THREE.Fog(0xa7c8e2, 520, 2100);
 
   // Ambient dropped from 0.55 -> 0.16: real contrast (a defined lit side and
   // shadow side) is what makes a scene read as "a place the sun is hitting"
@@ -763,7 +769,11 @@ function init() {
   // out. Now that the sun casts real shadows (below) the scene has genuine
   // contrast to work with — a darker exposure was reading as "hazy/overcast"
   // per review rather than "sunny," so let more light back in.
-  renderer.toneMappingExposure = 0.8;
+  // 0.8 -> 0.92: with the haze pulled back (fog near pushed out in buildScene)
+  // the scene was reading a touch dim; a bit more exposure lands the sunny,
+  // bright-but-not-blown daylight Apple's imagery has (ACES rolls off the
+  // highlights so the sky/sun glare stays controlled).
+  renderer.toneMappingExposure = 0.92;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   markContextHandlers();
