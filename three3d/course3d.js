@@ -622,6 +622,17 @@ function loadTreeSpecies() {
 // course-wide, which is cheap to instance outright on any 2020+ mobile GPU.
 // A far-distance billboard LOD (reusing game.js's treeSprites() canvases,
 // per the plan) is a fast-follow if on-device perf testing ever calls for it.
+// Deterministic per-tree PRNG (stable across rebuilds — keyed on world pos, not
+// instance index) so a treeline reads as organic variety, not stamped clones.
+function treeRand(x, y) {
+  let s = (Math.imul(Math.round(x * 8.13) | 0, 374761393) ^
+           Math.imul(Math.round(y * 8.13) | 0, 668265263)) >>> 0;
+  return () => {
+    s = Math.imul(s ^ (s >>> 15), 2246822519) >>> 0;
+    return ((s >>> 8) & 0xffffff) / 0x1000000;
+  };
+}
+
 let treesBuildInFlight = false;
 function buildTreesForCourse(courseId) {
   if (treesBuildInFlight) return; // already mid-build for this attempt — render()'s retry calls this every frame until it lands
@@ -648,14 +659,27 @@ function buildTreesForCourse(courseId) {
         // being lit by it. No receiveShadow: trees shadowing other trees
         // isn't worth the cost for this pass.
         inst.castShadow = true;
+        const eul = new THREE.Euler();
         for (let i = 0; i < list.length; i++) {
           const t = list[i];
           const th = gb.terrainZ(t.x, t.y);
           const pos = worldToScene(t.x, t.y, th);
-          const desiredH = t.h * M(); // world units -> metres
+          // Real forests aren't cloned lollipops — jitter each tree's height,
+          // crown width (independent of height), yaw, and give a slight lean so
+          // a treeline reads organic instead of a stamped row. Deterministic per
+          // world position so it's stable across rebuilds (setColorAt-free — no
+          // per-instance material cost).
+          const rnd = treeRand(t.x, t.y);
+          const hMul = 0.78 + 0.52 * rnd();     // height 0.78-1.30x
+          const wMul = 0.80 + 0.40 * rnd();     // crown width 0.80-1.20x, independent of height
+          const desiredH = t.h * M() * hMul;    // world units -> metres
           const scale = desiredH / height;
-          scaleV.set(scale, scale, scale);
-          quat.setFromEuler(new THREE.Euler(0, i * 2.399963, 0)); // golden-angle-ish, deterministic per-instance variety
+          scaleV.set(scale * wMul, scale, scale * wMul);
+          const yaw = rnd() * Math.PI * 2;      // full random spin (was golden-angle by index)
+          const lean = (rnd() - 0.5) * 0.16;    // small tilt off vertical
+          const leanAz = rnd() * Math.PI * 2;
+          eul.set(Math.cos(leanAz) * lean, yaw, Math.sin(leanAz) * lean);
+          quat.setFromEuler(eul);
           m4.compose(pos, quat, scaleV);
           inst.setMatrixAt(i, m4);
         }
