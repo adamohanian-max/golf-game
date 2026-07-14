@@ -10887,9 +10887,15 @@ async function beginMatch(courseId, holeCount, settings, format, live) {
 async function patchMyMatchRow(fields) {
   if (cpuMatch) return;              // local bot match → nothing to persist
   if (!LB_ON() || !activeMatch) return;
-  const me = getPlayerName() || "Player";
-  const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(activeMatch.id) +
-            "&player_name=eq." + encodeURIComponent(me);
+  // Identify my row by user_id when logged in — the stable key set at insert.
+  // player_name comes from _profile.display_name, which hydrates async, so it can
+  // differ between insert and write time; a name-only filter then matches 0 rows
+  // and every PATCH silently no-ops (PostgREST returns 204), leaving score at 0.
+  const u = currentUser();
+  const idFilter = (u && u.id)
+    ? "&user_id=eq." + encodeURIComponent(u.id)
+    : "&player_name=eq." + encodeURIComponent(getPlayerName() || "Player");
+  const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(activeMatch.id) + idFilter;
   const body = JSON.stringify(Object.assign({ cur_updated: new Date().toISOString() }, fields));
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
