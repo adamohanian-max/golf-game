@@ -11694,6 +11694,14 @@ async function renderMatchBoard() {
   const rows = await fetchMatchPlayers(activeMatch.id);
   onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync — needed every
                       // poll regardless of panel visibility, so this always runs
+  // Keep the scorecard's 1v1 up/down status fresh straight from the poll. onLivePoll
+  // only wires lastOpp for turn-based (Live) matches, and updateScorecard() otherwise
+  // only runs on my own hole events — so without this the opponent's progress never
+  // showed until I acted. Covers async match-play too.
+  if (matchPlay() && mode === "course") {
+    if (!liveMatch()) { const opp = rows.find((r) => !isMeEntry(r)); if (opp) lastOpp = opp; }
+    updateScorecard();
+  }
   const panel = document.getElementById("match-standings");
   if (!panel || panel.classList.contains("hidden")) return; // board UI closed — skip the innerHTML rebuild below
   const title = document.getElementById("mb-title");
