@@ -52,6 +52,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Sky } from "three/addons/objects/Sky.js";
 import { Water } from "three/addons/objects/Water.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 const FOUR_OAKS_ID = "four-oaks-dracut";
 
@@ -524,7 +525,82 @@ function buildGroundForCourse() {
 
   buildWaterForCourse(course);
   buildTreesForCourse(course.id);
+  buildBuildingsForCourse(course.id);
   buildGreenPatchesForCourse(aerial);
+}
+
+// ---- buildings: extruded OSM footprints ------------------------------------
+// The aerial drapes building ROOFS flat onto the ground; Apple shows real
+// massing. tools/fetch_buildings.py bakes footprints (world units) + heights to
+// courses/buildings/<id>.json; here we extrude each into a lit, shadow-casting
+// prism and merge them into one mesh. Course-agnostic: any course with a
+// buildings file gets massing; a 404 just skips (vector/unbaked courses).
+let buildingMesh = null;
+let buildingsBuiltForCourseId = null;
+function buildBuildingsForCourse(courseId) {
+  if (buildingsBuiltForCourseId === courseId) return;
+  buildingsBuiltForCourseId = courseId; // claim now so render()'s retry loop doesn't refetch
+  fetch("courses/buildings/" + courseId + ".json")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (buildingMesh) {
+        scene.remove(buildingMesh);
+        buildingMesh.geometry.dispose();
+        buildingMesh.material.dispose();
+        buildingMesh = null;
+      }
+      if (!data || !data.buildings || !data.buildings.length) return;
+      const gb = window.GolfBridge;
+      const m = M();
+      const geos = [];
+      for (const b of data.buildings) {
+        const poly = b.poly;
+        if (!poly || poly.length < 3) continue;
+        // centroid (world units) for terrain height + deterministic jitter
+        let cx = 0, cy = 0, area2 = 0;
+        for (let i = 0; i < poly.length - 1; i++) {
+          const cr = poly[i][0] * poly[i + 1][1] - poly[i + 1][0] * poly[i][1];
+          area2 += cr;
+          cx += (poly[i][0] + poly[i + 1][0]) * cr;
+          cy += (poly[i][1] + poly[i + 1][1]) * cr;
+        }
+        if (Math.abs(area2) < 1e-6) continue;
+        cx /= 3 * area2; cy /= 3 * area2;
+        const areaM2 = Math.abs(area2 / 2) * m * m;
+        const rnd = treeRand(cx, cy);
+        // OSM here has no height tags (all default), so vary height so the
+        // massing isn't a field of identical boxes, and make big footprints
+        // (clubhouse, cart barn) read taller than houses.
+        let depth = (b.h || 4.5) * (0.85 + 0.4 * rnd());
+        if (areaM2 > 700) depth *= 1.7;
+        else if (areaM2 > 300) depth *= 1.3;
+        depth = Math.min(depth, 22);
+        try {
+          const shape = new THREE.Shape(poly.map((p) => new THREE.Vector2(p[0] * m, p[1] * m)));
+          const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+          // +90deg about X maps footprint (x,y) -> scene (x, *, +y) matching the
+          // course convention (scene.z = +world.y*m; verified via debug: tee
+          // world (177,505) -> scene z 1385). A -90deg rotation mirrors it to
+          // -z, off the course entirely (the bug that hid these).
+          geo.rotateX(Math.PI / 2);
+          const gy = gb.terrainZ(cx, cy) * m;        // terrain height (metres) at the footprint
+          geo.translate(0, gy + depth, 0);           // prism now spans gy .. gy+depth (base on the terrain)
+          geos.push(geo);
+        } catch (e) { /* skip self-intersecting/degenerate footprints */ }
+      }
+      if (!geos.length) return;
+      const merged = mergeGeometries(geos, false);
+      for (const g of geos) g.dispose();
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xc9b79a, roughness: 0.9, metalness: 0.0, // warm tan — reads as built structure, distinct from grey concrete AND green turf
+      });
+      mat.envMapIntensity = ENV_MAP_INTENSITY;
+      buildingMesh = new THREE.Mesh(merged, mat);
+      buildingMesh.castShadow = true;
+      buildingMesh.receiveShadow = true;
+      scene.add(buildingMesh);
+    })
+    .catch(() => { /* no buildings file for this course — fine */ });
 }
 
 // Dense per-green overlay meshes — same material/texture as the main terrain
@@ -586,7 +662,10 @@ function buildWaterForCourse(course) {
     // to match how the terrain/skirt planes are built, same worldToScene scale.
     const shape = new THREE.Shape(poly.map((pt) => new THREE.Vector2(pt.x * m, pt.y * m)));
     const geo = new THREE.ShapeGeometry(shape);
-    geo.rotateX(-Math.PI / 2);
+    // +90 (not -90): -90 mirrors the footprint to scene -z, off the course, so
+    // the reflective water never rendered on the actual pond (only the dark
+    // aerial photo showed). scene.z = +world.y*m — see buildings above.
+    geo.rotateX(Math.PI / 2);
     let sumZ = 0;
     for (const pt of poly) sumZ += gb.terrainZ(pt.x, pt.y);
     const water = new Water(geo, {
