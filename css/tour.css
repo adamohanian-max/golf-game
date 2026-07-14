@@ -1,0 +1,197 @@
+/* ============================================================
+   Tour Events — live Masters-style leaderboard + bottom-left
+   scorebug. Modelled on the Masters manual board / TV graphic:
+   deep green board, Fraunces serif names, RED numerals under
+   par, GREEN over par, brass highlight for the "me" row.
+   ============================================================ */
+
+:root {
+  --tour-board-bg:  #0a2417;         /* deep Masters green board */
+  --tour-board-bg2: #0e2c1c;
+  --tour-line:      rgba(207, 168, 94, 0.22);  /* brass hairline */
+  --tp-over:        #6fae5a;         /* over par — green numerals */
+}
+
+/* under/over/even numerals (shared by board + scorebug) */
+.tp-under { color: var(--status-under); font-weight: var(--fw-bold, 700); }
+.tp-over  { color: var(--tp-over); }
+.tp-even  { color: var(--text-muted); }
+
+/* ---- Full-screen board ------------------------------------ */
+#tour-board {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(46,125,79,0.18), transparent 60%),
+    var(--green-900);
+  padding: max(var(--sat), 8px) 0 max(var(--sab), 0px);
+}
+#tour-board.hidden { display: none; }
+
+.tb-box {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--tour-board-bg2), var(--tour-board-bg));
+  border-left: var(--border-hair);
+  border-right: var(--border-hair);
+  overflow: hidden;
+}
+
+.tb-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-3) var(--s-2);
+  border-bottom: 1px solid var(--tour-line);
+}
+.tb-event {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.2px;
+  color: var(--brass-400);
+  line-height: 1.1;
+}
+.tb-round {
+  margin-top: 3px;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--w-70);
+}
+.tb-coursename { margin-top: 2px; font-size: 12px; color: var(--text-faint); }
+.tb-x {
+  flex: none;
+  width: 34px; height: 34px;
+  border: 1px solid var(--tour-line);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--w-70);
+  font-size: 15px;
+  cursor: pointer;
+}
+.tb-x:active { background: var(--w-08); }
+
+.tb-table-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.tb-table { width: 100%; border-collapse: collapse; }
+.tb-table thead th {
+  position: sticky; top: 0;
+  background: var(--tour-board-bg);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--brass-600);
+  font-weight: 700;
+  text-align: right;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--tour-line);
+}
+.tb-table thead th.tb-name { text-align: left; }
+.tb-table thead th.tb-pos  { text-align: center; }
+
+.tb-table tbody td {
+  padding: 9px 10px;
+  font-size: 15px;
+  color: var(--text);
+  border-bottom: 1px solid rgba(207,168,94,0.10);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tb-table td.tb-pos  { text-align: center; color: var(--w-55); font-size: 13px; width: 40px; }
+.tb-table td.tb-name {
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tb-table td.tb-total { font-weight: 700; width: 60px; }
+.tb-table td.tb-today, .tb-table td.tb-thru { width: 52px; color: var(--text-muted); font-size: 13px; }
+
+.tb-flag { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; flex: none; background: var(--w-08); }
+
+/* "me" row — brass highlight, gold rail */
+.tb-table tbody tr.tb-me td {
+  background: rgba(207, 168, 94, 0.14);
+  border-bottom-color: rgba(207,168,94,0.30);
+}
+.tb-table tbody tr.tb-me td.tb-pos { box-shadow: inset 3px 0 0 var(--brass-400); }
+.tb-table tbody tr.tb-me td.tb-name { color: var(--brass-400); }
+
+.tb-actions {
+  display: flex; gap: var(--s-2);
+  padding: var(--s-3);
+  border-top: 1px solid var(--tour-line);
+}
+.tb-btn-ghost, .tb-btn-tee {
+  flex: 1;
+  padding: 12px;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--tour-line);
+}
+.tb-btn-ghost { background: transparent; color: var(--w-70); }
+.tb-btn-ghost:active { background: var(--w-08); }
+.tb-btn-tee {
+  background: var(--brass-600);
+  border-color: var(--brass-400);
+  color: #1c1408;
+}
+.tb-btn-tee:disabled { opacity: 0.5; }
+.tb-btn-ghost.hidden, .tb-btn-tee.hidden { display: none; }
+.tb-credit { padding: 0 var(--s-3) var(--s-3); margin: 0; font-size: 10px; color: var(--text-faint); text-align: center; }
+
+/* ---- Bottom-left live scorebug (during gameplay) ---------- */
+#tour-bug {
+  position: fixed;
+  left: calc(var(--sal) + 8px);
+  bottom: calc(var(--sab) + 8px);
+  z-index: 18;
+  width: 210px;
+  background: linear-gradient(180deg, rgba(14,44,28,0.94), rgba(10,36,23,0.94));
+  border: 1px solid var(--tour-line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2, 0 4px 16px rgba(0,0,0,0.4));
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+#tour-bug.hidden { display: none; }
+.tbug-head {
+  padding: 5px 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--brass-400);
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid var(--tour-line);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tbug-row {
+  display: flex; align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.tbug-pos { width: 18px; color: var(--w-45); font-size: 11px; text-align: right; }
+.tbug-name {
+  flex: 1;
+  font-family: var(--font-display);
+  font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tbug-thru { width: 20px; text-align: right; color: var(--text-faint); font-size: 10.5px; }
+.tbug-total { width: 30px; text-align: right; font-weight: 700; }
+.tbug-row.tbug-me { background: rgba(207,168,94,0.16); }
+.tbug-row.tbug-me .tbug-name { color: var(--brass-400); }

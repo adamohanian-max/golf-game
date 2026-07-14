@@ -945,6 +945,12 @@ let activeTournament = null;     // full tournament row from Supabase
 let activeTournamentRound = null; // 1-4, which round the player is currently playing
 let tourEventName = null;         // name of the real PGA Tour event being played (Live PGA Tour)
 let _tourCourseId = null;         // baked course id of this week's tour venue — plays free (see isTourFeatured)
+// Tour Events (spectator leaderboard + compete-against-the-pros; see "Tour Events").
+let tourPlayMode = false;         // true while playing a round that counts toward the followed tour event
+let tourFollowing = false;        // true when the bottom-left live scorebug should show during gameplay
+let _tourLbCache = null;          // { at, data } short-TTL cache of the live leaderboard
+let _tourPoll = null;             // setInterval handle for live leaderboard polling
+let _tourExpanded = false;        // full-screen board: show full field vs leaders only
 // Match state — live head-to-head game with friends (see "Multiplayer matches").
 let activeMatch = null;      // full matches row from Supabase (null when not in a match)
 let matchHoleCount = 18;     // holes this match plays (9 or 18), set at Begin
@@ -5669,15 +5675,19 @@ function drawAttribution() {
   ctx.save();
   ctx.font = "10px system-ui, -apple-system, sans-serif";
   ctx.textBaseline = "bottom";
-  ctx.textAlign = "left";
   const pad = 6;
+  // The Tour Events scorebug owns the bottom-left corner during a tour round —
+  // move the credit to the bottom-right so they don't overlap.
+  const bugUp = tourPlayMode && mode === "course";
+  ctx.textAlign = bugUp ? "right" : "left";
+  const x = bugUp ? window.innerWidth - pad : pad;
   let y = window.innerHeight - pad;
   for (let i = lines.length - 1; i >= 0; i--) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(0,0,0,0.45)";
-    ctx.strokeText(lines[i], pad, y);
+    ctx.strokeText(lines[i], x, y);
     ctx.fillStyle = "rgba(255,255,255,0.82)";
-    ctx.fillText(lines[i], pad, y);
+    ctx.fillText(lines[i], x, y);
     y -= 13;
   }
   ctx.restore();
@@ -5845,6 +5855,7 @@ function showResult() {
   round.score += d;
   round.holesPlayed += 1;
   updateScorecard();
+  if (tourPlayMode) updateTourBug();   // refresh the live scorebug with my new cumulative
   // Live match: push my score/progress + per-hole scores so the opponent's
   // standings (and match-play status) update.
   if (matchLive()) {
@@ -6218,6 +6229,7 @@ function showRoundSummary(midRound = false) {
     if (dailyMode) finishDaily(totStrk);  // streak + share + daily board
     submitFinishedRound();                // post to regular leaderboard
     handleTournamentRoundComplete();      // post to tournament (no-op if not in tournament)
+    recordTourRound();                    // bank this round into the followed Tour Event (no-op if not one)
     // Live match: mark my round finished. The player reviews this scorecard,
     // then taps "Confirm scorecard" → openMatchResults() (the live results
     // page polls until everyone's done → final placement locks in).
@@ -7814,6 +7826,10 @@ function showMenu() {
   setSlopeMode(true);   // slope relief on by default
   closeCourseMenu();
   renderMenuChips();
+  // Leaving to the menu ends any in-progress Tour Event round + hides the scorebug.
+  tourPlayMode = false;
+  stopTourPoll();
+  updateTourBug();
 }
 
 // Home-menu chips: daily streak + today's featured (free) course.
@@ -10318,6 +10334,270 @@ async function openTourWeek() {
 
 function closeTourWeek() { document.getElementById("tour-week").classList.add("hidden"); }
 
+// =====================================================================
+//  Tour Events — live Masters-style leaderboard + compete against the pros
+//  A spectator layer (NOT a Supabase tournament): pull the current/most-recent
+//  real PGA event's whole field live from ESPN, let the player's own local score
+//  (from playing the event's course) merge into the field, and keep a TV-style
+//  scorebug pinned bottom-left during gameplay. My scores persist locally in
+//  golf.tourEvent; the pros' come live from TOUR_SCOREBOARD.
+// =====================================================================
+let _tourBoardData = null;        // last-fetched leaderboard {eventId,name,state,round,roundLabel,courseName,players}
+let _tourCourseMatch = null;      // baked COURSES entry for the event venue, or null
+
+function _parseToPar(v) {
+  if (v == null) return null;
+  if (typeof v === "number") return v;
+  const s = ("" + v).trim();
+  if (s === "E" || s === "e") return 0;
+  const n = parseInt(s, 10);
+  return isNaN(n) ? null : n;
+}
+function _parClass(n) { return n == null ? "" : n < 0 ? "tp-under" : n > 0 ? "tp-over" : "tp-even"; }
+function _parText(n) { return n == null ? "—" : formatToPar(n); }
+
+// Featured event pick (mirrors fetchTourNow) but over the raw scoreboard so we
+// keep each event's full competitors array. Short 45s cache for live freshness.
+async function fetchTourLeaderboard() {
+  if (_tourLbCache && Date.now() - _tourLbCache.at < 45000) return _tourLbCache.data;
+  const sb = await fetchJSONRetry(TOUR_SCOREBOARD);
+  if (!sb || !(sb.events || []).length) return null;
+  const st = (e) => (((e.status || {}).type) || {}).state || "pre";
+  const evs = sb.events;
+  const ev = evs.find((e) => st(e) === "in")
+    || evs.filter((e) => st(e) === "pre").sort((a, b) => new Date(a.date) - new Date(b.date))[0]
+    || evs.filter((e) => st(e) === "post").sort((a, b) => new Date(b.date) - new Date(a.date))[0]
+    || evs[0];
+  const state = st(ev);
+  const comp = (ev.competitions || [])[0] || {};
+  const round = ((ev.status || {}).period) || (comp.status || {}).period || 1;
+  const roundLabel = state === "post" ? "Final"
+    : state === "pre" ? "Starts soon"
+    : "Round " + round + " · In Progress";
+
+  const players = (comp.competitors || []).map((c) => {
+    const a = c.athlete || {};
+    const ls = c.linescores || [];
+    const cs = c.status || {};
+    const total = _parseToPar(c.score);
+    const completed = !!((cs.type || {}).completed) || state === "post";
+    const thru = cs.thru != null ? cs.thru : (completed ? "F" : (ls.length ? "F" : "—"));
+    const today = ls.length ? _parseToPar(ls[ls.length - 1].displayValue) : null;
+    return {
+      name: a.displayName || a.shortName || "—",
+      flag: (a.flag || {}).href || null,
+      total,
+      rounds: ls.map((l) => ({ n: l.period, strokes: l.value, toPar: _parseToPar(l.displayValue) })),
+      today, thru, pos: c.order,
+    };
+  }).filter((p) => p.total != null || p.rounds.length);
+  players.sort((a, b) => (a.total == null ? 999 : a.total) - (b.total == null ? 999 : b.total));
+
+  const data = { eventId: ev.id, name: ev.name || ev.shortName, state, round, roundLabel, courseName: null, players };
+  _tourLbCache = { at: Date.now(), data };
+  return data;
+}
+
+// --- My local standing (persisted, merges into the real field) ---
+function getTourEvent() { return lsGet("golf.tourEvent", null); }
+function setTourEvent(o) { lsSet("golf.tourEvent", o); }
+function ensureTourEvent(eventId, name) {
+  let te = getTourEvent();
+  if (!te || te.eventId !== eventId) { te = { eventId, name, rounds: [] }; setTourEvent(te); }
+  return te;
+}
+// My row for the merged board: cumulative to-par across completed rounds + the
+// live round in progress. Self-paced — my THRU shows my own progress.
+function tourMyStanding() {
+  const te = getTourEvent();
+  if (!te) return null;
+  const inRound = tourPlayMode && mode === "course";
+  // Don't appear on the board until there's a score to show (a completed round
+  // or a live one) — an empty "E" row before teeing off reads as a bug.
+  if (!(te.rounds || []).length && !inRound) return null;
+  const done = (te.rounds || []).reduce((s, x) => s + x, 0);
+  const total = done + (inRound ? (round.score || 0) : 0);
+  const roundsPlayed = (te.rounds || []).length + (inRound ? 1 : 0);
+  const thru = inRound ? (round.holesPlayed || 0) : (roundsPlayed ? "F" : "—");
+  const today = inRound ? (round.score || 0)
+    : ((te.rounds || []).length ? te.rounds[te.rounds.length - 1] : null);
+  return {
+    name: getPlayerName() || "You", flag: null, total,
+    rounds: (te.rounds || []).map((tp, i) => ({ n: i + 1, toPar: tp })),
+    today, thru, isMe: true, roundN: roundsPlayed,
+  };
+}
+function mergeMeIntoField(players, eventId) {
+  const te = getTourEvent();
+  const me = tourMyStanding();
+  if (!me || !te || te.eventId !== eventId) return players.slice();
+  const out = players.slice();
+  out.push(me);
+  out.sort((a, b) => (a.total == null ? 999 : a.total) - (b.total == null ? 999 : b.total));
+  return out;
+}
+// Called at round end (real finish only): bank this round's to-par into the
+// followed event, cap 4 rounds. Consumes tourPlayMode (re-enter via Tour Events).
+function recordTourRound() {
+  if (!tourPlayMode) return;
+  const te = getTourEvent();
+  tourPlayMode = false;
+  if (!te || (te.rounds || []).length >= 4) return;
+  te.rounds = te.rounds || [];
+  te.rounds.push(round.score || 0);
+  setTourEvent(te);
+}
+
+// --- Full-screen board (Masters-app style) ---
+async function openTourEvents() {
+  const ov = document.getElementById("tour-board");
+  ov.classList.remove("hidden");
+  mode = "tour";
+  elMenu.classList.add("hidden");
+  document.getElementById("play-menu") && document.getElementById("play-menu").classList.add("hidden");
+  document.getElementById("tb-event").textContent = "Tour Events";
+  document.getElementById("tb-status").textContent = "Loading live scores…";
+  document.getElementById("tb-list").innerHTML = "";
+  document.getElementById("tb-course").textContent = "";
+
+  const data = await fetchTourLeaderboard();
+  if (ov.classList.contains("hidden")) return;   // closed while loading
+  if (!data) { document.getElementById("tb-status").textContent = "Couldn't reach the tour feed — try again."; return; }
+
+  // Resolve the venue → baked course (for "Tee off").
+  const course = await fetchTourCourse(data.eventId);
+  data.courseName = course ? course.name : null;
+  _tourCourseMatch = course ? matchTourCourse(course.name) : null;
+  _tourBoardData = data;
+  ensureTourEvent(data.eventId, data.name);
+  tourFollowing = true; lsSet("golf.tourFollow", true);
+
+  renderTourBoard(data);
+  ensureTourPoll();
+}
+
+function _tourRowHTML(p, rank) {
+  const flag = p.flag ? '<img class="tb-flag" src="' + p.flag + '" alt="">' : '<span class="tb-flag"></span>';
+  const nm = escapeHTML(p.name);
+  const today = p.today == null ? "—" : '<span class="' + _parClass(p.today) + '">' + _parText(p.today) + "</span>";
+  const total = '<span class="' + _parClass(p.total) + '">' + _parText(p.total) + "</span>";
+  return '<tr class="' + (p.isMe ? "tb-me" : "") + '">' +
+    '<td class="tb-pos">' + rank + "</td>" +
+    '<td class="tb-name">' + flag + nm + "</td>" +
+    '<td class="tb-today">' + today + "</td>" +
+    '<td class="tb-thru">' + (p.thru == null ? "—" : p.thru) + "</td>" +
+    '<td class="tb-total">' + total + "</td></tr>";
+}
+
+function renderTourBoard(data) {
+  document.getElementById("tb-event").textContent = data.name;
+  document.getElementById("tb-status").textContent = data.roundLabel;
+  document.getElementById("tb-course").textContent = data.courseName || "";
+
+  const merged = mergeMeIntoField(data.players, data.eventId);
+  const LEAD = 15;
+  let shown = _tourExpanded ? merged : merged.slice(0, LEAD);
+  const meIdx = merged.findIndex((p) => p.isMe);
+  let appendedMe = false;
+  if (!_tourExpanded && meIdx >= LEAD) { shown = shown.concat([merged[meIdx]]); appendedMe = true; }
+
+  const list = document.getElementById("tb-list");
+  list.innerHTML = shown.map((p, i) => {
+    const rank = (appendedMe && i === shown.length - 1) ? meIdx + 1 : i + 1;
+    return _tourRowHTML(p, rank);
+  }).join("");
+
+  const exp = document.getElementById("tb-expand");
+  if (exp) {
+    exp.classList.toggle("hidden", merged.length <= LEAD);
+    exp.textContent = _tourExpanded ? "Show leaders" : "Show full field (" + merged.length + ")";
+  }
+  const tee = document.getElementById("tb-tee");
+  if (tee) {
+    if (_tourCourseMatch) {
+      tee.classList.remove("hidden");
+      const rn = ((getTourEvent() || {}).rounds || []).length + 1;
+      tee.textContent = rn > 4 ? "Event complete" : "Tee off Round " + rn;
+      tee.disabled = rn > 4;
+    } else {
+      tee.classList.add("hidden");
+    }
+  }
+}
+
+function hideTourBoard() { document.getElementById("tour-board").classList.add("hidden"); }
+function closeTourEvents() {
+  hideTourBoard();
+  stopTourPoll();
+  if (mode === "tour") showMenu();
+}
+
+function teeOffTourRound() {
+  const data = _tourBoardData;
+  if (!data || !_tourCourseMatch) return;
+  if ((((getTourEvent() || {}).rounds) || []).length >= 4) return;
+  hideTourBoard();
+  selectedCourseId = _tourCourseMatch.id;
+  _tourCourseId = _tourCourseMatch.id;   // free taste — event venue plays free
+  tourPlayMode = true; tourFollowing = true; lsSet("golf.tourFollow", true);
+  ensureTourEvent(data.eventId, data.name);
+  startCourse();
+  ensureTourPoll();
+  updateTourBug();
+}
+
+// --- Live polling (only refetches while an event is actually in progress) ---
+function ensureTourPoll() {
+  if (_tourPoll) return;
+  _tourPoll = setInterval(async () => {
+    if (!_tourBoardData || _tourBoardData.state !== "in") return;
+    const data = await fetchTourLeaderboard();
+    if (!data) return;
+    data.courseName = _tourBoardData.courseName;
+    _tourBoardData = data;
+    if (!document.getElementById("tour-board").classList.contains("hidden")) renderTourBoard(data);
+    updateTourBug();
+  }, 60000);
+}
+function stopTourPoll() { if (_tourPoll) { clearInterval(_tourPoll); _tourPoll = null; } }
+
+// --- Persistent bottom-left scorebug (TV lower-third) ---
+function _bugRowHTML(rank, p) {
+  const nm = escapeHTML(p.name);
+  const total = '<span class="' + _parClass(p.total) + '">' + _parText(p.total) + "</span>";
+  return '<div class="tbug-row ' + (p.isMe ? "tbug-me" : "") + '">' +
+    '<span class="tbug-pos">' + rank + "</span>" +
+    '<span class="tbug-name">' + nm + "</span>" +
+    '<span class="tbug-thru">' + (p.thru == null ? "" : p.thru) + "</span>" +
+    '<span class="tbug-total">' + total + "</span></div>";
+}
+function updateTourBug() {
+  const bug = document.getElementById("tour-bug");
+  if (!bug) return;
+  const show = tourPlayMode && mode === "course" && _tourBoardData;
+  bug.classList.toggle("hidden", !show);
+  if (!show) return;
+  const data = _tourBoardData;
+  const merged = mergeMeIntoField(data.players, data.eventId);
+  const meIdx = merged.findIndex((p) => p.isMe);
+  const rows = [];
+  for (let i = 0; i < Math.min(3, merged.length); i++) rows.push([i + 1, merged[i]]);
+  if (meIdx >= 3) rows.push([meIdx + 1, merged[meIdx]]);
+  bug.querySelector(".tbug-head").textContent = data.name + " · " + data.roundLabel;
+  bug.querySelector(".tbug-list").innerHTML = rows.map(([r, p]) => _bugRowHTML(r, p)).join("");
+}
+
+(function wireTourEvents() {
+  const close = document.getElementById("tb-close");
+  if (close) close.addEventListener("click", closeTourEvents);
+  const exp = document.getElementById("tb-expand");
+  if (exp) exp.addEventListener("click", () => { _tourExpanded = !_tourExpanded; if (_tourBoardData) renderTourBoard(_tourBoardData); });
+  const tee = document.getElementById("tb-tee");
+  if (tee) tee.addEventListener("click", teeOffTourRound);
+  const bug = document.getElementById("tour-bug");
+  if (bug) bug.addEventListener("click", () => { openTourEvents(); });
+})();
+
 // --- Wire-up ---
 (function wireTournament() {
   const ot = document.getElementById("open-tournaments");
@@ -10580,6 +10860,8 @@ function closePlayMenu() {
   if (bots) bots.addEventListener("click", () => { closePlayMenu(); ensureNameThen(openBotSelect); });
   const solo = document.getElementById("pm-solo");
   if (solo) solo.addEventListener("click", () => { closePlayMenu(); showCourseSelect(); });
+  const tour = document.getElementById("pm-tour");
+  if (tour) tour.addEventListener("click", () => { closePlayMenu(); openTourEvents(); });
   const back = document.getElementById("pm-back");
   if (back) back.addEventListener("click", () => { closePlayMenu(); showMenu(); });
 })();

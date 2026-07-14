@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=76">
   <link rel="stylesheet" href="css/tournament.css?v=57">
+  <link rel="stylesheet" href="css/tour.css?v=1">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -465,6 +466,41 @@
     </div>
   </div>
 
+  <!-- Tour Events: full-screen Masters-style live leaderboard of the current
+       real PGA event. Player's own local score merges into the field. -->
+  <div id="tour-board" class="hidden">
+    <div class="tb-box">
+      <div class="tb-header">
+        <div class="tb-title">
+          <div id="tb-event" class="tb-event">Tour Events</div>
+          <div id="tb-status" class="tb-round"></div>
+          <div id="tb-course" class="tb-coursename"></div>
+        </div>
+        <button id="tb-close" class="tb-x" aria-label="Close">✕</button>
+      </div>
+      <div class="tb-table-wrap">
+        <table class="tb-table">
+          <thead><tr>
+            <th class="tb-pos">POS</th><th class="tb-name">PLAYER</th>
+            <th class="tb-today">TODAY</th><th class="tb-thru">THRU</th><th class="tb-total">TOTAL</th>
+          </tr></thead>
+          <tbody id="tb-list"></tbody>
+        </table>
+      </div>
+      <div class="tb-actions">
+        <button id="tb-expand" class="tb-btn-ghost hidden">Show full field</button>
+        <button id="tb-tee" class="tb-btn-tee hidden">Tee off</button>
+      </div>
+      <p class="tb-credit">Live scoring via ESPN · not affiliated with the PGA Tour or Augusta National</p>
+    </div>
+  </div>
+
+  <!-- Persistent bottom-left live scorebug during gameplay (TV lower-third). -->
+  <div id="tour-bug" class="hidden">
+    <div class="tbug-head"></div>
+    <div class="tbug-list"></div>
+  </div>
+
   <div id="tournament-lobby" class="hidden">
     <div class="lb-box">
       <h2><span class="ic ic-flag-checkered"></span>Tournaments</h2>
@@ -616,6 +652,10 @@
           <span class="pm-label">Solo round</span>
           <span class="pm-sub">Play any course on your own</span>
         </button>
+        <button class="pm-item" id="pm-tour">
+          <span class="pm-label">Tour Events</span>
+          <span class="pm-sub">Follow the live PGA event — and play your way up the board</span>
+        </button>
       </div>
       <div class="ne-actions">
         <button id="pm-back" class="menu-btn secondary">Back</button>
@@ -715,6 +755,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=20"></script>
-  <script defer src="game.js?v=228"></script>
+  <script defer src="game.js?v=229"></script>
 </body>
 </html>
