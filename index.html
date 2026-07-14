@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=76">
   <link rel="stylesheet" href="css/tournament.css?v=57">
-  <link rel="stylesheet" href="css/tour.css?v=1">
+  <link rel="stylesheet" href="css/tour.css?v=2">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -282,6 +282,10 @@
       </div>
       <div id="re-tournament-row" class="re-trn-row hidden">
         <button id="re-tournament" class="menu-btn"><span class="ic ic-trophy"></span>Tournament</button>
+      </div>
+      <div id="re-tour-row" class="re-trn-row hidden">
+        <div id="re-tour-note" class="re-tour-note"></div>
+        <button id="re-tour-btn" class="menu-btn"><span class="ic ic-flag-checkered"></span>Next round</button>
       </div>
       <div class="re-actions">
         <button id="re-home" class="menu-btn secondary">Home</button>
@@ -755,6 +759,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=20"></script>
-  <script defer src="game.js?v=231"></script>
+  <script defer src="game.js?v=232"></script>
 </body>
 </html>

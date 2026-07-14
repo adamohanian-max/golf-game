@@ -195,3 +195,8 @@
 .tbug-total { width: 30px; text-align: right; font-weight: 700; }
 .tbug-row.tbug-me { background: rgba(207,168,94,0.16); }
 .tbug-row.tbug-me .tbug-name { color: var(--brass-400); }
+
+/* ---- Round-end "next round / cut / results" note ---------- */
+.re-tour-note { text-align: center; font-size: 13px; margin-bottom: 8px; color: var(--text-muted); }
+.re-tour-note.made   { color: var(--tp-over); font-weight: 700; }
+.re-tour-note.missed { color: var(--status-under); font-weight: 700; }

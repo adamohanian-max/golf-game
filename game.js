@@ -6198,6 +6198,7 @@ function showRoundSummary(midRound = false) {
   buildRoundScorecard();
   buildRoundStats();
   document.getElementById("re-tournament-row").classList.add("hidden");
+  document.getElementById("re-tour-row").classList.add("hidden");
   document.getElementById("round-end").classList.remove("hidden");
   if (!midRound) {
     // The booking-conversion funnel's top-of-funnel event (PRODUCT_STRATEGY.md §8).
@@ -6228,7 +6229,7 @@ function showRoundSummary(midRound = false) {
     if (dailyMode) finishDaily(totStrk);  // streak + share + daily board
     submitFinishedRound();                // post to regular leaderboard
     handleTournamentRoundComplete();      // post to tournament (no-op if not in tournament)
-    recordTourRound();                    // bank this round into the followed Tour Event (no-op if not one)
+    setupTourRoundEnd(recordTourRound()); // bank the tour round + show next-round / cut / results CTA
     // Live match: mark my round finished. The player reviews this scorecard,
     // then taps "Confirm scorecard" → openMatchResults() (the live results
     // page polls until everyone's done → final placement locks in).
@@ -10463,13 +10464,68 @@ function mergeMeIntoField(players, eventId) {
 // Called at round end (real finish only): bank this round's to-par into the
 // followed event, cap 4 rounds. Consumes tourPlayMode (re-enter via Tour Events).
 function recordTourRound() {
-  if (!tourPlayMode) return;
+  if (!tourPlayMode) return 0;
   const te = getTourEvent();
   tourPlayMode = false;
-  if (!te || (te.rounds || []).length >= 4) return;
+  if (!te || (te.rounds || []).length >= 4) return 0;
   te.rounds = te.rounds || [];
   te.rounds.push(round.score || 0);
   setTourEvent(te);
+  return te.rounds.length;   // round number just completed (1..4)
+}
+
+// PGA-style cut after R2: the field's through-R2 total at position 65 (+ ties).
+// Null if the field is too small or no board data. Lower is better.
+function tourCutLine() {
+  const d = _tourBoardData;
+  if (!d) return null;
+  const through2 = projectField(d.players, 2).filter((p) => p.total != null);
+  const CUT_POS = 65;   // PGA Tour: top 65 and ties
+  if (through2.length < 20) return null;
+  if (through2.length <= CUT_POS) return through2[through2.length - 1].total;
+  return through2[CUT_POS - 1].total;
+}
+// Did I make the cut? Only meaningful once 2 rounds are banked; before that,
+// not blocked. My through-R2 total must be at or better than the cut line.
+function tourMadeCut() {
+  const te = getTourEvent();
+  const r = (te && te.rounds) || [];
+  if (r.length < 2) return true;
+  const line = tourCutLine();
+  if (line == null) return true;
+  return (r[0] + r[1]) <= line;
+}
+
+// Round-end CTA for a tour round: Next round (R1–R3), See results (R4), or the
+// cut verdict after R2 (made → Play R3; missed → See results, event over).
+function setupTourRoundEnd(n) {
+  const row = document.getElementById("re-tour-row");
+  const btn = document.getElementById("re-tour-btn");
+  const note = document.getElementById("re-tour-note");
+  if (!row || !btn || !note) return;
+  if (!n) { row.classList.add("hidden"); return; }
+  row.classList.remove("hidden");
+  note.textContent = ""; note.className = "re-tour-note";
+
+  const hide = () => document.getElementById("round-end").classList.add("hidden");
+  const goResults = () => { hide(); openTourEvents(); };
+  const goNext = () => { hide(); teeOffTourRound(); };
+  const line = tourCutLine();
+  const lineTxt = line != null ? " (cut " + formatToPar(line) + ")" : "";
+
+  if (n >= 4) {
+    btn.innerHTML = '<span class="ic ic-trophy"></span>See results';
+    btn.onclick = goResults;
+  } else if (n === 2 && !tourMadeCut()) {
+    note.textContent = "Missed the cut" + lineTxt + " — your event is done.";
+    note.className = "re-tour-note missed";
+    btn.innerHTML = '<span class="ic ic-trophy"></span>See results';
+    btn.onclick = goResults;
+  } else {
+    if (n === 2) { note.textContent = "Made the cut" + lineTxt; note.className = "re-tour-note made"; }
+    btn.innerHTML = '<span class="ic ic-flag-checkered"></span>Play Round ' + (n + 1);
+    btn.onclick = goNext;
+  }
 }
 
 // --- Full-screen board (Masters-app style) ---
@@ -10516,13 +10572,18 @@ function _tourRowHTML(p, rank) {
 
 function renderTourBoard(data) {
   const n = tourDisplayRound();
+  const cut = n >= 2 ? tourCutLine() : null;
   document.getElementById("tb-event").textContent = data.name;
   document.getElementById("tb-status").textContent =
     (n === 1 ? "Round 1" : "Rounds 1–" + n + " · aggregate") +
+    (cut != null ? " · Cut " + formatToPar(cut) : "") +
     (data.state === "in" && data.round === n ? " · Live" : "");
   document.getElementById("tb-course").textContent = data.courseName || "";
 
-  const merged = mergeMeIntoField(projectField(data.players, n), data.eventId);
+  // From R3 on, only players who made the cut (reached round n) remain.
+  let field = projectField(data.players, n);
+  if (n >= 3) field = field.filter((p) => (p.rounds || []).some((r) => r.n >= n));
+  const merged = mergeMeIntoField(field, data.eventId);
   const LEAD = 15;
   let shown = _tourExpanded ? merged : merged.slice(0, LEAD);
   const meIdx = merged.findIndex((p) => p.isMe);
@@ -10545,8 +10606,9 @@ function renderTourBoard(data) {
     if (_tourCourseMatch && !tourPlayMode) {   // can't start a new round mid-round
       tee.classList.remove("hidden");
       const rn = ((getTourEvent() || {}).rounds || []).length + 1;
-      tee.textContent = rn > 4 ? "Event complete" : "Tee off Round " + rn;
-      tee.disabled = rn > 4;
+      const missedCut = rn >= 3 && !tourMadeCut();
+      tee.textContent = rn > 4 ? "Event complete" : missedCut ? "Missed the cut" : "Tee off Round " + rn;
+      tee.disabled = rn > 4 || missedCut;
     } else {
       tee.classList.add("hidden");
     }
@@ -10566,7 +10628,9 @@ function closeTourEvents() {
 function teeOffTourRound() {
   const data = _tourBoardData;
   if (!data || !_tourCourseMatch) return;
-  if ((((getTourEvent() || {}).rounds) || []).length >= 4) return;
+  const rounds = ((getTourEvent() || {}).rounds) || [];
+  if (rounds.length >= 4) return;
+  if (rounds.length === 2 && !tourMadeCut()) return;   // missed the cut — no R3/R4
   hideTourBoard();
   selectedCourseId = _tourCourseMatch.id;
   _tourCourseId = _tourCourseMatch.id;   // free taste — event venue plays free
@@ -10610,7 +10674,9 @@ function updateTourBug() {
   if (!show) return;
   const data = _tourBoardData;
   const n = tourDisplayRound();
-  const merged = mergeMeIntoField(projectField(data.players, n), data.eventId);
+  let field = projectField(data.players, n);
+  if (n >= 3) field = field.filter((p) => (p.rounds || []).some((r) => r.n >= n));
+  const merged = mergeMeIntoField(field, data.eventId);
   const meIdx = merged.findIndex((p) => p.isMe);
   const rows = [];
   for (let i = 0; i < Math.min(3, merged.length); i++) rows.push([i + 1, merged[i]]);
