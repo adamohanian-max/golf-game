@@ -595,8 +595,13 @@ function buildWaterForCourse(course) {
       waterNormals,
       sunDirection: sunDir.clone(),
       sunColor: 0xfff2da, // matches the warm sun light color (buildScene) so the specular glint reads as the same sun
-      waterColor: 0x2f6b74, // lighter than before — was reading as a flat dark blob; needs headroom to show the sky/sun glint
-      distortionScale: 3.4, // more visible ripple — was too calm to read as "wet" from a distance
+      // Looking DOWN at the pond (broadcast cam) the Fresnel reflection is weak,
+      // so the water reads almost entirely as this base color — 0x2f6b74 was too
+      // dark and rendered near-black. Lifted to a brighter lit blue so the pond
+      // reads as sunlit water (like Apple's) even top-down, while grazing angles
+      // still pick up the sky/sun glint on top.
+      waterColor: 0x5aa0b4,
+      distortionScale: 3.0, // slightly calmer than 3.4 — less busy sparkle on the now-lighter surface
       fog: !!scene.fog,
     });
     water.position.y = (sumZ / poly.length) * m;
