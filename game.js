@@ -1121,6 +1121,11 @@ function surfaceAt(x, y) {
   if (inAnyPoly(x, y, s.bunker)) return "bunker"; // sand
   if (inAnyPoly(x, y, s.green)) return "green";
   if (inAnyPoly(x, y, s.tee)) return "fairway";   // tee boxes play like fairway
+  // Teeing ground is always clean lie: back tees can be unmapped in OSM
+  // (hole tee set from imagery, or the bake's card-yardage stretch) and the
+  // surface mask often calls those tree-lined chutes "woods" — a -50% power
+  // lie penalty on the tee shot. Small radius so it never leaks into play.
+  if (HOLE.teePos && dist(x, y, HOLE.teePos.x, HOLE.teePos.y) < 2.5) return "fairway";
   // The mask decides OB vs playable first: its bake envelope already unions the
   // boundary polygon with the hole corridors + OSM play polygons and rescues
   // dune/waste sand, so it knows parcel lines cut through real play areas
@@ -6449,7 +6454,11 @@ const FALLBACK_HOLE = {
 };
 
 async function loadCourse(id) {
-  const res = await fetch("courses/" + id + ".json");
+  // no-cache (revalidate), matching the manifest fetch: WKWebView otherwise
+  // serves a stale course JSON indefinitely after a re-bake — tee/pin/DEM
+  // edits silently never reach the app (same failure mode as the game.js
+  // ?v= story, but for data).
+  const res = await fetch("courses/" + id + ".json", { cache: "no-cache" });
   if (!res.ok) throw new Error("HTTP " + res.status);
   course = await res.json();
   YARDS_PER_UNIT = course.yardsPerUnit || YARDS_PER_UNIT;
