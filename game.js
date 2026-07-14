@@ -10684,6 +10684,17 @@ function updateTourBug() {
   bug.querySelector(".tbug-head").textContent =
     data.name + " · " + (n === 1 ? "Round 1" : "Rds 1–" + n);
   bug.querySelector(".tbug-list").innerHTML = rows.map(([r, p]) => _bugRowHTML(r, p)).join("");
+
+  const cutEl = bug.querySelector(".tbug-cut");
+  const cut = n >= 2 ? tourCutLine() : null;
+  if (cut != null) {
+    const made = tourMadeCut();
+    cutEl.innerHTML = 'Cut <b>' + formatToPar(cut) + '</b>' +
+      '<span class="' + (made ? "tbug-made" : "tbug-missed") + '">' + (made ? "✓ made" : "✗ missed") + "</span>";
+    cutEl.classList.remove("hidden");
+  } else {
+    cutEl.classList.add("hidden");
+  }
 }
 
 (function wireTourEvents() {

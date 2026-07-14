@@ -195,6 +195,34 @@
 .tbug-total { width: 30px; text-align: right; font-weight: 700; }
 .tbug-row.tbug-me { background: rgba(207,168,94,0.16); }
 .tbug-row.tbug-me .tbug-name { color: var(--brass-400); }
+.tbug-cut {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 8px;
+  font-size: 10px; letter-spacing: 0.5px;
+  color: var(--w-55);
+  border-top: 1px solid var(--tour-line);
+  background: rgba(0,0,0,0.2);
+}
+.tbug-cut.hidden { display: none; }
+.tbug-cut b { color: var(--w-85); font-weight: 700; }
+.tbug-cut .tbug-made   { color: var(--tp-over); font-weight: 700; }
+.tbug-cut .tbug-missed { color: var(--status-under); font-weight: 700; }
+
+/* Phones: thinner + hugging the left edge. */
+@media (max-width: 640px) {
+  #tour-bug {
+    left: calc(var(--sal) + 2px);
+    bottom: calc(var(--sab) + 6px);
+    width: 156px;
+    border-radius: var(--r-sm, 10px);
+  }
+  .tbug-head { padding: 4px 6px; font-size: 8.5px; letter-spacing: 0.3px; }
+  .tbug-row { padding: 3px 6px; gap: 4px; font-size: 11px; }
+  .tbug-pos { width: 14px; font-size: 9.5px; }
+  .tbug-thru { width: 16px; font-size: 9px; }
+  .tbug-total { width: 26px; }
+  .tbug-cut { padding: 3px 6px; font-size: 8.5px; }
+}
 
 /* ---- Round-end "next round / cut / results" note ---------- */
 .re-tour-note { text-align: center; font-size: 13px; margin-bottom: 8px; color: var(--text-muted); }
