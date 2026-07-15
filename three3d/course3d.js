@@ -693,41 +693,67 @@ function buildWaterForCourse(course) {
 // Reuses game.js's OWN tree placement (GolfBridge.getTrees -> the exact same
 // cached list buildTrees() gives the 2D renderer) rather than re-deriving
 // WOODS-cell sampling here — one source of truth for where trees are.
-const TREE_MODEL_FILES = [
-  "three3d/models/trees/tree_oak.glb",
-  "three3d/models/trees/tree_detailed.glb",
-  "three3d/models/trees/tree_pine_tall.glb",
-  "three3d/models/trees/tree_pine_round.glb",
-];
+// Procedural "bumpy crown" trees — the Apple-Maps-tree look (a noise-displaced
+// icosphere canopy + trunk), replacing the Kenney low-poly CONES. A stand of
+// cones reads as cones no matter how you light it — the hard faceted silhouette
+// is the problem; a lumpy rounded crown reads as real canopy. Built in code, so
+// it needs no GLB/asset and works within the vendored/offline three. Keeps the
+// exact {parts,height} shape the old GLB loader returned, so buildTreesForCourse
+// is unchanged. (Photoreal octahedral impostors baked from a real tree are the
+// next tier up — they need a baked atlas + the impostor/InstancedMesh2 libs
+// vendored; this is the no-dependency Apple-mesh-era win.)
 let treeSpeciesPromise = null;
+function _lumpHash(x, y, z) {
+  let s = (Math.imul((x * 127) | 0, 2654435761) ^ Math.imul((y * 311) | 0, 40503) ^
+           Math.imul((z * 521) | 0, 668265263)) >>> 0;
+  s = Math.imul(s ^ (s >>> 15), 2246822519) >>> 0;
+  return ((s >>> 8) & 0xffff) / 0xffff;
+}
+function _makeCrown(radius, tall, lump) {
+  const geo = new THREE.IcosahedronGeometry(radius, 2);
+  const pos = geo.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const k = 1 - lump + 2 * lump * _lumpHash(v.x * 3, v.y * 3, v.z * 3); // per-vertex radial lumps -> irregular silhouette
+    v.multiplyScalar(k);
+    v.y *= tall;                                                          // stretch (evergreen vs round)
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, span = Math.max(0.001, bb.max.y - bb.min.y);
+  const bot = new THREE.Color(0x2f5a29), top = new THREE.Color(0x74b04e), col = [];
+  for (let i = 0; i < pos.count; i++) {
+    const t = (pos.getY(i) - bb.min.y) / span;                           // dark underside -> lit top (2-tone, the other half of the Apple read)
+    const c = bot.clone().lerp(top, 0.15 + 0.85 * t);
+    col.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  return geo;
+}
 function loadTreeSpecies() {
   if (treeSpeciesPromise) return treeSpeciesPromise;
-  const loader = new GLTFLoader();
-  treeSpeciesPromise = Promise.all(TREE_MODEL_FILES.map((url) => new Promise((resolve, reject) => {
-    loader.load(url, (gltf) => {
-      const parts = [];
-      gltf.scene.traverse((o) => {
-        if (!o.isMesh) return;
-        // Kenney's flat-color low-poly palette (bright teal-green foliage) reads
-        // as a cartoon cutout against the photoreal aerial terrain — pull it
-        // toward duller, more natural tones. Leaf vs. bark told apart by which
-        // channel dominates (green vs. red/brown); works without per-species
-        // material names.
-        const c = o.material.color;
-        if (c) {
-          if (c.g >= c.r && c.g >= c.b) c.lerp(new THREE.Color(0x355e2a), 0.85); // foliage -> natural forest green
-          else c.lerp(new THREE.Color(0x53422c), 0.7);                          // bark -> muted brown
-          o.material.roughness = 1;
-          o.material.metalness = 0;
-          o.material.envMapIntensity = ENV_MAP_INTENSITY;
-        }
-        parts.push({ geometry: o.geometry, material: o.material });
-      });
-      const box = new THREE.Box3().setFromObject(gltf.scene);
-      const height = Math.max(0.01, box.max.y - box.min.y);
-      resolve({ parts, height });
-    }, undefined, reject);
-  })));
+  const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+  crownMat.envMapIntensity = ENV_MAP_INTENSITY;
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a4630, roughness: 1, metalness: 0 });
+  trunkMat.envMapIntensity = ENV_MAP_INTENSITY;
+  // [crownRadius, verticalStretch, lumpAmount, trunkHeight, trunkRadius] (local
+  // units — buildTreesForCourse rescales each instance to its real height).
+  const arch = [
+    [3.1, 1.05, 0.16, 2.2, 0.42], // round deciduous
+    [2.5, 1.75, 0.13, 1.7, 0.36], // tall evergreen-ish blob
+    [3.7, 0.82, 0.18, 1.9, 0.46], // broad / spreading
+    [2.3, 1.02, 0.20, 1.5, 0.34], // small/young (also the bush mesh, species[3])
+  ];
+  const species = arch.map(([r, tall, lump, trunkH, trunkR]) => {
+    const crown = _makeCrown(r, tall, lump);
+    crown.translate(0, trunkH + r * tall * 0.6, 0);   // sit crown on the trunk (slight overlap)
+    const trunk = new THREE.CylinderGeometry(trunkR * 0.7, trunkR, trunkH, 6, 1);
+    trunk.translate(0, trunkH / 2, 0);                // base at y=0
+    const height = trunkH + r * tall * 1.6;           // total Y extent (drives per-instance scale)
+    return { parts: [{ geometry: crown, material: crownMat }, { geometry: trunk, material: trunkMat }], height };
+  });
+  treeSpeciesPromise = Promise.resolve(species);
   return treeSpeciesPromise;
 }
 
