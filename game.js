@@ -10929,6 +10929,13 @@ async function patchMyMatchRow(fields) {
         const rows = await res.json().catch(() => []);
         if (rows && rows.length) { if (rows[0].id) _myMatchRowId = rows[0].id; return; }
         _myMatchRowId = null;   // matched nothing → cached key was wrong; re-resolve next attempt
+      } else {
+        // Surface the real rejection instead of silently zeroing scores. A schema
+        // drift (unknown column) 400s here — this makes it obvious in the console
+        // ("column match_players.<x> does not exist") instead of a mystery 0.
+        const err = await res.text().catch(() => "");
+        console.warn("match row PATCH rejected (" + res.status + "): " + err.slice(0, 300));
+        if (res.status === 400) return;   // bad payload — retrying won't help
       }
     } catch (e) { /* network blip → retry */ }
     await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
@@ -12970,7 +12977,9 @@ function renderProgress() {
   }));
   const msLive = document.getElementById("ms-live");
   if (msLive) msLive.addEventListener("click", () => {
-    if (ms.dataset.format !== "match") return;   // match-play only
+    // Live works in ANY format (1v1-only, gated by the button's visibility in
+    // syncMatchLiveButton). No format gate here — a stale format!=="match" check
+    // made the visible toggle a no-op in stroke play.
     ms.dataset.live = ms.dataset.live === "1" ? "0" : "1";
     syncMatchLiveButton();
   });
