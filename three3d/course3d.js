@@ -780,6 +780,32 @@ const CANOPY_MAX_TREES = 14000;
 const CANOPY_MAX_BUSH = 6000;
 let _canopyCache = {};   // courseId -> items|null (avoid refetch on render()'s retry)
 
+// Trees must never obscure the target or the ball. Static: drop trees inside a
+// green (+margin) or on a tee box (filtered at build). Dynamic: punch a hole in
+// the canopy around the LIVE ball each frame (updateTreePunchout) — mirrors the
+// 2D renderer's canopy punch-out at ball/cup/green.
+const TREE_GREEN_MARGIN = 4.0;  // world units off a green edge kept tree-free
+const TREE_TEE_R = 7.0;         // radius around each tee kept tree-free
+const TREE_PUNCH_R = 5.5;       // radius around the live ball hidden each frame
+function _pointInPoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi + 1e-30) + xi) inside = !inside;
+  }
+  return inside;
+}
+function _dilatePoly(poly, margin) {
+  if (!poly || poly.length < 3) return null;
+  let cx = 0, cy = 0;
+  for (const p of poly) { cx += p.x; cy += p.y; }
+  cx /= poly.length; cy /= poly.length;
+  return poly.map((p) => {
+    const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1;
+    return { x: p.x + (dx / d) * margin, y: p.y + (dy / d) * margin };
+  });
+}
+
 let treesBuildInFlight = false;
 function buildTreesForCourse(courseId) {
   if (treesBuildInFlight) return; // render()'s retry calls this every frame until it lands
@@ -813,6 +839,20 @@ function buildTreesForCourse(courseId) {
       treeItems = gt.map((t) => ({ x: t.x, y: t.y, h: t.h }));
     }
 
+    // Static exclusion: never place a tree on a green (+margin) or a tee box —
+    // it would obscure the putting surface or the shot from the tee.
+    const _course = gb.getCourse();
+    const _dgreens = (((_course && _course.surfaces && _course.surfaces.green) || []))
+      .map((p) => _dilatePoly(p, TREE_GREEN_MARGIN)).filter(Boolean);
+    const _tees = (((_course && _course.holes) || [])).map((h) => h.tee).filter(Boolean);
+    const _teeR2 = TREE_TEE_R * TREE_TEE_R;
+    const _clearOfTarget = (it) => {
+      for (const g of _dgreens) if (_pointInPoly(it.x, it.y, g)) return false;
+      for (const tp of _tees) { const dx = it.x - tp.x, dy = it.y - tp.y; if (dx * dx + dy * dy < _teeR2) return false; }
+      return true;
+    };
+    treeItems = treeItems.filter(_clearOfTarget);
+
     treesBuildInFlight = false;
     for (const mesh of treeMeshes) { scene.remove(mesh); mesh.geometry.dispose(); }
     treeMeshes = [];
@@ -831,6 +871,7 @@ function buildTreesForCourse(courseId) {
       for (const part of parts) {
         const inst = new THREE.InstancedMesh(part.geometry, part.material, list.length);
         inst.castShadow = true; // a cast shadow anchors even cartoon geometry to the ground
+        const px = new Float32Array(list.length), py = new Float32Array(list.length);
         for (let i = 0; i < list.length; i++) {
           const t = list[i];
           const rnd = treeRand(t.x, t.y);
@@ -848,8 +889,10 @@ function buildTreesForCourse(courseId) {
           quat.setFromEuler(eul);
           m4.compose(pos, quat, scaleV);
           inst.setMatrixAt(i, m4);
+          px[i] = jx; py[i] = jy;
         }
         inst.instanceMatrix.needsUpdate = true;
+        _armPunchout(inst, px, py);   // enable the per-frame ball punch-out
         scene.add(inst);
         treeMeshes.push(inst);
       }
@@ -869,13 +912,16 @@ function buildTreesForCourse(courseId) {
           }
         }
       }
+      bushItems = bushItems.filter(_clearOfTarget);
       for (const part of bushSp.parts) {
         const inst = new THREE.InstancedMesh(part.geometry, part.material, bushItems.length);
         inst.castShadow = true;
+        const px = new Float32Array(bushItems.length), py = new Float32Array(bushItems.length);
         for (let i = 0; i < bushItems.length; i++) {
           const b = bushItems[i];
           const rnd = treeRand(b.x, b.y);
           const jx = b.x + (rnd() - 0.5) * 1.6, jy = b.y + (rnd() - 0.5) * 1.6;
+          px[i] = jx; py[i] = jy;
           const pos = worldToScene(jx, jy, gb.terrainZ(jx, jy));
           const hM = 1.1 + 1.6 * rnd();
           const v = hM / bushSp.height;
@@ -887,6 +933,7 @@ function buildTreesForCourse(courseId) {
           inst.setMatrixAt(i, m4);
         }
         inst.instanceMatrix.needsUpdate = true;
+        _armPunchout(inst, px, py);
         scene.add(inst);
         treeMeshes.push(inst);
       }
@@ -896,6 +943,43 @@ function buildTreesForCourse(courseId) {
     treesBuildInFlight = false; // let render()'s retry try again next frame
     console.warn("[Course3D] tree build failed:", e);
   });
+}
+
+// Stash per-instance world positions + a copy of the base matrices so
+// updateTreePunchout can hide/restore instances around the live ball.
+function _armPunchout(inst, px, py) {
+  inst.userData.px = px;
+  inst.userData.py = py;
+  inst.userData.base = new Float32Array(inst.instanceMatrix.array);
+  inst.userData.hidden = new Uint8Array(px.length);
+}
+
+// Hide any tree/bush instance within TREE_PUNCH_R of the live ball so the canopy
+// never buries it (mirrors the 2D renderer's ball punch-out). Cheap: a distance
+// scan every frame, but the GPU matrix re-upload only fires on frames where the
+// hidden SET actually changes (the ball crosses a tree's radius) — rare while
+// the ball rests. Only run at rest (see caller) so a shot in flight doesn't
+// churn the whole canopy under its ground track.
+function updateTreePunchout(bx, by) {
+  const R2 = TREE_PUNCH_R * TREE_PUNCH_R;
+  for (const mesh of treeMeshes) {
+    const px = mesh.userData.px;
+    if (!px) continue;
+    const py = mesh.userData.py, base = mesh.userData.base, hidden = mesh.userData.hidden;
+    const arr = mesh.instanceMatrix.array;
+    let changed = false;
+    for (let i = 0; i < px.length; i++) {
+      const dx = px[i] - bx, dy = py[i] - by;
+      const want = (dx * dx + dy * dy) < R2 ? 1 : 0;
+      if (want === hidden[i]) continue;
+      const o = i * 16;
+      if (want) { for (let k = 0; k < 16; k++) arr[o + k] = 0; }        // zero matrix -> not rasterized
+      else { for (let k = 0; k < 16; k++) arr[o + k] = base[o + k]; }   // restore
+      hidden[i] = want;
+      changed = true;
+    }
+    if (changed) mesh.instanceMatrix.needsUpdate = true;
+  }
 }
 
 // Bound once, ever — init() re-runs this on every context-restore, and without
@@ -1112,9 +1196,11 @@ function render() {
 
   const gb = window.GolfBridge;
   if (gb) {
-    const b = gb.getState().ball;
+    const st = gb.getState();
+    const b = st.ball;
     const bh = gb.terrainZ ? gb.terrainZ(b.x, b.y) : 0;
     worldToScene(b.x, b.y, bh + (b.z || 0), ballMesh.position);
+    if (!st.moving) updateTreePunchout(b.x, b.y);  // clear the canopy around the ball at rest
     updateShotCamera();
 
     // Trees retry: the WOODS mask decodes async, and syncFromHole (which
