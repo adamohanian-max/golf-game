@@ -10824,9 +10824,16 @@ async function fetchMatchById(id) {
   } catch (e) { return null; }
 }
 
+// The immutable primary key of MY match_players row. All my writes key off this,
+// captured at insert — because user_id (may be null at insert) and player_name
+// (display_name hydrates async) can both drift between insert and write time, and
+// a filter miss silently no-ops (PATCH → 204 over 0 rows). Row id can't drift.
+let _myMatchRowId = null;
+
 // Insert (or re-affirm, on rejoin) the current player's row in a match.
 async function addMatchPlayer(matchId) {
   if (!LB_ON() || !matchId) return false;
+  _myMatchRowId = null;   // fresh join → forget any prior match's row id
   const body = {
     match_id: matchId,
     user_id: (currentUser() || {}).id || null,
@@ -10836,11 +10843,31 @@ async function addMatchPlayer(matchId) {
     const res = await fetch(LB_URL + "/rest/v1/match_players", {
       method: "POST",
       // merge-duplicates on the (match_id, player_name) unique key → idempotent rejoin
-      headers: authHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      headers: authHeaders({ Prefer: "resolution=merge-duplicates,return=representation" }),
       body: JSON.stringify(body),
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const rows = await res.json().catch(() => []);
+    if (rows && rows[0] && rows[0].id) _myMatchRowId = rows[0].id;   // key all future writes off this
+    return true;
   } catch (e) { console.warn("addMatchPlayer failed:", e); return false; }
+}
+
+// Resolve the PostgREST filter that targets MY row: prefer the captured immutable
+// id; else find my row among the live rows via isMeEntry and cache its id; else a
+// best-effort identity filter. Returns e.g. "&id=eq.<uuid>" or null if unresolvable.
+async function myMatchRowFilter() {
+  if (_myMatchRowId) return "&id=eq." + encodeURIComponent(_myMatchRowId);
+  const rows = await fetchMatchPlayers(activeMatch.id).catch(() => null);
+  if (rows && rows.length) {
+    const mine = rows.find(isMeEntry) ||
+      rows.find((r) => sameName(r.player_name, getPlayerName()));
+    if (mine && mine.id) { _myMatchRowId = mine.id; return "&id=eq." + encodeURIComponent(mine.id); }
+  }
+  const u = currentUser();
+  if (u && u.id) return "&user_id=eq." + encodeURIComponent(u.id);
+  const nm = getPlayerName();
+  return nm ? "&player_name=eq." + encodeURIComponent(nm) : null;
 }
 
 async function fetchMatchPlayers(matchId) {
@@ -10887,26 +10914,26 @@ async function beginMatch(courseId, holeCount, settings, format, live) {
 async function patchMyMatchRow(fields) {
   if (cpuMatch) return;              // local bot match → nothing to persist
   if (!LB_ON() || !activeMatch) return;
-  // Identify my row by user_id when logged in — the stable key set at insert.
-  // player_name comes from _profile.display_name, which hydrates async, so it can
-  // differ between insert and write time; a name-only filter then matches 0 rows
-  // and every PATCH silently no-ops (PostgREST returns 204), leaving score at 0.
-  const u = currentUser();
-  const idFilter = (u && u.id)
-    ? "&user_id=eq." + encodeURIComponent(u.id)
-    : "&player_name=eq." + encodeURIComponent(getPlayerName() || "Player");
-  const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(activeMatch.id) + idFilter;
   const body = JSON.stringify(Object.assign({ cur_updated: new Date().toISOString() }, fields));
   for (let attempt = 0; attempt < 3; attempt++) {
+    const filter = await myMatchRowFilter();
+    if (!filter) { await new Promise(r => setTimeout(r, 250 * (attempt + 1))); continue; }
+    const q = "/rest/v1/match_players?match_id=eq." + encodeURIComponent(activeMatch.id) + filter;
     try {
+      // return=representation so we can SEE whether a row was actually updated —
+      // a 204 over 0 rows (stale filter) reads as success but writes nothing.
       const res = await fetch(LB_URL + q, {
-        method: "PATCH", headers: authHeaders({ Prefer: "return=minimal" }), body,
+        method: "PATCH", headers: authHeaders({ Prefer: "return=representation" }), body,
       });
-      if (res.ok) return;
+      if (res.ok) {
+        const rows = await res.json().catch(() => []);
+        if (rows && rows.length) { if (rows[0].id) _myMatchRowId = rows[0].id; return; }
+        _myMatchRowId = null;   // matched nothing → cached key was wrong; re-resolve next attempt
+      }
     } catch (e) { /* network blip → retry */ }
     await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
   }
-  console.warn("match row update failed after retries");
+  console.warn("match row update failed — no row matched my identity");
 }
 
 // Push my running score/progress (called every hole + on finish).
