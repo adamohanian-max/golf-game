@@ -18,10 +18,11 @@ The DSM from the same flight can also feed [[lidar-terrain]]'s `course.dem` path
 
 ## Path B — 3D Gaussian Splatting (Apple's new direction, experimental)
 
-Apple Maps Flyover is moving to **3D Gaussian Splatting** (WWDC 2026) — that neural look is *why* it reads better than a textured mesh. We can do the same per course:
-- Train a splat from drone/ground photos (any 3DGS trainer; DroneSplat targets in-the-wild drone imagery).
-- Render in three.js with **`@mkkellogg/gaussian-splats-3d`** (self-hosted viewer, npm).
-- Caveats: CPU splat sorting artifacts, **sub-optimal mobile performance**, large-scale scenes still maturing. Treat as a hero-course experiment, not the default for the mobile game yet.
+Apple Maps Flyover is moving to **3D Gaussian Splatting** (WWDC 2026) — that neural look is *why* it reads better than a textured mesh, and 3DGS specifically reconstructs vegetation (thin leaves, tree silhouettes) far better than photogrammetry mesh. We can do the same per course:
+- **Capture is a fresh drone flight — the baked nadir orthophoto CANNOT be reused.** 3DGS needs many overlapping OBLIQUE + low views for angular diversity; nadir-only gives floaters + a collapsed ground at grazing (golf-camera) angles. One drone flight can feed BOTH a mesh (Path A) and a splat.
+- Train with Nerfstudio/`gsplat` (Apache-2.0, self-host, needs CUDA) or Postshot (local, free tier); **DroneSplat** (CVPR'25) targets in-the-wild drone imagery + kills floaters/moving-cart distractors (verify its repo license before commercial use).
+- Render in three.js with **Spark** (`sparkjsdev/spark`, MIT, by World Labs) — NOT `@mkkellogg/gaussian-splats-3d`, which is now deprecated (its own maintainer recommends Spark). Spark **Z-buffer-merges splats with opaque meshes**, so the ball occludes correctly for free; **Spark 2.0 LoD** streams large scenes with a per-device splat budget.
+- **Mobile is the real gate, not the ball:** WKWebView has a hard per-process memory cap → crash on multi-million-splat scenes. Must run Spark 2.0 LoD with a conservative **~500K–1M splat budget** and stream `.RAD` per hole. Grazing-angle floaters persist (mitigate with oblique/low capture). Hero-course experiment, not the mobile default.
 
 ## Licensing / cost
 - WebODM + OpenDroneMap: free, open source, self-host.
