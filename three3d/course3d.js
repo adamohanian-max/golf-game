@@ -216,11 +216,19 @@ function patchGroundDetailShader(mat) {
           diffuseColor *= _aer;
         #endif
         {
-          float detailMix = 1.0 - smoothstep(uBlendNear, uBlendFar, vViewDist);
+          // CAP the blend at DETAIL_MAX so the aerial (cart paths, bunkers,
+          // fairway/green edges) is never fully overwritten by the flat turf
+          // tile up close — the old value ramped to 1.0 as the chase camera
+          // neared the ground, washing every feature to solid green. The turf
+          // now only tints (anti-blur) + adds a small grain; the photo stays
+          // visible and the unsharp-mask above keeps it crisp.
+          float DETAIL_MAX = 0.45;
+          float detailMix = (1.0 - smoothstep(uBlendNear, uBlendFar, vViewDist)) * DETAIL_MAX;
           vec3 turfColor = texture2D(uDetailMap, vDetailUv).rgb;
           vec3 sandColor = texture2D(uSandMap, vDetailUv).rgb;
           vec3 closeColor = mix(turfColor, sandColor, vBunkerMask);
-          diffuseColor.rgb = mix(diffuseColor.rgb, closeColor, detailMix);
+          diffuseColor.rgb = mix(diffuseColor.rgb, closeColor, detailMix);            // light colour tint (<=45%)
+          diffuseColor.rgb += (closeColor - vec3(0.5)) * (detailMix * 0.35);          // small micro-texture grain, feature-preserving
           // Nudge bunkers warmer/brighter even at broadcast distance (where
           // detailMix ~0) so they read as sand instead of relying only on
           // whatever the aerial photo happened to capture there.
@@ -395,7 +403,9 @@ function buildScene() {
   const ballMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
   ballMat.envMapIntensity = ENV_MAP_INTENSITY;
   ballMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.0427, 12, 10), // real 1.68in golf ball radius, in metres
+    // A true 1.68in ball (0.0427m) is a sub-pixel dot from the broadcast/chase
+    // camera — exaggerate it (golf-sim convention; the web viewer uses 0.45m).
+    new THREE.SphereGeometry(0.4, 16, 12),
     ballMat
   );
   scene.add(ballMesh);
@@ -1116,6 +1126,7 @@ function frameBirdsEye(fromS, toS) {
 // bird's-eye of ball->pin the moment it settles (phase 4/10). ------------
 let camMode = "address";   // "address" (static bird's-eye) | "follow" (chasing the shot)
 let wasMoving = false;
+let _lastHoleNum = null;    // reframe to the new tee when this changes (render())
 let followDir = { x: 0, y: -1 }; // world-space unit vector the camera trails behind
 
 function updateShotCamera() {
@@ -1200,8 +1211,26 @@ function render() {
     const b = st.ball;
     const bh = gb.terrainZ ? gb.terrainZ(b.x, b.y) : 0;
     worldToScene(b.x, b.y, bh + (b.z || 0), ballMesh.position);
+    // Keep the ball a visible size at ANY camera distance — a true 4cm ball is a
+    // sub-pixel dot from the broadcast/chase cam. Hold a roughly constant small
+    // angular size (floored near, capped far) so it never vanishes.
+    if (camera) {
+      const cd = camera.position.distanceTo(ballMesh.position);
+      const r = Math.min(1.8, Math.max(0.45, cd * 0.014));
+      ballMesh.scale.setScalar(r / 0.4);  // base SphereGeometry radius is 0.4m
+    }
     if (!st.moving) updateTreePunchout(b.x, b.y);  // clear the canopy around the ball at rest
     updateShotCamera();
+
+    // Reframe to the new tee when the hole advances. syncFromHole (which sets
+    // camMode="address" + frameBirdsEye(tee->pin) and repositions the markers)
+    // otherwise only runs from enter()/context-restore, so after a hole-out the
+    // camera would stay framed on the previous hole. Same course -> no rebuild.
+    const holeNow = gb.getHole();
+    if (holeNow && holeNow.num !== _lastHoleNum) {
+      _lastHoleNum = holeNow.num;
+      if (!st.moving) syncFromHole(false);
+    }
 
     // Trees retry: the WOODS mask decodes async, and syncFromHole (which
     // calls buildTreesForCourse) only runs once per hole/enter — a player
