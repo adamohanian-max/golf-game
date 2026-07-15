@@ -10885,7 +10885,7 @@ async function fetchMatchPlayers(matchId) {
 async function beginMatch(courseId, holeCount, settings, format, live) {
   if (!LB_ON() || !activeMatch) return false;
   track("match_start", { kind: live ? "live" : "async", format, holes: holeCount });
-  const validFormat = ["match", "skins", "ctp"].includes(format) ? format : "stroke";
+  const validFormat = format === "match" ? "match" : "stroke";
   const patch = {
     course_id: courseId,
     hole_count: holeCount,
@@ -11223,7 +11223,7 @@ function confirmMatchSetup() {
 async function startConfiguredMatch() {
   const ov = document.getElementById("match-setup");
   const holes = parseInt(ov.dataset.holes, 10) || 18;
-  const format = ["match", "skins", "ctp"].includes(ov.dataset.format) ? ov.dataset.format : "stroke";
+  const format = ov.dataset.format === "match" ? "match" : "stroke";
   const live = ov.dataset.live === "1";   // any format, gated to 1v1 by the toggle
   hideCourseSelect();
   showToast("Starting match…", 1500);
@@ -11344,53 +11344,6 @@ function computeMatchPlay(me, opp, holesTotal) {
     }
   }
   return { diff, thru, remaining, status, decided, result };
-}
-
-// Skins: each hole is worth one skin. Strict lowest score wins it outright;
-// a tie carries the skin's value into the next hole's pot (a later untied
-// hole clears the whole accumulated pot, standard skins rule). N players,
-// unlike match play's fixed 1v1 — reuses the same match_players rows the
-// ranked stroke-play list already has.
-function computeSkins(rows, holesTotal) {
-  const won = {};
-  for (const r of rows) won[r.player_name] = 0;
-  let pot = 0;
-  const perHole = [];
-  for (let h = 1; h <= holesTotal; h++) {
-    const scores = rows.map((r) => ({ r, s: (r.hole_scores || {})[h] }));
-    if (scores.some((x) => x.s == null)) { perHole.push({ hole: h, winner: null, pot: null }); continue; } // not everyone in yet
-    pot++;
-    const min = Math.min(...scores.map((x) => x.s));
-    const winners = scores.filter((x) => x.s === min);
-    if (winners.length === 1) {
-      won[winners[0].r.player_name] += pot;
-      perHole.push({ hole: h, winner: winners[0].r.player_name, pot });
-      pot = 0;
-    } else {
-      perHole.push({ hole: h, winner: null, pot }); // tie — pot carries to the next hole
-    }
-  }
-  return { perHole, won, carry: pot };
-}
-
-// Closest-to-pin: per hole, whoever's approach finished nearest the cup (first
-// time reaching the green that hole — state.proximity, synced as hole_prox)
-// wins that hole's point. Holes nobody has a recorded proximity for (missed
-// the green, or a bot opponent with no proximity data) are skipped, not
-// scored zero.
-function computeClosestToPin(rows, holesTotal) {
-  const won = {};
-  for (const r of rows) won[r.player_name] = 0;
-  const perHole = [];
-  for (let h = 1; h <= holesTotal; h++) {
-    const entries = rows.map((r) => ({ r, p: (r.hole_prox || {})[h] })).filter((x) => x.p != null);
-    if (!entries.length) { perHole.push({ hole: h, winner: null }); continue; }
-    const min = Math.min(...entries.map((x) => x.p));
-    const winner = entries.find((x) => x.p === min).r;
-    won[winner.player_name]++;
-    perHole.push({ hole: h, winner: winner.player_name, prox: min });
-  }
-  return { perHole, won };
 }
 
 // Match play: end-of-hole outcome + resulting match status ("Hole won · 2 up").
@@ -11945,28 +11898,6 @@ async function renderMatchResults() {
   if (allDone && meRow && meRow.pos === 1 && !meRow.tied && earnMilestone("match-win")) {
     showToast("First match win!", 2200, "gold");
     announceMilestoneUnlocks("match-win", 2600);
-  }
-  // Skins / closest-to-pin: same ranked stroke-play list as the base game,
-  // plus a pot/point leader banner and a per-hole breakdown appended under
-  // the scorecard once the match ends (§5/§7.2 new formats).
-  if (activeMatch.format === "skins" || activeMatch.format === "ctp") {
-    const isSkins = activeMatch.format === "skins";
-    const calc = isSkins ? computeSkins(rows, matchHoleCount) : computeClosestToPin(rows, matchHoleCount);
-    const leaderName = Object.keys(calc.won).sort((a, b) => calc.won[b] - calc.won[a])[0];
-    const leaderCount = calc.won[leaderName] || 0;
-    if (bannerEl && allDone) {
-      bannerEl.textContent = leaderCount
-        ? `${leaderName} leads ${isSkins ? "skins" : "closest-to-pin"} — ${leaderCount}`
-        : (isSkins ? "No skins won — every hole tied" : "No proximity data recorded");
-    }
-    if (scEl && allDone) {
-      const label = isSkins ? "Skins" : "Closest-to-pin";
-      const won = calc.perHole.filter((h) => h.winner);
-      scEl.innerHTML += won.length ? `<div class="mr-fmt-breakdown"><div class="mr-fmt-title">${label} by hole</div>` +
-        won.map((h) =>
-          `<div class="mr-fmt-row"><span>Hole ${h.hole}</span><span>${esc(h.winner)}${isSkins && h.pot > 1 ? " ×" + h.pot : ""}</span></div>`
-        ).join("") + `</div>` : "";
-    }
   }
   listEl.innerHTML = ranked.map(r => {
     const meCls = isMeEntry(r) ? " mr-me" : "";

@@ -434,12 +434,6 @@
 .mr-sc-wrap { overflow-x: auto; margin-top: var(--s-2); }
 .mr-sc-wrap:empty { display: none; }
 
-/* Skins / closest-to-pin per-hole breakdown, appended under the scorecard */
-.mr-fmt-breakdown { margin-top: var(--s-3); font-size: 13px; }
-.mr-fmt-title { font-weight: 600; color: var(--text-dim); margin-bottom: var(--s-1); }
-.mr-fmt-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--border-soft, rgba(0,0,0,.06)); }
-.mr-fmt-row:last-child { border-bottom: none; }
-
 /* Match results footer (Rematch / Next bot appear only after ladder matches) */
 .mr-actions { display: flex; gap: var(--s-2); }
 .mr-actions .menu-btn { flex: 1; margin: 0; }
