@@ -747,52 +747,78 @@ function treeRand(x, y) {
   };
 }
 
+// Perf caps for the aerial-canopy source (a dense-forest course detects tens of
+// thousands of crowns). Instanced low-poly, so these are comfortable on desktop;
+// a billboard LOD is the fast-follow for low-end mobile.
+const CANOPY_MAX_TREES = 14000;
+const CANOPY_MAX_BUSH = 6000;
+let _canopyCache = {};   // courseId -> items|null (avoid refetch on render()'s retry)
+
 let treesBuildInFlight = false;
 function buildTreesForCourse(courseId) {
-  if (treesBuildInFlight) return; // already mid-build for this attempt — render()'s retry calls this every frame until it lands
+  if (treesBuildInFlight) return; // render()'s retry calls this every frame until it lands
   const gb = window.GolfBridge;
-  const trees = gb.getTrees();
-  if (!trees.length) return; // WOODS mask may still be decoding — render()'s per-frame retry (mirrors game.js's own drawTrees() guard) picks it up the instant it's ready
   treesBuildInFlight = true;
-  loadTreeSpecies().then((species) => {
+  const canopyP = (courseId in _canopyCache)
+    ? Promise.resolve(_canopyCache[courseId])
+    : fetch("courses/trees/" + courseId + ".json")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => (_canopyCache[courseId] = (j && j.items) ? j.items : null))
+        .catch(() => (_canopyCache[courseId] = null));
+
+  Promise.all([loadTreeSpecies(), canopyP]).then(([species, canopy]) => {
+    // Build the tree + bush source. Prefer aerial-detected canopy — it's the
+    // COMPLETE set (every visible tree/bush incl. lone specimens on open rough),
+    // detected from the aerial by tools/detect_canopy.py — over the woods-mask
+    // getTrees (capped, misses isolated trees, and this course's mask under-
+    // classifies its own forest). Fall back to getTrees where there's no canopy
+    // file (or it's still baking).
+    let treeItems, bushItems = [];
+    if (canopy && canopy.length) {
+      const allT = [], allB = [];
+      for (const it of canopy) (it.kind === "bush" ? allB : allT).push(it);
+      const st = Math.max(1, Math.ceil(allT.length / CANOPY_MAX_TREES));
+      const sb = Math.max(1, Math.ceil(allB.length / CANOPY_MAX_BUSH));
+      treeItems = []; for (let i = 0; i < allT.length; i += st) treeItems.push(allT[i]);
+      for (let i = 0; i < allB.length; i += sb) bushItems.push(allB[i]);
+    } else {
+      const gt = gb.getTrees() || [];
+      if (!gt.length) { treesBuildInFlight = false; return; } // mask decoding — retry next frame
+      treeItems = gt.map((t) => ({ x: t.x, y: t.y, h: t.h }));
+    }
+
     treesBuildInFlight = false;
     for (const mesh of treeMeshes) { scene.remove(mesh); mesh.geometry.dispose(); }
     treeMeshes = [];
+    const m4 = new THREE.Matrix4(), quat = new THREE.Quaternion(), scaleV = new THREE.Vector3(), eul = new THREE.Euler();
+
+    // ---- trees (by species; deterministic per-position variation) ----
     const bySpecies = species.map(() => []);
-    for (const t of trees) bySpecies[t.s % species.length].push(t);
-    const m4 = new THREE.Matrix4(), quat = new THREE.Quaternion(), scaleV = new THREE.Vector3();
+    for (const t of treeItems) {
+      const sp = (Math.imul(Math.round(t.x * 7.3) | 0, 2654435761) ^ (Math.round(t.y * 7.3) | 0)) >>> 0;
+      bySpecies[sp % species.length].push(t);
+    }
     for (let s = 0; s < species.length; s++) {
       const list = bySpecies[s];
       if (!list.length) continue;
       const { parts, height } = species[s];
       for (const part of parts) {
         const inst = new THREE.InstancedMesh(part.geometry, part.material, list.length);
-        // Per the aesthetics review: a cast shadow anchors even simple/cartoon
-        // tree geometry to the ground far more convincingly than any texture
-        // change would — real light interacting with the object, not just
-        // being lit by it. No receiveShadow: trees shadowing other trees
-        // isn't worth the cost for this pass.
-        inst.castShadow = true;
-        const eul = new THREE.Euler();
+        inst.castShadow = true; // a cast shadow anchors even cartoon geometry to the ground
         for (let i = 0; i < list.length; i++) {
           const t = list[i];
-          const th = gb.terrainZ(t.x, t.y);
-          const pos = worldToScene(t.x, t.y, th);
-          // Real forests aren't cloned lollipops — jitter each tree's height,
-          // crown width (independent of height), yaw, and give a slight lean so
-          // a treeline reads organic instead of a stamped row. Deterministic per
-          // world position so it's stable across rebuilds (setColorAt-free — no
-          // per-instance material cost).
           const rnd = treeRand(t.x, t.y);
-          const hMul = 0.78 + 0.52 * rnd();     // height 0.78-1.30x
-          const wMul = 0.92 + 0.55 * rnd();     // crown width 0.92-1.47x — fuller so neighbours in a clump merge into a canopy mass (Apple-like), not separate cones
-          const desiredH = t.h * M() * hMul;    // world units -> metres
+          // jitter off the detection grid so canopy doesn't read as rows; vary
+          // height/crown/yaw/lean so a stand reads organic, not stamped clones.
+          const jx = t.x + (rnd() - 0.5) * 2.0, jy = t.y + (rnd() - 0.5) * 2.0;
+          const pos = worldToScene(jx, jy, gb.terrainZ(jx, jy));
+          const hMul = 0.78 + 0.52 * rnd();
+          const wMul = 0.92 + 0.55 * rnd();     // fuller crowns -> clumps merge into a canopy mass (Apple-like)
+          const desiredH = (t.h || 4.5) * M() * hMul;
           const scale = desiredH / height;
           scaleV.set(scale * wMul, scale, scale * wMul);
-          const yaw = rnd() * Math.PI * 2;      // full random spin (was golden-angle by index)
-          const lean = (rnd() - 0.5) * 0.16;    // small tilt off vertical
-          const leanAz = rnd() * Math.PI * 2;
-          eul.set(Math.cos(leanAz) * lean, yaw, Math.sin(leanAz) * lean);
+          const yaw = rnd() * Math.PI * 2, lean = (rnd() - 0.5) * 0.16, la = rnd() * Math.PI * 2;
+          eul.set(Math.cos(la) * lean, yaw, Math.sin(la) * lean);
           quat.setFromEuler(eul);
           m4.compose(pos, quat, scaleV);
           inst.setMatrixAt(i, m4);
@@ -803,35 +829,31 @@ function buildTreesForCourse(courseId) {
       }
     }
 
-    // Understory bushes: a small rounded blob scattered near (most) trees. Two
-    // wins toward the Apple look: (a) puts low foliage ON THE GROUND, not just
-    // tall trunks, and (b) fills clump interiors so a stand of trees reads as a
-    // continuous canopy mass instead of separated cones. Anchored to tree
-    // positions, so density tracks the woods for free — dense clumps get many
-    // bushes, a lone specimen gets one. Reuses the round-pine mesh scaled small
-    // + squashed wide; deterministic per world position (stable across rebuilds).
+    // ---- bushes: low rounded foliage on the ground (aerial-detected scrub).
+    // With no canopy file, synthesize a light understory near trees instead. ----
     const bushSp = species[3] || species[species.length - 1];
     if (bushSp) {
-      const bushPos = [];
-      for (const t of trees) {
-        const rp = treeRand(t.x * 1.7 + 3, t.y * 1.7 - 3);
-        const n = rp() < 0.72 ? (rp() < 0.3 ? 2 : 1) : 0;
-        for (let k = 0; k < n; k++) {
-          const a = rp() * Math.PI * 2, d = 2 + 4 * rp();
-          bushPos.push([t.x + Math.cos(a) * d, t.y + Math.sin(a) * d]);
+      if (!bushItems.length && (!canopy || !canopy.length)) {
+        for (const t of treeItems) {
+          const rp = treeRand(t.x * 1.7 + 3, t.y * 1.7 - 3);
+          const n = rp() < 0.6 ? 1 : 0;
+          for (let k = 0; k < n; k++) {
+            const a = rp() * Math.PI * 2, d = 2 + 4 * rp();
+            bushItems.push({ x: t.x + Math.cos(a) * d, y: t.y + Math.sin(a) * d });
+          }
         }
       }
-      const eul = new THREE.Euler();
       for (const part of bushSp.parts) {
-        const inst = new THREE.InstancedMesh(part.geometry, part.material, bushPos.length);
+        const inst = new THREE.InstancedMesh(part.geometry, part.material, bushItems.length);
         inst.castShadow = true;
-        for (let i = 0; i < bushPos.length; i++) {
-          const bx = bushPos[i][0], by = bushPos[i][1];
-          const pos = worldToScene(bx, by, gb.terrainZ(bx, by));
-          const rnd = treeRand(bx, by);
-          const hM = 1.1 + 1.6 * rnd();              // 1.1-2.7 m tall (shrub scale)
+        for (let i = 0; i < bushItems.length; i++) {
+          const b = bushItems[i];
+          const rnd = treeRand(b.x, b.y);
+          const jx = b.x + (rnd() - 0.5) * 1.6, jy = b.y + (rnd() - 0.5) * 1.6;
+          const pos = worldToScene(jx, jy, gb.terrainZ(jx, jy));
+          const hM = 1.1 + 1.6 * rnd();
           const v = hM / bushSp.height;
-          const wide = v * (1.4 + 0.7 * rnd());      // wider than tall -> rounded bush
+          const wide = v * (1.4 + 0.7 * rnd());
           scaleV.set(wide, v * 0.9, wide);
           eul.set(0, rnd() * Math.PI * 2, 0);
           quat.setFromEuler(eul);
@@ -845,8 +867,8 @@ function buildTreesForCourse(courseId) {
     }
     treesBuiltForCourseId = courseId;
   }).catch((e) => {
-    treesBuildInFlight = false; // let render()'s retry try again next frame instead of getting stuck forever
-    console.warn("[Course3D] tree model load failed:", e);
+    treesBuildInFlight = false; // let render()'s retry try again next frame
+    console.warn("[Course3D] tree build failed:", e);
   });
 }
 
