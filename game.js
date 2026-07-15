@@ -943,7 +943,6 @@ function leaveAppleGround() {
 // Tournament state — set when player enters a tournament round via the lobby.
 let activeTournament = null;     // full tournament row from Supabase
 let activeTournamentRound = null; // 1-4, which round the player is currently playing
-let tourEventName = null;         // name of the real PGA Tour event being played (Live PGA Tour)
 let _tourCourseId = null;         // baked course id of this week's tour venue — plays free (see isTourFeatured)
 // Tour Events (spectator leaderboard + compete-against-the-pros; see "Tour Events").
 let tourPlayMode = false;         // true while playing a round that counts toward the followed tour event
@@ -10263,76 +10262,6 @@ function fmtEventDate(iso) {
   catch (e) { return "soon"; }
 }
 
-async function openTourWeek() {
-  const modal = document.getElementById("tour-week");
-  modal.classList.remove("hidden");
-  const $ = (id) => document.getElementById(id);
-  $("tw-event").textContent = "Loading…";
-  $("tw-status").textContent = "";
-  $("tw-course").textContent = "";
-  $("tw-note").textContent = "";
-  $("tw-actions").innerHTML = "";
-  tourEventName = null;
-
-  const now = await fetchTourNow();
-  if (modal.classList.contains("hidden")) return;   // user closed while awaiting
-  if (!now || !now.featured) {
-    $("tw-event").textContent = "Schedule unavailable";
-    $("tw-status").textContent = "Couldn't reach the tour feed — try again later.";
-    return;
-  }
-  const ev = now.featured;
-  $("tw-event").textContent = ev.name;
-  $("tw-status").textContent =
-    ev.state === "in"  ? "● Live now" :
-    ev.state === "pre" ? "Starts " + fmtEventDate(ev.start) :
-                         "Final · " + fmtEventDate(ev.start);
-
-  const course = await fetchTourCourse(ev.id);
-  if (modal.classList.contains("hidden")) return;
-  if (!course) { $("tw-course").textContent = "Venue to be announced"; return; }
-  const loc = [course.city, course.region || course.country].filter(Boolean).join(", ");
-  $("tw-course").textContent = course.name +
-    (loc ? " · " + loc : "") + (course.par ? " · Par " + course.par : "");
-
-  const matched = matchTourCourse(course.name);
-  if (!matched) {
-    $("tw-note").textContent = "Not in the game yet — check back after it's added.";
-    return;
-  }
-
-  // Baked course in hand — route via the tournament infra (chosen play model).
-  selectedCourseId = matched.id;
-  tourEventName = ev.name;
-  _tourCourseId = matched.id;   // free taste — this week's venue unlocks (isTourFeatured)
-  const actions = $("tw-actions");
-  const active = LB_ON() ? await fetchActiveTournament(matched.id) : null;
-  if (modal.classList.contains("hidden")) return;
-
-  if (active) {
-    activeTournament = active;
-    actions.innerHTML = "<button class=\"menu-btn\" id=\"tw-enter\">Enter tournament</button>";
-    $("tw-enter").onclick = () => { closeTourWeek(); openTournamentLobby(); };
-  } else if (isTournamentAdmin() && LB_ON()) {
-    // Only admins can create (RLS-gated); non-admins fall through to solo below.
-    actions.innerHTML =
-      "<button class=\"menu-btn\" id=\"tw-create\">Start tour tournament</button>" +
-      "<button class=\"menu-btn secondary\" id=\"tw-solo\">Play the course solo</button>";
-    $("tw-create").onclick = async () => {
-      const b = $("tw-create"); b.disabled = true; b.textContent = "Creating…";
-      const t = await createTournament(ev.name, matched.id, gameDefaults);
-      if (t) { activeTournament = t; closeTourWeek(); openTournamentLobby(); }
-      else { b.disabled = false; b.textContent = "Start tour tournament"; showToast("Couldn't create tournament", 2000); }
-    };
-    $("tw-solo").onclick = () => { closeTourWeek(); startCourse(); };
-  } else {
-    $("tw-note").textContent = "This week's course is in the game.";
-    actions.innerHTML = "<button class=\"menu-btn\" id=\"tw-solo\">Play this course</button>";
-    $("tw-solo").onclick = () => { closeTourWeek(); startCourse(); };
-  }
-}
-
-function closeTourWeek() { document.getElementById("tour-week").classList.add("hidden"); }
 
 // =====================================================================
 //  Tour Events — live Masters-style leaderboard + compete against the pros
@@ -10712,11 +10641,6 @@ function updateTourBug() {
 (function wireTournament() {
   const ot = document.getElementById("open-tournaments");
   if (ot) ot.addEventListener("click", openTournamentLobby);
-
-  const tour = document.getElementById("open-tour");
-  if (tour) tour.addEventListener("click", openTourWeek);
-  const twClose = document.getElementById("tw-close");
-  if (twClose) twClose.addEventListener("click", closeTourWeek);
 
   const tlClose = document.getElementById("tl-close");
   if (tlClose) tlClose.addEventListener("click", closeTournamentLobby);
