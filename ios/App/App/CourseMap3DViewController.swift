@@ -39,12 +39,24 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
         } else {
             mv = MKMapView(frame: parent.bounds)
             mv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            // .satelliteFlyover, NOT .satellite: plain satellite silently clamps
-            // MKMapCamera.pitch to 0 (verified in the simulator — the map stayed
-            // top-down while the game's 3D toggle pitched the overlay). Flyover
-            // honors pitch everywhere; where Apple has flyover coverage it also
-            // brings the photoreal 3D terrain/tree/building meshes.
-            mv.mapType = .satelliteFlyover
+            // NOT .satellite/MKStandardMapConfiguration: plain satellite silently
+            // clamps MKMapCamera.pitch to 0 (verified in the simulator — the map
+            // stayed top-down while the game's 3D toggle pitched the overlay).
+            // Flyover/.realistic elevation honors pitch everywhere; where Apple
+            // has coverage it also brings the photoreal 3D terrain/tree/building
+            // meshes. `mapType = .satelliteFlyover` is soft-deprecated (WWDC22
+            // "What's new in MapKit") in favor of `preferredConfiguration` —
+            // same underlying flyover terrain-mesh subsystem (no behavioral
+            // difference found for the mesh re-anchoring jitter this file's
+            // probe/calibration machinery already works around — see below —
+            // this is a hygiene swap for the deprecation, not a jitter fix).
+            // App deployment target is iOS 15, `preferredConfiguration` needs
+            // 16+, so fall back to the legacy enum on older OS.
+            if #available(iOS 16.0, *) {
+                mv.preferredConfiguration = MKImageryMapConfiguration(elevationStyle: .realistic)
+            } else {
+                mv.mapType = .satelliteFlyover
+            }
             mv.showsCompass = false // game HUD owns the screen — no MapKit chrome
             mv.delegate = self
             // The game's own swipe-to-swing/pan/pinch input stays bound to
