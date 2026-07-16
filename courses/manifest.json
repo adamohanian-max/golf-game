@@ -1166,5 +1166,60 @@
     "location": "Louisville, KY",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "la-quinta-country-club",
+    "name": "La Quinta Country Club",
+    "sub": "La Quinta, CA · Par 72",
+    "par": 72,
+    "yards": 7101,
+    "holes": 18,
+    "location": "La Quinta, CA",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "dunes-golf-beach-club",
+    "name": "Dunes Golf & Beach Club",
+    "sub": "Myrtle Beach, SC · Par 72",
+    "par": 72,
+    "yards": 7372,
+    "holes": 18,
+    "location": "Myrtle Beach, SC",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "aronimink-golf-club",
+    "name": "Aronimink Golf Club",
+    "sub": "Newtown Square, PA · Par 70",
+    "par": 70,
+    "yards": 7112,
+    "holes": 18,
+    "location": "Newtown Square, PA",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "tpc-craig-ranch",
+    "name": "TPC Craig Ranch",
+    "sub": "McKinney, TX · Par 72",
+    "par": 72,
+    "yards": 7375,
+    "holes": 18,
+    "location": "McKinney, TX",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "tpc-deere-run",
+    "name": "TPC Deere Run",
+    "sub": "Silvis, IL · Par 71",
+    "par": 71,
+    "yards": 5882,
+    "holes": 18,
+    "location": "Silvis, IL",
+    "region": "USA",
+    "tags": []
   }
 ]
