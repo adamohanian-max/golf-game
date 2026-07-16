@@ -53,6 +53,15 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     // alphas are baked into the renderer's paint (fill #7ecb86 @ 0.13,
     // contour rgba(30,60,35,0.26) — drawGreen()'s exact values in game.js).
     private var greenOverlays: [MKOverlay] = []
+    // Flag annotation — MapKit positions it through the same pipeline as the
+    // probes (which are this system's calibration ground truth), so it is
+    // pixel-glued to the pin coordinate by construction, upright, with zero
+    // JS-side projection. State (visible/scale) changes are event-driven
+    // from JS (setFlagState, deduped there) — never per-frame; the pennant
+    // wave runs as a self-contained repeating Core Animation on the view's
+    // own sublayer, which touches neither the map camera nor other
+    // annotations' layout (static contract preserved).
+    private var flagAnn: FlagAnnotation?
 
     func enter(into parent: UIView, behind webView: WKWebView) {
         self.webView = webView
@@ -103,8 +112,12 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
 
     func leave() {
         lastReq = nil
-        if let mv = mapView { mv.removeOverlays(greenOverlays) }
+        if let mv = mapView {
+            mv.removeOverlays(greenOverlays)
+            if let f = flagAnn { mv.removeAnnotation(f) }
+        }
         greenOverlays.removeAll()
+        flagAnn = nil
         mapView?.removeFromSuperview()
         webView?.isOpaque = true
         webView?.backgroundColor = nil
@@ -136,11 +149,21 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
             abs(lastReq!.4 - pitch) > 0.01
         if changed {
             lastReq = req
+            // Disable implicit actions for the assignment: MapKit implicitly
+            // ANIMATES annotation view repositioning while the tiles move
+            // instantly (same behavior the probe reads dodge by using the
+            // model .center) — so a visible annotation (the flag) lags the
+            // ground by the animation curve during camera motion and slides
+            // into place after it stops. The game pushes tiny camera steps at
+            // 30-60Hz, so unanimated steps track exactly.
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             mv.camera = MKMapCamera(
                 lookingAtCenter: CLLocationCoordinate2D(latitude: lat, longitude: lon),
                 fromDistance: max(distM, 60),
                 pitch: CGFloat(pitch),
                 heading: heading) // direct assignment — no animation, game.js already pushes ~30fps
+            CATransaction.commit()
         }
         let a = mv.camera
         // Ground truth for the JS overlay projection: invisible probe
@@ -206,7 +229,17 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
 
     /// Probe annotations render as 1x1 transparent views — invisible, but
     /// still laid out by MapKit (isHidden could let MapKit skip positioning).
+    /// The flag annotation gets its real view (checked first — it's also an
+    /// MKPointAnnotation subclass, so it must not fall into the probe guard).
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        if let flag = annotation as? FlagAnnotation {
+            let id = "cm3d-flag"
+            let v = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? FlagAnnotationView)
+                ?? FlagAnnotationView(annotation: flag, reuseIdentifier: id)
+            v.annotation = flag
+            v.apply(flag)
+            return v
+        }
         guard let pt = annotation as? MKPointAnnotation, probeAnns.contains(pt) else { return nil }
         let id = "cm3d-probe"
         let v = mapView.dequeueReusableAnnotationView(withIdentifier: id)
@@ -242,12 +275,51 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
                     closed: (c["closed"] as? Bool) ?? false,
                     pts: pts.map { MKMapPoint(CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1])) }))
             }
+            // Cup: present only on the green holding the pin. Radius arrives
+            // in meters; convert to map points at the cup's latitude.
+            var cup: MKMapPoint? = nil
+            var cupRadius = 0.0
+            if let cc = green["cup"] as? [Double], cc.count >= 2 {
+                let coord = CLLocationCoordinate2D(latitude: cc[0], longitude: cc[1])
+                cup = MKMapPoint(coord)
+                let rM = (green["cupRadiusM"] as? Double) ?? 0
+                cupRadius = rM * MKMapPointsPerMeterAtLatitude(coord.latitude)
+            }
             let ov = GreenOverlay(
                 fill: fill.map { MKMapPoint(CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1])) },
-                contours: contours)
+                contours: contours, cup: cup, cupRadius: cupRadius)
             greenOverlays.append(ov)
             mv.addOverlay(ov)
         }
+    }
+
+    /// Flag visibility/position/scale — called by JS ONLY on a state change
+    /// (deduped there: pin move on hole change, ball-near-cup shrink in 0.05
+    /// buckets, pulled-on-green visibility). Desired state also lives on the
+    /// annotation itself so a view created later (MapKit lays views out a
+    /// runloop after addAnnotation) picks it up in viewFor.
+    func setFlagState(visible: Bool, scale: Double, lat: Double, lon: Double) {
+        guard let mv = mapView else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let ann: FlagAnnotation
+        if let existing = flagAnn {
+            ann = existing
+            if abs(ann.coordinate.latitude - lat) > 1e-9 || abs(ann.coordinate.longitude - lon) > 1e-9 {
+                ann.coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            }
+        } else {
+            ann = FlagAnnotation()
+            ann.coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            flagAnn = ann
+            mv.addAnnotation(ann)
+        }
+        ann.flagVisible = visible
+        ann.stickScale = CGFloat(scale)
+        if let v = mv.view(for: ann) as? FlagAnnotationView {
+            v.apply(ann)
+        }
+        CATransaction.commit()
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -275,12 +347,20 @@ final class GreenOverlay: NSObject, MKOverlay {
     }
     let fill: [MKMapPoint]
     let contours: [Contour]
+    // Cup (present only on the pin's green): center + radius in MAP POINTS
+    // (converted from meters at construction). Flat ground paint — exactly
+    // the kind of thing overlays are for; the upright flagstick is the
+    // FlagAnnotation instead.
+    let cup: MKMapPoint?
+    let cupRadius: Double
     let boundingMapRect: MKMapRect
     let coordinate: CLLocationCoordinate2D
 
-    init(fill: [MKMapPoint], contours: [Contour]) {
+    init(fill: [MKMapPoint], contours: [Contour], cup: MKMapPoint? = nil, cupRadius: Double = 0) {
         self.fill = fill
         self.contours = contours
+        self.cup = cup
+        self.cupRadius = cupRadius
         var rect = MKMapRect.null
         for p in fill {
             rect = rect.union(MKMapRect(x: p.x, y: p.y, width: 0, height: 0))
@@ -297,6 +377,8 @@ final class GreenOverlayRenderer: MKOverlayRenderer {
     // tint that lets the real turf show through, thin dark contour strokes.
     private static let fillColor = UIColor(red: 0x7e / 255, green: 0xcb / 255, blue: 0x86 / 255, alpha: 0.13).cgColor
     private static let contourColor = UIColor(red: 30 / 255, green: 60 / 255, blue: 35 / 255, alpha: 0.26).cgColor
+    private static let cupFill = UIColor(red: 0x0a / 255, green: 0x1f / 255, blue: 0x0f / 255, alpha: 1).cgColor
+    private static let cupRim = UIColor(red: 245 / 255, green: 245 / 255, blue: 235 / 255, alpha: 0.85).cgColor
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
         guard let green = overlay as? GreenOverlay, green.fill.count >= 3 else { return }
@@ -310,25 +392,148 @@ final class GreenOverlayRenderer: MKOverlayRenderer {
         context.setFillColor(Self.fillColor)
         context.fillPath()
 
-        guard !green.contours.isEmpty else { return }
-        context.saveGState()
-        // Clip contours to the green — the marching-squares paths are built
-        // over the green's bounding box and rely on the draw-time clip (same
-        // as drawGreen's withClip), otherwise they'd spill past the collar.
-        context.addPath(ring)
-        context.clip()
-        let lines = CGMutablePath()
-        for c in green.contours {
-            lines.move(to: point(for: c.pts[0]))
-            for p in c.pts.dropFirst() { lines.addLine(to: point(for: p)) }
-            if c.closed { lines.closeSubpath() }
+        if !green.contours.isEmpty {
+            context.saveGState()
+            // Clip contours to the green — the marching-squares paths are built
+            // over the green's bounding box and rely on the draw-time clip (same
+            // as drawGreen's withClip), otherwise they'd spill past the collar.
+            context.addPath(ring)
+            context.clip()
+            let lines = CGMutablePath()
+            for c in green.contours {
+                lines.move(to: point(for: c.pts[0]))
+                for p in c.pts.dropFirst() { lines.addLine(to: point(for: p)) }
+                if c.closed { lines.closeSubpath() }
+            }
+            context.addPath(lines)
+            context.setStrokeColor(Self.contourColor)
+            context.setLineWidth(1.2 / zoomScale) // ~constant screen px at any zoom
+            context.setLineJoin(.round)
+            context.setLineCap(.round)
+            context.strokePath()
+            context.restoreGState()
         }
-        context.addPath(lines)
-        context.setStrokeColor(Self.contourColor)
-        context.setLineWidth(1.2 / zoomScale) // ~constant screen px at any zoom
-        context.setLineJoin(.round)
-        context.setLineCap(.round)
-        context.strokePath()
-        context.restoreGState()
+
+        // Cup — dark hole + bright rim (drawGreen's exact colors). Drawn last
+        // so it sits over the contours. True world scale (no screen-px floor:
+        // at zooms where it would be sub-pixel, the flag marks the hole).
+        if let cup = green.cup, green.cupRadius > 0 {
+            let mr = MKMapRect(x: cup.x - green.cupRadius, y: cup.y - green.cupRadius,
+                               width: green.cupRadius * 2, height: green.cupRadius * 2)
+            let r = rect(for: mr)
+            context.setFillColor(Self.cupFill)
+            context.fillEllipse(in: r)
+            context.setStrokeColor(Self.cupRim)
+            context.setLineWidth(max(r.width * 0.18, 0.8 / zoomScale))
+            context.strokeEllipse(in: r)
+        }
+    }
+}
+
+/// Pin flag as a real MKAnnotationView — MapKit positions it through the
+/// same pipeline as the calibration probes (this system's ground truth), so
+/// it's glued to the pin coordinate with zero JS-side projection: the last
+/// green-side element that wiggled during camera moves. Carries its desired
+/// visible/scale state so a view laid out a runloop after addAnnotation
+/// still picks it up (see CourseMap3DLayer.setFlagState).
+final class FlagAnnotation: MKPointAnnotation {
+    var flagVisible = true
+    var stickScale: CGFloat = 1
+}
+
+final class FlagAnnotationView: MKAnnotationView {
+    // Fixed intrinsic size — the JS flag already sat at its 22px floor at
+    // most zooms, and it's pulled (hidden) on the green, so putt-zoom sizes
+    // never show. Pole base at (4, 44); pennant flies right from the top.
+    private static let W: CGFloat = 30, H: CGFloat = 46
+    private static let base = CGPoint(x: 4, y: 44)
+    private static let top = CGPoint(x: 4, y: 10)
+
+    private let contentLayer = CALayer()
+
+    override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        frame = CGRect(x: 0, y: 0, width: Self.W, height: Self.H)
+        // Anchor the annotation at the pole BASE, not the view center: the
+        // coordinate lands at view point (center - offset), so offset =
+        // center - base = (W/2 - 4, H/2 - 44) = (+11, -21).
+        centerOffset = CGPoint(x: Self.W / 2 - Self.base.x, y: Self.H / 2 - Self.base.y)
+        canShowCallout = false
+        isEnabled = false
+        backgroundColor = .clear
+
+        // Container scaled about the pole base for the ball-near-cup shrink
+        // (fs) — one transform, set only when JS's deduped state changes.
+        contentLayer.frame = bounds
+        contentLayer.anchorPoint = CGPoint(x: Self.base.x / Self.W, y: Self.base.y / Self.H)
+        contentLayer.position = Self.base
+        layer.addSublayer(contentLayer)
+
+        // Short ground shadow of the stick (drawGreen's exact look).
+        let shadow = CAShapeLayer()
+        let sp = CGMutablePath()
+        sp.move(to: Self.base)
+        sp.addLine(to: CGPoint(x: Self.base.x + 7, y: Self.base.y + 2))
+        shadow.path = sp
+        shadow.strokeColor = UIColor(white: 0, alpha: 0.28).cgColor
+        shadow.lineWidth = 2.5
+        shadow.fillColor = nil
+        contentLayer.addSublayer(shadow)
+
+        let pole = CAShapeLayer()
+        let pp = CGMutablePath()
+        pp.move(to: Self.base)
+        pp.addLine(to: Self.top)
+        pole.path = pp
+        pole.strokeColor = UIColor(red: 0xf4 / 255, green: 0xf4 / 255, blue: 0xf0 / 255, alpha: 1).cgColor
+        pole.lineWidth = 2
+        pole.fillColor = nil
+        contentLayer.addSublayer(pole)
+
+        // Red pennant (JS's static wave shape), rotated gently around the
+        // pole top by a self-contained repeating animation — no bridge
+        // traffic, no MapKit re-layout, just a composited sublayer wobble.
+        let pennant = CAShapeLayer()
+        let fp = CGMutablePath()
+        let L: CGFloat = 15, FH: CGFloat = 10
+        fp.move(to: Self.top)
+        fp.addQuadCurve(to: CGPoint(x: Self.top.x + L, y: Self.top.y + FH * 0.5),
+                        control: CGPoint(x: Self.top.x + L * 0.5, y: Self.top.y))
+        fp.addQuadCurve(to: CGPoint(x: Self.top.x, y: Self.top.y + FH),
+                        control: CGPoint(x: Self.top.x + L * 0.5, y: Self.top.y + FH * 0.5))
+        fp.closeSubpath()
+        pennant.path = fp
+        pennant.fillColor = UIColor(red: 0xe0 / 255, green: 0x2a / 255, blue: 0x25 / 255, alpha: 1).cgColor
+        pennant.strokeColor = UIColor(red: 120 / 255, green: 15 / 255, blue: 12 / 255, alpha: 0.6).cgColor
+        pennant.lineWidth = 1
+        pennant.frame = bounds
+        pennant.anchorPoint = CGPoint(x: Self.top.x / Self.W, y: Self.top.y / Self.H)
+        pennant.position = Self.top
+        contentLayer.addSublayer(pennant)
+        pennantLayer = pennant
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    private weak var pennantLayer: CAShapeLayer?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // (Re)start the wave — CA removes animations when the view leaves a
+        // window, so re-add whenever we come back.
+        guard window != nil, let p = pennantLayer, p.animation(forKey: "wave") == nil else { return }
+        let a = CABasicAnimation(keyPath: "transform.rotation.z")
+        a.fromValue = -0.06
+        a.toValue = 0.06
+        a.duration = 1.15
+        a.autoreverses = true
+        a.repeatCount = .infinity
+        a.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        p.add(a, forKey: "wave")
+    }
+
+    func apply(_ ann: FlagAnnotation) {
+        isHidden = !ann.flagVisible
+        contentLayer.transform = CATransform3DMakeScale(ann.stickScale, ann.stickScale, 1)
     }
 }

@@ -17,7 +17,8 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "enter", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "leave", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "syncCamera", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setGreenOverlay", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setGreenOverlay", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setFlagState", returnType: CAPPluginReturnPromise)
     ]
 
     private let layer = CourseMap3DLayer()
@@ -89,6 +90,20 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
         let greens = call.getArray("greens", JSObject.self) ?? []
         DispatchQueue.main.async {
             self.layer.setGreenOverlay(greens)
+            call.resolve()
+        }
+    }
+
+    // Flag annotation state — event-driven from game.js (deduped there:
+    // hole change, ball-near-cup shrink buckets, pulled-on-green), never
+    // per-frame.
+    @objc func setFlagState(_ call: CAPPluginCall) {
+        let visible = call.getBool("visible") ?? false
+        let scale = call.getDouble("scale") ?? 1
+        let lat = call.getDouble("lat") ?? 0
+        let lon = call.getDouble("lon") ?? 0
+        DispatchQueue.main.async {
+            self.layer.setFlagState(visible: visible, scale: scale, lat: lat, lon: lon)
             call.resolve()
         }
     }

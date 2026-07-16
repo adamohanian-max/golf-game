@@ -975,10 +975,19 @@ let _nativeGreenPolys = null; // last-sent green identity (array of g.poly refs)
 function appleGreenOverlayPayload(g) {
   const gm = appleGeoAffine();
   const proj = (x, y) => [gm[3] * x + gm[4] * y + gm[5], gm[0] * x + gm[1] * y + gm[2]]; // [lat,lon]
-  return {
+  const out = {
     fill: g.poly.map((p) => proj(p.x, p.y)),
     contours: (g.contours || []).map((c) => ({ closed: !!c.closed, pts: c.pts.map((p) => proj(p.x, p.y)) })),
   };
+  // Cup rides the pin's green — flat ground paint, so it belongs in the
+  // native overlay (unlike the upright flagstick, which is an annotation —
+  // see syncAppleFlag). Pins only move via setHole, which also changes the
+  // green set, so the existing resend trigger covers it.
+  if (pointInPoly(HOLE.holePos.x, HOLE.holePos.y, g.poly)) {
+    out.cup = proj(HOLE.holePos.x, HOLE.holePos.y);
+    out.cupRadiusM = HOLE.holeRadius * M_PER_UNIT;
+  }
+  return out;
 }
 // Pushes the current greens-in-play set to the native overlay ONLY when the
 // set actually changed (hole change / ball crossing into a new green's
@@ -997,6 +1006,33 @@ function syncAppleGreenOverlay(gs) {
   _nativeGreenPolys = polys;
   window.Capacitor.Plugins.CourseMap3D.setGreenOverlay({ greens: gs.map(appleGreenOverlayPayload) }).catch(() => {});
 }
+// Pin flag as a native MKAnnotationView — MapKit anchors it (same pipeline
+// as the calibration probes, i.e. ground truth), so it can't wiggle against
+// the photo the way the JS-projected flag did during camera moves. State is
+// EVENT-DRIVEN: this runs every frame but dedupes on the quantized state
+// key, so the bridge only hears about hole changes, the ball-near-cup
+// shrink in 0.05 buckets (a handful of calls during a shot's roll), and
+// pulled-on-green visibility flips — never a per-frame stream (the
+// static-contract rule; see CourseMap3DViewController).
+let _appleFlagKey = null;
+function syncAppleFlag() {
+  if (!window.Capacitor || !window.Capacitor.Plugins.CourseMap3D) return;
+  const b = state.ball;
+  const onGreen = surfaceAt(b.x, b.y) === "green";
+  const visible = nativeGreenOverlay && !onGreen && !cine && !greenView &&
+    mode === "course" && !HOLE.isRange;
+  // Same shrink the JS flag uses (fs 0.55 near the cup .. 1 far), quantized.
+  let fs = (Math.hypot(b.x - HOLE.holePos.x, b.y - HOLE.holePos.y) - FLAG_NEAR) / (FLAG_FAR - FLAG_NEAR);
+  fs = 0.55 + 0.45 * Math.max(0, Math.min(1, fs));
+  const fsBucket = Math.round(fs * 20) / 20;
+  const gm = appleGeoAffine();
+  const lat = gm[3] * HOLE.holePos.x + gm[4] * HOLE.holePos.y + gm[5];
+  const lon = gm[0] * HOLE.holePos.x + gm[1] * HOLE.holePos.y + gm[2];
+  const key = (visible ? "v" : "h") + "|" + fsBucket + "|" + lat.toFixed(7) + "|" + lon.toFixed(7);
+  if (_appleFlagKey === key) return;
+  _appleFlagKey = key;
+  window.Capacitor.Plugins.CourseMap3D.setFlagState({ visible, scale: fsBucket, lat, lon }).catch(() => {});
+}
 function appleGreenDetailWanted() {
   if (state.moving || cine || greenView) return false;
   const c = TUNE.clubs[selectedClub];
@@ -1011,7 +1047,7 @@ function leaveAppleGround() {
   _appleCal = null;
   _calS.a = [1, 0, 0, 1]; _calS.b = [0, 0]; _calEaseT = 0;
   _probeLL = _probeLLW = null; _fitHist.length = 0;
-  _apSettleN = 0; _apDetailA = 0; _nativeGreenPolys = null;
+  _apSettleN = 0; _apDetailA = 0; _nativeGreenPolys = null; _appleFlagKey = null;
   document.documentElement.style.background = "";
   document.body.style.background = "";
   const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D;
@@ -5480,6 +5516,7 @@ function draw() {
       // imagery). The dedupe inside makes this a per-frame no-op until the
       // set really changes. Relief below (still JS-projected) keeps the gate.
       syncAppleGreenOverlay(gs);
+      syncAppleFlag(); // native pin flag — also dedupes internally
       // Green detail earns its screen time: only the greens in play, only
       // when the pin is in club reach AND the camera has settled (see
       // appleGreenDetailWanted). Eased alpha so it fades in, never pops.
@@ -5563,6 +5600,11 @@ function draw() {
     ctx.fill();
   } else {
   if (!render3D) drawTeeMarkers();   // flank the tee box (WebGL draws the tee marker in 3D)
+  // Apple ground + native overlay on: the cup is painted by the native
+  // GreenOverlay renderer and the flag is a native MKAnnotationView (see
+  // syncAppleFlag) — both MapKit-anchored, so the JS versions must not
+  // double-draw on top. Same single kill switch as the green.
+  if (!(appleGroundActive() && nativeGreenOverlay)) {
   // hole cup — dark hole with a bright rim so it reads on the photo. A circle
   // on the ground foreshortens with the camera tilt, so ry scales by view.tilt.
   const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
@@ -5609,6 +5651,7 @@ function draw() {
     ctx.lineWidth = 1;
     ctx.stroke();
   }
+  }  // end JS cup+flag (skipped when native overlay owns them)
   }
 
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
