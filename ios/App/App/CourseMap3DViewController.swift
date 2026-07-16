@@ -38,12 +38,21 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     // so that they will follow the ground"), so this needs no probe
     // calibration — MapKit renders it through the same pipeline as the
     // imagery itself. Relief shading stays JS-canvas (baked raster, not a
-    // good MKOverlay fit). Colors/alphas match drawGreen()'s current values
-    // in game.js exactly (fill #7ecb86 @ 0.13, contour rgba(30,60,35,0.26)),
-    // both further scaled by the live detailAlpha from syncCamera.
+    // good MKOverlay fit).
+    //
+    // STATIC BY CONTRACT — this is what made the spike flawless and what the
+    // first production version broke: these overlays are added when the
+    // greens-in-play set changes (rare) and then NEVER touched. No per-frame
+    // renderer.alpha writes, no fade driven over the bridge — the first
+    // version wrote renderer alphas on every syncCamera (30-60Hz, even with
+    // the camera parked), which invalidated MapKit's overlay layer every
+    // frame and destabilized the probe annotations' layout the same way
+    // per-frame camera re-assignment does (see the lastReq guard below) —
+    // the JS calibration ingested those shaky probe answers and every
+    // JS-drawn element visibly bounced against a steady photo. Colors and
+    // alphas are baked into the renderer's paint (fill #7ecb86 @ 0.13,
+    // contour rgba(30,60,35,0.26) — drawGreen()'s exact values in game.js).
     private var greenOverlays: [MKOverlay] = []
-    private var greenFillRenderers: [ObjectIdentifier: MKPolygonRenderer] = [:]
-    private var greenContourRenderers: [ObjectIdentifier: MKMultiPolylineRenderer] = [:]
 
     func enter(into parent: UIView, behind webView: WKWebView) {
         self.webView = webView
@@ -96,8 +105,6 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
         lastReq = nil
         if let mv = mapView { mv.removeOverlays(greenOverlays) }
         greenOverlays.removeAll()
-        greenFillRenderers.removeAll()
-        greenContourRenderers.removeAll()
         mapView?.removeFromSuperview()
         webView?.isOpaque = true
         webView?.backgroundColor = nil
@@ -114,9 +121,8 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     /// not what it asked for. game.js folds these actuals back into
     /// buildAppleProj (see _appleActualCam there).
     func syncCamera(lat: Double, lon: Double, heading: Double, distM: Double, pitch: Double,
-                    probes: [[Double]], detailAlpha: Double, done: @escaping ([String: Any]) -> Void) {
+                    probes: [[Double]], done: @escaping ([String: Any]) -> Void) {
         guard let mv = mapView else { done([:]); return }
-        setGreenOverlayAlpha(detailAlpha)
         // Skip the camera assignment when the request hasn't changed: every
         // mv.camera set makes flyover RE-SAMPLE its pitch anchor from the
         // currently loaded mesh LOD, and at rest that re-roll alternates
@@ -218,64 +224,111 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     /// only when game.js's greensInPlay() set actually changes (hole change,
     /// or the ball crossing into a new green's relevance), not every frame,
     /// so a full remove+add is cheap enough (at most 1-2 greens at a time).
+    /// Once added, the overlays are never mutated (see the STATIC BY CONTRACT
+    /// note on greenOverlays above).
     /// `greens`: [{ fill: [[lat,lon],...], contours: [{closed, pts:
     /// [[lat,lon],...]}] }] — already projected to corrected-WGS84 JS-side.
     func setGreenOverlay(_ greens: [JSObject]) {
         guard let mv = mapView else { return }
         mv.removeOverlays(greenOverlays)
         greenOverlays.removeAll()
-        greenFillRenderers.removeAll()
-        greenContourRenderers.removeAll()
 
         for green in greens {
-            if let fill = green["fill"] as? [[Double]], fill.count >= 3 {
-                let coords = fill.map { CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1]) }
-                let poly = MKPolygon(coordinates: coords, count: coords.count)
-                greenOverlays.append(poly)
-                mv.addOverlay(poly)
+            guard let fill = green["fill"] as? [[Double]], fill.count >= 3 else { continue }
+            var contours: [GreenOverlay.Contour] = []
+            for c in (green["contours"] as? [JSObject]) ?? [] {
+                guard let pts = c["pts"] as? [[Double]], pts.count >= 2 else { continue }
+                contours.append(GreenOverlay.Contour(
+                    closed: (c["closed"] as? Bool) ?? false,
+                    pts: pts.map { MKMapPoint(CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1])) }))
             }
-            if let contours = green["contours"] as? [JSObject] {
-                var lines: [MKPolyline] = []
-                for c in contours {
-                    guard let pts = c["pts"] as? [[Double]], pts.count >= 2 else { continue }
-                    let coords = pts.map { CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1]) }
-                    lines.append(MKPolyline(coordinates: coords, count: coords.count))
-                }
-                if !lines.isEmpty {
-                    let multi = MKMultiPolyline(lines)
-                    greenOverlays.append(multi)
-                    mv.addOverlay(multi)
-                }
-            }
+            let ov = GreenOverlay(
+                fill: fill.map { MKMapPoint(CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1])) },
+                contours: contours)
+            greenOverlays.append(ov)
+            mv.addOverlay(ov)
         }
-    }
-
-    /// Mirrors game.js's `_apDetailA` fade — 0.13/0.26 are drawGreen()'s
-    /// current fill/contour baseline alphas (game.js ~3546/3560); detailAlpha
-    /// multiplies on top exactly like `ctx.globalAlpha = _apDetailA` does
-    /// there, so the fade-in/out feel matches the JS-canvas version unchanged.
-    private func setGreenOverlayAlpha(_ alpha: Double) {
-        let a = CGFloat(max(0, min(1, alpha)))
-        for r in greenFillRenderers.values { r.alpha = a * 0.13 }
-        for r in greenContourRenderers.values { r.alpha = a * 0.26 }
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-        if let polygon = overlay as? MKPolygon {
-            let r = MKPolygonRenderer(polygon: polygon)
-            r.fillColor = UIColor(red: 0x7e / 255, green: 0xcb / 255, blue: 0x86 / 255, alpha: 1)
-            r.alpha = 0 // set for real by the next syncCamera's detailAlpha
-            greenFillRenderers[ObjectIdentifier(polygon)] = r
-            return r
-        }
-        if let multi = overlay as? MKMultiPolyline {
-            let r = MKMultiPolylineRenderer(multiPolyline: multi)
-            r.strokeColor = UIColor(red: 30 / 255, green: 60 / 255, blue: 35 / 255, alpha: 1)
-            r.lineWidth = 1.5
-            r.alpha = 0
-            greenContourRenderers[ObjectIdentifier(multi)] = r
-            return r
+        if let green = overlay as? GreenOverlay {
+            return GreenOverlayRenderer(overlay: green)
         }
         return MKOverlayRenderer(overlay: overlay)
+    }
+}
+
+/// One green = one overlay: the fill ring AND its break-contour paths,
+/// rendered together in a single draw pass (GreenOverlayRenderer below).
+/// One object through one rasterization pipeline — the exact path the
+/// magenta-MKPolygon spike proved drapes correctly onto the flyover 3D
+/// terrain — so the fill and its contours drape as a unit and can never
+/// separate (the first version's separate MKMultiPolyline had unproven
+/// drape behavior, and contours floating off the fill read as "the green
+/// is off the photo"). Geometry is converted to MKMapPoint space once,
+/// at construction; everything here is immutable after init, which also
+/// makes it safe for MapKit's concurrent per-tile draw calls.
+final class GreenOverlay: NSObject, MKOverlay {
+    struct Contour {
+        let closed: Bool
+        let pts: [MKMapPoint]
+    }
+    let fill: [MKMapPoint]
+    let contours: [Contour]
+    let boundingMapRect: MKMapRect
+    let coordinate: CLLocationCoordinate2D
+
+    init(fill: [MKMapPoint], contours: [Contour]) {
+        self.fill = fill
+        self.contours = contours
+        var rect = MKMapRect.null
+        for p in fill {
+            rect = rect.union(MKMapRect(x: p.x, y: p.y, width: 0, height: 0))
+        }
+        // Small pad so contour strokes right at the fill edge don't clip at
+        // the overlay's tile boundary.
+        self.boundingMapRect = rect.insetBy(dx: -rect.size.width * 0.05 - 1, dy: -rect.size.height * 0.05 - 1)
+        self.coordinate = MKMapPoint(x: rect.midX, y: rect.midY).coordinate
+    }
+}
+
+final class GreenOverlayRenderer: MKOverlayRenderer {
+    // drawGreen()'s exact photo-mode paint (game.js ~3546/3560): translucent
+    // tint that lets the real turf show through, thin dark contour strokes.
+    private static let fillColor = UIColor(red: 0x7e / 255, green: 0xcb / 255, blue: 0x86 / 255, alpha: 0.13).cgColor
+    private static let contourColor = UIColor(red: 30 / 255, green: 60 / 255, blue: 35 / 255, alpha: 0.26).cgColor
+
+    override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
+        guard let green = overlay as? GreenOverlay, green.fill.count >= 3 else { return }
+
+        let ring = CGMutablePath()
+        ring.move(to: point(for: green.fill[0]))
+        for p in green.fill.dropFirst() { ring.addLine(to: point(for: p)) }
+        ring.closeSubpath()
+
+        context.addPath(ring)
+        context.setFillColor(Self.fillColor)
+        context.fillPath()
+
+        guard !green.contours.isEmpty else { return }
+        context.saveGState()
+        // Clip contours to the green — the marching-squares paths are built
+        // over the green's bounding box and rely on the draw-time clip (same
+        // as drawGreen's withClip), otherwise they'd spill past the collar.
+        context.addPath(ring)
+        context.clip()
+        let lines = CGMutablePath()
+        for c in green.contours {
+            lines.move(to: point(for: c.pts[0]))
+            for p in c.pts.dropFirst() { lines.addLine(to: point(for: p)) }
+            if c.closed { lines.closeSubpath() }
+        }
+        context.addPath(lines)
+        context.setStrokeColor(Self.contourColor)
+        context.setLineWidth(1.2 / zoomScale) // ~constant screen px at any zoom
+        context.setLineJoin(.round)
+        context.setLineCap(.round)
+        context.strokePath()
+        context.restoreGState()
     }
 }

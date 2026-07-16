@@ -60,10 +60,6 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("lat/lon/heading/distM required"); return
         }
         let pitch = call.getDouble("pitch") ?? 0
-        // Live fade for the native green overlay (mirrors game.js's _apDetailA)
-        // — piggybacked on this existing per-frame call rather than a second
-        // bridge round-trip, since this value already changes every frame.
-        let detailAlpha = call.getDouble("detailAlpha") ?? 0
         syncCount += 1
         if syncCount % 30 == 1 { // log roughly once/sec at the ~30fps throttle, not every frame
             NSLog("CourseMap3D: syncCamera #\(syncCount) lat=\(lat) lon=\(lon) heading=\(heading) distM=\(distM) pitch=\(pitch)")
@@ -73,7 +69,7 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
         let probes = (call.getArray("probes") as? [[Double]]) ?? []
         DispatchQueue.main.async {
             self.layer.syncCamera(lat: lat, lon: lon, heading: heading, distM: distM, pitch: pitch,
-                                   probes: probes, detailAlpha: detailAlpha) { actual in
+                                   probes: probes) { actual in
                 var out = JSObject()
                 for (k, v) in actual {
                     if let d = v as? Double { out[k] = d }

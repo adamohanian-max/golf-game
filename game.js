@@ -913,13 +913,7 @@ function syncAppleGround() {
   }
   // Send the REQUESTED camera; record what MapKit actually applied (its
   // clamps) so the next frame's overlay projection can match the real map.
-  // detailAlpha: live fade for the native green overlay (see
-  // syncAppleGreenOverlay/appleGreenOverlayPayload) — piggybacked on this
-  // existing per-frame call instead of a second bridge round-trip, since
-  // _apDetailA already changes every frame. Up to 1 frame stale here (this
-  // fires before draw()'s _apDetailA update for the frame) — imperceptible
-  // on an already-eased fade.
-  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes, detailAlpha: _apDetailA })
+  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes })
     .then((a) => {
       if (a && typeof a.distM === "number") {
         _appleActualCam = { lat: a.lat, lon: a.lon, distM: a.distM, pitch: a.pitch, heading: a.heading,
@@ -975,8 +969,13 @@ function appleGreenOverlayPayload(g) {
 // Pushes the current greens-in-play set to the native overlay ONLY when the
 // set actually changed (hole change / ball crossing into a new green's
 // relevance) — cheap identity check by g.poly reference, not every frame.
+// Once sent, the native side never mutates the overlays (no per-frame alpha
+// or geometry writes over the bridge — the STATIC-BY-CONTRACT rule in
+// CourseMap3DViewController; violating it destabilized the probe answers
+// and brought back the whole-overlay bounce).
 function syncAppleGreenOverlay(gs) {
-  if (!nativeGreenOverlay || !window.Capacitor || !window.Capacitor.Plugins.CourseMap3D) return;
+  if (!window.Capacitor || !window.Capacitor.Plugins.CourseMap3D) return;
+  if (!nativeGreenOverlay) gs = []; // kill switch: clear native, JS drawGreen takes over
   const polys = gs.map((g) => g.poly);
   const changed = !_nativeGreenPolys || polys.length !== _nativeGreenPolys.length ||
     polys.some((p, i) => p !== _nativeGreenPolys[i]);
@@ -5426,13 +5425,19 @@ function draw() {
     // break — without them putting on this course is blind. Same photo-mode
     // treatment every aerial course gets, minus the aerial itself.
     if (!HOLE.isRange) {
+      const gs = greensInPlay();
+      // Native tint+contours: always present for the greens in play, NOT
+      // gated behind the detail fade — the gate exists because the JS
+      // projection can't be trusted mid-camera-motion, which doesn't apply
+      // to native rendering (MapKit draws it exact, glued to its own
+      // imagery). The dedupe inside makes this a per-frame no-op until the
+      // set really changes. Relief below (still JS-projected) keeps the gate.
+      syncAppleGreenOverlay(gs);
       // Green detail earns its screen time: only the greens in play, only
       // when the pin is in club reach AND the camera has settled (see
       // appleGreenDetailWanted). Eased alpha so it fades in, never pops.
       _apDetailA += ((appleGreenDetailWanted() ? 1 : 0) - _apDetailA) * 0.12;
       if (_apDetailA > 0.02) {
-        const gs = greensInPlay();
-        syncAppleGreenOverlay(gs); // native overlay handles fill+contours when nativeGreenOverlay is on
         ctx.save();
         ctx.globalAlpha = _apDetailA;
         if (!nativeGreenOverlay) drawGreen(true, gs); // kill-switch fallback: original JS-canvas draw
