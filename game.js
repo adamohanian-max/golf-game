@@ -3610,11 +3610,13 @@ function drawGreen(photo, only) {
   // Apple's imagery, and skipping them saves the projection work).
   const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
   const baseA = ctx.globalAlpha;  // respect a caller's fade (Apple-ground detail ease-in)
-  ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(90,165,99,0.35)";
-  ctx.lineWidth = ws(photo ? 1.2 : 1.5);
-  ctx.lineJoin = "round";
-  const outlines = only ? only.map((g) => g.poly) : (s.green || []);
-  for (const poly of outlines) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+  if (!view.threeProj) { // three.js 3D: the WebGL green patch already reads as the green — skip the collar ring
+    ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(90,165,99,0.35)";
+    ctx.lineWidth = ws(photo ? 1.2 : 1.5);
+    ctx.lineJoin = "round";
+    const outlines = only ? only.map((g) => g.poly) : (s.green || []);
+    for (const poly of outlines) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+  }
   for (const g of only || HOLE._greens || []) {
     if (!polyVisible(g.poly)) continue; // skip off-screen greens (incl. their topo)
     withClip(g.poly, () => {

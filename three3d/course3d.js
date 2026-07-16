@@ -1164,12 +1164,11 @@ function frameBirdsEye(fromS, toS) {
   controls.update();
 }
 
-// ---- broadcast fly-cam: chases the ball while it's moving, re-frames a
-// bird's-eye of ball->pin the moment it settles (phase 4/10). ------------
-let camMode = "address";   // "address" (static bird's-eye) | "follow" (chasing the shot)
+// ---- shot camera: holds a static bird's-eye while the ball is airborne (no
+// chase), re-frames ball->pin the moment it settles. ---------------------
+let camMode = "address";   // always "address" now — the in-flight follow was removed
 let wasMoving = false;
 let _lastHoleNum = null;    // reframe to the new tee when this changes (render())
-let followDir = { x: 0, y: -1 }; // world-space unit vector the camera trails behind
 
 function updateShotCamera() {
   const gb = window.GolfBridge;
@@ -1178,17 +1177,6 @@ function updateShotCamera() {
   const moving = !!st.moving;
   const b = st.ball;
 
-  if (moving && !wasMoving) {
-    // shot just launched: trail from the ball's own velocity if it's already
-    // nonzero, else (first physics tick hasn't run yet) fall back to the
-    // ball->pin direction so the cut isn't facing backwards.
-    const hole = gb.getHole();
-    let dx = b.vx, dy = b.vy;
-    if (Math.hypot(dx, dy) < 1e-4 && hole) { dx = hole.holePos.x - b.x; dy = hole.holePos.y - b.y; }
-    const d = Math.hypot(dx, dy) || 1;
-    followDir = { x: dx / d, y: dy / d };
-    camMode = "follow";
-  }
   if (!moving && wasMoving) {
     // settled: re-frame a bird's-eye toward the pin for the next shot.
     const hole = gb.getHole();
@@ -1200,20 +1188,6 @@ function updateShotCamera() {
     }
   }
   wasMoving = moving;
-
-  if (camMode === "follow") {
-    const bh = gb.terrainZ(b.x, b.y);
-    const ballS = worldToScene(b.x, b.y, bh + (b.z || 0));
-    const m = M();
-    const behind = 16, up = 7;
-    const targetPos = new THREE.Vector3(
-      ballS.x - followDir.x * m * behind,
-      ballS.y + up,
-      ballS.z - followDir.y * m * behind
-    );
-    camera.position.lerp(targetPos, 0.1);
-    controls.target.lerp(ballS, 0.25);
-  }
 }
 
 function resize() {
