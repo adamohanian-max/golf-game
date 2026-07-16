@@ -160,9 +160,15 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
             // it to get where MapKit renders the raw pin COORDINATE.
             let nx = Double(v.center.x - v.centerOffset.x), ny = Double(v.center.y - v.centerOffset.y)
             let dx = nx - dbgPinX, dy = ny - dbgPinY
-            NSLog("CM3D-DBG pin flag=(%.1f,%.1f) js=(%.1f,%.1f) d=(%.1f,%.1f) |d|=%.1f pitch=%.1f distM=%.0f",
+            // Probe health: how many probe coords arrived, how many have live
+            // views (nil view => off-screen => NaN answer => no calibration).
+            var alive = 0
+            for ann in probeAnns where mv.view(for: ann) != nil { alive += 1 }
+            let p0 = probes.first.map { String(format: "(%.5f,%.5f)", $0[0], $0[1]) } ?? "none"
+            NSLog("CM3D-DBG pin flag=(%.1f,%.1f) js=(%.1f,%.1f) d=(%.1f,%.1f) |d|=%.1f pitch=%.1f distM=%.0f probes=%d alive=%d p0=%@",
                   nx, ny, dbgPinX, dbgPinY,
-                  dx, dy, (dx * dx + dy * dy).squareRoot(), pitch, distM)
+                  dx, dy, (dx * dx + dy * dy).squareRoot(), pitch, distM,
+                  probes.count, alive, p0)
         }
         // Skip the camera assignment when the request hasn't changed: every
         // mv.camera set makes flyover RE-SAMPLE its pitch anchor from the

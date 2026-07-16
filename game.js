@@ -599,7 +599,7 @@ const _calS = { a: [1, 0, 0, 1], b: [0, 0] };
 let _calEaseT = 0;
 // Sticky probe coordinates (see syncAppleGround) + last 3 fit targets for
 // the median filter in buildAppleProj.
-let _probeLL = null, _probeLLW = null;
+let _probeLL = null, _probeLLW = null, _probeRegime = -1;
 const _fitHist = [];
 // Native map frame height in points, returned by enter(). The WKWebView's
 // innerHeight EXCLUDES the home-indicator region (~33pt), so cssH/2 sits
@@ -929,8 +929,17 @@ function syncAppleGround() {
     // center paired with a new coordinate is a garbage answer (measured:
     // ±90-170 css px calibration spikes during zoom). Static coordinates
     // can't race their own layout.
+    // ...but NEVER across a pitch-regime change: probes spawned at flat-view
+    // screen fractions project to a degenerate/shifted pattern under a
+    // pitched camera (and vice versa), and the fit computed from them
+    // applies the wrong regime's correction — measured on hole 5 as a
+    // stable ±16-25px pin error at 55° with the flat-spawned quad reused
+    // verbatim (probe p0 identical across the toggle). Before probes ran at
+    // every pitch this couldn't happen (they only existed while pitched);
+    // respawning on regime change restores that invariant.
+    const regime = cam.reqPitch < 10 ? 0 : 1;
     let reuse = null;
-    if (_probeLL && _probeLL.length === 4) {
+    if (_probeLL && _probeLL.length === 4 && _probeRegime === regime) {
       reuse = _probeLL;
       for (const w of _probeLLW) {
         const q = appleProjPt(raw, w.x, w.y, _apGroundZ(raw, w.x, w.y));
@@ -940,7 +949,7 @@ function syncAppleGround() {
     if (reuse) {
       probes.push(...reuse);
     } else {
-      _probeLL = []; _probeLLW = [];
+      _probeLL = []; _probeLLW = []; _probeRegime = regime;
       for (const [fx, fy] of [[0.3, 0.33], [0.7, 0.33], [0.25, 0.75], [0.75, 0.75]]) {
         const w = appleUnproject(raw, fx * cssW, fy * cssH);
         _probeLLW.push(w);
@@ -1084,7 +1093,7 @@ function leaveAppleGround() {
   _appleActualCam = null;
   _appleCal = null;
   _calS.a = [1, 0, 0, 1]; _calS.b = [0, 0]; _calEaseT = 0;
-  _probeLL = _probeLLW = null; _fitHist.length = 0;
+  _probeLL = _probeLLW = null; _probeRegime = -1; _fitHist.length = 0;
   _apSettleN = 0; _apDetailA = 0; _nativeGreenPolys = null; _appleFlagKey = null;
   document.documentElement.style.background = "";
   document.body.style.background = "";
