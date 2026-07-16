@@ -1155,5 +1155,16 @@
     "location": "Original design",
     "region": "Other",
     "tags": []
+  },
+  {
+    "id": "hurstbourne-country-club",
+    "name": "Hurstbourne Country Club",
+    "sub": "Louisville, KY · Par 72",
+    "par": 72,
+    "yards": 5669,
+    "holes": 18,
+    "location": "Louisville, KY",
+    "region": "USA",
+    "tags": []
   }
 ]
