@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=77">
   <link rel="stylesheet" href="css/tournament.css?v=58">
-  <link rel="stylesheet" href="css/tour.css?v=3">
+  <link rel="stylesheet" href="css/tour.css?v=4">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -467,6 +467,7 @@
   <div id="tour-board" class="hidden">
     <div class="tb-box">
       <div class="tb-header">
+        <button id="tb-back" class="tb-x hidden" aria-label="Back to schedule">‹</button>
         <div class="tb-title">
           <div id="tb-event" class="tb-event">Tour Events</div>
           <div id="tb-status" class="tb-round"></div>
@@ -474,6 +475,7 @@
         </div>
         <button id="tb-close" class="tb-x" aria-label="Close">✕</button>
       </div>
+      <div id="tb-schedule" class="tb-schedule hidden"></div>
       <div class="tb-table-wrap">
         <table class="tb-table">
           <thead><tr>
@@ -651,7 +653,7 @@
         </button>
         <button class="pm-item" id="pm-tour">
           <span class="pm-label">Tour Events</span>
-          <span class="pm-sub">Follow the live PGA event — and play your way up the board</span>
+          <span class="pm-sub">Play any 2026 PGA event — compete against the real field</span>
         </button>
       </div>
       <div class="ne-actions">
@@ -748,6 +750,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=32"></script>
-  <script defer src="game.js?v=252"></script>
+  <script defer src="game.js?v=254"></script>
 </body>
 </html>

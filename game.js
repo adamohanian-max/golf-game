@@ -792,9 +792,23 @@ function buildAppleProj(cssW, cssH) {
   // over ~1.5s (see the `cal.t` freshness gate above) — so a fit from
   // recent 3D use (accurate near wherever probes last sampled, e.g. near
   // the green) could keep bleeding into the flat overlay for a bit, visibly
-  // wrong far from there (e.g. a wide view from the tee). Gate attachment on
-  // pitch directly instead of trusting decay timing to always beat it.
-  if (active && pitchDeg > 0.05) { P.calA = _calS.a.slice(); P.calB = _calS.b.slice(); }
+  // wrong far from there (e.g. a wide view from the tee).
+  //
+  // NOT a hard `pitchDeg > 0.05` cutoff though — that shipped first and
+  // discarded the cal's residual in a single frame right as the 3D->2D
+  // tween finished, popping every JS-drawn element (flag/cup/ball) upward
+  // at the exact moment the map went still (measured: photo region 0.00%
+  // frame-to-frame after the camera parked, flag region still churning).
+  // Instead, blend the calibration toward identity as pitch falls — the
+  // anchor error it corrects scales with tan(pitch), so its rightful
+  // influence really does go to zero smoothly; by 0° this is exactly the
+  // hard gate (identity, flat stays calibration-free), with no seam.
+  const calT = Math.min(1, Math.max(0, pitchDeg) / 4);
+  if (active && calT > 0) {
+    P.calA = [1 + (_calS.a[0] - 1) * calT, _calS.a[1] * calT,
+              _calS.a[2] * calT, 1 + (_calS.a[3] - 1) * calT];
+    P.calB = [_calS.b[0] * calT, _calS.b[1] * calT];
+  }
   return P;
 }
 // Project world (x, y[, height in world units]) through the Apple pinhole,
@@ -1009,9 +1023,13 @@ let activeTournamentRound = null; // 1-4, which round the player is currently pl
 let _tourCourseId = null;         // baked course id of this week's tour venue — plays free (see isTourFeatured)
 // Tour Events (spectator leaderboard + compete-against-the-pros; see "Tour Events").
 let tourPlayMode = false;         // true while playing a round that counts toward the followed tour event
-let _tourLbCache = null;          // { at, data } short-TTL cache of the live leaderboard
+let _tourLbCache = {};            // { [eventId]: {at, data} } short-TTL per-event leaderboard cache
 let _tourPoll = null;             // setInterval handle for live leaderboard polling
 let _tourExpanded = false;        // full-screen board: show full field vs leaders only
+let _tourSchedule = null;         // cached full-season schedule (array of events)
+let _tourSchedCache = null;       // { at, data } schedule fetch cache
+let _tourOpenEvent = null;        // schedule event whose board is currently open {id,name,start,end,state,period}
+let _tourActiveEventId = null;    // eventId of the round currently being played (tourPlayMode)
 // Match state — live head-to-head game with friends (see "Multiplayer matches").
 let activeMatch = null;      // full matches row from Supabase (null when not in a match)
 let matchHoleCount = 18;     // holes this match plays (9 or 18), set at Begin
@@ -10418,7 +10436,6 @@ function startTournamentRound(roundNum) {
 const TOUR_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard";
 const TOUR_CORE_EVENT = "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/";
 const TOUR_CACHE_MS = 5 * 60 * 1000;   // throttle ESPN hits within a session
-let _tourCache = null;                 // { at, data }
 
 async function fetchJSONRetry(url, tries = 3) {
   for (let i = 0; i < tries; i++) {
@@ -10430,24 +10447,59 @@ async function fetchJSONRetry(url, tries = 3) {
   return null;
 }
 
-// Featured event = a live one if any, else the soonest upcoming, else the
-// most recent. Null only on total feed failure (offline / ESPN down).
-async function fetchTourNow() {
-  if (_tourCache && Date.now() - _tourCache.at < TOUR_CACHE_MS) return _tourCache.data;
+// ESPN dates are ISO/UTC; the scoreboard's ?dates= param wants YYYYMMDD (UTC).
+function _yyyymmdd(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate());
+}
+
+// Full-season schedule from the scoreboard's leagues[].calendar (~46 events).
+// State is derived from each event's dates, then OVERRIDDEN by the real
+// status.type.state + status.period for any event ESPN currently returns in
+// sb.events (this week) — that live period is what the round gate reads.
+async function fetchTourSchedule() {
+  if (_tourSchedCache && Date.now() - _tourSchedCache.at < TOUR_CACHE_MS) return _tourSchedCache.data;
   const sb = await fetchJSONRetry(TOUR_SCOREBOARD);
   if (!sb) return null;
-  const evs = (sb.events || []).map((e) => ({
-    id: e.id,
-    name: e.name || e.shortName,
-    state: (((e.status || {}).type) || {}).state || "pre",   // pre | in | post
-    start: e.date || e.startDate,
-  }));
-  const live = evs.find((e) => e.state === "in");
-  const pre  = evs.filter((e) => e.state === "pre").sort((a, b) => new Date(a.start) - new Date(b.start))[0];
-  const post = evs.filter((e) => e.state === "post").sort((a, b) => new Date(b.start) - new Date(a.start))[0];
-  const data = { featured: live || pre || post || evs[0] || null, all: evs };
-  _tourCache = { at: Date.now(), data };
-  return data;
+  const cal = (((sb.leagues || [])[0] || {}).calendar) || [];
+  const liveById = {};
+  for (const e of (sb.events || [])) {
+    const type = ((e.status || {}).type) || {};
+    liveById[e.id] = {
+      state: type.state, period: (e.status || {}).period,
+      canceled: type.name === "STATUS_CANCELED",
+      name: e.name || e.shortName,
+    };
+  }
+  const now = Date.now();
+  const evs = cal.map((c) => {
+    const start = c.startDate, end = c.endDate;
+    let state = now < new Date(start) ? "pre"
+      : now > (new Date(end).getTime() + 864e5) ? "post" : "in";  // +1d grace past end
+    let period, canceled = false, name = c.label;
+    const lv = liveById[c.id];
+    if (lv) {
+      if (lv.state) state = lv.state;
+      period = lv.period; canceled = !!lv.canceled;
+      if (lv.name) name = lv.name;
+    }
+    return { id: c.id, name, start, end, state, period, canceled };
+  }).filter((e) => e.id);
+  evs.sort((a, b) => new Date(a.start) - new Date(b.start));
+  _tourSchedCache = { at: Date.now(), data: evs };
+  return evs;
+}
+
+// Round gate (locked rule): a completed event is fully replayable; a live event
+// opens round N once the pros have started it (period >= N); an upcoming event
+// is not playable yet. Canceled events never play.
+function canPlayRound(ev, N) {
+  if (!ev || N > 4 || N < 1 || ev.canceled) return false;
+  if (ev.state === "post") return true;
+  if (ev.state === "in") return (ev.period || 0) >= N;
+  return false;   // pre
 }
 
 // Venue detail for an event (course name, location, par, per-hole data).
@@ -10518,15 +10570,22 @@ function _parseToPar(v) {
 function _parClass(n) { return n == null ? "" : n < 0 ? "tp-under" : n > 0 ? "tp-over" : "tp-even"; }
 function _parText(n) { return n == null ? "—" : formatToPar(n); }
 
-// Featured event pick (mirrors fetchTourNow) but over the raw scoreboard so we
-// keep each event's full competitors array. Short 45s cache for live freshness.
-async function fetchTourLeaderboard() {
-  if (_tourLbCache && Date.now() - _tourLbCache.at < 45000) return _tourLbCache.data;
-  const sb = await fetchJSONRetry(TOUR_SCOREBOARD);
+// Leaderboard for a specific event (by id + start date) — or, with no args, the
+// featured event (live → soonest upcoming → most recent). scoreboard?dates= on
+// any date in the event window returns that event's full field, so past events
+// load their real final leaderboard the same way live ones do. Per-event 45s
+// cache for live freshness.
+async function fetchTourLeaderboard(eventId, startISO) {
+  const key = eventId || "_featured";
+  const cached = _tourLbCache[key];
+  if (cached && Date.now() - cached.at < 45000) return cached.data;
+  const url = startISO ? TOUR_SCOREBOARD + "?dates=" + _yyyymmdd(startISO) : TOUR_SCOREBOARD;
+  const sb = await fetchJSONRetry(url);
   if (!sb || !(sb.events || []).length) return null;
   const st = (e) => (((e.status || {}).type) || {}).state || "pre";
   const evs = sb.events;
-  const ev = evs.find((e) => st(e) === "in")
+  const ev = (eventId && evs.find((e) => e.id === eventId))
+    || evs.find((e) => st(e) === "in")
     || evs.filter((e) => st(e) === "pre").sort((a, b) => new Date(a.date) - new Date(b.date))[0]
     || evs.filter((e) => st(e) === "post").sort((a, b) => new Date(b.date) - new Date(a.date))[0]
     || evs[0];
@@ -10555,18 +10614,49 @@ async function fetchTourLeaderboard() {
   }).filter((p) => p.total != null || p.rounds.length);
   players.sort((a, b) => (a.total == null ? 999 : a.total) - (b.total == null ? 999 : b.total));
 
-  const data = { eventId: ev.id, name: ev.name || ev.shortName, state, round, roundLabel, courseName: null, players };
-  _tourLbCache = { at: Date.now(), data };
+  const canceled = (((ev.status || {}).type) || {}).name === "STATUS_CANCELED"
+    || (state === "post" && !players.length);
+  const data = { eventId: ev.id, name: ev.name || ev.shortName, state, round, roundLabel, courseName: null, players, canceled };
+  _tourLbCache[key] = { at: Date.now(), data };
   return data;
 }
 
-// --- My local standing (persisted, merges into the real field) ---
-function getTourEvent() { return lsGet("golf.tourEvent", null); }
-function setTourEvent(o) { lsSet("golf.tourEvent", o); }
+// --- My local standing (persisted per event, merges into the real field) ---
+// Progress lives in a per-event MAP so playing many 2026 events each bank rounds
+// independently. Legacy single-slot golf.tourEvent is migrated in on first read.
+function _tourMap() {
+  let map = lsGet("golf.tourEvents", null);
+  if (!map) {
+    map = {};
+    const legacy = lsGet("golf.tourEvent", null);   // one-time migration
+    if (legacy && legacy.eventId) map[legacy.eventId] = { name: legacy.name, rounds: legacy.rounds || [] };
+    lsSet("golf.tourEvents", map);
+  }
+  return map;
+}
+// The event the standing helpers act on: the live-play event while playing,
+// else the event whose board is open.
+function _curEventId() {
+  if (tourPlayMode && _tourActiveEventId) return _tourActiveEventId;
+  if (_tourOpenEvent) return _tourOpenEvent.id;
+  return _tourActiveEventId || null;
+}
+function getTourEvent(id) {
+  id = id || _curEventId();
+  if (!id) return null;
+  const e = _tourMap()[id];
+  return e ? { eventId: id, name: e.name, rounds: e.rounds || [] } : null;
+}
+function setTourEvent(o) {
+  if (!o || !o.eventId) return;
+  const map = _tourMap();
+  map[o.eventId] = { name: o.name, rounds: o.rounds || [] };
+  lsSet("golf.tourEvents", map);
+}
 function ensureTourEvent(eventId, name) {
-  let te = getTourEvent();
-  if (!te || te.eventId !== eventId) { te = { eventId, name, rounds: [] }; setTourEvent(te); }
-  return te;
+  const map = _tourMap();
+  if (!map[eventId]) { map[eventId] = { name, rounds: [] }; lsSet("golf.tourEvents", map); }
+  return getTourEvent(eventId);
 }
 // My row for the merged board: cumulative to-par across completed rounds + the
 // live round in progress. Self-paced — my THRU shows my own progress.
@@ -10589,13 +10679,21 @@ function tourMyStanding() {
     today, thru, isMe: true, roundN: roundsPlayed,
   };
 }
-// Which round the board should reflect = the round the PLAYER is on. Pros are
-// shown aggregated THROUGH this round (R1 → R1 only, R2 → 1+2, …), so the field
-// always compares like-for-like against my progress. 1..4.
+// Which round the board should reflect. Once I've teed off, it's the round the
+// PLAYER is on — pros shown aggregated THROUGH that round (R1 → R1 only, R2 →
+// 1+2, …) so the field compares like-for-like against my progress. Before I've
+// played (pure spectating), it's the event's OWN current round: a finished event
+// shows the final leaderboard, a live one shows through the live round. 1..4.
 function tourDisplayRound() {
   const te = getTourEvent();
   const banked = te && te.rounds ? te.rounds.length : 0;
   const inRound = tourPlayMode;
+  if (banked === 0 && !inRound) {
+    const ev = _tourOpenEvent, d = _tourBoardData;
+    if ((ev && ev.state === "post") || (d && d.state === "post")) return 4;
+    const per = (ev && ev.period) || (d && d.round) || 1;
+    return Math.min(Math.max(per, 1), 4);
+  }
   let n = banked + (inRound ? 1 : 0);
   return Math.min(Math.max(n, 1), 4);
 }
@@ -10670,7 +10768,7 @@ function setupTourRoundEnd(n) {
   note.textContent = ""; note.className = "re-tour-note";
 
   const hide = () => document.getElementById("round-end").classList.add("hidden");
-  const goResults = () => { hide(); openTourEvents(); };
+  const goResults = () => { hide(); _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents(); };
   const goNext = () => { hide(); teeOffTourRound(); };
   const line = tourCutLine();
   const lineTxt = line != null ? " (cut " + formatToPar(line) + ")" : "";
@@ -10690,33 +10788,115 @@ function setupTourRoundEnd(n) {
   }
 }
 
-// --- Full-screen board (Masters-app style) ---
+// --- Full-screen overlay: schedule list (front) → one event's board ---
+// Toggle the two panes of #tour-board.
+function _showTourPane(which) {
+  const isBoard = which === "board";
+  const sched = document.getElementById("tb-schedule");
+  const wrap = document.querySelector("#tour-board .tb-table-wrap");
+  const acts = document.querySelector("#tour-board .tb-actions");
+  const back = document.getElementById("tb-back");
+  if (sched) sched.classList.toggle("hidden", isBoard);
+  if (wrap) wrap.classList.toggle("hidden", !isBoard);
+  if (acts) acts.classList.toggle("hidden", !isBoard);
+  if (back) back.classList.toggle("hidden", !isBoard);
+}
+
+// Schedule = whole 2026 season. Tapping an event opens its board.
 async function openTourEvents() {
   const ov = document.getElementById("tour-board");
   ov.classList.remove("hidden");
   mode = "tour";
-  _tourExpanded = false;   // always open on the leaders view
+  _tourOpenEvent = null;
+  stopTourPoll();
   elMenu.classList.add("hidden");
   document.getElementById("play-menu") && document.getElementById("play-menu").classList.add("hidden");
+  _showTourPane("schedule");
   document.getElementById("tb-event").textContent = "Tour Events";
-  document.getElementById("tb-status").textContent = "Loading live scores…";
+  document.getElementById("tb-status").textContent = "Loading schedule…";
+  document.getElementById("tb-course").textContent = "";
+  const sched = document.getElementById("tb-schedule");
+  if (sched) sched.innerHTML = "";
+
+  const evs = await fetchTourSchedule();
+  if (ov.classList.contains("hidden")) return;   // closed while loading
+  if (!evs || !evs.length) { document.getElementById("tb-status").textContent = "Couldn't reach the tour feed — try again."; return; }
+  _tourSchedule = evs;
+  renderTourSchedule(evs);
+}
+
+function _schedRowHTML(e) {
+  const badge = e.canceled ? '<span class="tb-badge tb-badge-x">Canceled</span>'
+    : e.state === "in" ? '<span class="tb-badge tb-badge-live">Live</span>'
+    : e.state === "post" ? '<span class="tb-badge tb-badge-final">Final</span>'
+    : '<span class="tb-badge tb-badge-up">Upcoming</span>';
+  const played = ((getTourEvent(e.id) || {}).rounds || []).length;
+  const prog = played ? '<span class="tb-sched-prog">' + played + '/4 played</span>' : "";
+  return '<button class="tb-sched-row" data-id="' + escapeHTML(e.id) + '">' +
+    '<span class="tb-sched-main">' +
+      '<span class="tb-sched-name">' + escapeHTML(e.name) + "</span>" +
+      '<span class="tb-sched-date">' + escapeHTML(fmtEventDate(e.start)) + "</span></span>" +
+    '<span class="tb-sched-meta">' + prog + badge + "</span></button>";
+}
+
+function renderTourSchedule(evs) {
+  document.getElementById("tb-event").textContent = "Tour Events";
+  document.getElementById("tb-status").textContent = evs.length + " events · 2026 PGA Tour season";
+  document.getElementById("tb-course").textContent = "";
+  // Live first, then upcoming (soonest), then past (most recent).
+  const rank = { in: 0, pre: 1, post: 2 };
+  const rows = evs.slice().sort((a, b) => {
+    if (rank[a.state] !== rank[b.state]) return rank[a.state] - rank[b.state];
+    return a.state === "post" ? new Date(b.start) - new Date(a.start) : new Date(a.start) - new Date(b.start);
+  });
+  const host = document.getElementById("tb-schedule");
+  if (!host) return;
+  host.innerHTML = rows.map(_schedRowHTML).join("");
+  host.querySelectorAll(".tb-sched-row").forEach((el) => {
+    el.addEventListener("click", () => {
+      const ev = evs.find((e) => e.id === el.dataset.id);
+      if (ev) openTourEvent(ev);
+    });
+  });
+}
+
+function tourBackToSchedule() {
+  stopTourPoll();
+  _tourOpenEvent = null;
+  _showTourPane("schedule");
+  if (_tourSchedule) renderTourSchedule(_tourSchedule);
+  else openTourEvents();
+}
+
+// One event's board (Masters-app style). ev = schedule entry {id,name,start,state,period}.
+async function openTourEvent(ev) {
+  const ov = document.getElementById("tour-board");
+  ov.classList.remove("hidden");
+  mode = "tour";
+  _tourExpanded = false;   // always open on the leaders view
+  _tourOpenEvent = ev;
+  elMenu.classList.add("hidden");
+  document.getElementById("play-menu") && document.getElementById("play-menu").classList.add("hidden");
+  _showTourPane("board");
+  document.getElementById("tb-event").textContent = ev.name;
+  document.getElementById("tb-status").textContent = "Loading scores…";
   document.getElementById("tb-list").innerHTML = "";
   document.getElementById("tb-course").textContent = "";
 
-  const data = await fetchTourLeaderboard();
-  if (ov.classList.contains("hidden")) return;   // closed while loading
+  const data = await fetchTourLeaderboard(ev.id, ev.start);
+  if (ov.classList.contains("hidden") || _tourOpenEvent !== ev) return;   // closed / switched while loading
   if (!data) { document.getElementById("tb-status").textContent = "Couldn't reach the tour feed — try again."; return; }
 
-  // Resolve the venue → baked course (for "Tee off").
-  const course = await fetchTourCourse(data.eventId);
-  if (ov.classList.contains("hidden")) return;   // closed during the course fetch — don't start polling
+  // Resolve the venue → baked course (for "Tee off"). Canceled events don't play.
+  const course = data.canceled ? null : await fetchTourCourse(ev.id);
+  if (ov.classList.contains("hidden") || _tourOpenEvent !== ev) return;
   data.courseName = course ? course.name : null;
   _tourCourseMatch = course ? matchTourCourse(course.name) : null;
   _tourBoardData = data;
-  ensureTourEvent(data.eventId, data.name);
+  ensureTourEvent(ev.id, data.name || ev.name);
 
   renderTourBoard(data);
-  ensureTourPoll();
+  if (data.state === "in") ensureTourPoll();
 }
 
 function _tourRowHTML(p, rank) {
@@ -10736,10 +10916,10 @@ function renderTourBoard(data) {
   const n = tourDisplayRound();
   const cut = n >= 2 ? tourCutLine() : null;
   document.getElementById("tb-event").textContent = data.name;
-  document.getElementById("tb-status").textContent =
+  document.getElementById("tb-status").textContent = data.canceled ? "Canceled" :
     (n === 1 ? "Round 1" : "Rounds 1–" + n + " · aggregate") +
     (cut != null ? " · Cut " + formatToPar(cut) : "") +
-    (data.state === "in" && data.round === n ? " · Live" : "");
+    (data.state === "in" && data.round === n ? " · Live" : data.state === "post" ? " · Final" : "");
   document.getElementById("tb-course").textContent = data.courseName || "";
 
   // From R3 on, only players who made the cut (reached round n) remain.
@@ -10765,14 +10945,24 @@ function renderTourBoard(data) {
   }
   const tee = document.getElementById("tb-tee");
   if (tee) {
-    if (_tourCourseMatch && !tourPlayMode) {   // can't start a new round mid-round
-      tee.classList.remove("hidden");
-      const rn = ((getTourEvent() || {}).rounds || []).length + 1;
-      const missedCut = rn >= 3 && !tourMadeCut();
-      tee.textContent = rn > 4 ? "Event complete" : missedCut ? "Missed the cut" : "Tee off Round " + rn;
-      tee.disabled = rn > 4 || missedCut;
-    } else {
+    // No baked venue (or canceled) → spectator only. Mid-round → can't start another.
+    if (!_tourCourseMatch || data.canceled || tourPlayMode) {
       tee.classList.add("hidden");
+    } else {
+      tee.classList.remove("hidden");
+      const rn = ((getTourEvent(data.eventId) || {}).rounds || []).length + 1;
+      const gev = _tourOpenEvent || { state: data.state, period: data.round, canceled: data.canceled };
+      const missedCut = rn >= 3 && !tourMadeCut();
+      let label, dis = false;
+      if (rn > 4) { label = "Event complete"; dis = true; }
+      else if (missedCut) { label = "Missed the cut"; dis = true; }
+      else if (!canPlayRound(gev, rn)) {
+        dis = true;
+        label = gev.state === "pre" ? "Upcoming — not started yet"
+          : "Round " + rn + " opens when the pros tee off";
+      } else { label = "Tee off Round " + rn; }
+      tee.textContent = label;
+      tee.disabled = dis;
     }
   }
 }
@@ -10789,14 +10979,17 @@ function closeTourEvents() {
 
 function teeOffTourRound() {
   const data = _tourBoardData;
-  if (!data || !_tourCourseMatch) return;
-  const rounds = ((getTourEvent() || {}).rounds) || [];
+  if (!data || !_tourCourseMatch || data.canceled) return;
+  const rounds = ((getTourEvent(data.eventId) || {}).rounds) || [];
   if (rounds.length >= 4) return;
   if (rounds.length === 2 && !tourMadeCut()) return;   // missed the cut — no R3/R4
+  const gev = _tourOpenEvent || { state: data.state, period: data.round, canceled: data.canceled };
+  if (!canPlayRound(gev, rounds.length + 1)) return;   // real-life round gate
   hideTourBoard();
   selectedCourseId = _tourCourseMatch.id;
   _tourCourseId = _tourCourseMatch.id;   // free taste — event venue plays free
   tourPlayMode = true;
+  _tourActiveEventId = data.eventId;
   ensureTourEvent(data.eventId, data.name);
   startCourse();
   ensureTourPoll();
@@ -10807,12 +11000,15 @@ function teeOffTourRound() {
 function ensureTourPoll() {
   if (_tourPoll) return;
   _tourPoll = setInterval(async () => {
-    if (!_tourBoardData || _tourBoardData.state !== "in") return;
-    const data = await fetchTourLeaderboard();
+    const ev = _tourOpenEvent;
+    if (!ev || !_tourBoardData || _tourBoardData.state !== "in") return;
+    const data = await fetchTourLeaderboard(ev.id, ev.start);
     if (!data) return;
     data.courseName = _tourBoardData.courseName;
     _tourBoardData = data;
-    if (!document.getElementById("tour-board").classList.contains("hidden")) renderTourBoard(data);
+    const boardPane = document.querySelector("#tour-board .tb-table-wrap");
+    if (!document.getElementById("tour-board").classList.contains("hidden") &&
+        boardPane && !boardPane.classList.contains("hidden")) renderTourBoard(data);
     updateTourBug();
   }, 60000);
 }
@@ -10862,12 +11058,14 @@ function updateTourBug() {
 (function wireTourEvents() {
   const close = document.getElementById("tb-close");
   if (close) close.addEventListener("click", closeTourEvents);
+  const back = document.getElementById("tb-back");
+  if (back) back.addEventListener("click", tourBackToSchedule);
   const exp = document.getElementById("tb-expand");
   if (exp) exp.addEventListener("click", () => { _tourExpanded = !_tourExpanded; if (_tourBoardData) renderTourBoard(_tourBoardData); });
   const tee = document.getElementById("tb-tee");
   if (tee) tee.addEventListener("click", teeOffTourRound);
   const bug = document.getElementById("tour-bug");
-  if (bug) bug.addEventListener("click", () => { openTourEvents(); });
+  if (bug) bug.addEventListener("click", () => { _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents(); });
 })();
 
 // --- Wire-up ---

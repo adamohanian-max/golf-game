@@ -149,6 +149,53 @@
 .tb-btn-ghost.hidden, .tb-btn-tee.hidden { display: none; }
 .tb-credit { padding: 0 var(--s-3) var(--s-3); margin: 0; font-size: 10px; color: var(--text-faint); text-align: center; }
 
+/* ---- Season schedule list (front pane) ------------------- */
+.tb-schedule {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tb-schedule.hidden { display: none; }
+.tb-sched-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  width: 100%;
+  padding: 12px var(--s-3);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(207,168,94,0.10);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.tb-sched-row:active { background: var(--w-08); }
+.tb-sched-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tb-sched-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tb-sched-date { font-size: 11px; color: var(--text-faint); }
+.tb-sched-meta { display: flex; align-items: center; gap: 8px; flex: none; }
+.tb-sched-prog { font-size: 10px; color: var(--brass-400); font-variant-numeric: tabular-nums; }
+.tb-badge {
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: var(--r-sm, 6px);
+  border: 1px solid var(--tour-line);
+  white-space: nowrap;
+}
+.tb-badge-live { color: #ff5b5b; border-color: rgba(255,91,91,0.5); }
+.tb-badge-final { color: var(--w-55); }
+.tb-badge-up { color: var(--brass-400); border-color: var(--brass-600); }
+.tb-badge-x { color: var(--text-faint); }
+
 /* ---- Bottom-left live scorebug (during gameplay) ---------- */
 #tour-bug {
   position: fixed;
