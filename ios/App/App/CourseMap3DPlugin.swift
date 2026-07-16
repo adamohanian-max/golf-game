@@ -74,12 +74,9 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
         // probes: [[lat,lon],...] — coordinates the JS overlay wants ground-truth
         // screen positions for (see CourseMap3DLayer.syncCamera).
         let probes = (call.getArray("probes") as? [[Double]]) ?? []
-        // DEBUG (misregistration experiment): JS-projected pin screen px.
-        let dbgPinX = call.getDouble("dbgPinX") ?? .nan
-        let dbgPinY = call.getDouble("dbgPinY") ?? .nan
         DispatchQueue.main.async {
             self.layer.syncCamera(lat: lat, lon: lon, heading: heading, distM: distM, pitch: pitch,
-                                   probes: probes, dbgPinX: dbgPinX, dbgPinY: dbgPinY) { actual in
+                                   probes: probes) { actual in
                 var out = JSObject()
                 for (k, v) in actual {
                     if let d = v as? Double { out[k] = d }

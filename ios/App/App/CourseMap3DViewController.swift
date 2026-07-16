@@ -143,33 +143,14 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     /// the game's overlay projection must render what the map really shows,
     /// not what it asked for. game.js folds these actuals back into
     /// buildAppleProj (see _appleActualCam there).
-    // DEBUG (misregistration experiment): counts syncs for throttled logging.
-    private var dbgSyncN = 0
-
+    // NOTE for future misregistration debugging: the flag annotation view is
+    // a free ground-truth reference — `view(for: flagAnn).center −
+    // centerOffset` is where MapKit really renders the pin coordinate, and
+    // logging it against a JS-projected pin position (temporary dbg fields on
+    // this call) is how the 2026-07 flat-offset/canopy-probe bugs were found.
     func syncCamera(lat: Double, lon: Double, heading: Double, distM: Double, pitch: Double,
-                    probes: [[Double]], dbgPinX: Double = .nan, dbgPinY: Double = .nan,
-                    done: @escaping ([String: Any]) -> Void) {
+                    probes: [[Double]], done: @escaping ([String: Any]) -> Void) {
         guard let mv = mapView else { done([:]); return }
-        // DEBUG (misregistration experiment): compare the native flag view's
-        // rendered center (model value, same read the probes use) against the
-        // JS-projected pin. Read-only; ~1 line/sec; remove after.
-        dbgSyncN += 1
-        if dbgSyncN % 30 == 1, dbgPinX.isFinite,
-           let f = flagAnn, let v = mv.view(for: f) {
-            // view.center includes centerOffset (pole-base anchoring) — undo
-            // it to get where MapKit renders the raw pin COORDINATE.
-            let nx = Double(v.center.x - v.centerOffset.x), ny = Double(v.center.y - v.centerOffset.y)
-            let dx = nx - dbgPinX, dy = ny - dbgPinY
-            // Probe health: how many probe coords arrived, how many have live
-            // views (nil view => off-screen => NaN answer => no calibration).
-            var alive = 0
-            for ann in probeAnns where mv.view(for: ann) != nil { alive += 1 }
-            let p0 = probes.first.map { String(format: "(%.5f,%.5f)", $0[0], $0[1]) } ?? "none"
-            NSLog("CM3D-DBG pin flag=(%.1f,%.1f) js=(%.1f,%.1f) d=(%.1f,%.1f) |d|=%.1f pitch=%.1f distM=%.0f probes=%d alive=%d p0=%@",
-                  nx, ny, dbgPinX, dbgPinY,
-                  dx, dy, (dx * dx + dy * dy).squareRoot(), pitch, distM,
-                  probes.count, alive, p0)
-        }
         // Skip the camera assignment when the request hasn't changed: every
         // mv.camera set makes flyover RE-SAMPLE its pitch anchor from the
         // currently loaded mesh LOD, and at rest that re-roll alternates

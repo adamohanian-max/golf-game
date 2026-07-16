@@ -918,11 +918,7 @@ function syncAppleGround() {
   }
   // Send the REQUESTED camera; record what MapKit actually applied (its
   // clamps) so the next frame's overlay projection can match the real map.
-  // DEBUG (misregistration experiment): JS-projected pin screen position —
-  // native logs its flag view center against these to quantify the JS-frame
-  // error at the green. Read-only diagnostics; remove after the experiment.
-  const dbgPinX = wx(HOLE.holePos.x, HOLE.holePos.y), dbgPinY = wyg(HOLE.holePos.x, HOLE.holePos.y);
-  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes, dbgPinX, dbgPinY })
+  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes })
     .then((a) => {
       if (a && typeof a.distM === "number") {
         _appleActualCam = { lat: a.lat, lon: a.lon, distM: a.distM, pitch: a.pitch, heading: a.heading,
@@ -961,9 +957,6 @@ let _apDetailA = 0;    // green-detail fade alpha (eases in after settle)
 // original all-JS-canvas rendering instantly, no revert needed, given this
 // session's track record of subtle only-on-device bugs in this area.
 let nativeGreenOverlay = true;
-// DEBUG (misregistration experiment): draw a magenta cross at the JS-projected
-// pin to compare against the native flag annotation. Remove after.
-const DBG_PIN_MARK = true;
 let _nativeGreenPolys = null; // last-sent green identity (array of g.poly refs) — dedupes setGreenOverlay calls
 // World-units -> Apple-corrected-WGS84 [lat,lon] pairs for one green, in the
 // exact shape CourseMap3DViewController.setGreenOverlay expects. Reuses
@@ -5688,17 +5681,6 @@ function draw() {
     ctx.stroke();
   }
   }  // end !cupHeld (cup + JS flagstick wait for the native tint)
-  // DEBUG (misregistration experiment): magenta cross at the JS-projected pin
-  // so screenshots visually corroborate the logged flag-vs-JS deltas.
-  if (DBG_PIN_MARK && appleGroundActive()) {
-    const mx = wx(HOLE.holePos.x, HOLE.holePos.y), my = wyg(HOLE.holePos.x, HOLE.holePos.y);
-    ctx.strokeStyle = "#ff00ff";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(mx - 9, my); ctx.lineTo(mx + 9, my);
-    ctx.moveTo(mx, my - 9); ctx.lineTo(mx, my + 9);
-    ctx.stroke();
-  }
   }
 
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
