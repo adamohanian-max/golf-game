@@ -497,12 +497,16 @@ let mode = "menu";
 // are untouched either way (see window.GolfBridge + update3DMode below).
 let render3D = false;
 function render3DWanted() {
-  if (!course || course.id !== "four-oaks-dracut") return false;
-  if (mode !== "course" || (typeof HOLE !== "undefined" && HOLE && HOLE.isRange)) return false;
-  try {
-    if (/[?&]3d=1\b/.test(location.search)) return true;
-  } catch (e) { /* location unavailable, fall through to the stored toggle */ }
-  return lsGet("golf.render3D", false); // set by the "Play in 3D" course-card badge (renderCourseCards)
+  // Four Oaks moved to the Apple Flyover ground path (appleGroundActive) — the
+  // three.js engine (three3d/course3d.js) is RETIRED but kept in-tree, dormant.
+  // Four Oaks was the only course this ever returned true for, so it is now
+  // always false and update3DMode()/window.Course3D calls are no-ops.
+  //
+  // Re-enabling three.js (e.g. as a web-only fallback where Apple can't run):
+  // return the old gate BUT force false whenever appleGroundActive(), or the
+  // `if (render3D) return;` at the top of draw() will starve the Apple ground —
+  // syncAppleGround() (which inserts the native map) lives downstream of it.
+  return false;
 }
 function update3DMode() {
   const want = render3DWanted();
@@ -518,7 +522,7 @@ function update3DMode() {
     if (render3D) window.Course3D.enter(); else window.Course3D.leave();
   }
 }
-// Apple MapKit ground layer (Butter Brook) — NOT a render3D-style full-frame
+// Apple MapKit ground layer (Butter Brook, Four Oaks) — NOT a render3D-style full-frame
 // takeover. Apple is this course's ground renderer always, the same way the
 // baked NAIP aerial is every other course's ground renderer always; there is
 // no 2D/Apple toggle. draw() (below) skips only the ground-paint calls for
@@ -526,8 +530,14 @@ function update3DMode() {
 // a native MKMapView sits behind the transparent-there canvas, camera synced
 // each frame to the game's own view/camera state via course.geo.toLonLat
 // (tools/geo_anchor_course.py). See CourseMap3DPlugin.swift.
+// Courses whose ground layer is the native Apple MKMapView (see appleGroundActive).
+// Butter Brook (fictional, draped on real Superior NF terrain) + Four Oaks (real
+// course — Apple Flyover renders the actual course under the overlay). The native
+// plugin is course-agnostic; a course qualifies once it has a `geo` anchor
+// (tools/geo_anchor_course.py) and Apple Flyover coverage at its location.
+const APPLE_GROUND_IDS = new Set(["butter-brook-golf-club", "four-oaks-dracut"]);
 function appleGroundActive() {
-  return !!(course && course.id === "butter-brook-golf-club" && course.geo &&
+  return !!(course && APPLE_GROUND_IDS.has(course.id) && course.geo &&
     mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
     window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
     window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D);
@@ -6981,17 +6991,8 @@ function renderCourseCards() {
     if (featured && !isTournamentAdmin()) badges += `<span class="cs-badge featured">Free today</span>`;
     if (tags.includes("pgaTour")) badges += `<span class="cs-badge pga">PGA Tour</span>`;
     if (tags.includes("major")) badges += `<span class="cs-badge major">Major</span>`;
-    // Four Oaks 3D (three.js) is WIP — still hidden from the public picker via
-    // HIDDEN_COURSE_IDS (only admins reach this card at all, see
-    // visibleCourses()). This toggle replaces the dev-only `?3d=1` URL param
-    // as the real entry point; render3DWanted() (top of file) already reads
-    // this same localStorage key every frame, so flipping it takes effect
-    // immediately, no reload needed.
-    const is3D = c.id === "four-oaks-dracut";
-    if (is3D) {
-      const on = lsGet("golf.render3D", false);
-      badges += `<span class="cs-badge cs-badge-3d${on ? " on" : ""}" data-three-d-toggle>${on ? "3D ✓" : "Play in 3D"}</span>`;
-    }
+    // (Four Oaks' old "Play in 3D" three.js toggle was removed — that course is
+    // now on the Apple Flyover ground path, iOS-only, no picker toggle.)
     const par = c.par != null ? c.par : "—";
     const yds = c.yards ? c.yards.toLocaleString() + " yds" : "";
     const loc = c.location && c.location !== "Unknown" ? esc(c.location) : "";
@@ -7015,14 +7016,6 @@ function renderCourseCards() {
     const play = card.querySelector(".cs-play");
     if (play) play.addEventListener("click", () => { selectedCourseId = c.id; startCourse(); });
     card.querySelector(".cs-preview").addEventListener("click", () => openPreview(c.id));
-    if (is3D) {
-      const toggle = card.querySelector("[data-three-d-toggle]");
-      toggle.addEventListener("click", (e) => {
-        e.stopPropagation();
-        lsSet("golf.render3D", !lsGet("golf.render3D", false));
-        renderCourseCards(); // re-render so the badge label/state reflects the flip immediately
-      });
-    }
     frag.appendChild(card);
   }
   elCsGrid.innerHTML = "";
