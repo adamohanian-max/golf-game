@@ -592,6 +592,11 @@ let _appleCal = null;
 // Smoothed calibration affine (eases toward each fresh fit; identity when
 // none) — raw per-sync fits would pop the whole overlay on anchor re-rolls.
 const _calS = { a: [1, 0, 0, 1], b: [0, 0] };
+// dt tracker for _calS's ease rate (see below) — mirrors updateCamera's
+// _camEaseT pattern (that one's comment explains why frame-count-based
+// easing is a real bug class here: convergence speed couples to device fps
+// instead of wall-clock time).
+let _calEaseT = 0;
 // Sticky probe coordinates (see syncAppleGround) + last 3 fit targets for
 // the median filter in buildAppleProj.
 let _probeLL = null, _probeLLW = null;
@@ -606,7 +611,7 @@ function buildAppleProj(cssW, cssH) {
   let Oy = (-view.d * sx0 + view.a * sy0) / det;
   const m = M_PER_UNIT;
   // Requested center in geo terms (also what syncAppleGround sends).
-  const g = course.geo.toLonLat;
+  const g = appleGeoAffine();
   const reqLat = g[3] * Ox + g[4] * Oy + g[5];
   const reqLon = g[0] * Ox + g[1] * Oy + g[2];
   // What the game WANTS (always what gets sent over the bridge — the map
@@ -667,11 +672,11 @@ function buildAppleProj(cssW, cssH) {
   let fitA = null, fitB = null;
   const cal = _appleCal;
   const hdgDiff = cal ? Math.abs(((cal.P.heading - P.heading) % 360 + 540) % 360 - 180) : 999;
-  if (cal && cal.ll.length === 3 &&
+  if (cal && cal.ll.length >= 3 &&
       Math.abs(cal.P.reqDistM - reqDistM) < reqDistM * 0.25 &&
       Math.abs(cal.P.pitch - pitchDeg) < 10 && hdgDiff < 10 &&
       performance.now() - cal.t < 1500) {
-    const g = course.geo.toLonLat;
+    const g = appleGeoAffine();
     const gdet = g[0] * g[4] - g[1] * g[3] || 1;
     // Predict through the RAW replica of the camera the answers were made
     // for (cal.P, calibration stripped) — not the current frame's camera.
@@ -764,13 +769,32 @@ function buildAppleProj(cssW, cssH) {
   // content itself jumped) — snap most of the way in one frame so the
   // overlay lands with it, instead of visibly sliding after it. Near
   // targets keep the gentle rate that smooths probe answer granularity.
+  // dt-scaled (not a flat per-call blend) so convergence speed stays
+  // constant in wall-clock time regardless of device frame rate — this
+  // function runs once per rendered frame via applyView(), same coupling
+  // updateCamera's _camEaseT comment documents for camera.focus/scale/tilt.
+  // Bases chosen so dt=16.7ms (60fps) reproduces the original 0.5/0.85
+  // exactly: 1-Math.pow(0.5,1)=0.5, 1-Math.pow(0.15,1)=0.85.
   const gap = Math.hypot(tgtB[0] - _calS.b[0], tgtB[1] - _calS.b[1]);
-  const k = gap > 6 ? 0.85 : 0.5;
+  const nowCal = performance.now();
+  const dtCal = _calEaseT ? Math.min(nowCal - _calEaseT, 100) : 16.7;
+  _calEaseT = nowCal;
+  const k = gap > 6 ? 1 - Math.pow(0.15, dtCal / 16.7) : 1 - Math.pow(0.5, dtCal / 16.7);
   for (let i = 0; i < 4; i++) _calS.a[i] += (tgtA[i] - _calS.a[i]) * k;
   for (let i = 0; i < 2; i++) _calS.b[i] += (tgtB[i] - _calS.b[i]) * k;
   const active = Math.abs(_calS.a[0] - 1) + Math.abs(_calS.a[3] - 1) + Math.abs(_calS.a[1]) + Math.abs(_calS.a[2]) > 1e-4 ||
                  Math.abs(_calS.b[0]) + Math.abs(_calS.b[1]) > 0.05;
-  if (active) { P.calA = _calS.a.slice(); P.calB = _calS.b.slice(); }
+  // Flat view (pitch ~0) never sends probes (see syncAppleGround's matching
+  // `reqPitch > 0.05` gate) — the raw pinhole replica is already exact there
+  // (no pitch-anchor terrain jitter to fight), so it should NEVER carry a
+  // calibration affine. But _calS/_appleCal are module-level state that
+  // don't hard-reset on a pitch->0 transition, only decay toward identity
+  // over ~1.5s (see the `cal.t` freshness gate above) — so a fit from
+  // recent 3D use (accurate near wherever probes last sampled, e.g. near
+  // the green) could keep bleeding into the flat overlay for a bit, visibly
+  // wrong far from there (e.g. a wide view from the tee). Gate attachment on
+  // pitch directly instead of trusting decay timing to always beat it.
+  if (active && pitchDeg > 0.05) { P.calA = _calS.a.slice(); P.calB = _calS.b.slice(); }
   return P;
 }
 // Project world (x, y[, height in world units]) through the Apple pinhole,
@@ -848,7 +872,7 @@ function syncAppleGround() {
   // onto those answers. Flat view needs no probes (affine already exact).
   const probes = [];
   if (cam.reqPitch > 0.05) {
-    const g = course.geo.toLonLat;
+    const g = appleGeoAffine();
     const cssW = window.innerWidth, cssH = window.innerHeight;
     // Unproject through the RAW replica — cam carries the previous fit's
     // calA, and probing through it moves the probe points every time the
@@ -932,7 +956,7 @@ function leaveAppleGround() {
   _appleGroundEntered = false;
   _appleActualCam = null;
   _appleCal = null;
-  _calS.a = [1, 0, 0, 1]; _calS.b = [0, 0];
+  _calS.a = [1, 0, 0, 1]; _calS.b = [0, 0]; _calEaseT = 0;
   _probeLL = _probeLLW = null; _fitHist.length = 0;
   _apSettleN = 0; _apDetailA = 0;
   document.documentElement.style.background = "";
@@ -982,14 +1006,21 @@ let cineEnabled = lsGet("golf.cineLanding", true); // per-device toggle (HUD men
 // Slope-mode style: false = flow dots (default), true = static fall-line arrows.
 // Per-device cosmetic preference (localStorage), not a tournament setting.
 let breakArrows = lsGet("golf.breakArrows", false);
-let tiltView = lsGet("golf.tiltView", false); // slightly-3D tilted course camera (HUD button)
+// Dev hook (cousin of ?course=/?hole=): ?tilt=1 forces the 3D tilt on at
+// boot, so a simulator smoke test doesn't need to tap the HUD button.
+let tiltView = /[?&]tilt=1\b/.test(location.search) || lsGet("golf.tiltView", false); // slightly-3D tilted course camera (HUD button)
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
-let chipSpinBias = 0;      // chip spin slider (-1 run .. 0 neutral .. +1 bite); resets to 0 each hole
-let flightBias = 0;        // full-shot FLIGHT slider (0 stock .. 1 high spinner); one-shot, resets after the swing
+let chipSpinBias = 0;      // chip SPIN (-1 low/run .. 0 stock .. +1 high/bite); resets to 0 each hole
+let flightSpinBias = 0;    // full-shot SPIN (-1 low knockdown .. 0 stock .. +1 high backspin); one-shot, resets after the swing
 let lieEffectEnabled = true; // rough/sand cost power + spin (off = every lie plays clean, easier)
 let shotPreviewEnabled = false; // live predicted-landing marker while swinging (HUD menu, tournament-synced)
+let powerPreviewEnabled = false; // admin toggle: persistent power slider + spin selector + idle shot preview
+let previewFrac = 1;       // power slider (0..1) — pre-swing "if I swing at X% it goes here" preview, AND a
+                            // real MAX ceiling on the swipe/flick's power (launchShot clamps down to it, never up).
+let previewFracTouched = false; // true once the player has manually dragged the power slider for the CURRENT
+                            // shot — stops the chip-assist auto-default (0.5, lands on the pin) from clobbering it
 let measurePoint = null;   // world {x,y} of the dropped range-finder marker
 let markerDropT = 0;       // when the marker was tap-dropped (grace vs insta-dismiss)
 let measureDragging = false;
@@ -1611,6 +1642,7 @@ function simShotRest(ball0, flight0) {
               z: ball0.z, vz: ball0.vz, spin: ball0.spin };
   let fl = Object.assign({}, flight0);
   let airborne = !!flight0, lipped = false; // matches update()'s real dispatch: putts start grounded (flight0=null)
+  let carry = null; // first touchdown of the arc — null for putts (never airborne)
   for (let i = 0; i < TUNE.cineSimSteps; i++) {
     if (airborne && fl) {
       // --- arc phase (mirrors arcFlightStep) ---
@@ -1635,6 +1667,7 @@ function simShotRest(ball0, flight0) {
         const surf = surfaceAt(b.x, b.y);
         const sp = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp, dy = b.vy / sp;
         if (surf === "water" || surf === "woods" || surf === "ob") return null; // dead — no trigger
+        carry = { x: b.x, y: b.y };
         const v = landingRelease(fl, b.spin, surf);
         b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0;
         fl = null; airborne = false;
@@ -1702,13 +1735,13 @@ function simShotRest(ball0, flight0) {
       if (!HOLE.isRange && !lipped) {
         const cup = resolveCup(b, speed, false, () => 0.5);
         if (cup) {
-          if (cup.holed) return { holed: true };
+          if (cup.holed) return { holed: true, carry };
           lipped = true;                       // like state._lippedThisShot — never re-test
           if (cup.hop) airborne = true;        // rammed lip-over keeps flying (grounded lip already re-paced)
         }
       }
       if (speed < TUNE.stopThreshold)
-        return { x: b.x, y: b.y, surf: surfaceAt(b.x, b.y), lipped };
+        return { x: b.x, y: b.y, surf: surfaceAt(b.x, b.y), lipped, carry };
     }
   }
   return null;
@@ -2239,13 +2272,12 @@ function chipActiveNow() {
   if (surfaceAt(b.x, b.y) === "green") return false;
   return dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT < TUNE.chipRangeYds;
 }
-// Chip spin slider -> { landFrac, spinScale } (bias -1..+1). More spin lands the ball
+// Chip SPIN slider -> { landFrac, spinScale } (bias -1..+1). More spin lands the ball
 // deeper (higher landFrac) and checks harder (higher spinScale); less spin lands short
 // and runs. Neutral (0) reproduces TUNE.chipLandFrac / TUNE.chipSpin exactly.
 function chipSpinParams() {
-  const bias = chipSpinBias;
-  const landFrac = Math.max(0.5, Math.min(0.98, TUNE.chipLandFrac + bias * TUNE.chipLandSpread));
-  const spinScale = TUNE.chipSpin * Math.pow(TUNE.chipSpinRange, bias);
+  const landFrac = Math.max(0.5, Math.min(0.98, TUNE.chipLandFrac + chipSpinBias * TUNE.chipLandSpread));
+  const spinScale = TUNE.chipSpin * Math.pow(TUNE.chipSpinRange, chipSpinBias);
   return { landFrac, spinScale };
 }
 
@@ -2343,14 +2375,22 @@ function buildTrialShot(ang, frac, spin, onGreen) {
   // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
   const lieSurf = surfaceAt(b.x, b.y);
   const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
-  // Flight slider (right gutter, full shots): 0 = stock, 1 = full high spinner.
-  // Continuous — each flightHi* knob is the t=1 endpoint, lerped by the slider.
-  const hiT = chipActive ? 0 : flightBias;
-  let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul * (1 - (1 - TUNE.flightHiCarry) * hiT); // carry (world units)
+  // Flight selector (right gutter, full shots): -1 Low knockdown .. 0 Stock .. +1 High
+  // spinner. hiT's SIGN picks which endpoint set (flightHi*/flightLo*) applies; its
+  // magnitude (t) is the lerp fraction toward that endpoint. hiT >= 0 reduces byte-for-
+  // byte to the old high-only math — chip mode and the High path are unchanged.
+  const hiT = chipActive ? 0 : flightSpinBias;
+  const t = Math.abs(hiT);
+  const apexK  = hiT >= 0 ? TUNE.flightHiApex  : TUNE.flightLoApex;
+  const landK  = hiT >= 0 ? TUNE.flightHiLand  : TUNE.flightLoLand;
+  const spinK  = hiT >= 0 ? TUNE.flightHiSpin  : TUNE.flightLoSpin;
+  const carryK = hiT >= 0 ? TUNE.flightHiCarry : TUNE.flightLoCarry;
+  const windK  = hiT >= 0 ? TUNE.flightHiWind  : TUNE.flightLoWind;
+  let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul * (1 - (1 - carryK) * t); // carry (world units)
   // Elevation: make a full shot finish at the plays-like distance (uphill shorter,
   // downhill longer). Chips already fold plays-like into their reach, so skip them.
   if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
-  const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul * (1 + (TUNE.flightHiApex - 1) * hiT); // apex height (scales with the swing)
+  const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul * (1 + (apexK - 1) * t); // apex height (scales with the swing)
   const mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
   // Slight amplification so deliberate hooks/slices still register.
   const spinVal = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
@@ -2360,22 +2400,32 @@ function buildTrialShot(ang, frac, spin, onGreen) {
   const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
   const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[lieSurf] ?? 1) : 1;  // rough flyer / sand kill backspin
   const spinScale = chipActive ? chipSpinParams().spinScale : chipBoost;
-  const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (1 + (TUNE.flightHiSpin - 1) * hiT));
+  const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (1 + (spinK - 1) * t));
   // Flyer descent: rough/sand shots also come in shallower (less lift), so the
   // steepness half of the landing check fades too and the ball releases. Chips skip it.
   const lieLandMul = (lieEffectEnabled && !chipActive) ? (TUNE.lieLand[lieSurf] ?? 1) : 1;
-  const landDeg = c.land * lieLandMul + TUNE.flightHiLand * hiT;
+  const landDeg = c.land * lieLandMul + landK * t;
   const flr = buildFlight(ang, C, H, landDeg * Math.PI / 180, effectiveSpinN);
   flr.flight.noLandCheck = chipActive; // chips: release tuned by the spin slider alone
-  if (hiT > 0) flr.flight.windMul = 1 + (TUNE.flightHiWind - 1) * hiT; // a high ball rides the wind
+  if (t > 0) flr.flight.windMul = 1 + (windK - 1) * t; // high rides the wind, low punches through it
   return { usePutter: false, onGreen, f, hiT, mph,
            vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
 }
 
 function launchShot(ang, frac, spin, onGreen) {
   if (!canSwing() || frac <= 0.05) return;
+  // Power slider = a real MAX ceiling on this swing (panel visible, same context it shows
+  // in), not just a preview reference — clamp the flick-derived frac down to it. Never
+  // boosts a soft flick, only caps a hard one; a putt/on-green stroke is never capped.
+  // Floored at 0.06 (just above the too-soft-flick threshold above) so a chip-mode slider
+  // dragged to 0% still lets a real swing through instead of silently eating every shot —
+  // previewFrac=0 is a legit slider position there (full-shot mode floors at clubMinFrac).
+  if (powerPreviewEnabled && mode === "course" && !onGreen && selectedClub !== "putter") {
+    frac = Math.min(frac, Math.max(previewFrac, 0.06));
+  }
   measurePoint = null; // shot fired — clear the rangefinder marker
   shotPreview = null;  // shot fired — clear the live preview marker
+  previewFracTouched = false; // fresh shot next time — let the chip-assist auto-default re-engage
   if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
   const trial = buildTrialShot(ang, frac, spin, onGreen);
   if (!trial) return;
@@ -2387,7 +2437,7 @@ function launchShot(ang, frac, spin, onGreen) {
   b.vx = trial.vx; b.vy = trial.vy; b.vz = trial.vz; b.z = trial.z; b.spin = trial.spin;
   shot.mph = trial.mph;
   state.airborne = !trial.usePutter;
-  if (trial.hiT > 0) resetFlightBias(); // one-shot: the slider never silently carries to the next swing
+  if (trial.hiT !== 0) resetFlightBias(); // one-shot: the selector never silently carries to the next swing
   state.moving = true;
   haptic(trial.usePutter ? 3 : 9);  // light tick for putter, firm buzz for full shot
   if (trial.usePutter) playPutt(); else playStrike(trial.f);  // crack/tap on contact
@@ -2524,7 +2574,8 @@ canvas.addEventListener("wheel", onWheel, { passive: false });
 // =====================================================================
 //  Live shot preview — while the player is still dragging/swiping (before
 //  release), forward-simulate the swing-in-progress with simShotRest() and
-//  show a marker + yardage at the predicted landing/rest spot. Opt-in
+//  show a marker + yardage at the predicted CARRY point (first touchdown —
+//  no bounce/rollout; putts, which never fly, show the stop point). Opt-in
 //  (shotPreviewEnabled, HUD menu "Shot preview") — a pure feedback overlay,
 //  same physics as the real shot, no change to how power/spin/club work.
 // =====================================================================
@@ -2555,6 +2606,18 @@ function updateShotPreview() {
     const v = swipeVelocity(wheelGesture.path, WHEEL_WINDOW_MS + WHEEL_TAIL_MS);
     ({ ang, frac } = swipeToShot(sign * v.dxs, sign * v.dys, v.dt, TUNE.fullPowerSwipe));
     spin = curveFromPath(wheelGesture.path);
+  } else if (powerPreviewEnabled && mode === "course" && !state.moving &&
+             surfaceAt(state.ball.x, state.ball.y) !== "green" && selectedClub !== "putter") {
+    // No gesture in progress — static pre-swing preview driven by the power/spin/height
+    // panel instead, so the prediction is visible any time the player is addressing the
+    // ball, not just for the split-second of an actual flick.
+    ang = -Math.PI / 2 - view.angle; // aim straight up the screen — matches whatever a real swipe fires at right now
+    // buildTrialShot discards frac<=0.05 as "too weak, no shot" (the real too-soft-a-flick
+    // floor in swingEnd/launchShot) — floor the PREVIEW's own frac just above that so a low
+    // power slider still shows a prediction instead of the marker vanishing; the real swing's
+    // threshold and previewFrac's own stored/displayed value are both untouched.
+    frac = Math.max(previewFrac, 0.06);
+    spin = 0; // the Spin selector shapes chipSpinBias/flightSpinBias, not side-curve
   } else {
     shotPreview = null;
     return;
@@ -2568,8 +2631,12 @@ function updateShotPreview() {
   const r = simShotRest(b0, trial.flight);
   if (!r) { shotPreview = null; return; }
   if (r.holed) { shotPreview = { holed: true, rest: { x: HOLE.holePos.x, y: HOLE.holePos.y }, yards: 0 }; return; }
-  shotPreview = { holed: false, lipped: r.lipped, rest: { x: r.x, y: r.y },
-                  yards: dist(state.ball.x, state.ball.y, r.x, r.y) * YARDS_PER_UNIT };
+  // Marker = expected CARRY point (first touchdown), not rest — bounce/rollout
+  // deliberately excluded so the preview reads like a caddie's carry number.
+  // Putts never fly (carry null) so they keep the simulated stop point.
+  const pt = r.carry || { x: r.x, y: r.y };
+  shotPreview = { holed: false, lipped: r.lipped, rest: pt,
+                  yards: dist(state.ball.x, state.ball.y, pt.x, pt.y) * YARDS_PER_UNIT };
 }
 
 // =====================================================================
@@ -2740,6 +2807,13 @@ function updateCamera() {
     const distNow = window.innerHeight / camera.scale * M_PER_UNIT * APPLE_CAM_K;
     const ramp = Math.min(1, Math.max(0, (distNow - 220) / (380 - 220)));
     applePitchT = tiltView ? TUNE.applePitchDeg * ramp : 0;
+    // Green-detail settle gate: count consecutive frames with the camera
+    // exactly parked (ease snaps make these strict equalities reachable).
+    const parked = camera.angle === camera.tAngle && camera.scale === camera.tScale &&
+      camera.tilt === camera.tTilt && !cameraAiming && !camTouch &&
+      Math.abs(applePitch - applePitchT) < 0.05 &&
+      Math.abs(camera.focus.x - camera.tFocus.x) + Math.abs(camera.focus.y - camera.tFocus.y) < 0.02;
+    _apSettleN = parked ? _apSettleN + 1 : 0;
   } else {
     applePitchT = 0;
   }
@@ -3454,20 +3528,25 @@ function drawDetailGrain() {
 }
 
 // Green: collar + fill + topo contours. `photo` => translucent over the aerial.
-function drawGreen(photo) {
+function drawGreen(photo, only) {
+  // `only`: restrict to these green records (Apple ground draws just the
+  // greens in play — neighbor holes' OSM polys never register perfectly with
+  // Apple's imagery, and skipping them saves the projection work).
   const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
+  const baseA = ctx.globalAlpha;  // respect a caller's fade (Apple-ground detail ease-in)
   ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(90,165,99,0.35)";
   ctx.lineWidth = ws(photo ? 1.2 : 1.5);
   ctx.lineJoin = "round";
-  for (const poly of s.green || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
-  for (const g of HOLE._greens || []) {
+  const outlines = only ? only.map((g) => g.poly) : (s.green || []);
+  for (const poly of outlines) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+  for (const g of only || HOLE._greens || []) {
     if (!polyVisible(g.poly)) continue; // skip off-screen greens (incl. their topo)
     withClip(g.poly, () => {
       if (photo) {
-        ctx.globalAlpha = 0.13;          // light tint — let the real turf show through
+        ctx.globalAlpha = 0.13 * baseA;  // light tint — let the real turf show through
         ctx.fillStyle = "#7ecb86";
         ctx.fillRect(0, 0, cssW, cssH);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = baseA;
       } else {
         const lg = ctx.createLinearGradient(wx(g.hi.x, g.hi.y), wy(g.hi.x, g.hi.y), wx(g.lo.x, g.lo.y), wy(g.lo.x, g.lo.y));
         lg.addColorStop(0, "#92d398");
@@ -5307,12 +5386,22 @@ function draw() {
     // break — without them putting on this course is blind. Same photo-mode
     // treatment every aerial course gets, minus the aerial itself.
     if (!HOLE.isRange) {
-      drawGreen(true);
-      // Relief follows the pitched view too — drawGreenRelief linearizes the
-      // pinhole about each green's centroid for its raster blit.
-      for (const g of greensInPlay()) {
-        if (!polyVisible(g.poly)) continue;
-        drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient, showSlope && breakArrows);
+      // Green detail earns its screen time: only the greens in play, only
+      // when the pin is in club reach AND the camera has settled (see
+      // appleGreenDetailWanted). Eased alpha so it fades in, never pops.
+      _apDetailA += ((appleGreenDetailWanted() ? 1 : 0) - _apDetailA) * 0.12;
+      if (_apDetailA > 0.02) {
+        const gs = greensInPlay();
+        ctx.save();
+        ctx.globalAlpha = _apDetailA;
+        drawGreen(true, gs);
+        // Relief follows the pitched view too — drawGreenRelief linearizes
+        // the pinhole about each green's centroid for its raster blit.
+        for (const g of gs) {
+          if (!polyVisible(g.poly)) continue;
+          drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * _apDetailA, showSlope && breakArrows);
+        }
+        ctx.restore();
       }
     }
   } else if (bucketBlend) {
@@ -5346,12 +5435,15 @@ function draw() {
   // baked in there; nothing draws live here when flat — kz=0 no-ops drawTrees)
   // animated flow dots draw ABOVE the (possibly cached) ground so they never
   // force a ground re-render; wyg() keeps them glued to the displaced turf
-  if (!HOLE.isRange && showSlope && !breakArrows && !greenView) {
+  if (!HOLE.isRange && showSlope && !breakArrows && !greenView &&
+      (!appleGround || _apDetailA > 0.02)) {
     // Tilted + zoomed out, the dots shrink into dark grit on the greens —
     // fade them out below the readable-zoom ramp (flat mode unchanged).
-    const fFade = view.kz
+    // Apple ground: dots ride the green-detail gate (in club reach + camera
+    // settled), fading with it.
+    const fFade = (view.kz
       ? Math.min(1, Math.max(0, (view.scale - TUNE.flowFadeLo) / (TUNE.flowFadeHi - TUNE.flowFadeLo)))
-      : 1;
+      : 1) * (appleGround ? _apDetailA : 1);
     if (fFade > 0) for (const g of greensInPlay()) {
       if (!polyVisible(g.poly)) continue;
       updateFlowDots(g); drawFlowDots(g, fFade);
@@ -5453,24 +5545,9 @@ function draw() {
       ctx.stroke();
     }
 
-    // live shot preview: marker + yardage at the predicted landing/rest spot,
-    // forward-simulated from the swing-in-progress (opt-in, shotPreviewEnabled).
-    // Falls back to a plain direction-only tick while below the swing threshold
-    // or before the first preview resolves.
-    if (shotPreview && !state.moving && !cine && !greenView) {
-      const mx = wx(shotPreview.rest.x, shotPreview.rest.y), my = wyg(shotPreview.rest.x, shotPreview.rest.y);
-      ctx.setLineDash([3, 6]);                     // tighter dash than the range-finder's [6,5] — visually distinct
-      ctx.strokeStyle = "rgba(120,200,255,0.55)";   // cool blue vs range-finder's white/gold — never confused with a manual measurement
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(mx, my); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(120,200,255,0.25)"; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = "rgba(120,200,255,0.95)"; ctx.stroke();
-      ctx.beginPath(); ctx.arc(mx, my, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(120,200,255,0.95)"; ctx.fill();
-      drawLabel(mx, my - 18, shotPreview.holed ? "IN!" : Math.round(shotPreview.yards) + " yds", "#7cc8ff");
-    } else if (swipePath && swipePath.length >= 2 && !state.moving) {
+    // live direction-only tick during an active swipe (no landing-marker overlay —
+    // power/carry is read from the HUD club-yardage number instead).
+    if (swipePath && swipePath.length >= 2 && !state.moving) {
       // live swipe: thin direction-only tick from the ball — echoes that input is
       // registering without giving any power/landing assist
       const p0 = swipePath[0], pl = swipePath[swipePath.length - 1];
@@ -5637,19 +5714,19 @@ function draw() {
   drawGreenView();
   drawCine();   // cinematic 3D landing (same overlay slot; never open together)
 
-  // hole-change transition: fade out to course-green, swap the hole at the
-  // midpoint (starting zoomed out so the camera eases in), then fade back.
+  // hole-change transition: the STATE side (swap the hole at the midpoint,
+  // clear the transition) runs unconditionally every frame from loop() via
+  // tickHoleTransition() — it drives real game state (setHole, and canSwing()
+  // gates on !holeTransition) so it can't live only in this 2D-only function
+  // (render3D early-returns above it — Four Oaks 3D hit exactly this: the
+  // Next Hole button set holeTransition and then nothing ever advanced it,
+  // permanently blocking the swing too). Only the cosmetic fade-to-green
+  // overlay is drawn here.
   if (holeTransition) {
     const p = Math.min(1, (performance.now() - holeTransition.t0) / holeTransition.dur);
     const a = p < 0.5 ? p / 0.5 : 1 - (p - 0.5) / 0.5; // 0 -> 1 -> 0
-    if (p >= 0.5 && !holeTransition.swapped) {
-      holeTransition.advance();
-      camera.scale = camera.tScale * 0.6; // start zoomed out, let updateCamera ease in
-      holeTransition.swapped = true;
-    }
     ctx.fillStyle = `rgba(11,40,21,${a.toFixed(3)})`;
     ctx.fillRect(0, 0, cssW, cssH);
-    if (p >= 1) holeTransition = null;
   }
 
   drawAttribution();
@@ -5695,6 +5772,21 @@ function drawAttribution() {
 function advanceHole(advanceFn) {
   if (holeTransition) return;
   holeTransition = { t0: performance.now(), dur: 850, advance: advanceFn, swapped: false };
+}
+// State side of the hole-change transition (swap the hole at the midpoint,
+// clear when done) — called unconditionally every frame from loop(), NOT
+// from draw() (draw() is 2D-only, early-returns entirely in Four Oaks 3D, and
+// this drives real game state: setHole, and canSwing() gates on !holeTransition).
+// draw() still draws the cosmetic fade-to-green overlay when this is active.
+function tickHoleTransition() {
+  if (!holeTransition) return;
+  const p = Math.min(1, (performance.now() - holeTransition.t0) / holeTransition.dur);
+  if (p >= 0.5 && !holeTransition.swapped) {
+    holeTransition.advance();
+    camera.scale = camera.tScale * 0.6; // start zoomed out, let updateCamera ease in
+    holeTransition.swapped = true;
+  }
+  if (p >= 1) holeTransition = null;
 }
 
 // =====================================================================
@@ -6477,6 +6569,40 @@ async function loadCourse(id) {
   course._mask = undefined;
   holeIndex = 0;
   setHole(course.holes[holeIndex]);
+  loadAppleCorrection(id);
+}
+
+// Apple's satellite imagery carries its own georegistration error (~1-5m off
+// true WGS84), separate from anything _appleCal/_calS fix (those correct for
+// MapKit's own screen-projection/pitch-anchor behavior, not for the imagery
+// itself being geographically shifted). See docs/TRACING.md +
+// scripts/fit-correction.mjs — a course gets a data/corrections/<id>.json
+// only once someone has traced it against Apple's imagery; most courses
+// don't have one yet, which is expected, not an error.
+let appleCorrection = null; // { courseId, dLat, dLng } | null
+async function loadAppleCorrection(id) {
+  appleCorrection = null;
+  try {
+    const res = await fetch("data/corrections/" + id + ".json", { cache: "no-store" });
+    if (!res.ok) return; // no correction traced for this course yet — fine
+    const rec = await res.json();
+    const ic = rec && rec.imageryCorrection;
+    if (ic && typeof ic.dLat === "number" && typeof ic.dLng === "number") {
+      appleCorrection = { courseId: id, dLat: ic.dLat, dLng: ic.dLng };
+    }
+  } catch (e) { /* no correction available — Apple ground renders at true WGS84 */ }
+}
+
+// course.geo.toLonLat with the course's fitted Apple-imagery correction (if
+// any) folded into the translation terms — shifts every derived lat/lon so
+// the overlay/camera land on what Apple's photo actually shows instead of
+// true WGS84. True WGS84 stays canonical in courses/*.json itself; this is
+// applied only here, at the point of consumption for Apple's map.
+function appleGeoAffine() {
+  const g = course.geo.toLonLat;
+  const c = appleCorrection;
+  if (!c || c.courseId !== course.id) return g;
+  return [g[0], g[1], g[2] + c.dLng, g[3], g[4], g[5] + c.dLat];
 }
 
 // Selectable courses (baked under courses/<id>.json). The live list comes from
@@ -7063,14 +7189,15 @@ function updateStats() {
   const b0 = state.ball;
   const sig = mode + "|" + (state.moving ? 1 : 0) + "|" + (state.inHole ? 1 : 0) + "|" +
     Math.round(b0.x * 100) + "|" + Math.round(b0.y * 100) + "|" +
-    (HOLE ? HOLE.num : -1) + "|" + selectedClub + "|" + flightBias + "|" + chipSpinBias + "|" +
+    (HOLE ? HOLE.num : -1) + "|" + selectedClub + "|" + flightSpinBias + "|" + chipSpinBias + "|" +
     (lieEffectEnabled ? 1 : 0) + "|" + (chipEnabled ? 1 : 0) + "|" +
-    shot.mph + "|" + shot.carry + "|" + shot.total;
+    shot.mph + "|" + shot.carry + "|" + shot.total + "|" +
+    Math.round(view.angle * 1000); // camera aim — so the idle shot preview stays live while re-aiming (arrow keys/drag)
   if (sig === _statsSig) return;
   _statsSig = sig;
-  // Gutter slider (SPIN greenside / FLIGHT on full shots): shown only with the ball
-  // at rest off the green (so it never blocks a swing-in-progress). Off in menu/range.
-  syncSpinSlider();
+  // Power+trajectory panel: shown only with the ball at rest off the green (so it
+  // never blocks a swing-in-progress). Off in menu/range, or when the admin toggle is off.
+  syncPowerPreview();
   if (mode !== "course" && mode !== "range") { elStats.classList.add("hidden"); return; }
   // Hide the stats panel while the ball is in motion so it doesn't cover the
   // hole/ball during a shot; it returns once the ball settles.
@@ -7321,6 +7448,11 @@ function setShotPreview(on) {
   const btn = document.getElementById("hm-preview");
   if (btn) btn.classList.toggle("active", on);
 }
+function setPowerPreview(on) {
+  powerPreviewEnabled = on;
+  if (!on) { shotPreview = null; previewFracTouched = false; }
+  syncPowerPreview();
+}
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
 document.getElementById("hm-wind").addEventListener("click", () => setWind(!windEnabled));
 const elSlottedBtn = document.getElementById("hm-slotted");
@@ -7541,12 +7673,13 @@ const SETTING_DEFS = [
   { key: "chip",        label: "Chip mode",       icon: "ic-chip",   get: () => chipEnabled,     set: (v) => setChip(v) },
   { key: "lieEffect",   label: "Lie effect",      icon: "ic-slope",  get: () => lieEffectEnabled, set: (v) => setLieEffect(v) },
   { key: "shotPreview", label: "Shot preview",    icon: "ic-target", get: () => shotPreviewEnabled, set: (v) => setShotPreview(v) },
+  { key: "powerPreview", label: "Power preview (beta)", icon: "ic-target", get: () => powerPreviewEnabled, set: (v) => setPowerPreview(v) },
 ];
 // Effective defaults: hardcoded fallback until the global row loads.
 // Immutable fallback for each setting — used when a saved/loaded settings row
 // predates a key (e.g. a global Supabase row baked before "chip" existed). A
 // MISSING key falls back to this default, NOT to false.
-const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true, lieEffect: true, shotPreview: false };
+const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true, lieEffect: true, shotPreview: false, powerPreview: false };
 let gameDefaults = Object.assign({}, SETTING_DEFAULTS);
 let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
 
@@ -7672,67 +7805,85 @@ let swingSens = Math.min(3, Math.max(0.5, +lsGet(SENS_KEY, 3) || 3));
   });
 })();
 
-// Right-gutter shot slider — ONE widget, two meanings by context (syncSpinSlider):
-//   chip range  -> SPIN  (bite +1 .. run −1), drives chipSpinBias. Resets each hole.
-//   full shot   -> FLIGHT (std 0 .. high +1), drives flightBias — the flighted high
-//                  spinner (see TUNE.flightHi*). One-shot: consumed & reset on launch.
-// Neither is persisted, so a big setting never silently carries over.
-const elChipSpin = document.getElementById("chip-spin");
-const elChipSpinSlider = document.getElementById("chip-spin-slider");
-const elChipSpinVal = document.getElementById("chip-spin-val");
-const elCsTop = document.getElementById("cs-top");
-const elCsBot = document.getElementById("cs-bot");
-const elCsName = document.getElementById("cs-name");
-let spinSliderMode = null;  // "chip" | "flight" — what the gutter slider currently drives
-function chipSpinLabel(pct) { return pct > 0 ? "+" + pct : "" + pct; }
+// Right-gutter shot-power panel — a power slider coupled with a Low/Stock/High spin
+// selector. Power (previewFrac) feeds the static branch of updateShotPreview() AND is a
+// real MAX ceiling on the swipe/flick's power — launchShot clamps down to it (never
+// boosts a soft flick, only caps a hard one). Spin is a discrete pick, not a drag —
+// clicking a button sets chipSpinBias (chip range: -1 low/run .. 0 stock .. +1 high/bite)
+// or flightSpinBias (full shot: -1 low knockdown .. 0 stock .. +1 high spinner) the same
+// as the old continuous slider did, now as a real symmetric axis both directions.
+// Admin-toggled (powerPreviewEnabled, SETTING_DEFS "powerPreview").
+const elShotPower = document.getElementById("shot-power");
+const elAttrSlider = document.getElementById("attr-slider");
+const elAttrVal = document.getElementById("attr-val");
+const elSpTop = document.getElementById("sp-top");
+const elSpBot = document.getElementById("sp-bot");
+const elAttrSeg = document.getElementById("attr-seg");
+const elAttrBtns = elAttrSeg ? Array.from(elAttrSeg.querySelectorAll(".attr-btn")) : [];
 function resetChipSpin() {
   chipSpinBias = 0;
-  flightBias = 0;
-  spinSliderMode = null;  // force a relabel + revalue on the next sync
+  previewFracTouched = false; // fresh hole — let the chip-assist auto-default kick back in
 }
 function resetFlightBias() {
-  flightBias = 0;
-  spinSliderMode = null;
+  flightSpinBias = 0;
 }
-// Show/relabel/revalue the gutter slider for the current context. Called from
-// updateStats() so it tracks ball position, rest state and chip range.
-function syncSpinSlider() {
-  if (!elChipSpin || !elChipSpinSlider) return;
-  const show = mode === "course" && !state.moving && !state.inHole &&
+// Power, full-shot only: buildTrialShot floors every full swing at TUNE.clubMinFrac (no
+// club dribbles below it), so a direct 0..1 slider->frac mapping wastes its bottom stretch
+// (0..clubMinFrac all produce the identical floored distance). Remap the slider's 0..1
+// onto [clubMinFrac..1] instead, so the slider's own min/max line up with the real min/max
+// distance the club can hit — every position on the slider actually changes the number.
+// Chip mode has no such floor (the chip band formula is continuous down to f=0), so it
+// keeps the direct 0..1 mapping.
+function powerSliderPct() {
+  if (chipActiveNow()) return Math.round(previewFrac * 100);
+  return Math.round((previewFrac - TUNE.clubMinFrac) / (1 - TUNE.clubMinFrac) * 100);
+}
+function setPowerFromSliderPct(pct) {
+  const v = pct / 100;
+  previewFrac = chipActiveNow() ? v : TUNE.clubMinFrac + (1 - TUNE.clubMinFrac) * v;
+  previewFracTouched = true;
+}
+// Show/revalue the shot-power panel for the current context. Called from updateStats()
+// so it tracks ball position, rest state, chip range and the selected club.
+function syncPowerPreview() {
+  if (!elShotPower) return;
+  const show = powerPreviewEnabled && mode === "course" && !state.moving && !state.inHole &&
                surfaceAt(state.ball.x, state.ball.y) !== "green" &&
                selectedClub !== "putter";
-  elChipSpin.classList.toggle("hidden", !show);
+  elShotPower.classList.toggle("hidden", !show);
   if (!show) return;
-  const m = chipActiveNow() ? "chip" : "flight";
-  if (m === spinSliderMode) return;
-  spinSliderMode = m;
-  if (m === "chip") {
-    elChipSpinSlider.min = -100;
-    if (elCsTop) elCsTop.textContent = "bite";
-    if (elCsBot) elCsBot.textContent = "run";
-    if (elCsName) elCsName.textContent = "SPIN";
-    elChipSpinSlider.value = Math.round(chipSpinBias * 100);
-    if (elChipSpinVal) elChipSpinVal.textContent = chipSpinLabel(Math.round(chipSpinBias * 100));
-  } else {
-    elChipSpinSlider.min = 0;
-    if (elCsTop) elCsTop.textContent = "high";
-    if (elCsBot) elCsBot.textContent = "std";
-    if (elCsName) elCsName.textContent = "FLIGHT";
-    elChipSpinSlider.value = Math.round(flightBias * 100);
-    if (elChipSpinVal) elChipSpinVal.textContent = "" + Math.round(flightBias * 100);
-  }
+  // Chip assist: auto-default power to dead-center of the chip reach band (f=0.5 lands
+  // exactly on the pin — see buildTrialShot's chipReachLo/Hi interpolation), unless the
+  // player has already dragged the slider for this shot.
+  if (!previewFracTouched) previewFrac = chipActiveNow() ? 0.5 : 1;
+  const chip = chipActiveNow();
+  if (elSpBot) elSpBot.textContent = chip ? "0" : "min";
+  const pct = powerSliderPct();
+  if (elAttrSlider) elAttrSlider.value = pct;
+  if (elAttrVal) elAttrVal.textContent = String(pct);
+  const activeKey = chip
+    ? (chipSpinBias <= -0.5 ? "low" : chipSpinBias >= 0.5 ? "high" : "stock")
+    : (flightSpinBias <= -0.5 ? "low" : flightSpinBias >= 0.5 ? "high" : "stock");
+  for (const b of elAttrBtns) b.classList.toggle("active", b.dataset.spin === activeKey);
+  updateShotPreview();
 }
-if (elChipSpinSlider) {
-  elChipSpinSlider.addEventListener("input", () => {
-    const pct = parseInt(elChipSpinSlider.value, 10);
-    if (spinSliderMode === "flight") {
-      flightBias = pct / 100;
-      if (elChipSpinVal) elChipSpinVal.textContent = "" + pct;
+if (elAttrSlider) {
+  elAttrSlider.addEventListener("input", () => {
+    setPowerFromSliderPct(parseInt(elAttrSlider.value, 10));
+    if (elAttrVal) elAttrVal.textContent = elAttrSlider.value;
+    updateShotPreview();
+    updateClubUI(); // live carry number tracks the slider while dragging, not just on release
+  });
+}
+for (const btn of elAttrBtns) {
+  btn.addEventListener("click", () => {
+    const key = btn.dataset.spin;
+    if (chipActiveNow()) {
+      chipSpinBias = key === "low" ? -1 : key === "high" ? 1 : 0;
     } else {
-      chipSpinBias = pct / 100;
-      if (elChipSpinVal) elChipSpinVal.textContent = chipSpinLabel(pct);
+      flightSpinBias = key === "low" ? -1 : key === "high" ? 1 : 0;
     }
-    updateStats();  // refresh the carry readout live as the slider moves
+    syncPowerPreview();
   });
 }
 
@@ -7754,8 +7905,10 @@ function updateClubUI() {
       const land = playsLikeYards(b.x, b.y).plays * chipSpinParams().landFrac;
       elClubYds.textContent = Math.round(land) + "y";
     } else {
-      // Full shot: fold the FLIGHT slider's carry cost into the readout live.
-      elClubYds.textContent = Math.round(c.carry * (1 - (1 - TUNE.flightHiCarry) * flightBias)) + "y";
+      // Full shot: fold the Spin selector's carry cost AND the power slider's ceiling
+      // (previewFrac, same value buildTrialShot's ef would use) into the readout live.
+      const flightCarryK = flightSpinBias >= 0 ? TUNE.flightHiCarry : TUNE.flightLoCarry;
+      elClubYds.textContent = Math.round(c.carry * previewFrac * (1 - (1 - flightCarryK) * Math.abs(flightSpinBias))) + "y";
     }
   }
 }
@@ -7865,7 +8018,8 @@ function setYardsPerUnit(ypu) {
 function startCourse() {
   // Locked-course backstop: every picker path funnels here. Live-match guests
   // play the host's course and tournament rounds are admin-chosen — exempt.
-  if (!matchLive() && activeTournamentRound === null && !courseUnlocked(selectedCourseId)) {
+  if (!matchLive() && activeTournamentRound === null &&
+      selectedCourseId !== DEV_COURSE_BOOT && !courseUnlocked(selectedCourseId)) {
     showToast("Locked — " + unlockReq(selectedCourseId).label, 2400);
     showCourseSelect();
     return;
@@ -13167,6 +13321,7 @@ function loop() {
   if (steps === PHYS_MAX_STEPS) _physAccum = 0;
 
   tickHoleDrop();
+  tickHoleTransition(); // Next Hole button: unconditional so it still works when draw() is skipped (Four Oaks 3D)
   tickCine();         // cinematic landing: cut in on the descent, close after rest
   cpuDriverTick();    // drive the live CPU opponent's shots (no-op unless in one)
   liveCameraTick();   // follow the opponent's ball while it's their turn
@@ -13234,13 +13389,35 @@ loop();
 showMenu();
 maybeJoinFromLink();      // ?m=CODE challenge link — prompt to join, no-op if absent
 probeBakeApi();           // reveal admin "Add course" only if the bake server is up
+// Dev hook (cousin of ?3d=1): ?course=<id> boots straight into that course —
+// simulator/device smoke tests can't tap through the picker. Bypasses the
+// unlock gate (see startCourse); no-op unless the id exists in the manifest.
+const DEV_COURSE_BOOT = new URLSearchParams(location.search).get("course");
 loadManifest().then(() => {
   buildCourseList();      // refresh list from courses/manifest.json (admin-baked courses)
   renderMenuChips();      // featured course needs the real manifest
+  if (DEV_COURSE_BOOT && COURSES.some((c) => c.id === DEV_COURSE_BOOT)) {
+    selectedCourseId = DEV_COURSE_BOOT;
+    startCourse();        // loads the course itself
+    return;
+  }
   return loadCourse(selectedCourseId);
 }).catch((e) => {
   console.warn("Course load failed, using fallback hole:", e);
 });
+// Dev hook (cousin of ?course=): ?hole=N jumps straight to hole N once the
+// course finishes loading — simulator smoke tests for a specific hole's 3D
+// overlay shouldn't need to play through every prior hole.
+const DEV_HOLE_BOOT = parseInt(new URLSearchParams(location.search).get("hole"), 10);
+if (DEV_HOLE_BOOT > 0) {
+  const _devHoleIv = setInterval(() => {
+    if (course && course.holes && course.holes[DEV_HOLE_BOOT - 1]) {
+      clearInterval(_devHoleIv);
+      holeIndex = DEV_HOLE_BOOT - 1;
+      setHole(course.holes[holeIndex]);
+    }
+  }, 200);
+}
 
 // Auth boot: capture magic-link tokens, restore/validate the session, load the
 // profile, and flush any rounds queued while logged out. All best-effort.

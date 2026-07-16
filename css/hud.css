@@ -245,7 +245,7 @@ body.gv-open #hud-btn,
 body.gv-open #hm-club-row,
 body.gv-open #green-view-btn,
 body.gv-open #tilt-view-btn,
-body.gv-open #chip-spin,
+body.gv-open #shot-power,
 body.gv-open #scorecard,
 body.gv-open #hint { display: none; }
 
@@ -594,12 +594,15 @@ body.is-mobile #hud-edit-bar {
 }
 
 /* =====================================================================
-   Chip spin slider — right-gutter vertical control, greenside chips only.
-   Bias runs +bite (top) .. −run (bottom); brass accent to read as a
-   "feel" dial, distinct from the green on/off toggles. Shown/hidden by
-   updateStats() (only with the ball at rest, in chip range).
+   Shot power panel — right-gutter control, every non-putter club. A power
+   slider (0-max) that's a pre-swing preview AND a real MAX ceiling on the
+   swipe/flick — a hard flick gets capped down to it, a soft flick is never
+   boosted up — coupled with a Low/Stock/High spin selector (chipSpinBias
+   chip range, flightSpinBias full shot). Shown/hidden by updateStats()
+   (ball at rest, off the green, not putter) AND the "Power preview" admin
+   toggle (powerPreviewEnabled).
    ===================================================================== */
-#chip-spin {
+#shot-power {
   position: fixed;
   right: calc(var(--sar) + var(--s-2));
   top: 50%;
@@ -611,7 +614,7 @@ body.is-mobile #hud-edit-bar {
   align-items: center;
   gap: var(--s-1);
   padding: var(--s-2) var(--s-1);
-  width: 44px;
+  width: 60px;
   background: var(--surface-hud);
   backdrop-filter: blur(var(--blur-xs));
   -webkit-backdrop-filter: blur(var(--blur-xs));
@@ -619,32 +622,62 @@ body.is-mobile #hud-edit-bar {
   border-radius: var(--r-md);
   box-shadow: var(--shadow-1);
 }
-#chip-spin.hidden { display: none; }
-#chip-spin .cs-end {
+#shot-power.hidden { display: none; }
+#shot-power .cs-end {
   font-size: var(--t-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
 }
-#chip-spin-slider {
+#attr-slider {
   writing-mode: vertical-lr;      /* modern vertical range */
-  direction: rtl;                 /* top = max (bite), bottom = min (run) */
+  direction: rtl;                 /* top = max/positive, bottom = 0/negative */
   -webkit-appearance: slider-vertical;  /* legacy WebKit fallback */
   width: 24px;
   height: 150px;
   accent-color: var(--brass);
-  /* center detent hint at 0 */
-  background: linear-gradient(to bottom, transparent calc(50% - 1px),
-              var(--w-32) calc(50% - 1px), var(--w-32) calc(50% + 1px),
-              transparent calc(50% + 1px)) no-repeat;
 }
-#chip-spin .cs-label {
+#shot-power .cs-label {
   font-size: var(--t-micro);
   letter-spacing: 0.06em;
   color: var(--text-dim);
 }
-#chip-spin .cs-label b {
+#shot-power .cs-label b {
   color: var(--brass-bright);
   font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-bold, 700);
+}
+#shot-power .cs-seg-label {
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  opacity: 0.7;
+  text-align: center;
+  margin-top: 2px;
+}
+#attr-seg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+.attr-btn {
+  border: var(--border-hair);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  padding: 3px 2px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+}
+.attr-btn:active { transform: scale(0.96); }
+.attr-btn.active {
+  background: var(--brass-soft);
+  color: var(--brass-bright);
+  border-color: var(--brass);
   font-weight: var(--fw-bold, 700);
 }

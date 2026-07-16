@@ -14,7 +14,7 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=57">
   <link rel="stylesheet" href="css/base.css?v=67">
-  <link rel="stylesheet" href="css/hud.css?v=89">
+  <link rel="stylesheet" href="css/hud.css?v=92">
   <link rel="stylesheet" href="css/menu.css?v=71">
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=77">
@@ -154,11 +154,17 @@
   <div id="hud-edit-bar" class="hidden">Drag to move · pinch or <button id="hud-zoom-out" class="hud-zoom">−</button><button id="hud-zoom-in" class="hud-zoom">+</button> to resize · <button id="hud-edit-done">Done</button></div>
   <div id="toast" class="hidden"></div>
 
-  <div id="chip-spin" class="hidden">
-    <span class="cs-end cs-top" id="cs-top">bite</span>
-    <input id="chip-spin-slider" type="range" min="-100" max="100" value="0">
-    <span class="cs-end cs-bot" id="cs-bot">run</span>
-    <span class="cs-label"><span id="cs-name">SPIN</span> <b id="chip-spin-val">0</b></span>
+  <div id="shot-power" class="hidden">
+    <span class="cs-end cs-top" id="sp-top">max</span>
+    <input id="attr-slider" type="range" min="0" max="100" value="100">
+    <span class="cs-end cs-bot" id="sp-bot">0</span>
+    <span class="cs-label">POWER <b id="attr-val">100</b></span>
+    <span class="cs-seg-label">Shot Trajectory</span>
+    <div id="attr-seg">
+      <button class="attr-btn" data-spin="low">Low</button>
+      <button class="attr-btn active" data-spin="stock">Stock</button>
+      <button class="attr-btn" data-spin="high">High</button>
+    </div>
   </div>
 
   <div id="range-ui" class="hidden">
@@ -741,7 +747,7 @@
        full download+execute; defer still preserves this document order for when
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./three3d/course3d.js?v=20"></script>
-  <script defer src="game.js?v=246"></script>
+  <script type="module" src="./three3d/course3d.js?v=31"></script>
+  <script defer src="game.js?v=247"></script>
 </body>
 </html>
