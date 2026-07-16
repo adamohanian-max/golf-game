@@ -83,6 +83,13 @@ cards need: `par`, `yards`, `holes` (summed from the baked geometry), `location`
 major-venue ids to `tools/course_tags.json` first if the new course qualifies.
 Idempotent — safe to re-run after every bake.
 
+**If the course is (or could be) a real PGA Tour venue, also regenerate the Tour
+Events playability map:** `python3 tools/tour_venues.py --write-map courses/tour_venues.json`.
+This rewrites `{eventId:{courseId,courseName,venue}}` for every 2026 event whose
+venue now matches a baked course — it's what drives the "✓ Playable" chips on the
+Play → Tour Events schedule. Skip it only for Originals / non-tour courses. (Also
+rerun at season rollover, since ESPN event ids are per-season.)
+
 ## Definition of done — `verify_course.py` (the gate)
 A course is up to standard only when **`python3 tools/verify_course.py <id>` exits 0**. The gate (calibrated so Pinehurst scores grade A) runs automatically:
 - **HARD (any failure → exit 1):** `global:true` + `world`/`aerial`/`surfaces` present; expected hole count (`--holes N`, default 18) each with par/yards/tee/pin; `course.jpg` exists + valid JPEG + **every tee/pin registers inside it** via the inverse `toWorld` affine; DEM grid `nx*ny == len(data)` covering the world rect (waive with `--allow-no-dem`); and the **engine smoke test** — `tools/engine_smoke.js` via `osascript -l JavaScript` stubs DOM/canvas/Image and runs `draw()` on every hole in BOTH vector + photoreal modes plus a swing + putt (no throw = pass). `--no-engine` skips it.
