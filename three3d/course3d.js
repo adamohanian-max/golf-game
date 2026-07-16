@@ -90,6 +90,39 @@ function sceneToWorld(v) {
   return { x: v.x / m, y: v.z / m };
 }
 
+// World (game coords) -> screen CSS px through the LIVE camera. game.js's
+// wx()/wy() route through this when render3D (view.threeProj) so the 2D gameplay
+// layer (cup/ball/aim/contours) draws glued onto the three.js ground — same idea
+// as view.appleProj's MapKit pinhole, but the camera is fully known here so it's
+// exact (no probe calibration). render() runs before draw() each frame, so the
+// camera matrices are already current when game.js calls this.
+const _projV = new THREE.Vector3();
+function project(x, y, zUnits, out) {
+  out = out || {};
+  if (!camera) { out.x = 0; out.y = 0; out.inFront = false; return out; }
+  worldToScene(x, y, zUnits || 0, _projV);
+  _projV.applyMatrix4(camera.matrixWorldInverse); // scene -> view space (camera looks down -z)
+  out.inFront = _projV.z < 0;
+  _projV.applyMatrix4(camera.projectionMatrix);   // view -> NDC (perspective divide via w)
+  out.x = (_projV.x * 0.5 + 0.5) * window.innerWidth;
+  out.y = (1 - (_projV.y * 0.5 + 0.5)) * window.innerHeight;
+  return out;
+}
+// Screen CSS px -> world (game coords) on the horizontal ground plane at
+// elevation zUnits. For the range finder / taps under render3D.
+const _unV = new THREE.Vector3();
+function unproject(sx, sy, zUnits) {
+  if (!camera) return null;
+  const m = M();
+  _unV.set((sx / window.innerWidth) * 2 - 1, -((sy / window.innerHeight) * 2 - 1), 0.5).unproject(camera);
+  const ox = camera.position.x, oy = camera.position.y, oz = camera.position.z;
+  const dy = _unV.y - oy;
+  if (Math.abs(dy) < 1e-6) return null;
+  const t = ((zUnits || 0) * m - oy) / dy;
+  if (t < 0) return null;
+  return { x: (ox + (_unV.x - ox) * t) / m, y: (oz + (_unV.z - oz) * t) / m };
+}
+
 let renderer = null;
 let scene = null;
 let camera = null;
@@ -409,6 +442,11 @@ function buildScene() {
     ballMat
   );
   scene.add(ballMesh);
+  // The 2D canvas draws the ball now (projected through this camera via
+  // view.threeProj), so the aim line/shadow/trail stay consistent with it and
+  // the ball is a constant, readable size. Hide the WebGL sphere. (Flag + tee
+  // stay WebGL — they read better as real 3D geometry.)
+  ballMesh.visible = false;
 }
 
 // Terrain mesh sampled straight from terrainZ() (DEM + broad swells + green
@@ -1113,12 +1151,16 @@ function syncFromHole(force) {
 function frameBirdsEye(fromS, toS) {
   const dx = toS.x - fromS.x, dz = toS.z - fromS.z;
   const dist = Math.hypot(dx, dz) || 1;
-  const midX = (fromS.x + toS.x) / 2, midZ = (fromS.z + toS.z) / 2, midY = (fromS.y + toS.y) / 2;
-  // Floors keep short approach shots (ball already close to the pin) from
-  // re-framing into an awkward too-close, too-low shot.
-  const back = Math.max(dist * 0.4, 28), elevate = Math.max(dist * 0.25, 18);
-  camera.position.set(midX - (dx / dist) * back, midY + elevate, midZ - (dz / dist) * back);
-  controls.target.set(midX, midY, midZ);
+  const ux = dx / dist, uz = dz / dist; // unit ball->pin (scene x/z)
+  // Address view: sit behind AND above the BALL, look down the line just past
+  // it, so the ball reads in the lower third with the hole running away to the
+  // pin. (Old framing centred on the tee->pin midpoint, which pushed the ball
+  // below the bottom edge — you couldn't see your own ball at address.) Floors
+  // keep short approach shots from re-framing too close/low.
+  const back = Math.max(dist * 0.28, 30), elevate = Math.max(dist * 0.34, 26);
+  const look = Math.min(dist * 0.5, dist);
+  camera.position.set(fromS.x - ux * back, Math.max(fromS.y, toS.y) + elevate, fromS.z - uz * back);
+  controls.target.set(fromS.x + ux * look, (fromS.y + toS.y) / 2, fromS.z + uz * look);
   controls.update();
 }
 
@@ -1273,7 +1315,7 @@ function dispose() {
 }
 
 window.Course3D = {
-  init, enter, leave, render, resize, dispose, FOUR_OAKS_ID, worldToScene, sceneToWorld,
+  init, enter, leave, render, resize, dispose, FOUR_OAKS_ID, worldToScene, sceneToWorld, project, unproject,
   debug: () => {
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
     const q = camera.quaternion;

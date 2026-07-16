@@ -2794,6 +2794,16 @@ function applyView() {
   // for its look-at center). Null whenever flat — wx/wy stay pure affine.
   view.appleProj = (applePitch > 0.05 && typeof appleGroundActive === "function" && appleGroundActive())
     ? buildAppleProj(cssW, cssH) : null;
+  // Four Oaks three.js 3D: route wx/wy/screenToWorld through the live three.js
+  // camera (Course3D.project) so the 2D gameplay layer glues onto its ground.
+  view.threeProj = (render3D && window.Course3D && window.Course3D.project) ? true : null;
+  if (view.threeProj) {
+    // local screen px per world unit near the ball, so ws()-sized marks
+    // (ball/cup) read sanely under the perspective camera
+    const b = state.ball, tz = terrainZ(b.x, b.y);
+    const q0 = window.Course3D.project(b.x, b.y, tz), q1 = window.Course3D.project(b.x + 1, b.y, tz);
+    view.threeScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
+  }
 }
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
@@ -2966,11 +2976,19 @@ function _apPt(x, y) {
   _apLast = { wx: x, wy: y, P, x: q.x, y: q.y };
   return _apLast;
 }
-function wx(x, y) { return view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
-function wy(x, y) { return view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
-function ws(v) { return v * view.scale; }
+let _tLast = null, _tGen = 0; // three.js (render3D) projection cache — per-frame, camera moves
+function _tPt(x, y) {
+  if (_tLast && _tLast.wx === x && _tLast.wy === y && _tLast.gen === _tGen) return _tLast;
+  const q = window.Course3D.project(x, y, terrainZ(x, y));
+  _tLast = { wx: x, wy: y, gen: _tGen, x: q.x, y: q.y };
+  return _tLast;
+}
+function wx(x, y) { return view.threeProj ? _tPt(x, y).x : view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
+function wy(x, y) { return view.threeProj ? _tPt(x, y).y : view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
+function ws(v) { return v * (view.threeProj ? view.threeScale : view.scale); }
 // Inverse: screen px -> world coords (for the range finder).
 function screenToWorld(sx, sy) {
+  if (view.threeProj) return window.Course3D.unproject(sx, sy, terrainZ(state.ball.x, state.ball.y)) || { x: state.ball.x, y: state.ball.y };
   if (view.appleProj) return appleUnproject(view.appleProj, sx, sy);
   const det = view.a * view.e - view.b * view.d || 1;
   const x = sx - view.c, y = sy - view.f;
@@ -3084,6 +3102,7 @@ function computeViewAABB() {
   _viewAABB = { minx, miny, maxx, maxy };
 }
 function polyVisible(poly) {
+  if (view.threeProj) return true; // _viewAABB is the affine's; the three.js camera view doesn't match it — don't cull
   if (!_viewAABB || !poly || poly.length < 2) return true;
   const bb = poly._bb || (poly._bb = polyBBox(poly)); // memoized
   const v = _viewAABB;
@@ -5378,10 +5397,10 @@ function drawGroundStack(cssW, cssH, warp) {
 }
 
 function draw() {
-  // Four Oaks 3D: three.js owns the whole frame (course, ball, flag, camera) via
-  // window.Course3D.render() in loop(); the 2D canvas is hidden (update3DMode)
-  // so there is nothing to paint here. Every other course is unaffected.
-  if (render3D) return;
+  // Four Oaks 3D: three.js draws the GROUND/trees/flag (Course3D.render() in
+  // loop, before this) and the 2D layer below still runs — it paints the
+  // gameplay (cup, ball, aim, contours) ON TOP, projected through the three.js
+  // camera (view.threeProj), same as Apple ground keeps the 2D layer over MapKit.
   const cssW = window.innerWidth, cssH = window.innerHeight;
   // Butter Brook: Apple MapKit is this course's ground layer, always (not a
   // render3D-style full-frame mode) — see appleGroundActive()/syncAppleGround()
@@ -5396,7 +5415,7 @@ function draw() {
   // heavy tilt layers (photo-canopy extrusion) still cost one blit parked.
   // Butter Brook never engages this — real Apple tilt lands in a later stage
   // (see the plan) instead of the fake canvas warp.
-  const tilt3d = !appleGround && !!(view.kz && !HOLE.isRange && !greenView && !cine);
+  const tilt3d = !appleGround && !render3D && !!(view.kz && !HOLE.isRange && !greenView && !cine);
   _warpPad = tilt3d ? estimateWarpPad(cssW, cssH) : 0;
   computeViewAABB(); // for off-screen polygon culling this frame
   const warp = tilt3d;
@@ -5416,7 +5435,15 @@ function draw() {
   // Camera parked but the last rebuild was a degraded motion frame → rebuild
   // once at full quality so the parked cache never shows the coarse version.
   const settle = warp && _warpCache && _warpCache.sig === wSig && _warpCache.degraded;
-  if (appleGround) {
+  if (render3D) {
+    // three.js already painted the ground/trees/flag this frame; clear the 2D
+    // canvas to transparent so #c3d shows through, then the common tail draws
+    // cup/ball/aim over it. Green tint + topo contours (the putting read) draw
+    // here — drawGreen routes through view.threeProj onto the 3D green.
+    _tGen++;
+    ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
+    if (!HOLE.isRange) drawGreen(true, greensInPlay());
+  } else if (appleGround) {
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     syncAppleGround();
     // The full ground stack is skipped (Apple IS the ground), but the green
@@ -5511,7 +5538,7 @@ function draw() {
     ctx.fillStyle = "#e02a25";
     ctx.fill();
   } else {
-  drawTeeMarkers();   // flank the tee box so it reads clearly
+  if (!render3D) drawTeeMarkers();   // flank the tee box (WebGL draws the tee marker in 3D)
   // hole cup — dark hole with a bright rim so it reads on the photo. A circle
   // on the ground foreshortens with the camera tilt, so ry scales by view.tilt.
   const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
@@ -5528,7 +5555,7 @@ function draw() {
   const _b = state.ball;
   const ballOnGreen = surfaceAt(_b.x, _b.y) === "green";
   const dToHole = Math.hypot(_b.x - HOLE.holePos.x, _b.y - HOLE.holePos.y);
-  if (!ballOnGreen) {
+  if (!ballOnGreen && !render3D) { // WebGL draws the flagstick in 3D
     let fs = (dToHole - FLAG_NEAR) / (FLAG_FAR - FLAG_NEAR);
     fs = 0.55 + 0.45 * Math.max(0, Math.min(1, fs)); // 0.55 (near) .. 1 (far)
     const poleH = Math.max(ws(0.78), 22) * fs, topX = hx, topY = hy - poleH;
@@ -5567,7 +5594,9 @@ function draw() {
     // Screen pixels the ball floats above ground. Under the Apple pinhole the
     // height is projected for real (appleProjPt takes z) — flight arcs
     // foreshorten correctly instead of using the flat screen-lift.
-    const lift = view.appleProj
+    const lift = view.threeProj
+      ? gy - window.Course3D.project(b.x, b.y, terrainZ(b.x, b.y) + b.z).y
+      : view.appleProj
       ? gy - appleProjPt(view.appleProj, b.x, b.y, b.z + _apGroundZ(view.appleProj, b.x, b.y)).y
       : ws(b.z);
     // Keep the ball clearly visible at every zoom (floor in screen px); real
