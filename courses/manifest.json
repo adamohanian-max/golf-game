@@ -1221,5 +1221,27 @@
     "location": "Silvis, IL",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "tpc-san-antonio-oaks",
+    "name": "TPC San Antonio (Oaks Course)",
+    "sub": "San Antonio, TX · Par 72",
+    "par": 72,
+    "yards": 7537,
+    "holes": 18,
+    "location": "San Antonio, TX",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "bellerive-country-club",
+    "name": "Bellerive Country Club",
+    "sub": "Town and Country, MO · Par 72",
+    "par": 72,
+    "yards": 7438,
+    "holes": 18,
+    "location": "Town and Country, MO",
+    "region": "USA",
+    "tags": []
   }
 ]
