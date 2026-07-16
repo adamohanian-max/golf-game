@@ -703,80 +703,24 @@ function buildAppleProj(cssW, cssH) {
       const q = appleProjPt(calP, wx, wy, _apGroundZ(calP, wx, wy));
       S.push(q); D.push({ x: cal.px[i], y: cal.py[i] });
     }
-    // Least-squares affine over all probes (4 sent = overdetermined), then
-    // one round of outlier rejection: annotation answers occasionally glitch
-    // for a frame, and mesh refinement can slide ONE probe's terrain-anchored
-    // position while the ground truth at the pin never moved — an exact
-    // 3-point fit folds either straight into shear and visibly wobbles the
-    // overlay mid-transition. Drop the worst residual > 5 px and refit.
-    const lsq = (pts, ans) => {
-      let sxx = 0, sxy = 0, sx = 0, syy = 0, sy = 0, n = pts.length;
-      let bx = [0, 0, 0], by = [0, 0, 0];
-      for (let i = 0; i < n; i++) {
-        const p = pts[i], d = ans[i];
-        sxx += p.x * p.x; sxy += p.x * p.y; syy += p.y * p.y; sx += p.x; sy += p.y;
-        bx[0] += p.x * d.x; bx[1] += p.y * d.x; bx[2] += d.x;
-        by[0] += p.x * d.y; by[1] += p.y * d.y; by[2] += d.y;
-      }
-      // solve symmetric 3x3 [sxx sxy sx; sxy syy sy; sx sy n] m = b (Cramer)
-      const M = [sxx, sxy, sx, sxy, syy, sy, sx, sy, n];
-      const det = M[0] * (M[4] * M[8] - M[5] * M[7]) - M[1] * (M[3] * M[8] - M[5] * M[6]) + M[2] * (M[3] * M[7] - M[4] * M[6]);
-      if (Math.abs(det) < 1e6) return null;  // near-collinear
-      const solve3 = (b) => {
-        const r = [];
-        for (let c = 0; c < 3; c++) {
-          const T = M.slice();
-          T[c] = b[0]; T[c + 3] = b[1]; T[c + 6] = b[2];
-          r.push((T[0] * (T[4] * T[8] - T[5] * T[7]) - T[1] * (T[3] * T[8] - T[5] * T[6]) + T[2] * (T[3] * T[7] - T[4] * T[6])) / det);
-        }
-        return r;
-      };
-      return { X: solve3(bx), Y: solve3(by) };
-    };
-    if (pitchDeg < 10) {
-      // FLAT/NEAR-FLAT: translation-only fit (median of per-probe residuals).
-      // The real error down here is MapKit's safe-area camera-centering
-      // shift — pure translation. A full affine is actively harmful: even at
-      // pitch 0 MapKit renders PERSPECTIVE, so terrain/canopy elevation at a
-      // probe's spot displaces it radially (h/D — measured ~30px of phantom
-      // pin error at distM 252 when probes sat near tall trees and the LSQ
-      // absorbed the displacement as bogus scale, extrapolated to a pin
-      // outside the probe quad; the same artifact reappeared at pitch 3°
-      // via the affine path, hence the 10° threshold — below it the
-      // pitch-anchor error the affine exists to correct is < tan(10°)≈0.18
-      // of its full-tilt size, and elevation noise dominates the fit).
-      // Median rejects per-probe elevation noise; translation extrapolates
-      // safely everywhere on screen.
-      const med = (v) => { const s = v.slice().sort((a, b) => a - b); return (s[1] + s[2]) / 2; };
-      if (S.length >= 4) {
-        const tx = med(D.map((d, i) => d.x - S[i].x));
-        const ty = med(D.map((d, i) => d.y - S[i].y));
-        if (Math.hypot(tx, ty) < 500) { fitA = [1, 0, 0, 1]; fitB = [tx, ty]; }
-      }
-    } else {
-    let f = lsq(S, D);
-    if (f && S.length > 3) {
-      let worst = -1, wr = 0;
-      for (let i = 0; i < S.length; i++) {
-        const rx = f.X[0] * S[i].x + f.X[1] * S[i].y + f.X[2] - D[i].x;
-        const ry = f.Y[0] * S[i].x + f.Y[1] * S[i].y + f.Y[2] - D[i].y;
-        const r = Math.hypot(rx, ry);
-        if (r > wr) { wr = r; worst = i; }
-      }
-      if (wr > 5) {
-        S = S.filter((_, i) => i !== worst);
-        D = D.filter((_, i) => i !== worst);
-        f = lsq(S, D) || f;
-      }
-    }
-    if (f) {
-      const [a, b, tx] = f.X, [d, e, ty] = f.Y;
-      const sdet = a * e - b * d;
-      // Sanity: near-identity-ish (anchor shifts translate; scale/rot stay small)
-      if (sdet > 0.5 && sdet < 2 && Math.hypot(tx, ty) < 500) {
-        fitA = [a, b, d, e]; fitB = [tx, ty];
-      }
-    }
+    // Translation-only fit (median of per-probe residuals) at EVERY pitch.
+    // The error this calibration corrects is a global translation at all
+    // regimes: flat = MapKit's safe-area camera-centering shift; pitched =
+    // the flyover anchor re-roll (whose own old sanity-gate comment said it:
+    // "anchor shifts translate; scale/rot stay small"). The previous full
+    // least-squares AFFINE was actively harmful wherever probes landed on
+    // Apple's canopy mesh: elevated probe answers displace radially (h/D)
+    // and the LSQ absorbed that as bogus scale, extrapolating to 14-28px of
+    // pin error — measured on the 18-hole sweep as a clean bimodal split,
+    // bad exactly on the tree-ringed framings (holes 2,3,6,7,8,10,11 at
+    // 55°) and earlier as the flat hole-5 case. The median rejects up to
+    // two canopy-displaced probes outright, and a translation extrapolates
+    // safely to any point on screen.
+    const med = (v) => { const s = v.slice().sort((a, b) => a - b); return (s[1] + s[2]) / 2; };
+    if (S.length >= 4) {
+      const tx = med(D.map((d, i) => d.x - S[i].x));
+      const ty = med(D.map((d, i) => d.y - S[i].y));
+      if (Math.hypot(tx, ty) < 500) { fitA = [1, 0, 0, 1]; fitB = [tx, ty]; }
     }
   }
   // Median-of-3 over recent fit targets: a single garbage fit (annotation
