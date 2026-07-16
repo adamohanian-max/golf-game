@@ -601,12 +601,23 @@ let _calEaseT = 0;
 // the median filter in buildAppleProj.
 let _probeLL = null, _probeLLW = null;
 const _fitHist = [];
+// Native map frame height in points, returned by enter(). The WKWebView's
+// innerHeight EXCLUDES the home-indicator region (~33pt), so cssH/2 sits
+// ~16px above the native map's center — measured (flag-vs-JS experiment,
+// 2026-07-16) as a constant ~16px pure-vertical offset on every flat-mode
+// frame, at every zoom, on every hole; the probe calibration absorbed it in
+// 3D but flat mode carried it raw. All center/FOV/distance math below must
+// use the MAP's height, not the webview's.
+let _appleMapH = 0;
 function buildAppleProj(cssW, cssH) {
+  // The map may be taller than the webview viewport (home-indicator strip) —
+  // center the camera replica on the MAP's center, not innerHeight/2.
+  const mapH = _appleMapH || cssH;
   // Look-at target O = the world point at the true screen center under the
   // FLAT view (game camera logic — focus/fit/aim — stays orthographic and
   // untouched; the perspective is layered on top of it).
   const det = view.a * view.e - view.b * view.d || 1;
-  const sx0 = cssW / 2 - view.c, sy0 = cssH / 2 - view.f;
+  const sx0 = cssW / 2 - view.c, sy0 = mapH / 2 - view.f;
   let Ox = (view.e * sx0 - view.b * sy0) / det;
   let Oy = (-view.d * sx0 + view.a * sy0) / det;
   const m = M_PER_UNIT;
@@ -616,7 +627,7 @@ function buildAppleProj(cssW, cssH) {
   const reqLon = g[0] * Ox + g[1] * Oy + g[2];
   // What the game WANTS (always what gets sent over the bridge — the map
   // re-clamps for itself every frame):
-  const reqDistM = (cssH / camera.scale) * m * APPLE_CAM_K; // line-of-sight, metres
+  const reqDistM = (mapH / camera.scale) * m * APPLE_CAM_K; // line-of-sight, metres (FOV spans the MAP's height)
   const reqPitch = applePitch;
   // What the overlay RENDERS: fold in MapKit's clamps (see _appleActualCam).
   // Only adopt an actual value when it disagrees with what we asked for —
@@ -660,8 +671,8 @@ function buildAppleProj(cssW, cssH) {
     rx: ch, ry: -sh, rz: 0,
     ux: sh * cp, uy: ch * cp, uz: sp,
     fx: sp * sh, fy: sp * ch, fz: -cp,
-    focal: (cssH / 2) / Math.tan(15 * Math.PI / 180),
-    cx: cssW / 2, cy: cssH / 2,
+    focal: (mapH / 2) / Math.tan(15 * Math.PI / 180),
+    cx: cssW / 2, cy: mapH / 2,
   };
   // Calibration: fit a screen affine from the raw replica onto the probe
   // annotations' ACTUAL rendered positions (see _appleCal). The fit input
@@ -865,7 +876,9 @@ function syncAppleGround() {
     // it shows as a solid pine rectangle.
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";
-    P.enter({ courseId: course.id }).catch((e) => console.error("CourseMap3D enter", e));
+    P.enter({ courseId: course.id })
+      .then((r) => { if (r && r.mapH > 0) _appleMapH = r.mapH; }) // real map frame height (see _appleMapH)
+      .catch((e) => console.error("CourseMap3D enter", e));
   }
   const now = performance.now();
   // ~30fps cap over the native bridge — except while the camera is moving
@@ -1081,6 +1094,7 @@ let _tourSchedCache = null;       // { at, data } schedule fetch cache
 let _tourOpenEvent = null;        // schedule event whose board is currently open {id,name,start,end,state,period}
 let _tourActiveEventId = null;    // eventId of the round currently being played (tourPlayMode)
 let _tourResultsCache = {};       // { [eventId]: {purse, displayPurse, payouts:[$ desc]} }
+let _tourVenueMap = null;         // { [eventId]: {courseId, courseName, venue} } — baked, for schedule playability
 // Match state — live head-to-head game with friends (see "Multiplayer matches").
 let activeMatch = null;      // full matches row from Supabase (null when not in a match)
 let matchHoleCount = 18;     // holes this match plays (9 or 18), set at Begin
@@ -2918,7 +2932,7 @@ function updateCamera() {
     camera.tilt = camera.tTilt = 1;
     // Cap zoom so the camera never requests under flyover's minimum distance
     // (past the clamp the map drifts off the overlay — see APPLE_MIN_DIST_M).
-    const sMax = window.innerHeight * M_PER_UNIT * APPLE_CAM_K / APPLE_MIN_DIST_M;
+    const sMax = (_appleMapH || window.innerHeight) * M_PER_UNIT * APPLE_CAM_K / APPLE_MIN_DIST_M;
     if (camera.scale > sMax) camera.scale = sMax;
     if (camera.tScale > sMax) camera.tScale = sMax;
     // Pitch rides the zoom: full 3D at hole-scale framings, easing to flat
@@ -10981,40 +10995,75 @@ async function openTourEvents() {
   const sched = document.getElementById("tb-schedule");
   if (sched) sched.innerHTML = "";
 
-  const evs = await fetchTourSchedule();
+  const [evs] = await Promise.all([fetchTourSchedule(), loadTourVenueMap()]);
   if (ov.classList.contains("hidden")) return;   // closed while loading
   if (!evs || !evs.length) { document.getElementById("tb-status").textContent = "Couldn't reach the tour feed — try again."; return; }
   _tourSchedule = evs;
   renderTourSchedule(evs);
 }
 
-function _schedRowHTML(e) {
-  const badge = e.canceled ? '<span class="tb-badge tb-badge-x">Canceled</span>'
-    : e.state === "in" ? '<span class="tb-badge tb-badge-live">Live</span>'
-    : e.state === "post" ? '<span class="tb-badge tb-badge-final">Final</span>'
-    : '<span class="tb-badge tb-badge-up">Upcoming</span>';
+// Baked eventId→course map (courses/tour_venues.json) drives the schedule's
+// playability chips instantly — no per-event API calls. Missing file → no chips.
+async function loadTourVenueMap() {
+  if (_tourVenueMap) return _tourVenueMap;
+  try {
+    const res = await fetch("courses/tour_venues.json", { cache: "force-cache" });
+    _tourVenueMap = res.ok ? await res.json() : {};
+  } catch (e) { _tourVenueMap = {}; }
+  return _tourVenueMap;
+}
+// Can the player tee this event, just watch, or is it locked? Mirrors the gate
+// renderTourBoard/canPlayRound enforce on open (pre = locked; post/live with a
+// baked venue = playable; otherwise watch-only).
+function tourEventPlayInfo(e) {
+  const m = (_tourVenueMap || {})[e.id] || null;
+  const info = { courseId: m ? m.courseId : null, courseName: m ? m.courseName : null,
+    playable: false, watchOnly: false, locked: false };
+  if (e.canceled) { info.watchOnly = true; }
+  else if (e.state === "pre") { info.locked = true; }
+  else if (m) { info.playable = true; }
+  else { info.watchOnly = true; }
+  return info;
+}
+
+function _schedRowHTML(e, info) {
+  const chip = info.locked ? '<span class="tb-badge tb-chip-lock">Locked</span>'
+    : e.canceled ? '<span class="tb-badge tb-badge-x">Canceled</span>'
+    : info.playable ? '<span class="tb-badge tb-chip-play">✓ Playable</span>'
+    : '<span class="tb-badge tb-chip-watch">Watch only</span>';
   const played = ((getTourEvent(e.id) || {}).rounds || []).length;
-  const prog = played ? '<span class="tb-sched-prog">' + played + '/4 played</span>' : "";
+  const prog = played ? '<span class="tb-sched-prog">' + played + '/4</span>' : "";
+  const date = fmtEventDate(e.start);
+  const sub = info.courseName ? escapeHTML(info.courseName) + " · " + date : date;
   return '<button class="tb-sched-row" data-id="' + escapeHTML(e.id) + '">' +
     '<span class="tb-sched-main">' +
       '<span class="tb-sched-name">' + escapeHTML(e.name) + "</span>" +
-      '<span class="tb-sched-date">' + escapeHTML(fmtEventDate(e.start)) + "</span></span>" +
-    '<span class="tb-sched-meta">' + prog + badge + "</span></button>";
+      '<span class="tb-sched-sub">' + sub + "</span></span>" +
+    '<span class="tb-sched-meta">' + prog + chip + "</span></button>";
 }
 
+// Grouped so the playable events lead and the locked upcoming ones sink to the
+// bottom: Live now → Ready to play → Completed (watch only) → Upcoming.
 function renderTourSchedule(evs) {
   document.getElementById("tb-event").textContent = "Tour Events";
-  document.getElementById("tb-status").textContent = evs.length + " events · 2026 PGA Tour season";
+  document.getElementById("tb-status").textContent = "Play a real 2026 PGA Tour event";
   document.getElementById("tb-course").textContent = "";
-  // Live first, then upcoming (soonest), then past (most recent).
-  const rank = { in: 0, pre: 1, post: 2 };
-  const rows = evs.slice().sort((a, b) => {
-    if (rank[a.state] !== rank[b.state]) return rank[a.state] - rank[b.state];
-    return a.state === "post" ? new Date(b.start) - new Date(a.start) : new Date(a.start) - new Date(b.start);
-  });
+  const rows = evs.map((e) => ({ e, info: tourEventPlayInfo(e) }));
+  const recent = (a, b) => new Date(b.e.start) - new Date(a.e.start);
+  const soon = (a, b) => new Date(a.e.start) - new Date(b.e.start);
+  const groups = [
+    ["Live now", rows.filter((x) => x.e.state === "in").sort(soon)],
+    ["Ready to play", rows.filter((x) => x.e.state === "post" && x.info.playable).sort(recent)],
+    ["Completed · watch only", rows.filter((x) => x.e.state === "post" && !x.info.playable).sort(recent)],
+    ["Upcoming", rows.filter((x) => x.e.state === "pre").sort(soon)],
+  ];
   const host = document.getElementById("tb-schedule");
   if (!host) return;
-  host.innerHTML = rows.map(_schedRowHTML).join("");
+  host.innerHTML = groups.filter(([, g]) => g.length).map(([label, g]) =>
+    '<div class="tb-sched-group">' + escapeHTML(label) +
+      '<span class="tb-sched-count">' + g.length + "</span></div>" +
+    g.map((x) => _schedRowHTML(x.e, x.info)).join("")
+  ).join("");
   host.querySelectorAll(".tb-sched-row").forEach((el) => {
     el.addEventListener("click", () => {
       const ev = evs.find((e) => e.id === el.dataset.id);

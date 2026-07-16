@@ -96,6 +96,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--needs-bake", action="store_true", help="only print the bake TODO list")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--write-map", metavar="PATH",
+                    help="write { eventId: {courseId, courseName, venue} } for matched events (for the in-game schedule playability chips)")
     args = ap.parse_args()
 
     courses = json.load(open(MANIFEST))
@@ -131,12 +133,21 @@ def main():
         course, score = match_course(venue["name"], courses)
         if course:
             row["courseId"] = course["id"]
+            row["courseName"] = course.get("name")
             matched.append(row)
         else:
             row["bestScore"] = round(score, 2)
             row["boundary"] = guess_boundary(venue["name"], index)
             needs.append(row)
         time.sleep(0.15)
+
+    if args.write_map:
+        m = {r["eventId"]: {"courseId": r["courseId"], "courseName": r.get("courseName"),
+                            "venue": r.get("venue")} for r in matched}
+        with open(args.write_map, "w") as f:
+            json.dump(m, f, indent=2)
+        print(f"wrote {len(m)} event→course entries -> {args.write_map}", file=sys.stderr)
+        return 0
 
     if args.json:
         print(json.dumps({"matched": matched, "needsBake": needs, "noVenue": novenue}, indent=2))

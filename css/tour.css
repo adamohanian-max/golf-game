@@ -79,6 +79,13 @@
 }
 .tb-x:active { background: var(--w-08); }
 
+/* Pane toggle: these single-class element rules out-order the base .hidden, so
+   spell out the hidden state specifically or the leaderboard table / actions /
+   back arrow leak onto the schedule pane. */
+#tour-board .tb-table-wrap.hidden,
+#tour-board .tb-actions.hidden,
+#tb-back.hidden { display: none; }
+
 .tb-table-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .tb-table { width: 100%; border-collapse: collapse; }
 .tb-table thead th {
@@ -238,8 +245,33 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tb-sched-date { font-size: 11px; color: var(--text-faint); }
+.tb-sched-sub {
+  font-size: 11px; color: var(--text-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .tb-sched-meta { display: flex; align-items: center; gap: 8px; flex: none; }
 .tb-sched-prog { font-size: 10px; color: var(--brass-400); font-variant-numeric: tabular-nums; }
+
+/* Section headers grouping the season (Live / Ready to play / …) */
+.tb-sched-group {
+  position: sticky; top: 0;
+  z-index: 1;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px var(--s-3) 5px;
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--brass-600);
+  background: var(--tour-board-bg);
+  border-bottom: 1px solid var(--tour-line);
+}
+.tb-sched-count {
+  font-size: 9.5px; color: var(--text-faint);
+  border: 1px solid var(--tour-line); border-radius: 999px;
+  padding: 1px 6px; letter-spacing: 0.5px;
+}
+
 .tb-badge {
   font-size: 9.5px;
   letter-spacing: 0.6px;
@@ -254,6 +286,10 @@
 .tb-badge-final { color: var(--w-55); }
 .tb-badge-up { color: var(--brass-400); border-color: var(--brass-600); }
 .tb-badge-x { color: var(--text-faint); }
+/* Playability chips */
+.tb-chip-play  { color: #1c1408; background: var(--brass-600); border-color: var(--brass-400); }
+.tb-chip-watch { color: var(--w-55); }
+.tb-chip-lock  { color: var(--text-faint); border-style: dashed; }
 
 /* ---- Bottom-left live scorebug (during gameplay) ---------- */
 #tour-bug {
