@@ -1243,5 +1243,49 @@
     "location": "Town and Country, MO",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "trump-national-doral",
+    "name": "Trump National Doral (Blue Monster)",
+    "sub": "Miami, FL · Par 72",
+    "par": 72,
+    "yards": 7484,
+    "holes": 18,
+    "location": "Miami, FL",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "waialae-country-club",
+    "name": "Waialae Country Club",
+    "sub": "Honolulu, HI · Par 70",
+    "par": 70,
+    "yards": 7116,
+    "holes": 18,
+    "location": "Honolulu, HI",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "bay-hill-club",
+    "name": "Arnold Palmer's Bay Hill Club",
+    "sub": "Orlando, FL · Par 72",
+    "par": 72,
+    "yards": 7304,
+    "holes": 18,
+    "location": "Orlando, FL",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "black-desert-resort",
+    "name": "Black Desert Resort",
+    "sub": "Ivins, UT · Par 72",
+    "par": 72,
+    "yards": 6894,
+    "holes": 18,
+    "location": "Ivins, UT",
+    "region": "USA",
+    "tags": []
   }
 ]
