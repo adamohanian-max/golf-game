@@ -418,19 +418,20 @@ function buildScene() {
       `)
       .replace("#include <begin_vertex>", `
         #include <begin_vertex>
-        // PlaneGeometry(3,2,...) is centered at origin, x in [-1.5, 1.5]. Ramp
-        // from 0 at the pole edge (x=-1.5, pinned) to full amplitude at the
-        // tail (x=+1.5) so it reads as attached-at-one-edge cloth, not a
-        // rigid sign swinging on a center hinge.
-        float ramp = (position.x + 1.5) / 3.0;
-        float wave = sin(uTime * 6.0 - position.x * 3.0) * ramp * 0.35;
+        // Geometry is translated so x in [0, 2.6] with the pole edge pinned at
+        // x=0. Ramp 0 at the pole -> 1 at the tail so it reads as cloth attached
+        // at one edge, not a rigid sign swinging on a center hinge.
+        float ramp = position.x / 2.6;
+        float wave = sin(uTime * 6.0 - position.x * 3.5) * ramp * 0.35;
         transformed.z += wave;
       `);
   };
-  pinFlagMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(3, 2, 8, 1),
-    flagMat
-  );
+  // A real pin flag: a rectangle attached to the pole along its LEFT edge, flying
+  // to one side. translate() pins the left edge at x=0 (the pole) so it extends
+  // +x and pivots about the pole when billboarded to face the camera (see render()).
+  const flagGeo = new THREE.PlaneGeometry(2.6, 1.4, 12, 1);
+  flagGeo.translate(1.3, 0.3, 0); // left edge -> pole (x=0); raised so the flag flies from near the pole top
+  pinFlagMesh = new THREE.Mesh(flagGeo, flagMat);
   scene.add(pinFlagMesh);
 
   const ballMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
@@ -1220,6 +1221,11 @@ function render() {
   for (const w of waterMeshes) w.material.uniforms["time"].value += dt;
   const flagShader = pinFlagMesh.material.userData.shader;
   if (flagShader) flagShader.uniforms.uTime.value = now / 1000;
+  // Billboard the flag about the pole so it always presents its face to the
+  // camera (tail sweeping to one side), never going edge-on and vanishing.
+  pinFlagMesh.rotation.y = Math.atan2(
+    camera.position.x - pinFlagMesh.position.x,
+    camera.position.z - pinFlagMesh.position.z);
 
   const gb = window.GolfBridge;
   if (gb) {

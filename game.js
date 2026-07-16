@@ -2851,6 +2851,10 @@ function applyView() {
   // camera (Course3D.project) so the 2D gameplay layer glues onto its ground.
   view.threeProj = (render3D && window.Course3D && window.Course3D.project) ? true : null;
   if (view.threeProj) {
+    // The three.js camera IS the 3D — kill the flat 2.5D tilt so wyg()==wy() (no
+    // double terrain lift offsetting the cup/shadow/flow-dots from the green
+    // tint) and the ground ellipses stay round. Everything glues to the 3D green.
+    view.kz = 0; view.tilt = 1;
     // local screen px per world unit near the ball, so ws()-sized marks
     // (ball/cup) read sanely under the perspective camera
     const b = state.ball, tz = terrainZ(b.x, b.y);
