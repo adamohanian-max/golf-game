@@ -47,6 +47,20 @@ const TUNE = {
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.044,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
+  // Arc shape polish (renderer-independent; both default to identity, so the arc is
+  // bit-for-bit unchanged until dialed). arcDecel: mean-1 speed profile along the
+  // scripted arc — faster off the face, easing into landing (drag feel) WITHOUT
+  // moving the landing spot. arcDescentPow: descent-only height exponent (>2 = more
+  // vertical drop) — the RENDERED descent only; the physics landing check still uses
+  // the club land angle, and the landing spot is unchanged.
+  arcDecel: 0.25,        // 0 = constant speed (old); 0.25 = 1.25× early .. 0.75× late (drag feel).
+                         // NOTE: reshuffles the landing within the engine's existing ~1-frame
+                         // quantum (~5yd driver, ~2yd wedge) — set 0 for bit-identical carries.
+  arcDescentPow: 2.3,    // 2 = old parabola; 2.3 drops a touch more steeply (carry-neutral)
+  // Ball render depth cues.
+  ballTrailMax: 18,      // max points in the airborne motion trail (was a fixed 10)
+  ballShadowAlpha: 0.28, // ground-shadow opacity at deck level; fades as the ball climbs
+  ballShadowSpread: 0.02,// shadow softening/spread added per world-unit of height
   spinFactor: 0.01,     // how hard a curved swipe bends flight (draw/fade)
   windEffect: 0.0002,   // world-units/frame² per mph — how hard wind pushes the ball
   playsLikePerFoot: 1.0, // caddie "plays like": yards added per foot of climb to the pin (uphill plays longer)
@@ -1401,6 +1415,22 @@ function flightStep(b) {
 // velocity/height WITHOUT touching state.flight or the ball. Used both by
 // setupFlight below (the real, committed launch) and by buildTrialShot (a
 // hypothetical, discarded-after-simShotRest preview).
+// Arc shape helpers — pure, and called by BOTH the live arcFlightStep AND the
+// simShotRest prediction mirror, so the two can never drift (same rule as
+// landingRelease/resolveCup). Both are identity at their default TUNE values.
+function arcSpeedK(prog) {
+  // Per-frame advance multiplier along the arc: >1 early, <1 late (drag feel).
+  // Mean 1 over prog 0..1, so carry timing / hang / landing spot are preserved.
+  const p = Math.min(Math.max(prog, 0), 1);
+  return 1 + TUNE.arcDecel * (1 - 2 * p);
+}
+function arcHeightZ(fl, d) {
+  // Two-parabola height at arc-distance d. Ascent parabolic; descent uses
+  // arcDescentPow (>2 = more vertical drop). z=H at apex, 0 at launch/landing.
+  const t = d <= fl.xa ? (d - fl.xa) / fl.xa : (d - fl.xa) / (fl.C - fl.xa);
+  const p = d <= fl.xa ? 2 : TUNE.arcDescentPow;
+  return Math.max(fl.H * (1 - Math.pow(Math.abs(t), p)), 0);
+}
 function buildFlight(ang, C, H, L, spinN) {
   H = Math.max(H, 0.001);
   let xa = C - 2 * H / Math.tan(L);          // apex horizontal position
@@ -1418,9 +1448,10 @@ function setupFlight(b, ang, C, H, L, spinN) {
 
 function arcFlightStep(b) {
   const fl = state.flight;
-  fl.d += fl.vh;
-  b.x += b.vx;
-  b.y += b.vy;
+  const k = arcSpeedK(fl.d / fl.C);   // drag feel: ease along the arc; landing spot preserved
+  fl.d += fl.vh * k;
+  b.x += b.vx * k;
+  b.y += b.vy * k;
   // sidespin curves the path (draw/fade); keep the arc advancing along its length
   if (b.spin) {
     const sp = Math.hypot(b.vx, b.vy) || 1;
@@ -1435,11 +1466,10 @@ function arcFlightStep(b) {
     b.vx -= Math.sin(wind.dir) * wind.speed * we;
     b.vy += Math.cos(wind.dir) * wind.speed * we;
   }
-  // height from the two-parabola arc
-  const d = fl.d, C = fl.C, H = fl.H, xa = fl.xa;
-  const t = d <= xa ? (d - xa) / xa : (d - xa) / (C - xa);
+  // height from the two-parabola arc (shared helper — see simShotRest mirror)
+  const d = fl.d, C = fl.C, xa = fl.xa;   // kept for the landing test below
   const prevz = b.z;
-  b.z = Math.max(H * (1 - t * t), 0);
+  b.z = arcHeightZ(fl, d);
   b.vz = b.z - prevz; // for the shadow/trail render
   clampToWorld(b);
 
@@ -1779,8 +1809,9 @@ function simShotRest(ball0, flight0) {
   for (let i = 0; i < TUNE.cineSimSteps; i++) {
     if (airborne && fl) {
       // --- arc phase (mirrors arcFlightStep) ---
-      fl.d += fl.vh;
-      b.x += b.vx; b.y += b.vy;
+      const k = arcSpeedK(fl.d / fl.C);
+      fl.d += fl.vh * k;
+      b.x += b.vx * k; b.y += b.vy * k;
       if (b.spin) {
         const sp = Math.hypot(b.vx, b.vy) || 1;
         const px = -b.vy / sp, py = b.vx / sp;
@@ -1792,8 +1823,7 @@ function simShotRest(ball0, flight0) {
         b.vx -= Math.sin(wind.dir) * wind.speed * we;
         b.vy += Math.cos(wind.dir) * wind.speed * we;
       }
-      const t = fl.d <= fl.xa ? (fl.d - fl.xa) / fl.xa : (fl.d - fl.xa) / (fl.C - fl.xa);
-      b.z = Math.max(fl.H * (1 - t * t), 0);
+      b.z = arcHeightZ(fl, fl.d);
       clampToWorld(b);
       if (fl.d >= fl.C || (fl.d > fl.xa && b.z <= 0)) {
         b.z = 0;
@@ -5739,22 +5769,25 @@ function draw() {
     // scale only takes over when zoomed in far enough to exceed the floor.
     const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
 
-    // motion trail while airborne — fades from tail to ball
+    // motion trail while airborne — dissolves from tail to ball
     if (b.z > 0.4) {
       ballTrail.push({ x: gx, y: gy - lift });
-      if (ballTrail.length > 10) ballTrail.shift();
+      if (ballTrail.length > TUNE.ballTrailMax) ballTrail.shift();
     } else {
       ballTrail.length = 0;
     }
+    ctx.lineCap = "round";
     for (let i = 1; i < ballTrail.length; i++) {
       const f = i / ballTrail.length;
-      ctx.strokeStyle = `rgba(255,255,255,${f * 0.4})`;
+      // f*f eases the far tail out smoothly instead of cutting off at a hard edge
+      ctx.strokeStyle = `rgba(255,255,255,${f * f * 0.45})`;
       ctx.lineWidth = baseR * f * 1.2;
       ctx.beginPath();
       ctx.moveTo(ballTrail[i - 1].x, ballTrail[i - 1].y);
       ctx.lineTo(ballTrail[i].x, ballTrail[i].y);
       ctx.stroke();
     }
+    ctx.lineCap = "butt";
 
     // live direction-only tick during an active swipe (no landing-marker overlay —
     // power/carry is read from the HUD club-yardage number instead).
@@ -5789,11 +5822,14 @@ function draw() {
     }
     ctx.globalAlpha = pAlpha;
 
-    // shadow shrinks slightly as the ball climbs
-    const shR = baseR * Math.max(0.45, 1 - b.z * 0.012);
+    // shadow: sits on the ground under the ball, spreading + fading as it climbs
+    // (reads as the ball lifting away from the turf = depth)
+    const climb = b.z * TUNE.ballShadowSpread;
+    const shR = baseR * (1 + Math.min(climb, 0.6));
+    const shA = TUNE.ballShadowAlpha * Math.max(0.3, 1 - climb);
     ctx.beginPath();
     ctx.ellipse(pbx, pby, shR, shR * 0.6, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+    ctx.fillStyle = `rgba(0, 0, 0, ${shA})`;
     ctx.fill();
 
     // ball grows slightly with height; top-left highlight for a 3D feel
