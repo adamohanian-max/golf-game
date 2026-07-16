@@ -1026,14 +1026,15 @@ function syncAppleFlag() {
   const onGreen = surfaceAt(b.x, b.y) === "green";
   const visible = nativeGreenOverlay && !onGreen && !cine && !greenView &&
     mode === "course" && !HOLE.isRange;
-  // Perspective cue for a FIXED-screen-size annotation: the flag reads
-  // SMALL from far away and grows as the ball closes in (near 1.0 .. far
-  // 0.55). The JS flagstick's mapping is the opposite (shrink near the cup)
-  // because it world-scales via ws() and its fs only counteracts crowding —
-  // a constant-px sprite has no ws() term, so this scale IS its distance
-  // cue, and copying the JS curve made it scale backwards vs real life.
-  let t = (Math.hypot(b.x - HOLE.holePos.x, b.y - HOLE.holePos.y) - FLAG_NEAR) / (FLAG_FAR - FLAG_NEAR);
-  const fs = 1.0 - 0.45 * Math.max(0, Math.min(1, t));
+  // Perspective cue for a FIXED-screen-size annotation, keyed on the CAMERA
+  // distance (what you actually see), not the ball's position: apparent
+  // size ∝ 1/distance, so fs = REF/distM clamped — zoomed to the green the
+  // flag is full size, from a long-hole tee it reads small. (Ball-distance
+  // was the previous key — wrong reference frame; zooming without moving
+  // the ball left the flag size frozen.)
+  const camDistM = view.appleProj ? view.appleProj.reqDistM
+    : ((_appleMapH || window.innerHeight) / camera.scale) * M_PER_UNIT * APPLE_CAM_K;
+  const fs = Math.max(0.5, Math.min(1.15, 280 / camDistM));
   const fsBucket = Math.round(fs * 20) / 20;
   const gm = appleGeoAffine();
   const lat = gm[3] * HOLE.holePos.x + gm[4] * HOLE.holePos.y + gm[5];
