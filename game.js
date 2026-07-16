@@ -5513,8 +5513,12 @@ function draw() {
     // Tilted + zoomed out, the dots shrink into dark grit on the greens —
     // fade them out below the readable-zoom ramp (flat mode unchanged).
     // Apple ground: dots ride the green-detail gate (in club reach + camera
-    // settled), fading with it.
-    const fFade = (view.kz
+    // settled), fading with it — AND the same zoom ramp, since view.kz is
+    // always 0 there (tilt pitches the real MKMapCamera, not the canvas
+    // warp) so the kz gate alone never fades them: measured from a par-3
+    // tee, full-brightness fixed-px dots sprawled visually past the tiny
+    // far green as scattered grit.
+    const fFade = ((view.kz || appleGround)
       ? Math.min(1, Math.max(0, (view.scale - TUNE.flowFadeLo) / (TUNE.flowFadeHi - TUNE.flowFadeLo)))
       : 1) * (appleGround ? _apDetailA : 1);
     if (fFade > 0) for (const g of greensInPlay()) {
