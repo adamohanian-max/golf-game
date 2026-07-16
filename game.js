@@ -1003,8 +1003,16 @@ function syncAppleGreenOverlay(gs) {
     polys.some((p, i) => p !== _nativeGreenPolys[i]);
   if (!changed) return;
   _nativeGreenPolys = polys;
-  window.Capacitor.Plugins.CourseMap3D.setGreenOverlay({ greens: gs.map(appleGreenOverlayPayload) }).catch(() => {});
+  // Hold the JS cup until the native tint has had time to rasterize — a bare
+  // cup floating on the raw photo before the green renders reads as broken.
+  // The promise resolves when native ADDS the overlays; MapKit rasterizes the
+  // tiles a beat later, hence the grace window in the cup gate below.
+  _nativeGreenReadyAt = Infinity;
+  window.Capacitor.Plugins.CourseMap3D.setGreenOverlay({ greens: gs.map(appleGreenOverlayPayload) })
+    .then(() => { _nativeGreenReadyAt = performance.now(); })
+    .catch(() => { _nativeGreenReadyAt = 0; });
 }
+let _nativeGreenReadyAt = 0; // when the last native overlay send resolved (Infinity while in flight)
 // Pin flag as a native MKAnnotationView — MapKit anchors it (same pipeline
 // as the calibration probes, i.e. ground truth), so it can't wiggle against
 // the photo the way the JS-projected flag did during camera moves. State is
@@ -5609,7 +5617,12 @@ function draw() {
   // renders (and gets captured) in this same world projection, so drawing
   // the cup here keeps ball-into-hole visually exact by construction. A
   // native MapKit cup sat in the photo's frame instead and balls sank a few
-  // px beside it.
+  // px beside it. BUT it waits for the native green tint to render first —
+  // a lone cup floating on the raw photo before the green appears reads as
+  // broken (grace covers MapKit's async tile rasterization after the add).
+  const cupHeld = appleGroundActive() && nativeGreenOverlay &&
+    !(performance.now() - _nativeGreenReadyAt > 250);
+  if (!cupHeld) {
   const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
   ctx.beginPath();
   ctx.ellipse(hx, hy, hr, hr * view.tilt, 0, 0, Math.PI * 2);
@@ -5656,6 +5669,7 @@ function draw() {
     ctx.lineWidth = 1;
     ctx.stroke();
   }
+  }  // end !cupHeld (cup + JS flagstick wait for the native tint)
   }
 
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
