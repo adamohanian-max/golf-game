@@ -57,6 +57,7 @@ BUNKER_NEAR_YDS = 50      # bunker assigned to a hole if centroid within this
 WATER_NEAR_YDS = 70
 TEE_NEAR_YDS = 35
 TEE_STRETCH_MIN_YDS = 15  # scorecard-vs-geometry gap before we push the tee back
+TEE_GREEN_CLEAR_YDS = 8   # clearance past a foreign green edge when un-sticking a tee
 WOODS_NEAR_YDS = 90       # woods/grass are big & numerous -> wider catch
 GRASS_NEAR_YDS = 60
 CARTPATH_NEAR_YDS = 45
@@ -598,6 +599,32 @@ def point_in_poly(pt, poly):
     return inside
 
 
+def guard_tee(tee_m, pin_m, green_polys, own_c, step_m=2.0, max_m=80.0):
+    """OSM hole lines are sometimes drawn starting ON the previous hole's green
+    (the mapper stood there) -> the game tees off from a green. If the tee point
+    falls inside any green that isn't this hole's own, walk it back along the
+    hole axis (away from the pin) until it clears, plus TEE_GREEN_CLEAR_YDS.
+    `green_polys` = [(poly_m_points, centroid_m)]; `own_c` = this hole's green
+    centroid (meters). Returns (tee_m, moved_m) — moved_m is 0 when untouched
+    (also when no exit is found within max_m: keep the original rather than
+    teleporting the tee somewhere unvetted)."""
+    def on_foreign_green(pt):
+        return any(point_in_poly(pt, poly) for poly, c in green_polys
+                   if dist(c, own_c) > 1.0)
+    if not on_foreign_green(tee_m):
+        return tee_m, 0.0
+    back = unit(sub(tee_m, pin_m))
+    clear = TEE_GREEN_CLEAR_YDS * M_PER_YARD
+    pt, moved = tee_m, 0.0
+    while moved < max_m:
+        pt = (pt[0] + back[0] * step_m, pt[1] + back[1] * step_m)
+        moved += step_m
+        if not on_foreign_green(pt):
+            pt = (pt[0] + back[0] * clear, pt[1] + back[1] * clear)
+            return pt, moved + clear
+    return tee_m, 0.0
+
+
 def seg_dist(p, a, b):
     """Distance from point p to segment a-b."""
     ax, ay = a; bx, by = b; px, py = p
@@ -789,6 +816,15 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
         d = yards_override * M_PER_YARD
         tee_m = (pin_m[0] - u[0] * d, pin_m[1] - u[1] * d)
         line_m[0] = tee_m
+
+    # Un-stick tees that land on another hole's green (bad OSM hole-line start).
+    gpolys = [([project(p["lat"], p["lon"], lat0, lon0) for p in g["geometry"]], c)
+              for c, g in gc]
+    tee_m, moved = guard_tee(tee_m, pin_m, gpolys, green_c)
+    if moved:
+        line_m[0] = tee_m
+        print(f"  ! hole {num}: tee started on another green — "
+              f"pushed back {moved / M_PER_YARD:.0f}y")
 
     nrm = (-u[1], u[0])
     def to_frame(p):

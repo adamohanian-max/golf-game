@@ -384,6 +384,7 @@ def main():
     gc = [(fc.centroid(projall(g["geometry"])), g) for g in greens]
     def nearest_green(pt): return min(gc, key=lambda c: fc.dist(pt, c[0]))
     scorecard = fc.load_scorecard(args.scorecard, args.id)
+    gpolys = [(projall(g["geometry"]), c) for c, g in gc]
     geom_yards_by_hole = {}
     oriented_lines = []
     for n, lm in hole_lines:
@@ -402,6 +403,12 @@ def main():
             u = fc.unit(fc.sub(pin_m, tee_m))
             d = yov * MPY
             lm[0] = (pin_m[0] - u[0] * d, pin_m[1] - u[1] * d)
+        # Un-stick tees that land on another hole's green (bad OSM hole-line start).
+        own_c = nearest_green(pin_m)[0]
+        lm[0], moved = fc.guard_tee(lm[0], pin_m, gpolys, own_c)
+        if moved:
+            print(f"  ! hole {n}: tee started on another green — "
+                  f"pushed back {moved / MPY:.0f}y")
         oriented_lines.append((n, lm))
     hole_lines = oriented_lines
 
