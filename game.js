@@ -733,6 +733,27 @@ function buildAppleProj(cssW, cssH) {
       };
       return { X: solve3(bx), Y: solve3(by) };
     };
+    if (pitchDeg < 10) {
+      // FLAT/NEAR-FLAT: translation-only fit (median of per-probe residuals).
+      // The real error down here is MapKit's safe-area camera-centering
+      // shift — pure translation. A full affine is actively harmful: even at
+      // pitch 0 MapKit renders PERSPECTIVE, so terrain/canopy elevation at a
+      // probe's spot displaces it radially (h/D — measured ~30px of phantom
+      // pin error at distM 252 when probes sat near tall trees and the LSQ
+      // absorbed the displacement as bogus scale, extrapolated to a pin
+      // outside the probe quad; the same artifact reappeared at pitch 3°
+      // via the affine path, hence the 10° threshold — below it the
+      // pitch-anchor error the affine exists to correct is < tan(10°)≈0.18
+      // of its full-tilt size, and elevation noise dominates the fit).
+      // Median rejects per-probe elevation noise; translation extrapolates
+      // safely everywhere on screen.
+      const med = (v) => { const s = v.slice().sort((a, b) => a - b); return (s[1] + s[2]) / 2; };
+      if (S.length >= 4) {
+        const tx = med(D.map((d, i) => d.x - S[i].x));
+        const ty = med(D.map((d, i) => d.y - S[i].y));
+        if (Math.hypot(tx, ty) < 500) { fitA = [1, 0, 0, 1]; fitB = [tx, ty]; }
+      }
+    } else {
     let f = lsq(S, D);
     if (f && S.length > 3) {
       let worst = -1, wr = 0;
@@ -755,6 +776,7 @@ function buildAppleProj(cssW, cssH) {
       if (sdet > 0.5 && sdet < 2 && Math.hypot(tx, ty) < 500) {
         fitA = [a, b, d, e]; fitB = [tx, ty];
       }
+    }
     }
   }
   // Median-of-3 over recent fit targets: a single garbage fit (annotation
