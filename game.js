@@ -895,7 +895,21 @@ function syncAppleGround() {
     } else {
       _probeLL = []; _probeLLW = []; _probeRegime = regime;
       for (const [fx, fy] of [[0.3, 0.33], [0.7, 0.33], [0.25, 0.75], [0.75, 0.75]]) {
-        const w = appleUnproject(raw, fx * cssW, fy * cssH);
+        // Prefer a probe on OPEN TURF near the anchor fraction: a probe over
+        // woods anchors its annotation to Apple's CANOPY mesh, and its
+        // displaced answer poisons the fit. The median tolerates up to two
+        // such probes, but a green pocketed in forest (hole 11: 16.5px
+        // residual with the median alone) can put 3 of 4 anchor fractions in
+        // trees — so nudge each toward mapped ground (surfaceAt: anything
+        // but woods/ob) before accepting the raw fraction as a fallback.
+        let w = appleUnproject(raw, fx * cssW, fy * cssH);
+        for (const [ox, oy] of [[0, 0], [0.08, 0], [-0.08, 0], [0, 0.1], [0, -0.1],
+                                [0.14, 0.08], [-0.14, 0.08], [0.14, -0.08], [-0.14, -0.08]]) {
+          const cx = Math.min(0.9, Math.max(0.1, fx + ox)), cy = Math.min(0.88, Math.max(0.15, fy + oy));
+          const cand = appleUnproject(raw, cx * cssW, cy * cssH);
+          const s = surfaceAt(cand.x, cand.y);
+          if (s !== "woods" && s !== "ob") { w = cand; break; }
+        }
         _probeLLW.push(w);
         _probeLL.push([g[3] * w.x + g[4] * w.y + g[5], g[0] * w.x + g[1] * w.y + g[2]]);
       }
