@@ -16,7 +16,8 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "enter", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "leave", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "syncCamera", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "syncCamera", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setGreenOverlay", returnType: CAPPluginReturnPromise)
     ]
 
     private let layer = CourseMap3DLayer()
@@ -59,6 +60,10 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("lat/lon/heading/distM required"); return
         }
         let pitch = call.getDouble("pitch") ?? 0
+        // Live fade for the native green overlay (mirrors game.js's _apDetailA)
+        // — piggybacked on this existing per-frame call rather than a second
+        // bridge round-trip, since this value already changes every frame.
+        let detailAlpha = call.getDouble("detailAlpha") ?? 0
         syncCount += 1
         if syncCount % 30 == 1 { // log roughly once/sec at the ~30fps throttle, not every frame
             NSLog("CourseMap3D: syncCamera #\(syncCount) lat=\(lat) lon=\(lon) heading=\(heading) distM=\(distM) pitch=\(pitch)")
@@ -67,7 +72,8 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
         // screen positions for (see CourseMap3DLayer.syncCamera).
         let probes = (call.getArray("probes") as? [[Double]]) ?? []
         DispatchQueue.main.async {
-            self.layer.syncCamera(lat: lat, lon: lon, heading: heading, distM: distM, pitch: pitch, probes: probes) { actual in
+            self.layer.syncCamera(lat: lat, lon: lon, heading: heading, distM: distM, pitch: pitch,
+                                   probes: probes, detailAlpha: detailAlpha) { actual in
                 var out = JSObject()
                 for (k, v) in actual {
                     if let d = v as? Double { out[k] = d }
@@ -75,6 +81,19 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
                 call.resolve(out)
             }
+        }
+    }
+
+    // greens: [{ fill: [[lat,lon],...], contours: [{closed: Bool, pts: [[lat,lon],...]}] }].
+    // Called only when game.js's greensInPlay() set changes (hole change /
+    // ball crossing into a new green's relevance) — not every frame. World
+    // units -> corrected-WGS84 projection already happened JS-side (reuses
+    // appleGeoAffine(), the same math the camera/probes use).
+    @objc func setGreenOverlay(_ call: CAPPluginCall) {
+        let greens = call.getArray("greens", JSObject.self) ?? []
+        DispatchQueue.main.async {
+            self.layer.setGreenOverlay(greens)
+            call.resolve()
         }
     }
 }

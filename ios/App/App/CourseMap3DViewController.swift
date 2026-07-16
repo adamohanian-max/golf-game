@@ -1,3 +1,4 @@
+import Capacitor
 import MapKit
 import WebKit
 
@@ -29,6 +30,20 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     // renders 100-200 px apart across visits).
     private var probeAnns: [MKPointAnnotation] = []
     private var lastReq: (Double, Double, Double, Double, Double)?
+
+    // Native green overlay (fill + break contours) — replaces the JS canvas's
+    // equivalent draw for Apple ground. Confirmed via an on-device spike this
+    // session that MKOverlay drapes correctly onto the flyover 3D terrain
+    // under pitch (WWDC 2015: "overlays will be drawn on top of the terrain
+    // so that they will follow the ground"), so this needs no probe
+    // calibration — MapKit renders it through the same pipeline as the
+    // imagery itself. Relief shading stays JS-canvas (baked raster, not a
+    // good MKOverlay fit). Colors/alphas match drawGreen()'s current values
+    // in game.js exactly (fill #7ecb86 @ 0.13, contour rgba(30,60,35,0.26)),
+    // both further scaled by the live detailAlpha from syncCamera.
+    private var greenOverlays: [MKOverlay] = []
+    private var greenFillRenderers: [ObjectIdentifier: MKPolygonRenderer] = [:]
+    private var greenContourRenderers: [ObjectIdentifier: MKMultiPolylineRenderer] = [:]
 
     func enter(into parent: UIView, behind webView: WKWebView) {
         self.webView = webView
@@ -79,6 +94,10 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
 
     func leave() {
         lastReq = nil
+        if let mv = mapView { mv.removeOverlays(greenOverlays) }
+        greenOverlays.removeAll()
+        greenFillRenderers.removeAll()
+        greenContourRenderers.removeAll()
         mapView?.removeFromSuperview()
         webView?.isOpaque = true
         webView?.backgroundColor = nil
@@ -95,8 +114,9 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     /// not what it asked for. game.js folds these actuals back into
     /// buildAppleProj (see _appleActualCam there).
     func syncCamera(lat: Double, lon: Double, heading: Double, distM: Double, pitch: Double,
-                    probes: [[Double]], done: @escaping ([String: Any]) -> Void) {
+                    probes: [[Double]], detailAlpha: Double, done: @escaping ([String: Any]) -> Void) {
         guard let mv = mapView else { done([:]); return }
+        setGreenOverlayAlpha(detailAlpha)
         // Skip the camera assignment when the request hasn't changed: every
         // mv.camera set makes flyover RE-SAMPLE its pitch anchor from the
         // currently loaded mesh LOD, and at rest that re-roll alternates
@@ -192,5 +212,70 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
         v.isEnabled = false
         v.alpha = 0.02
         return v
+    }
+
+    /// Replaces the current set of native green overlays wholesale — called
+    /// only when game.js's greensInPlay() set actually changes (hole change,
+    /// or the ball crossing into a new green's relevance), not every frame,
+    /// so a full remove+add is cheap enough (at most 1-2 greens at a time).
+    /// `greens`: [{ fill: [[lat,lon],...], contours: [{closed, pts:
+    /// [[lat,lon],...]}] }] — already projected to corrected-WGS84 JS-side.
+    func setGreenOverlay(_ greens: [JSObject]) {
+        guard let mv = mapView else { return }
+        mv.removeOverlays(greenOverlays)
+        greenOverlays.removeAll()
+        greenFillRenderers.removeAll()
+        greenContourRenderers.removeAll()
+
+        for green in greens {
+            if let fill = green["fill"] as? [[Double]], fill.count >= 3 {
+                let coords = fill.map { CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1]) }
+                let poly = MKPolygon(coordinates: coords, count: coords.count)
+                greenOverlays.append(poly)
+                mv.addOverlay(poly)
+            }
+            if let contours = green["contours"] as? [JSObject] {
+                var lines: [MKPolyline] = []
+                for c in contours {
+                    guard let pts = c["pts"] as? [[Double]], pts.count >= 2 else { continue }
+                    let coords = pts.map { CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1]) }
+                    lines.append(MKPolyline(coordinates: coords, count: coords.count))
+                }
+                if !lines.isEmpty {
+                    let multi = MKMultiPolyline(lines)
+                    greenOverlays.append(multi)
+                    mv.addOverlay(multi)
+                }
+            }
+        }
+    }
+
+    /// Mirrors game.js's `_apDetailA` fade — 0.13/0.26 are drawGreen()'s
+    /// current fill/contour baseline alphas (game.js ~3546/3560); detailAlpha
+    /// multiplies on top exactly like `ctx.globalAlpha = _apDetailA` does
+    /// there, so the fade-in/out feel matches the JS-canvas version unchanged.
+    private func setGreenOverlayAlpha(_ alpha: Double) {
+        let a = CGFloat(max(0, min(1, alpha)))
+        for r in greenFillRenderers.values { r.alpha = a * 0.13 }
+        for r in greenContourRenderers.values { r.alpha = a * 0.26 }
+    }
+
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        if let polygon = overlay as? MKPolygon {
+            let r = MKPolygonRenderer(polygon: polygon)
+            r.fillColor = UIColor(red: 0x7e / 255, green: 0xcb / 255, blue: 0x86 / 255, alpha: 1)
+            r.alpha = 0 // set for real by the next syncCamera's detailAlpha
+            greenFillRenderers[ObjectIdentifier(polygon)] = r
+            return r
+        }
+        if let multi = overlay as? MKMultiPolyline {
+            let r = MKMultiPolylineRenderer(multiPolyline: multi)
+            r.strokeColor = UIColor(red: 30 / 255, green: 60 / 255, blue: 35 / 255, alpha: 1)
+            r.lineWidth = 1.5
+            r.alpha = 0
+            greenContourRenderers[ObjectIdentifier(multi)] = r
+            return r
+        }
+        return MKOverlayRenderer(overlay: overlay)
     }
 }

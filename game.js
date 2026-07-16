@@ -913,7 +913,13 @@ function syncAppleGround() {
   }
   // Send the REQUESTED camera; record what MapKit actually applied (its
   // clamps) so the next frame's overlay projection can match the real map.
-  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes })
+  // detailAlpha: live fade for the native green overlay (see
+  // syncAppleGreenOverlay/appleGreenOverlayPayload) — piggybacked on this
+  // existing per-frame call instead of a second bridge round-trip, since
+  // _apDetailA already changes every frame. Up to 1 frame stale here (this
+  // fires before draw()'s _apDetailA update for the frame) — imperceptible
+  // on an already-eased fade.
+  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes, detailAlpha: _apDetailA })
     .then((a) => {
       if (a && typeof a.distM === "number") {
         _appleActualCam = { lat: a.lat, lon: a.lon, distM: a.distM, pitch: a.pitch, heading: a.heading,
@@ -944,6 +950,40 @@ function syncAppleGround() {
 // overlay work every frame the player is only looking at the hole.
 let _apSettleN = 0;    // consecutive settled camera frames (updateCamera)
 let _apDetailA = 0;    // green-detail fade alpha (eases in after settle)
+// Native MKOverlay for the green fill + break contours, replacing the JS
+// canvas draw of the same for Apple ground — confirmed via an on-device spike
+// this session that MKOverlay drapes correctly onto the flyover 3D terrain
+// under pitch, so it needs no probe calibration (unlike everything else this
+// file projects by hand). Kill switch: flip to false to fall back to the
+// original all-JS-canvas rendering instantly, no revert needed, given this
+// session's track record of subtle only-on-device bugs in this area.
+let nativeGreenOverlay = true;
+let _nativeGreenPolys = null; // last-sent green identity (array of g.poly refs) — dedupes setGreenOverlay calls
+// World-units -> Apple-corrected-WGS84 [lat,lon] pairs for one green, in the
+// exact shape CourseMap3DViewController.setGreenOverlay expects. Reuses
+// appleGeoAffine() — the SAME affine (true WGS84 + this course's fitted
+// imagery correction) the camera/probes already use, so the native overlay
+// and the live camera/probe-calibrated projection agree on registration.
+function appleGreenOverlayPayload(g) {
+  const gm = appleGeoAffine();
+  const proj = (x, y) => [gm[3] * x + gm[4] * y + gm[5], gm[0] * x + gm[1] * y + gm[2]]; // [lat,lon]
+  return {
+    fill: g.poly.map((p) => proj(p.x, p.y)),
+    contours: (g.contours || []).map((c) => ({ closed: !!c.closed, pts: c.pts.map((p) => proj(p.x, p.y)) })),
+  };
+}
+// Pushes the current greens-in-play set to the native overlay ONLY when the
+// set actually changed (hole change / ball crossing into a new green's
+// relevance) — cheap identity check by g.poly reference, not every frame.
+function syncAppleGreenOverlay(gs) {
+  if (!nativeGreenOverlay || !window.Capacitor || !window.Capacitor.Plugins.CourseMap3D) return;
+  const polys = gs.map((g) => g.poly);
+  const changed = !_nativeGreenPolys || polys.length !== _nativeGreenPolys.length ||
+    polys.some((p, i) => p !== _nativeGreenPolys[i]);
+  if (!changed) return;
+  _nativeGreenPolys = polys;
+  window.Capacitor.Plugins.CourseMap3D.setGreenOverlay({ greens: gs.map(appleGreenOverlayPayload) }).catch(() => {});
+}
 function appleGreenDetailWanted() {
   if (state.moving || cine || greenView) return false;
   const c = TUNE.clubs[selectedClub];
@@ -958,7 +998,7 @@ function leaveAppleGround() {
   _appleCal = null;
   _calS.a = [1, 0, 0, 1]; _calS.b = [0, 0]; _calEaseT = 0;
   _probeLL = _probeLLW = null; _fitHist.length = 0;
-  _apSettleN = 0; _apDetailA = 0;
+  _apSettleN = 0; _apDetailA = 0; _nativeGreenPolys = null;
   document.documentElement.style.background = "";
   document.body.style.background = "";
   const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D;
@@ -5392,9 +5432,10 @@ function draw() {
       _apDetailA += ((appleGreenDetailWanted() ? 1 : 0) - _apDetailA) * 0.12;
       if (_apDetailA > 0.02) {
         const gs = greensInPlay();
+        syncAppleGreenOverlay(gs); // native overlay handles fill+contours when nativeGreenOverlay is on
         ctx.save();
         ctx.globalAlpha = _apDetailA;
-        drawGreen(true, gs);
+        if (!nativeGreenOverlay) drawGreen(true, gs); // kill-switch fallback: original JS-canvas draw
         // Relief follows the pitched view too — drawGreenRelief linearizes
         // the pinhole about each green's centroid for its raster blit.
         for (const g of gs) {
