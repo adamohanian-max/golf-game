@@ -133,9 +133,27 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     /// the game's overlay projection must render what the map really shows,
     /// not what it asked for. game.js folds these actuals back into
     /// buildAppleProj (see _appleActualCam there).
+    // DEBUG (misregistration experiment): counts syncs for throttled logging.
+    private var dbgSyncN = 0
+
     func syncCamera(lat: Double, lon: Double, heading: Double, distM: Double, pitch: Double,
-                    probes: [[Double]], done: @escaping ([String: Any]) -> Void) {
+                    probes: [[Double]], dbgPinX: Double = .nan, dbgPinY: Double = .nan,
+                    done: @escaping ([String: Any]) -> Void) {
         guard let mv = mapView else { done([:]); return }
+        // DEBUG (misregistration experiment): compare the native flag view's
+        // rendered center (model value, same read the probes use) against the
+        // JS-projected pin. Read-only; ~1 line/sec; remove after.
+        dbgSyncN += 1
+        if dbgSyncN % 30 == 1, dbgPinX.isFinite,
+           let f = flagAnn, let v = mv.view(for: f) {
+            // view.center includes centerOffset (pole-base anchoring) — undo
+            // it to get where MapKit renders the raw pin COORDINATE.
+            let nx = Double(v.center.x - v.centerOffset.x), ny = Double(v.center.y - v.centerOffset.y)
+            let dx = nx - dbgPinX, dy = ny - dbgPinY
+            NSLog("CM3D-DBG pin flag=(%.1f,%.1f) js=(%.1f,%.1f) d=(%.1f,%.1f) |d|=%.1f pitch=%.1f distM=%.0f",
+                  nx, ny, dbgPinX, dbgPinY,
+                  dx, dy, (dx * dx + dy * dy).squareRoot(), pitch, distM)
+        }
         // Skip the camera assignment when the request hasn't changed: every
         // mv.camera set makes flyover RE-SAMPLE its pitch anchor from the
         // currently loaded mesh LOD, and at rest that re-roll alternates
