@@ -979,14 +979,13 @@ function appleGreenOverlayPayload(g) {
     fill: g.poly.map((p) => proj(p.x, p.y)),
     contours: (g.contours || []).map((c) => ({ closed: !!c.closed, pts: c.pts.map((p) => proj(p.x, p.y)) })),
   };
-  // Cup rides the pin's green — flat ground paint, so it belongs in the
-  // native overlay (unlike the upright flagstick, which is an annotation —
-  // see syncAppleFlag). Pins only move via setHole, which also changes the
-  // green set, so the existing resend trigger covers it.
-  if (pointInPoly(HOLE.holePos.x, HOLE.holePos.y, g.poly)) {
-    out.cup = proj(HOLE.holePos.x, HOLE.holePos.y);
-    out.cupRadiusM = HOLE.holeRadius * M_PER_UNIT;
-  }
+  // NO cup here (the Swift renderer still supports one — payload just never
+  // includes it): the cup was briefly native and it put the drawn hole in
+  // MapKit's frame while the BALL renders in the JS world projection — the
+  // few-px disagreement between those frames at putt zoom made balls sink
+  // visibly beside the hole. The cup must live in the ball's own frame
+  // (JS-drawn via the same wx/wy the ball uses), aligned by construction;
+  // photo-frame alignment is the flag's job (native, pulled while putting).
   return out;
 }
 // Pushes the current greens-in-play set to the native overlay ONLY when the
@@ -5600,13 +5599,13 @@ function draw() {
     ctx.fill();
   } else {
   if (!render3D) drawTeeMarkers();   // flank the tee box (WebGL draws the tee marker in 3D)
-  // Apple ground + native overlay on: the cup is painted by the native
-  // GreenOverlay renderer and the flag is a native MKAnnotationView (see
-  // syncAppleFlag) — both MapKit-anchored, so the JS versions must not
-  // double-draw on top. Same single kill switch as the green.
-  if (!(appleGroundActive() && nativeGreenOverlay)) {
   // hole cup — dark hole with a bright rim so it reads on the photo. A circle
   // on the ground foreshortens with the camera tilt, so ry scales by view.tilt.
+  // ALWAYS JS-drawn, even with the native Apple-ground overlay on: the ball
+  // renders (and gets captured) in this same world projection, so drawing
+  // the cup here keeps ball-into-hole visually exact by construction. A
+  // native MapKit cup sat in the photo's frame instead and balls sank a few
+  // px beside it.
   const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
   ctx.beginPath();
   ctx.ellipse(hx, hy, hr, hr * view.tilt, 0, 0, Math.PI * 2);
@@ -5617,11 +5616,13 @@ function draw() {
   ctx.stroke();
 
   // flagstick: shrinks as the ball nears the cup, and is "pulled" (hidden, only
-  // the hole shows) once the ball is on the green.
+  // the hole shows) once the ball is on the green. Skipped when the native
+  // MKAnnotationView flag owns it (Apple ground, see syncAppleFlag) or when
+  // WebGL draws it in 3D.
   const _b = state.ball;
   const ballOnGreen = surfaceAt(_b.x, _b.y) === "green";
   const dToHole = Math.hypot(_b.x - HOLE.holePos.x, _b.y - HOLE.holePos.y);
-  if (!ballOnGreen && !render3D) { // WebGL draws the flagstick in 3D
+  if (!ballOnGreen && !render3D && !(appleGroundActive() && nativeGreenOverlay)) {
     let fs = (dToHole - FLAG_NEAR) / (FLAG_FAR - FLAG_NEAR);
     fs = 0.55 + 0.45 * Math.max(0, Math.min(1, fs)); // 0.55 (near) .. 1 (far)
     const poleH = Math.max(ws(0.78), 22) * fs, topX = hx, topY = hy - poleH;
@@ -5651,7 +5652,6 @@ function draw() {
     ctx.lineWidth = 1;
     ctx.stroke();
   }
-  }  // end JS cup+flag (skipped when native overlay owns them)
   }
 
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
