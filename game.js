@@ -5542,12 +5542,17 @@ function draw() {
       if (_apDetailA > 0.02) {
         ctx.save();
         ctx.globalAlpha = _apDetailA;
-        if (!nativeGreenOverlay) drawGreen(true, gs); // kill-switch fallback: original JS-canvas draw
-        // Relief follows the pitched view too — drawGreenRelief linearizes
-        // the pinhole about each green's centroid for its raster blit.
-        for (const g of gs) {
-          if (!polyVisible(g.poly)) continue;
-          drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * _apDetailA, showSlope && breakArrows);
+        if (!nativeGreenOverlay) {
+          // Kill-switch fallback only: original JS-canvas tint + relief.
+          // With the native overlay on, the green shows the BARE photo turf
+          // with just the dashed slope contours (native) — the tint and the
+          // relief raster were both dropped by request (the pale hillshade +
+          // warm speckles read as a smudge over Apple's already-good photo).
+          drawGreen(true, gs);
+          for (const g of gs) {
+            if (!polyVisible(g.poly)) continue;
+            drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * _apDetailA, showSlope && breakArrows);
+          }
         }
         ctx.restore();
       }

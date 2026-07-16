@@ -417,14 +417,13 @@ final class GreenOverlayRenderer: MKOverlayRenderer {
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
         guard let green = overlay as? GreenOverlay, green.fill.count >= 3 else { return }
 
+        // Fill ring: used ONLY as the clip for the contours — no tint fill.
+        // (The translucent green tint was dropped by request: the real turf
+        // reads better bare, the slope contours alone carry the information.)
         let ring = CGMutablePath()
         ring.move(to: point(for: green.fill[0]))
         for p in green.fill.dropFirst() { ring.addLine(to: point(for: p)) }
         ring.closeSubpath()
-
-        context.addPath(ring)
-        context.setFillColor(Self.fillColor)
-        context.fillPath()
 
         if !green.contours.isEmpty {
             context.saveGState()
@@ -442,6 +441,7 @@ final class GreenOverlayRenderer: MKOverlayRenderer {
             context.addPath(lines)
             context.setStrokeColor(Self.contourColor)
             context.setLineWidth(1.2 / zoomScale) // ~constant screen px at any zoom
+            context.setLineDash(phase: 0, lengths: [6 / zoomScale, 4 / zoomScale]) // dashed slope lines
             context.setLineJoin(.round)
             context.setLineCap(.round)
             context.strokePath()
