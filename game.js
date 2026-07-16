@@ -57,6 +57,7 @@ const TUNE = {
   arcFloatPow: 2.4,      // how tightly the hang concentrates at the very top (higher = tighter)
   arcApex: 1.2,          // global apex-height multiplier (1 = club maxH; >1 = ball flies higher, carry unchanged)
   arcLowSuppress: 1.0,   // how much the Low/knockdown button ignores the apex boost + float (1 = fully flat & penetrating)
+  arcLowRoll: 1.6,       // Low/knockdown rollout multiplier (1 = normal; >1 = runs out more after landing)
   arcDescentPow: 2.3,    // 2 = old parabola; 2.3 drops a touch more steeply (carry-neutral)
   ballTrailMax: 18,      // max points in the airborne motion trail (was a fixed 10)
   ballShadowAlpha: 0.28, // ground-shadow opacity at deck level
@@ -1608,7 +1609,7 @@ function landingRelease(fl, spin, surf) {
   const check = Math.min(1.1,
     (spinW * fl.spinN + TUNE.checkLandW * steep) * backspinRetained * grip);
   const rollK = fl.noLandCheck ? TUNE.rolloutK : TUNE.rolloutKFull; // chips skid & release more
-  let Dr = fl.vh * rollK * (1 - check * TUNE.spinCheckK); // <0 = spins back
+  let Dr = fl.vh * rollK * (1 - check * TUNE.spinCheckK) * (fl.rolloutMul ?? 1); // <0 = spins back; rolloutMul>1 = low-shot runner
   Dr = Math.max(Dr, -TUNE.spinBackMax); // a spun-back wedge sucks back a few yards, not off the green
   if (surf === "green") return Math.sign(Dr) * Math.sqrt(2 * TUNE.greenDecel * Math.abs(Dr));
   const fr = TUNE.friction[surf] ?? 0.9;
@@ -1617,7 +1618,7 @@ function landingRelease(fl, spin, surf) {
   // high-friction surfaces (bunker fr=0.55) produce huge initial v = Dr*(1-fr) that
   // shoots the ball off when it rolls off the edge onto low-friction fairway.
   const bo = TUNE.bounce[surf] ?? TUNE.bounce.fairway;
-  return Math.min(Dr * (1 - fr), fl.vh * bo.h);
+  return Math.min(Dr * (1 - fr), fl.vh * bo.h * (fl.rolloutMul ?? 1)); // cap lifts for low runners (shallow landing releases hotter)
 }
 
 // --- Ballistic bounces after the first landing: projectile arc + land/settle ---
@@ -2681,6 +2682,7 @@ function buildTrialShot(ang, frac, spin, onGreen) {
                           1 + (TUNE.arcApex - 1) * loMul);
   flr.flight.noLandCheck = chipActive; // chips: release tuned by the spin slider alone
   flr.flight.floatMul = loMul;          // Low → less/no apex hang (see arcSpeedK)
+  flr.flight.rolloutMul = hiT < 0 ? 1 + (TUNE.arcLowRoll - 1) * t : 1; // Low → runs out more (see landingRelease)
   if (t > 0) flr.flight.windMul = 1 + (windK - 1) * t; // high rides the wind, low punches through it
   return { usePutter: false, onGreen, f, hiT, mph,
            vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
