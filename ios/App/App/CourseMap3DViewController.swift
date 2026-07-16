@@ -415,11 +415,15 @@ final class GreenOverlayRenderer: MKOverlayRenderer {
         }
 
         // Cup — dark hole + bright rim (drawGreen's exact colors). Drawn last
-        // so it sits over the contours. True world scale (no screen-px floor:
-        // at zooms where it would be sub-pixel, the flag marks the hole).
+        // so it sits over the contours. The REAL cup is 0.15 m radius —
+        // sub-pixel at every normal zoom — so like the JS version
+        // (max(ws(holeRadius), 3)) the drawn size is floored at ~3.5 screen
+        // px via zoomScale, the same per-tile-rasterization idiom as the
+        // contour line width (no per-frame mutation; MapKit re-rasterizes
+        // tiles on zoom changes anyway).
         if let cup = green.cup, green.cupRadius > 0 {
-            let mr = MKMapRect(x: cup.x - green.cupRadius, y: cup.y - green.cupRadius,
-                               width: green.cupRadius * 2, height: green.cupRadius * 2)
+            let rr = max(green.cupRadius, Double(3.5 / zoomScale))
+            let mr = MKMapRect(x: cup.x - rr, y: cup.y - rr, width: rr * 2, height: rr * 2)
             let r = rect(for: mr)
             context.setFillColor(Self.cupFill)
             context.fillEllipse(in: r)
