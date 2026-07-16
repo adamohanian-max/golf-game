@@ -63,8 +63,18 @@ class CourseMap3DLayer: NSObject, MKMapViewDelegate {
     // annotations' layout (static contract preserved).
     private var flagAnn: FlagAnnotation?
 
+    // Native map frame size in points — returned from enter() so game.js can
+    // center its camera replica on the REAL map center. The WKWebView's
+    // innerHeight excludes the home-indicator region (~33pt), so its center
+    // sits ~16px above the map view's: measured as a constant ~16px vertical
+    // offset between everything JS draws and everything MapKit renders in
+    // flat mode (the probe calibration absorbed it in 3D, flat had no
+    // correction at all).
+    private(set) var mapSize: CGSize = .zero
+
     func enter(into parent: UIView, behind webView: WKWebView) {
         self.webView = webView
+        mapSize = parent.bounds.size
 
         let mv: MKMapView
         if let existing = mapView {

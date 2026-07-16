@@ -795,31 +795,17 @@ function buildAppleProj(cssW, cssH) {
   for (let i = 0; i < 2; i++) _calS.b[i] += (tgtB[i] - _calS.b[i]) * k;
   const active = Math.abs(_calS.a[0] - 1) + Math.abs(_calS.a[3] - 1) + Math.abs(_calS.a[1]) + Math.abs(_calS.a[2]) > 1e-4 ||
                  Math.abs(_calS.b[0]) + Math.abs(_calS.b[1]) > 0.05;
-  // Flat view (pitch ~0) never sends probes (see syncAppleGround's matching
-  // `reqPitch > 0.05` gate) — the raw pinhole replica is already exact there
-  // (no pitch-anchor terrain jitter to fight), so it should NEVER carry a
-  // calibration affine. But _calS/_appleCal are module-level state that
-  // don't hard-reset on a pitch->0 transition, only decay toward identity
-  // over ~1.5s (see the `cal.t` freshness gate above) — so a fit from
-  // recent 3D use (accurate near wherever probes last sampled, e.g. near
-  // the green) could keep bleeding into the flat overlay for a bit, visibly
-  // wrong far from there (e.g. a wide view from the tee).
-  //
-  // NOT a hard `pitchDeg > 0.05` cutoff though — that shipped first and
-  // discarded the cal's residual in a single frame right as the 3D->2D
-  // tween finished, popping every JS-drawn element (flag/cup/ball) upward
-  // at the exact moment the map went still (measured: photo region 0.00%
-  // frame-to-frame after the camera parked, flag region still churning).
-  // Instead, blend the calibration toward identity as pitch falls — the
-  // anchor error it corrects scales with tan(pitch), so its rightful
-  // influence really does go to zero smoothly; by 0° this is exactly the
-  // hard gate (identity, flat stays calibration-free), with no seam.
-  const calT = Math.min(1, Math.max(0, pitchDeg) / 4);
-  if (active && calT > 0) {
-    P.calA = [1 + (_calS.a[0] - 1) * calT, _calS.a[1] * calT,
-              _calS.a[2] * calT, 1 + (_calS.a[3] - 1) * calT];
-    P.calB = [_calS.b[0] * calT, _calS.b[1] * calT];
-  }
+  // Applied at EVERY pitch, flat included. Two earlier designs both proved
+  // wrong: (1) flat with no calibration at all carried MapKit's safe-area
+  // camera-centering shift raw (~16px constant vertical, measured via the
+  // flag-vs-JS experiment); (2) a pitch-scaled blend (calT = pitch/4)
+  // faded the correction out exactly where it was still needed. Now probes
+  // flow at every pitch, so the fit continuously measures whatever the
+  // current camera state actually does — flat gets the center-shift
+  // correction, pitched gets the anchor correction, and transitions track
+  // through the tween instead of fading or popping. The freshness gates
+  // above still decay a stale fit to identity if probes stop answering.
+  if (active) { P.calA = _calS.a.slice(); P.calB = _calS.b.slice(); }
   return P;
 }
 // Project world (x, y[, height in world units]) through the Apple pinhole,
@@ -892,13 +878,16 @@ function syncAppleGround() {
   // One camera model, one source: the same numbers the overlay projection
   // uses this frame (flat mode builds them fresh here — appleProj is null).
   const cam = view.appleProj || buildAppleProj(window.innerWidth, window.innerHeight);
-  // Pitched: pick 3 well-spread ground probes (fixed screen triangle,
-  // unprojected to world -> lat/lon). Their lat/lons are exact by
-  // construction — the Swift side answers with where MapKit REALLY renders
-  // them (invisible annotation views), and buildAppleProj fits the overlay
-  // onto those answers. Flat view needs no probes (affine already exact).
+  // Pick 4 well-spread ground probes (fixed screen quad, unprojected to
+  // world -> lat/lon). Their lat/lons are exact by construction — the Swift
+  // side answers with where MapKit REALLY renders them (invisible annotation
+  // views), and buildAppleProj fits the overlay onto those answers. Sent at
+  // EVERY pitch including flat: "flat needs no probes" was disproven by the
+  // flag-vs-JS experiment — MapKit's safe-area-adjusted camera centering
+  // shifts flat rendering ~16px vs the raw-frame assumption, and only the
+  // probe fit can measure it exactly.
   const probes = [];
-  if (cam.reqPitch > 0.05) {
+  {
     const g = appleGeoAffine();
     const cssW = window.innerWidth, cssH = window.innerHeight;
     // Unproject through the RAW replica — cam carries the previous fit's
@@ -2873,9 +2862,16 @@ function applyView() {
   Object.assign(view, computeViewMatrix(
     camera.angle, camera.tilt, camera.scale * (1 + camPunch),
     camera.focus.x, camera.focus.y, cssW, cssH));
-  // Apple-ground 3D: build this frame's pinhole (needs the fresh affine above
-  // for its look-at center). Null whenever flat — wx/wy stay pure affine.
-  view.appleProj = (applePitch > 0.05 && typeof appleGroundActive === "function" && appleGroundActive())
+  // Apple ground: build this frame's pinhole at ANY pitch — including flat.
+  // Flat was assumed "exact by construction" and bypassed the projection +
+  // probe calibration entirely; the flag-vs-JS experiment (2026-07-16)
+  // measured a constant ~16px pure-vertical offset on every flat frame, at
+  // every zoom, on every hole — MapKit centers its camera within its
+  // safe-area-adjusted layout, not the raw frame (undocumented, inset-
+  // dependent). Rather than model insets by hand, flat now routes through
+  // the same probe-calibrated pinhole as pitched (a pitch-0 pinhole is the
+  // affine plus the measured correction).
+  view.appleProj = (typeof appleGroundActive === "function" && appleGroundActive())
     ? buildAppleProj(cssW, cssH) : null;
   // Four Oaks three.js 3D: route wx/wy/screenToWorld through the live three.js
   // camera (Course3D.project) so the 2D gameplay layer glues onto its ground.

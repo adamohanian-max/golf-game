@@ -41,7 +41,13 @@ public class CourseMap3DPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             NSLog("CourseMap3D: enter() inserting mapView into \(type(of: parent)), webView frame=\(webView.frame)")
             self.layer.enter(into: parent, behind: webView)
-            call.resolve()
+            // Report the native map frame size — game.js centers its camera
+            // replica on the real map center (innerHeight excludes the
+            // home-indicator region, shifting the webview's center ~16px).
+            call.resolve([
+                "mapW": Double(self.layer.mapSize.width),
+                "mapH": Double(self.layer.mapSize.height),
+            ])
         }
     }
 
