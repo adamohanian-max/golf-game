@@ -927,7 +927,11 @@ function syncAppleGround() {
   }
   // Send the REQUESTED camera; record what MapKit actually applied (its
   // clamps) so the next frame's overlay projection can match the real map.
-  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes })
+  // DEBUG (misregistration experiment): JS-projected pin screen position —
+  // native logs its flag view center against these to quantify the JS-frame
+  // error at the green. Read-only diagnostics; remove after the experiment.
+  const dbgPinX = wx(HOLE.holePos.x, HOLE.holePos.y), dbgPinY = wyg(HOLE.holePos.x, HOLE.holePos.y);
+  P.syncCamera({ lat: cam.reqLat, lon: cam.reqLon, heading: cam.heading, distM: cam.reqDistM, pitch: cam.reqPitch, probes, dbgPinX, dbgPinY })
     .then((a) => {
       if (a && typeof a.distM === "number") {
         _appleActualCam = { lat: a.lat, lon: a.lon, distM: a.distM, pitch: a.pitch, heading: a.heading,
@@ -966,6 +970,9 @@ let _apDetailA = 0;    // green-detail fade alpha (eases in after settle)
 // original all-JS-canvas rendering instantly, no revert needed, given this
 // session's track record of subtle only-on-device bugs in this area.
 let nativeGreenOverlay = true;
+// DEBUG (misregistration experiment): draw a magenta cross at the JS-projected
+// pin to compare against the native flag annotation. Remove after.
+const DBG_PIN_MARK = true;
 let _nativeGreenPolys = null; // last-sent green identity (array of g.poly refs) — dedupes setGreenOverlay calls
 // World-units -> Apple-corrected-WGS84 [lat,lon] pairs for one green, in the
 // exact shape CourseMap3DViewController.setGreenOverlay expects. Reuses
@@ -1073,6 +1080,7 @@ let _tourSchedule = null;         // cached full-season schedule (array of event
 let _tourSchedCache = null;       // { at, data } schedule fetch cache
 let _tourOpenEvent = null;        // schedule event whose board is currently open {id,name,start,end,state,period}
 let _tourActiveEventId = null;    // eventId of the round currently being played (tourPlayMode)
+let _tourResultsCache = {};       // { [eventId]: {purse, displayPurse, payouts:[$ desc]} }
 // Match state — live head-to-head game with friends (see "Multiplayer matches").
 let activeMatch = null;      // full matches row from Supabase (null when not in a match)
 let matchHoleCount = 18;     // holes this match plays (9 or 18), set at Begin
@@ -5670,6 +5678,17 @@ function draw() {
     ctx.stroke();
   }
   }  // end !cupHeld (cup + JS flagstick wait for the native tint)
+  // DEBUG (misregistration experiment): magenta cross at the JS-projected pin
+  // so screenshots visually corroborate the logged flag-vs-JS deltas.
+  if (DBG_PIN_MARK && appleGroundActive()) {
+    const mx = wx(HOLE.holePos.x, HOLE.holePos.y), my = wyg(HOLE.holePos.x, HOLE.holePos.y);
+    ctx.strokeStyle = "#ff00ff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(mx - 9, my); ctx.lineTo(mx + 9, my);
+    ctx.moveTo(mx, my - 9); ctx.lineTo(mx, my + 9);
+    ctx.stroke();
+  }
   }
 
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
@@ -10580,6 +10599,85 @@ async function fetchTourCourse(eventId) {
   };
 }
 
+// Real prize money for an event (same core endpoint as the venue). Top-level
+// `purse` + per-competitor `earnings`; the earnings sorted descending are the
+// real payout-by-finish-slot table (already tie-averaged in ESPN's data).
+// Cached per event. Payouts empty until the real event is final.
+async function fetchTourResults(eventId) {
+  const c = _tourResultsCache[eventId];
+  if (c) return c;
+  const d = await fetchJSONRetry(TOUR_CORE_EVENT + encodeURIComponent(eventId));
+  if (!d) return null;
+  const comp = (d.competitions || [])[0] || {};
+  const payouts = (comp.competitors || [])
+    .map((x) => +x.earnings || 0)
+    .filter((v) => v > 0)
+    .sort((a, b) => b - a);
+  const res = { purse: +d.purse || 0, displayPurse: d.displayPurse || null, payouts };
+  _tourResultsCache[eventId] = res;
+  return res;
+}
+
+// My prize for finishing at `place` in a group of `tieCount` players sharing that
+// place: the group occupies slots place..place+tieCount-1; split the sum of those
+// real payout slots equally (standard golf). 0 past the paid positions / no data.
+function tourFinishPayout(place, tieCount, payouts) {
+  if (!payouts || !payouts.length || !place || place < 1) return 0;
+  let sum = 0;
+  for (let s = place; s < place + Math.max(1, tieCount); s++) sum += payouts[s - 1] || 0;
+  return Math.round(sum / Math.max(1, tieCount));
+}
+function fmtMoney(n) { return "$" + Math.round(n || 0).toLocaleString("en-US"); }
+
+// Auto-popup result window when the player finishes a tour event: their final
+// place (with ties) + real prize from the event's earnings. `missedCut` → $0.
+async function showTourResult(missedCut) {
+  const data = _tourBoardData;
+  const modal = document.getElementById("tour-result");
+  if (!data || !modal) return;
+  const n = tourDisplayRound();
+  let field = projectField(data.players, n);
+  if (n >= 3) field = field.filter((p) => (p.rounds || []).some((r) => r.n >= n));
+  const merged = mergeMeIntoField(field, data.eventId);
+  const positions = tourPositionsByTotal(merged);
+  const meIdx = merged.findIndex((p) => p.isMe);
+  const me = positions[meIdx] || { pos: null, tied: false };
+  const tieCount = me.pos == null ? 1 : positions.filter((r) => r.pos === me.pos).length;
+  const myTotal = merged[meIdx] ? merged[meIdx].total : null;
+
+  document.getElementById("tr-event").textContent = data.name;
+  document.getElementById("tr-place").textContent =
+    me.pos == null ? "—" : (me.tied ? "T-" : "") + ordinal(me.pos);
+  document.getElementById("tr-place-sub").textContent =
+    (myTotal != null ? formatToPar(myTotal) + " · " : "") + "of " + merged.length + " players";
+  const payEl = document.getElementById("tr-payout");
+  const purseEl = document.getElementById("tr-purse");
+  modal.classList.remove("hidden");
+  mode = "tour";
+
+  if (missedCut) {
+    payEl.textContent = "$0";
+    purseEl.textContent = "Missed the cut — no weekend payout";
+    return;
+  }
+  payEl.textContent = "…";
+  purseEl.textContent = "";
+  const results = await fetchTourResults(data.eventId);
+  if (modal.classList.contains("hidden")) return;   // dismissed while fetching
+  const finalized = _tourOpenEvent && _tourOpenEvent.state === "post" && results && results.payouts.length;
+  if (!finalized) {
+    payEl.textContent = "—";
+    purseEl.textContent = "Prize finalizes when the event ends";
+    return;
+  }
+  payEl.textContent = fmtMoney(tourFinishPayout(me.pos, tieCount, results.payouts));
+  purseEl.textContent = "from the " + (results.displayPurse || fmtMoney(results.purse)) + " purse";
+}
+function hideTourResult() {
+  document.getElementById("tour-result").classList.add("hidden");
+  document.getElementById("round-end").classList.add("hidden");
+}
+
 // Generic tokens dropped before matching ESPN venue names to our manifest.
 const _COURSE_STOP = new Set(["the","golf","club","course","country","links",
   "resort","gc","cc","no","and","at","complex","courses"]);
@@ -10831,19 +10929,21 @@ function setupTourRoundEnd(n) {
   note.textContent = ""; note.className = "re-tour-note";
 
   const hide = () => document.getElementById("round-end").classList.add("hidden");
-  const goResults = () => { hide(); _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents(); };
   const goNext = () => { hide(); teeOffTourRound(); };
   const line = tourCutLine();
   const lineTxt = line != null ? " (cut " + formatToPar(line) + ")" : "";
+  const missedCut = n === 2 && !tourMadeCut();
+  const eventDone = n >= 4 || missedCut;
 
-  if (n >= 4) {
-    btn.innerHTML = '<span class="ic ic-trophy"></span>See results';
-    btn.onclick = goResults;
-  } else if (n === 2 && !tourMadeCut()) {
-    note.textContent = "Missed the cut" + lineTxt + " — your event is done.";
-    note.className = "re-tour-note missed";
-    btn.innerHTML = '<span class="ic ic-trophy"></span>See results';
-    btn.onclick = goResults;
+  if (eventDone) {
+    if (missedCut) {
+      note.textContent = "Missed the cut" + lineTxt + " — your event is done.";
+      note.className = "re-tour-note missed";
+    }
+    btn.innerHTML = '<span class="ic ic-trophy"></span>Your result';
+    btn.onclick = () => showTourResult(missedCut);
+    // Auto-popup the place/payout window (short beat so round-end paints first).
+    setTimeout(() => showTourResult(missedCut), 350);
   } else {
     if (n === 2) { note.textContent = "Made the cut" + lineTxt; note.className = "re-tour-note made"; }
     btn.innerHTML = '<span class="ic ic-flag-checkered"></span>Play Round ' + (n + 1);
@@ -10962,13 +11062,31 @@ async function openTourEvent(ev) {
   if (data.state === "in") ensureTourPoll();
 }
 
-function _tourRowHTML(p, rank) {
+// Finishing positions with ties (standard golf: equal scores share a position,
+// the next slot is skipped — e.g. T2, T2, 4). Input is already sorted by total
+// (lower = better), null totals sorted to the bottom → no position ("—").
+function tourPositionsByTotal(players) {
+  const out = players.map(() => ({ pos: null, tied: false }));
+  for (let i = 0; i < players.length; i++) {
+    if (players[i].total == null) continue;
+    out[i].pos = (i > 0 && players[i - 1].total != null && players[i - 1].total === players[i].total)
+      ? out[i - 1].pos : i + 1;
+  }
+  const counts = {};
+  out.forEach((r) => { if (r.pos != null) counts[r.pos] = (counts[r.pos] || 0) + 1; });
+  out.forEach((r) => { r.tied = r.pos != null && counts[r.pos] > 1; });
+  return out;
+}
+// Compact board label: "T2" / "2" / "—".
+function tourPos(r) { return !r || r.pos == null ? "—" : (r.tied ? "T" : "") + r.pos; }
+
+function _tourRowHTML(p, posLabel) {
   const flag = p.flag ? '<img class="tb-flag" src="' + escapeHTML(p.flag) + '" alt="">' : '<span class="tb-flag"></span>';
   const nm = escapeHTML(p.name);
   const today = p.today == null ? "—" : '<span class="' + _parClass(p.today) + '">' + _parText(p.today) + "</span>";
   const total = '<span class="' + _parClass(p.total) + '">' + _parText(p.total) + "</span>";
   return '<tr class="' + (p.isMe ? "tb-me" : "") + '">' +
-    '<td class="tb-pos">' + rank + "</td>" +
+    '<td class="tb-pos">' + posLabel + "</td>" +
     '<td class="tb-name">' + flag + nm + "</td>" +
     '<td class="tb-today">' + today + "</td>" +
     '<td class="tb-thru">' + (p.thru == null ? "—" : p.thru) + "</td>" +
@@ -10995,10 +11113,11 @@ function renderTourBoard(data) {
   let appendedMe = false;
   if (!_tourExpanded && meIdx >= LEAD) { shown = shown.concat([merged[meIdx]]); appendedMe = true; }
 
+  const positions = tourPositionsByTotal(merged);
   const list = document.getElementById("tb-list");
   list.innerHTML = shown.map((p, i) => {
-    const rank = (appendedMe && i === shown.length - 1) ? meIdx + 1 : i + 1;
-    return _tourRowHTML(p, rank);
+    const mi = (appendedMe && i === shown.length - 1) ? meIdx : i;
+    return _tourRowHTML(p, tourPos(positions[mi]));
   }).join("");
 
   const exp = document.getElementById("tb-expand");
@@ -11098,10 +11217,11 @@ function updateTourBug() {
   let field = projectField(data.players, n);
   if (n >= 3) field = field.filter((p) => (p.rounds || []).some((r) => r.n >= n));
   const merged = mergeMeIntoField(field, data.eventId);
+  const positions = tourPositionsByTotal(merged);
   const meIdx = merged.findIndex((p) => p.isMe);
   const rows = [];
-  for (let i = 0; i < Math.min(3, merged.length); i++) rows.push([i + 1, merged[i]]);
-  if (meIdx >= 3) rows.push([meIdx + 1, merged[meIdx]]);
+  for (let i = 0; i < Math.min(3, merged.length); i++) rows.push([tourPos(positions[i]), merged[i]]);
+  if (meIdx >= 3) rows.push([tourPos(positions[meIdx]), merged[meIdx]]);
   bug.querySelector(".tbug-head").textContent =
     data.name + " · " + (n === 1 ? "Round 1" : "Rds 1–" + n);
   bug.querySelector(".tbug-list").innerHTML = rows.map(([r, p]) => _bugRowHTML(r, p)).join("");
@@ -11129,6 +11249,10 @@ function updateTourBug() {
   if (tee) tee.addEventListener("click", teeOffTourRound);
   const bug = document.getElementById("tour-bug");
   if (bug) bug.addEventListener("click", () => { _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents(); });
+  const trBoard = document.getElementById("tr-board");
+  if (trBoard) trBoard.addEventListener("click", () => { hideTourResult(); _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents(); });
+  const trDone = document.getElementById("tr-done");
+  if (trDone) trDone.addEventListener("click", () => { hideTourResult(); showMenu(); });
 })();
 
 // --- Wire-up ---
