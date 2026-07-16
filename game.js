@@ -47,11 +47,16 @@ const TUNE = {
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.044,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
-  // Arc shape polish (renderer-independent). arcDecel: mean-1 speed profile along the
-  // scripted arc — faster off the face, easing into landing (drag feel). Carry stays
-  // EXACT because the arc lands at a precomputed landD (see buildFlight), not wherever
-  // the decel'd steps happen to cross C; arcDecel:0 reverts the feel exactly.
-  arcDecel: 0.25,        // 0 = constant speed; 0.25 = 1.25× early .. 0.75× late
+  // Arc shape polish (renderer-independent). The ball's APPARENT speed along the arc is
+  // shaped in arcSpeedK: drag (launch faster than landing) × float (dips toward the apex,
+  // where a real ball's vertical velocity vanishes and it hangs). Carry stays EXACT for
+  // ANY profile because the arc lands at a precomputed landD (see buildFlight); set
+  // arcDecel:0 + arcFloat:0 for constant speed.
+  arcDecel: 0.18,        // aero drag: launch faster than landing (1+d early .. 1-d late)
+  arcFloat: 0.585,       // apex hang depth: apparent speed at the top ≈ (1-arcFloat)× the drag speed
+  arcFloatPow: 2.4,      // how tightly the hang concentrates at the very top (higher = tighter)
+  arcApex: 1.2,          // global apex-height multiplier (1 = club maxH; >1 = ball flies higher, carry unchanged)
+  arcLowSuppress: 1.0,   // how much the Low/knockdown button ignores the apex boost + float (1 = fully flat & penetrating)
   arcDescentPow: 2.3,    // 2 = old parabola; 2.3 drops a touch more steeply (carry-neutral)
   ballTrailMax: 18,      // max points in the airborne motion trail (was a fixed 10)
   ballShadowAlpha: 0.28, // ground-shadow opacity at deck level
@@ -192,6 +197,14 @@ const TUNE = {
   cineYawDrift: 0.04,    // gentle orbit (rad/s) while the cinematic plays
   cineBallZ: 1.0,        // flight-height scale in the 3D view (1 = true world scale)
   cineSimSteps: 4000,    // forward-sim frame cap (~66s of ball time — never binds in practice)
+  // --- Safe default tee aim (setHole) ---
+  teeAimMaxDeg: 55,      // scan half-width around the tee->pin bearing
+  teeAimStepDeg: 2.5,    // candidate angle step (~45 angles across the fan)
+  teeAimMinClub: "6i",   // never club down past this hunting for a safe tee shot
+  // --- One-finger hold-then-slide aim pan (touch) ---
+  aimHoldMs: 250,        // motionless press this long arms aim-drag
+  aimHoldPx: 10,         // "motionless" = whole path within this radius of the press
+  aimDragDegPx: 0.15,    // aim pan rate: degrees of camera rotation per screen px
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
@@ -351,6 +364,91 @@ function autoClub() {
   if (!autoClubEnabled || manualClubThisShot || mode === "range" || !HOLE) return;
   // Pick the club for the elevation-adjusted ("plays like") distance, like a caddie.
   selectedClub = clubForYards(playsLikeYards(state.ball.x, state.ball.y).plays);
+}
+
+// Safe default tee aim: forward-sim the auto club hit flat-out at the pin; if
+// the predicted finish is trouble (woods/ob/water — sim returns null) or misses
+// the fairway, fan candidate angles around tee->pin and aim at the deepest
+// middle-of-fairway landing instead. If NO angle lands fairway with this club
+// (dogleg shorter than its carry), club down until one does. Returns the world
+// bearing to aim at; may write selectedClub. Runs once per setHole.
+// (surfaceMask may still be loading here; surfaceAt falls back to OSM polygons —
+// acceptable, and the mask is cached after the first visit to a course.)
+function safeTeeAim() {
+  const alpha = Math.atan2(HOLE.holePos.y - HOLE.teePos.y, HOLE.holePos.x - HOLE.teePos.x);
+  if (HOLE.isRange || slottedMode || selectedClub === "putter") return alpha;
+
+  const b = state.ball;
+  const SAFE = { fairway: 1, green: 1, tee: 1 };
+  function simTeeShot(ang) {
+    const t = buildTrialShot(ang, 1, 0, false); // frac=1: autoClub picked this club for full carry
+    if (!t || !t.flight) return null;
+    return simShotRest({ x: b.x, y: b.y, vx: t.vx, vy: t.vy, z: t.z, vz: t.vz, spin: t.spin }, t.flight);
+  }
+  // Largest probe-ring radius (world units) whose samples are all fairway/green —
+  // bigger = deeper in the fairway. The "middle of the fairway" metric.
+  function clearance(x, y) {
+    let best = 0;
+    for (const r of [3, 6, 9, 12]) {
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        if (!SAFE[surfaceAt(x + Math.cos(a) * r, y + Math.sin(a) * r)]) return best;
+      }
+      best = r;
+    }
+    return best;
+  }
+
+  const straight = simTeeShot(alpha);
+  if (straight && (straight.holed || SAFE[straight.surf])) return alpha; // par 3s + already-safe holes
+
+  const step = TUNE.teeAimStepDeg * Math.PI / 180;
+  const maxOff = TUNE.teeAimMaxDeg * Math.PI / 180;
+  let bestRough = null; // playable non-fairway rest (rough/bunker), best across all clubs tried
+  function scanClub() {
+    let best = null;
+    for (let off = 0; off <= maxOff + 1e-9; off += step) {
+      for (const sgn of off === 0 ? [1] : [1, -1]) {
+        const ang = alpha + sgn * off;
+        const r = simTeeShot(ang);
+        if (!r || r.holed) { if (r) return { ang, score: Infinity, rd: 0 }; continue; }
+        const rd = dist(r.x, r.y, HOLE.holePos.x, HOLE.holePos.y);
+        if (SAFE[r.surf]) {
+          const score = clearance(r.x, r.y) * 100 - off * 180 / Math.PI; // clearance first, pin bearing tiebreak
+          if (!best || score > best.score) best = { ang, score, rd };
+        } else {
+          const score = -dist(r.x, r.y, HOLE.holePos.x, HOLE.holePos.y); // closest to the pin wins
+          if (!bestRough || score > bestRough.score) bestRough = { ang, score };
+        }
+      }
+    }
+    return best;
+  }
+
+  let best = scanClub();
+  if (!best && autoClubEnabled && !manualClubThisShot) {
+    // Dogleg shorter than this club's carry: step down until a fairway aim exists.
+    const club0 = selectedClub;
+    const stopIdx = CLUB_ORDER.indexOf(TUNE.teeAimMinClub);
+    let i = CLUB_ORDER.indexOf(selectedClub);
+    while (!best && ++i <= stopIdx) {
+      selectedClub = CLUB_ORDER[i];
+      best = scanClub();
+    }
+    if (!best) selectedClub = club0; // nothing helped — restore the caddie's pick
+  }
+  if (best && straight) {
+    // Straight line is playable (rough/bunker) — two sanity gates so a par-3
+    // tee shot into greenside rough never gets "corrected" 45° away to a stray
+    // fairway: (1) a greenside miss is already the right line, keep it;
+    // (2) any rotation must not finish meaningfully farther from the pin.
+    const sd = dist(straight.x, straight.y, HOLE.holePos.x, HOLE.holePos.y);
+    if (sd * YARDS_PER_UNIT < 45 || best.rd > sd + 12) best = null;
+  }
+  if (best) return best.ang;
+  if (straight) return alpha;          // straight finds playable rough — leave the player's line alone
+  if (bestRough) return bestRough.ang; // straight is dead: rough beats water/woods/OB
+  return alpha;                        // pathological — nothing helps at any angle
 }
 
 // =====================================================================
@@ -1378,11 +1476,18 @@ function flightStep(b) {
 // hypothetical, discarded-after-simShotRest preview).
 // Arc shape helpers — pure, called by BOTH the live arcFlightStep AND the simShotRest
 // prediction mirror, so the two can never drift (same rule as landingRelease/resolveCup).
-function arcSpeedK(prog) {
-  // Per-frame advance multiplier along the arc: >1 early, <1 late (drag feel). Mean 1
-  // over prog 0..1. Carry is held exact by the landD clamp, not by this profile.
-  const p = Math.min(Math.max(prog, 0), 1);
-  return 1 + TUNE.arcDecel * (1 - 2 * p);
+function arcSpeedK(fl, d) {
+  // Per-frame advance multiplier along the arc. Real-flight shape, and carry-safe (the
+  // landD clamp pins the landing for ANY positive profile — this only sets the timing):
+  //  - drag: launch faster than landing (aero drag bleeds ground speed monotonically).
+  //  - float: apparent speed DIPS toward the apex (min at the top), because a real ball's
+  //    vertical velocity vanishes there — it hangs, then gravity pulls it down and it
+  //    drops away as the height falls back off.
+  const prog = Math.min(Math.max(d / fl.C, 0), 1);
+  const drag = 1 + TUNE.arcDecel * (1 - 2 * prog);
+  const zf = fl.H > 0 ? arcHeightZ(fl, d) / fl.H : 0;        // 0 at ground, 1 at apex
+  const float = 1 - TUNE.arcFloat * (fl.floatMul ?? 1) * Math.pow(zf, TUNE.arcFloatPow);
+  return Math.max(0.06, drag * float);
 }
 function arcHeightZ(fl, d) {
   // Two-parabola height at arc-distance d. Ascent parabolic; descent uses arcDescentPow
@@ -1391,15 +1496,19 @@ function arcHeightZ(fl, d) {
   const p = d <= fl.xa ? 2 : TUNE.arcDescentPow;
   return Math.max(fl.H * (1 - Math.pow(Math.abs(t), p)), 0);
 }
-function buildFlight(ang, C, H, L, spinN) {
-  H = Math.max(H, 0.001);
+function buildFlight(ang, C, H, L, spinN, apexMul) {
+  if (apexMul === undefined) apexMul = TUNE.arcApex;   // per-shot override (Low button passes < arcApex)
+  const H0 = Math.max(H, 0.001);             // rated apex — fixes the carry landing (apex-independent)
+  H = H0 * apexMul;                           // boosted apex for the arc shape + hang (ball flies higher)
   let xa = C - 2 * H / Math.tan(L);          // apex horizontal position
   xa = Math.max(xa, C * 0.15);               // guard (steep, short shots)
-  const T = 2 * Math.sqrt(2 * H / TUNE.gravity); // hang time in frames (apex-based)
-  const vh = C / Math.max(T, 1);             // constant horizontal speed
-  // Exact distance the constant-speed arc lands at today (first vh-multiple >= C). The
-  // arc is pinned to land here, so decel changes timing only — never the carry.
-  const landD = Math.ceil(C / vh) * vh;
+  const T = 2 * Math.sqrt(2 * H / TUNE.gravity); // hang time in frames (apex-based, boosted → floatier)
+  const vh = C / Math.max(T, 1);             // horizontal pace along the arc
+  // Carry is pinned to the RATED-apex landing (vh0 from the un-boosted apex), so raising
+  // arcApex flies the ball higher WITHOUT moving where it lands. The final step clamps to
+  // landD; decel/float/apex only change the timing, never the carry.
+  const vh0 = C / Math.max(2 * Math.sqrt(2 * H0 / TUNE.gravity), 1);
+  const landD = Math.ceil(C / vh0) * vh0;
   return { flight: { ang, C, H, xa, L, vh, landD, d: 0, spinN: spinN || 0 },
            vx: Math.cos(ang) * vh, vy: Math.sin(ang) * vh, z: 0.0001, vz: 0 };
 }
@@ -1411,7 +1520,7 @@ function setupFlight(b, ang, C, H, L, spinN) {
 
 function arcFlightStep(b) {
   const fl = state.flight;
-  const k = arcSpeedK(fl.d / fl.C);
+  const k = arcSpeedK(fl, fl.d);
   let inc = fl.vh * k;
   if (fl.d + inc > fl.landD) inc = fl.landD - fl.d;   // land exactly where the constant-speed model does
   fl.d += inc;
@@ -1774,7 +1883,7 @@ function simShotRest(ball0, flight0) {
   for (let i = 0; i < TUNE.cineSimSteps; i++) {
     if (airborne && fl) {
       // --- arc phase (mirrors arcFlightStep) ---
-      const k = arcSpeedK(fl.d / fl.C);
+      const k = arcSpeedK(fl, fl.d);
       let inc = fl.vh * k;
       if (fl.d + inc > fl.landD) inc = fl.landD - fl.d;
       fl.d += inc;
@@ -2253,6 +2362,9 @@ function camTouchOf(touches, id) {
 // Touch identifier the current single-finger gesture (swipe / measure-drag /
 // marker-drag) is pinned to. Null while using mouse input.
 let activeTouchId = null;
+// One-finger hold-then-slide aim pan: press motionless for TUNE.aimHoldMs, then
+// slide left/right — aim follows the finger slowly (a flick is still the swing).
+let aimDrag = null; // { lastX }
 
 // Mobile browsers replay a tap as synthetic mouse events (mousedown/mouseup)
 // after touchend. Those land on the just-dropped rangefinder marker, register
@@ -2269,13 +2381,14 @@ function swingStart(e) {
   if (cine) { closeCine(); return; }              // cinematic landing: tap = skip
   if (greenView) { gvPointerStart(e); return; }   // inspect view owns the pointer
   shotPreview = null; // fresh gesture — any stale preview marker must not survive into it
+  aimDrag = null;     // ditto a stale aim pan (touchend can be missed)
   // Pin this gesture to whichever touch just landed (undefined for mouse —
   // pointerPos falls back to touches[0]/the event itself in that case).
   activeTouchId = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].identifier : null;
   if (measureMode) { const p = pointerPos(e, activeTouchId); measurePoint = screenToWorldGround(p.x, p.y); measureDragging = true; return; }
   if (e.touches && e.touches.length >= 2) {
     // second finger landed — cancel any pending swing, enter camera-manipulation mode
-    swipe = null; swipePath = null;
+    swipe = null; swipePath = null; aimDrag = null;
     const t0 = e.touches[0], t1 = e.touches[1];
     const dx = t1.clientX - t0.clientX, dy = t1.clientY - t0.clientY;
     camTouch = {
@@ -2365,10 +2478,35 @@ function swingMove(e) {
     measurePoint = screenToWorldGround(p.x, p.y);
     return;
   }
+  if (aimDrag) {
+    // hold-then-slide aim pan: horizontal finger motion rotates the aim slowly.
+    // Same sign as the two-finger twist: dragging right turns the world right.
+    e.preventDefault();
+    const p = pointerPos(e, activeTouchId);
+    camera.tAngle += (p.x - aimDrag.lastX) * TUNE.aimDragDegPx * Math.PI / 180;
+    aimDrag.lastX = p.x;
+    cameraAiming = true;
+    frameTarget();
+    return;
+  }
   if (!swipe) return;
   e.preventDefault();
   const p = pointerPos(e, activeTouchId);
-  swipePath.push({ x: p.x, y: p.y, t: performance.now() });
+  const now = performance.now();
+  // Arm aim-drag (touch only): finger has been down TUNE.aimHoldMs without ever
+  // leaving a TUNE.aimHoldPx radius of the press — this move is the start of a
+  // deliberate slide, not a flick. Swings (drives AND putts) translate
+  // immediately, so the motionless-hold gate never trips mid-stroke.
+  if (!swingIsMouse && now - swipe.t >= TUNE.aimHoldMs &&
+      Math.hypot(p.x - swipe.x, p.y - swipe.y) < TUNE.aimHoldPx &&
+      swipePath.every(q => Math.hypot(q.x - swipe.x, q.y - swipe.y) < TUNE.aimHoldPx)) {
+    aimDrag = { lastX: p.x };
+    swipe = null; swipePath = null; shotPreview = null;
+    haptic(3);
+    if (earnMilestone("hint-aimdrag")) showToast("Slide to aim", 1800, "gold");
+    return;
+  }
+  swipePath.push({ x: p.x, y: p.y, t: now });
   maybeUpdateShotPreview();
 }
 
@@ -2536,8 +2674,13 @@ function buildTrialShot(ang, frac, spin, onGreen) {
   // steepness half of the landing check fades too and the ball releases. Chips skip it.
   const lieLandMul = (lieEffectEnabled && !chipActive) ? (TUNE.lieLand[lieSurf] ?? 1) : 1;
   const landDeg = c.land * lieLandMul + landK * t;
-  const flr = buildFlight(ang, C, H, landDeg * Math.PI / 180, effectiveSpinN);
+  // Knockdown stays low: a Low shot (hiT<0) suppresses the global apex boost + float so it
+  // flies flat and penetrating instead of ballooning. Stock/High keep the full boost+float.
+  const loMul = hiT < 0 ? Math.max(0, 1 - TUNE.arcLowSuppress * t) : 1;
+  const flr = buildFlight(ang, C, H, landDeg * Math.PI / 180, effectiveSpinN,
+                          1 + (TUNE.arcApex - 1) * loMul);
   flr.flight.noLandCheck = chipActive; // chips: release tuned by the spin slider alone
+  flr.flight.floatMul = loMul;          // Low → less/no apex hang (see arcSpeedK)
   if (t > 0) flr.flight.windMul = 1 + (windK - 1) * t; // high rides the wind, low punches through it
   return { usePutter: false, onGreen, f, hiT, mph,
            vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
@@ -2611,6 +2754,7 @@ function swingEnd(e) {
     swipe = null; swipePath = null;
     return;
   }
+  if (aimDrag) { aimDrag = null; return; } // aim pan over — no shot, no marker
   if (!swipe || !canSwing()) { swipe = null; swipePath = null; return; }
   const p = pointerPos(e, activeTouchId);
   swipePath.push({ x: p.x, y: p.y, t: performance.now() });
@@ -2645,7 +2789,7 @@ canvas.addEventListener("touchend", swingEnd);
 // in-flight input state so the next tap starts clean
 canvas.addEventListener("touchcancel", () => {
   swipe = null; swipePath = null; camTouch = null; markerDrag = null; measureDragging = false;
-  activeTouchId = null; shotPreview = null;
+  activeTouchId = null; shotPreview = null; aimDrag = null;
   if (greenView) greenView.drag = null;
 });
 canvas.addEventListener("mousedown", swingStart);
@@ -5947,6 +6091,7 @@ function draw() {
 function drawAttribution() {
   if (!HOLE || HOLE.isRange) return;
   if (!elMenu.classList.contains("hidden")) return;   // hidden behind the home menu
+  if (appleGroundActive()) return;   // MapKit draws its own required credit natively
   const meta = COURSES.find((c) => c.id === selectedCourseId);
   const isOriginal = meta && meta.region === "Originals";
   const src = HOLE.aerial && HOLE.aerial.src;
@@ -6698,9 +6843,11 @@ function setHole(rec) {
   autoClubEnabled = !!activeSettings.autoClub; // honor the round's default each new hole
   manualClubThisShot = false; // fresh hole starts clean (no carried-over override)
   autoClub(); // tee club for the hole length (range lets the player choose)
-  // rotate the camera so this hole's tee->pin points up the screen (plays "up"
+  // rotate the camera so the tee shot's line points up the screen (plays "up"
   // even though the global map is north-up and holes face different ways).
-  const alpha = Math.atan2(HOLE.holePos.y - HOLE.teePos.y, HOLE.holePos.x - HOLE.teePos.x);
+  // safeTeeAim(): tee->pin unless that line is predicted to finish in trouble —
+  // then the middle of the fairway (may also club down on short doglegs).
+  const alpha = safeTeeAim();
   camera.tAngle = -Math.PI / 2 - alpha;
   camera.angle = camera.tAngle; cameraAiming = false; // instant orient on hole change
   frameTarget();
