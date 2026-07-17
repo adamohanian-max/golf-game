@@ -381,6 +381,28 @@ function safeTeeAim() {
 
   const b = state.ball;
   const SAFE = { fairway: 1, green: 1, tee: 1 };
+  // Fairway polys carry no hole id, and surfaceAt() says "fairway" for ANY
+  // hole's fairway — on parallel routings the fan happily aims at the
+  // neighbouring hole's fairway (deepest clearance, wrong hole). A landing
+  // belongs to the played hole if it's nearer this hole's tee->pin line than
+  // any other hole's (mirrors the bake's nearest-hole surface assignment).
+  function segD(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const L2 = dx * dx + dy * dy;
+    const t = L2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L2)) : 0;
+    return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+  }
+  const holeLines = (course && course.holes && course.holes.length > 1)
+    ? course.holes.map(h => ({ num: h.num, t: h.tee, p: h.pin })) : null;
+  function onPlayedHole(x, y) {
+    if (!holeLines) return true;
+    let mine = Infinity, other = Infinity;
+    for (const h of holeLines) {
+      const d = segD(x, y, h.t.x, h.t.y, h.p.x, h.p.y);
+      if (h.num === HOLE.num) mine = d; else if (d < other) other = d;
+    }
+    return mine <= other;
+  }
   function simTeeShot(ang) {
     const t = buildTrialShot(ang, 1, 0, false); // frac=1: autoClub picked this club for full carry
     if (!t || !t.flight) return null;
@@ -401,7 +423,9 @@ function safeTeeAim() {
   }
 
   const straight = simTeeShot(alpha);
-  if (straight && (straight.holed || SAFE[straight.surf])) return alpha; // par 3s + already-safe holes
+  if (straight && (straight.holed ||
+      (SAFE[straight.surf] && onPlayedHole(straight.x, straight.y))))
+    return alpha; // par 3s + already-safe holes
 
   const step = TUNE.teeAimStepDeg * Math.PI / 180;
   const maxOff = TUNE.teeAimMaxDeg * Math.PI / 180;
@@ -414,7 +438,7 @@ function safeTeeAim() {
         const r = simTeeShot(ang);
         if (!r || r.holed) { if (r) return { ang, score: Infinity, rd: 0 }; continue; }
         const rd = dist(r.x, r.y, HOLE.holePos.x, HOLE.holePos.y);
-        if (SAFE[r.surf]) {
+        if (SAFE[r.surf] && onPlayedHole(r.x, r.y)) {
           const score = clearance(r.x, r.y) * 100 - off * 180 / Math.PI; // clearance first, pin bearing tiebreak
           if (!best || score > best.score) best = { ang, score, rd };
         } else {
