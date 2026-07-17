@@ -53,7 +53,7 @@ const TUNE = {
   // ANY profile because the arc lands at a precomputed landD (see buildFlight); set
   // arcDecel:0 + arcFloat:0 for constant speed.
   arcDecel: 0.18,        // aero drag: launch faster than landing (1+d early .. 1-d late)
-  arcFloat: 0.585,       // apex hang depth: apparent speed at the top ≈ (1-arcFloat)× the drag speed
+  arcFloat: 0.4,         // apex hang depth: apparent speed at the top ≈ (1-arcFloat)× the drag speed
   arcFloatPow: 2.4,      // how tightly the hang concentrates at the very top (higher = tighter)
   arcApex: 1.2,          // global apex-height multiplier (1 = club maxH; >1 = ball flies higher, carry unchanged)
   arcLowSuppress: 1.0,   // how much the Low/knockdown button ignores the apex boost + float (1 = fully flat & penetrating)
