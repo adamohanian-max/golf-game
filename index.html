@@ -109,9 +109,13 @@
   <button id="green-view-btn" class="hidden" aria-label="Read green"><span class="ic ic-green3d"></span></button>
   <button id="tilt-view-btn" class="hidden" aria-label="3D view"><span class="ic ic-tilt"></span></button>
   <div id="hm-club-row" class="hidden">
-    <button id="hm-club-up" class="hm-club-arrow" aria-label="Longer club"><span class="ic ic-chev-up"></span></button>
-    <div id="hm-club-cur"><b id="hm-club-name">Driver</b><small id="hm-club-yds">282y</small></div>
-    <button id="hm-club-down" class="hm-club-arrow" aria-label="Shorter club"><span class="ic ic-chev-down"></span></button>
+    <!-- Rolling club wheel: slot-machine drum. #club-window is the fixed "payline"
+         (painted first, so the strip's text scrolls over it); #club-strip is the
+         JS-built column of clubs, moved by translateY only. -->
+    <div id="club-wheel" aria-label="Club selector">
+      <div id="club-window" aria-hidden="true"></div>
+      <div id="club-strip"></div>
+    </div>
   </div>
   <div id="hud-menu" class="hidden">
     <div id="hm-course-items">
@@ -149,7 +153,7 @@
     <button class="hm-item" id="hm-home"><span class="ic ic-home"></span>Home</button>
   </div>
 
-  <div id="hint">Swipe to swing · ← → to aim · ↑ ↓ club</div>
+  <div id="hint">Swipe to swing · ← → to aim · roll club</div>
   <div id="live-turn" class="hidden"></div>
   <div id="hud-edit-bar" class="hidden">Drag to move · pinch or <button id="hud-zoom-out" class="hud-zoom">−</button><button id="hud-zoom-in" class="hud-zoom">+</button> to resize · <button id="hud-edit-done">Done</button></div>
   <div id="toast" class="hidden"></div>
@@ -768,6 +772,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script defer src="game.js?v=286"></script>
+  <script defer src="game.js?v=287"></script>
 </body>
 </html>

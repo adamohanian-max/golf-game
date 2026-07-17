@@ -5693,7 +5693,12 @@ function drawWindIndicator() {
   ctx.restore();
 }
 let _surround = null; // cached course-green surround gradient, keyed to viewport size
-const FLAG_FAR = 70, FLAG_NEAR = 12; // world-unit range over which the flag shrinks
+// Flagstick on-screen scale. FLAG_H_UNITS = pole height in world units — the camera fits
+// ball↔pin, so ws() already shrinks the pin with distance (perspective); this is tuned up
+// from a real 7ft stick (which is sub-pixel at 500yd) purely for visibility. Clamped to a
+// small floor (a far pin stays a visible tick) and a hard cap (an up-close / zoomed-in pin
+// never balloons).
+const FLAG_H_UNITS = 4.0, FLAG_MIN_PX = 8, FLAG_MAX_PX = 44;
 
 // Tee markers: two blocks flanking the teeing ground, square to the play line,
 // so the tee box reads clearly on the photo (and in the preview flyover).
@@ -5936,26 +5941,28 @@ function draw() {
   // WebGL draws it in 3D.
   const _b = state.ball;
   const ballOnGreen = surfaceAt(_b.x, _b.y) === "green";
-  const dToHole = Math.hypot(_b.x - HOLE.holePos.x, _b.y - HOLE.holePos.y);
   if (!ballOnGreen && !render3D && !(appleGroundActive() && nativeGreenOverlay)) {
-    let fs = (dToHole - FLAG_NEAR) / (FLAG_FAR - FLAG_NEAR);
-    fs = 0.55 + 0.45 * Math.max(0, Math.min(1, fs)); // 0.55 (near) .. 1 (far)
-    const poleH = Math.max(ws(0.78), 22) * fs, topX = hx, topY = hy - poleH;
+    // Real-scale flagstick: pole height tracks perspective — the camera fits ball↔pin, so
+    // ws() shrinks the pin with distance (a 500-yd flag is smaller than a 200-yd one).
+    // Floored so a far pin stays a visible tick; hard-capped so an up-close / zoomed-in pin
+    // never balloons. Everything else scales off poleH so proportions hold at any size.
+    const poleH = Math.max(FLAG_MIN_PX, Math.min(FLAG_MAX_PX, ws(FLAG_H_UNITS)));
+    const topX = hx, topY = hy - poleH;
     ctx.strokeStyle = "rgba(0,0,0,0.28)";   // short ground shadow of the stick
-    ctx.lineWidth = 2.5 * fs;
+    ctx.lineWidth = Math.max(1, poleH * 0.11);
     ctx.beginPath();
     ctx.moveTo(hx, hy);
-    ctx.lineTo(hx + ws(4) * fs, hy + ws(1));
+    ctx.lineTo(hx + poleH * 0.9, hy + poleH * 0.14);
     ctx.stroke();
     ctx.strokeStyle = "#f4f4f0";             // the pole
-    ctx.lineWidth = 2 * fs;
+    ctx.lineWidth = Math.max(1.5, poleH * 0.09);
     ctx.beginPath();
     ctx.moveTo(hx, hy);
     ctx.lineTo(topX, topY);
     ctx.stroke();
     const t = performance.now() / 180;       // waving red pennant flying right
-    const flagL = Math.max(ws(0.5), 15) * fs, flagH = Math.max(ws(0.32), 10) * fs;
-    const w1 = Math.sin(t) * Math.max(ws(0.05), 1.6) * fs, w2 = Math.sin(t + 1.2) * Math.max(ws(0.06), 2) * fs;
+    const flagL = poleH * 0.64, flagH = poleH * 0.41;
+    const w1 = Math.sin(t) * poleH * 0.07, w2 = Math.sin(t + 1.2) * poleH * 0.09;
     ctx.beginPath();
     ctx.moveTo(topX, topY);
     ctx.quadraticCurveTo(topX + flagL * 0.5, topY - w1, topX + flagL, topY + flagH * 0.5 + w2);
@@ -7750,8 +7757,9 @@ const elHudBtn = document.getElementById("hud-btn");
 const elHudMenu = document.getElementById("hud-menu");
 const elHmCourseItems = document.getElementById("hm-course-items");
 const elHmClubRow = document.getElementById("hm-club-row");
-const elClubName = document.getElementById("hm-club-name");
-const elClubYds = document.getElementById("hm-club-yds");
+const elClubWheel = document.getElementById("club-wheel");
+const elClubStrip = document.getElementById("club-strip");
+let cwItems = []; // one .cw-item per CLUB_ORDER entry, built by buildClubWheel()
 const elMeasureBtn = document.getElementById("hm-measure");
 const elSlopeBtn = document.getElementById("hm-slope");
 const elArrowsBtn = document.getElementById("hm-arrows");
