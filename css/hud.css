@@ -268,36 +268,55 @@ body.gv-open #hint { display: none; }
   z-index: 15;
 }
 #hm-club-row.hidden { display: none; }
-.hm-club-arrow {
-  width: 100%;
-  height: 32px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 15px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: transform var(--dur-fast), background var(--dur-fast), color var(--dur-fast);
+/* Rolling club wheel: a masked drum. The strip of clubs scrolls (translateY only)
+   over a fixed accent "payline" band; edges fade like the curve of a reel. */
+#club-wheel {
+  position: relative;
+  width: 112px;
+  height: 148px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 27%, #000 73%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 27%, #000 73%, transparent);
 }
-.hm-club-arrow:active { transform: scale(0.94); background: rgba(99, 185, 139, 0.3); color: var(--text); }
-#hm-club-cur {
-  cursor: pointer;
+#club-wheel:active { cursor: grabbing; }
+#club-window {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+  background: var(--accent);
+  border-radius: var(--r-sm);
+}
+#club-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  will-change: transform;
+}
+.cw-item {
+  height: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  border-radius: var(--r-sm);
-  padding: var(--s-3) 20px;
-  min-width: 96px;
+  color: var(--text-muted);
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none; /* the wheel owns all input */
 }
-#hm-club-cur b { font-family: var(--font-display); font-size: 22px; color: #fff; line-height: 1.1; }
-#hm-club-cur small { font-size: 13px; color: var(--w-85); letter-spacing: 0.3px; }
+.cw-item b { font-family: var(--font-display); font-size: 18px; line-height: 1.05; }
+.cw-item small { font-size: 11.5px; letter-spacing: 0.3px; }
+.cw-item.cw-sel b { color: #fff; font-size: 21px; }
+.cw-item.cw-sel small { color: var(--w-85); }
 /* on the green the selector is locked to the putter — quiet it down */
-#hm-club-row.putting #hm-club-cur { background: var(--surface-raised); }
-#hm-club-row.putting #hm-club-cur b { color: var(--text-muted); }
-#hm-club-row.putting .hm-club-arrow { opacity: 0.4; }
+#hm-club-row.putting #club-window { background: var(--surface-raised); }
+#hm-club-row.putting #club-wheel { opacity: 0.8; cursor: default; }
+#hm-club-row.putting .cw-item.cw-sel b { color: var(--text-muted); }
 
 /* ---- HUD dropdown menu + settings sheet -------------------- */
 #hud-menu, #hud-settings {
@@ -528,7 +547,7 @@ body.is-mobile #hud-edit-bar {
 }
 body.is-mobile #hud-menu .hm-item,
 body.is-mobile #hud-settings .hm-item { white-space: normal; }
-body.is-mobile #hm-club-cur { min-width: 0; padding: var(--s-2) var(--s-3); }
+body.is-mobile #club-wheel { width: 96px; }
 body.is-mobile #range-ui {
   /* sit above the bottom stat strip, clear of the club column */
   left: var(--s-3);

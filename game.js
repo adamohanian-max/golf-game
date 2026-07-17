@@ -8364,17 +8364,21 @@ for (const btn of elAttrBtns) {
   });
 }
 
-// Club selector: +/- steps through the bag (putter is automatic on the green).
+// Club selector: rolling wheel — the drum shows the selection; this writes the
+// live yardage onto the selected slot and rolls the drum there when the club was
+// changed from outside the wheel (auto-club, hole change, arrow keys, green).
 function updateClubUI() {
   const onGreen = HOLE && !HOLE.isRange && surfaceAt(state.ball.x, state.ball.y) === "green";
   elHmClubRow.classList.toggle("putting", !!onGreen);
+  let name, yds;
+  let idx = CLUB_ORDER.indexOf(selectedClub);
   if (onGreen) {
-    elClubName.textContent = "Putter"; elClubYds.textContent = "";
+    name = "Putter"; yds = ""; idx = CLUB_ORDER.length - 1; // drum rolls to the putter slot; selectedClub untouched
   } else if (selectedClub === "putter") {
-    elClubName.textContent = "Putter"; elClubYds.textContent = "~30y";
+    name = "Putter"; yds = "~30y";
   } else {
     const c = TUNE.clubs[selectedClub];
-    elClubName.textContent = c.name;
+    name = c.name;
     if (chipActiveNow()) {
       // Chip: show where the ball LANDS (carry). Tracks the spin slider (landFrac — more
       // spin lands deeper) AND the power slider (reach: previewFrac maps the chip across
@@ -8382,14 +8386,15 @@ function updateClubUI() {
       const b = state.ball;
       const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * previewFrac;
       const land = Math.min(c.carry, playsLikeYards(b.x, b.y).plays * reach * chipSpinParams().landFrac);
-      elClubYds.textContent = Math.round(land) + "y";
+      yds = Math.round(land) + "y";
     } else {
       // Full shot: fold the Spin selector's carry cost AND the power slider's ceiling
       // (previewFrac, same value buildTrialShot's ef would use) into the readout live.
       const flightCarryK = flightSpinBias >= 0 ? TUNE.flightHiCarry : TUNE.flightLoCarry;
-      elClubYds.textContent = Math.round(c.carry * previewFrac * (1 - (1 - flightCarryK) * Math.abs(flightSpinBias))) + "y";
+      yds = Math.round(c.carry * previewFrac * (1 - (1 - flightCarryK) * Math.abs(flightSpinBias))) + "y";
     }
   }
+  cwSetLive(idx, name, yds);
 }
 function setAutoClub(on) {
   autoClubEnabled = on;
@@ -8403,11 +8408,154 @@ function stepClub(delta) { // +1 = longer club, -1 = shorter
   selectedClub = CLUB_ORDER[Math.max(0, Math.min(CLUB_ORDER.length - 1, i - delta))];
   updateClubUI();
 }
-// tap club display to cycle forward; arrow keys still work for full step control
-document.getElementById("hm-club-cur").addEventListener("click", () => stepClub(1));
-// up/down arrow buttons: up = longer club, down = shorter (matches ↑/↓ keys)
-document.getElementById("hm-club-up").addEventListener("click", () => stepClub(1));
-document.getElementById("hm-club-down").addEventListener("click", () => stepClub(-1));
+// ---- Rolling club wheel -----------------------------------------------------
+// The selector is a slot-machine drum: drag or flick the column and it rolls with
+// momentum, ticks a haptic detent at every club, and springs to rest centered on
+// one. CLUB_ORDER runs top->bottom longest->putter and the strip follows the
+// finger, so dragging down rolls back toward the long clubs like a real reel.
+// cw.pos is a float club index; the strip is translateY-only (no layout work).
+const CW_H = 44; // one slot, px — must match .cw-item height in hud.css
+const cw = { pos: 0, vel: 0, drag: null, raf: 0, manual: false, target: null, live: -1, lastTs: 0 };
+function cwRated(id) {
+  if (id === "putter") return ["Putter", "~30y"];
+  const c = TUNE.clubs[id];
+  return [c.name, Math.round(c.carry) + "y"];
+}
+function buildClubWheel() {
+  elClubStrip.innerHTML = "";
+  cwItems = CLUB_ORDER.map((id) => {
+    const it = document.createElement("div");
+    it.className = "cw-item";
+    const [n, y] = cwRated(id);
+    it.innerHTML = "<b>" + n + "</b><small>" + y + "</small>";
+    elClubStrip.appendChild(it);
+    return it;
+  });
+  cw.pos = Math.max(0, CLUB_ORDER.indexOf(selectedClub));
+  cwRender();
+}
+function cwRender() {
+  const center = (elClubWheel.clientHeight || 148) / 2 - CW_H / 2;
+  elClubStrip.style.transform = "translateY(" + (center - cw.pos * CW_H).toFixed(2) + "px)";
+  const sel = Math.round(Math.min(Math.max(cw.pos, 0), cwItems.length - 1));
+  for (let i = 0; i < cwItems.length; i++) {
+    const d = Math.min(Math.abs(i - cw.pos), 2.5);
+    cwItems[i].style.opacity = (1 - d * 0.3).toFixed(2);
+    cwItems[i].style.transform = "scaleY(" + (1 - d * 0.16).toFixed(3) + ")"; // reel-edge foreshortening
+    cwItems[i].classList.toggle("cw-sel", i === sel);
+  }
+}
+// Live selection while the drum rolls: every detent crossing picks that club.
+function cwCommit() {
+  const i = Math.round(Math.min(Math.max(cw.pos, 0), CLUB_ORDER.length - 1));
+  const id = CLUB_ORDER[i];
+  if (id === selectedClub) return;
+  manualClubThisShot = true;
+  selectedClub = id;
+  haptic(3); // mechanical detent tick
+  updateClubUI();
+}
+// updateClubUI's write-through: live yardage onto the target slot, rated label
+// restored on the slot it leaves, drum rolled there unless the user is driving.
+function cwSetLive(idx, name, yds) {
+  if (!cwItems.length || idx < 0) return;
+  if (cw.live !== idx && cw.live >= 0) {
+    const [n, y] = cwRated(CLUB_ORDER[cw.live]);
+    cwItems[cw.live].innerHTML = "<b>" + n + "</b><small>" + y + "</small>";
+  }
+  cw.live = idx;
+  cwItems[idx].innerHTML = "<b>" + name + "</b>" + (yds ? "<small>" + yds + "</small>" : "");
+  if (cw.drag || cw.manual) { cwRender(); return; } // user owns the drum right now
+  if (cw.pos === idx && cw.target == null) { cwRender(); return; }
+  cw.target = idx;
+  cwStart();
+}
+function cwStart() { if (!cw.raf) { cw.lastTs = 0; cw.raf = requestAnimationFrame(cwTick); } }
+function cwTick(ts) {
+  cw.raf = 0;
+  const dt = Math.min(cw.lastTs ? ts - cw.lastTs : 16.7, 50); cw.lastTs = ts;
+  const N = CLUB_ORDER.length - 1, fr = dt / 16.7;
+  if (!cw.drag) {
+    if (cw.target != null) {
+      // programmatic roll (auto-club, green entry/exit, keys): ease straight there
+      cw.pos += (cw.target - cw.pos) * (1 - Math.pow(0.82, fr));
+      if (Math.abs(cw.target - cw.pos) < 0.004) { cw.pos = cw.target; cw.target = null; }
+      if (cw.manual) cwCommit(); // tap-step still ticks detents on the way
+    } else {
+      cw.pos += cw.vel * fr;
+      cw.vel *= Math.pow(0.9, fr); // reel friction
+      if (cw.pos < 0 || cw.pos > N) { // end stops bleed speed fast + push back in
+        cw.vel *= Math.pow(0.5, fr);
+        cw.pos = cw.pos < 0 ? cw.pos * Math.pow(0.6, fr) : N + (cw.pos - N) * Math.pow(0.6, fr);
+      }
+      if (cw.manual) cwCommit();
+      if (Math.abs(cw.vel) < 0.03) { // slow — spring into the nearest detent
+        cw.vel = 0;
+        const t = Math.round(Math.min(Math.max(cw.pos, 0), N));
+        cw.pos += (t - cw.pos) * (1 - Math.pow(0.8, fr));
+        if (Math.abs(t - cw.pos) < 0.004) cw.pos = t;
+      }
+    }
+  }
+  cwRender();
+  const parked = !cw.drag && cw.target == null && cw.vel === 0 && cw.pos === Math.round(cw.pos);
+  if (!parked) cw.raf = requestAnimationFrame(cwTick);
+  else { cw.lastTs = 0; if (cw.manual) { cwCommit(); cw.manual = false; } }
+}
+function cwClamped(p) { // rubber-band past the ends of the bag
+  const N = CLUB_ORDER.length - 1;
+  return p < 0 ? p * 0.35 : p > N ? N + (p - N) * 0.35 : p;
+}
+elClubWheel.addEventListener("pointerdown", (e) => {
+  if (hudEditOn) return; // edit mode drags the whole panel instead
+  if (elHmClubRow.classList.contains("putting")) return; // locked to putter on the green
+  cw.drag = { y0: e.clientY, p0: cw.pos, t0: performance.now(), moved: 0,
+              samples: [[performance.now(), cw.pos]] };
+  cw.manual = true; cw.target = null; cw.vel = 0;
+  elClubWheel.setPointerCapture(e.pointerId);
+  e.preventDefault(); e.stopPropagation();
+  cwStart();
+});
+elClubWheel.addEventListener("pointermove", (e) => {
+  if (!cw.drag) return;
+  const dy = e.clientY - cw.drag.y0;
+  cw.drag.moved = Math.max(cw.drag.moved, Math.abs(dy));
+  cw.pos = cwClamped(cw.drag.p0 - dy / CW_H);
+  const now = performance.now();
+  cw.drag.samples.push([now, cw.pos]);
+  while (cw.drag.samples.length > 2 && now - cw.drag.samples[0][0] > 90) cw.drag.samples.shift();
+  cwCommit(); // detents tick under the finger
+  e.preventDefault();
+});
+function cwRelease(e) {
+  const d = cw.drag;
+  if (!d) return;
+  cw.drag = null;
+  if (d.moved < 6 && performance.now() - d.t0 < 300) {
+    // tap: step toward the tapped neighbour slot (old one-tap muscle memory)
+    const r = elClubWheel.getBoundingClientRect();
+    const off = Math.round((e.clientY - r.top - r.height / 2) / CW_H);
+    if (off) cw.target = Math.min(Math.max(Math.round(cw.pos) + off, 0), CLUB_ORDER.length - 1);
+    cwStart();
+    return;
+  }
+  const s = d.samples, [t0, p0] = s[0], [t1, p1] = s[s.length - 1];
+  cw.vel = t1 > t0 ? (p1 - p0) / ((t1 - t0) / 16.7) : 0; // slots per frame
+  cw.vel = Math.min(Math.max(cw.vel, -1.1), 1.1); // cap the fling
+  cwStart();
+}
+elClubWheel.addEventListener("pointerup", cwRelease);
+elClubWheel.addEventListener("pointercancel", cwRelease);
+// desktop scroll over the widget rolls the drum; the settle spring snaps it
+elClubWheel.addEventListener("wheel", (e) => {
+  if (hudEditOn || elHmClubRow.classList.contains("putting")) return;
+  e.preventDefault(); e.stopPropagation();
+  cw.manual = true; cw.target = null;
+  cw.pos = cwClamped(cw.pos + e.deltaY / 110);
+  cwCommit();
+  cwStart();
+}, { passive: false });
+buildClubWheel();
 
 // ← / → aim: a single tap is one small eased nudge; holding (OS auto-repeat)
 // switches to a smooth continuous turn (updateCamera). Swipe up fires along it.
