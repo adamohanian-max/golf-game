@@ -48,12 +48,13 @@ const TUNE = {
   gravity: 0.044,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
   // Arc shape polish (renderer-independent). The ball's APPARENT speed along the arc is
-  // shaped in arcSpeedK: drag (launch faster than landing) × float (dips toward the apex,
-  // where a real ball's vertical velocity vanishes and it hangs). Carry stays EXACT for
-  // ANY profile because the arc lands at a precomputed landD (see buildFlight); set
+  // shaped in arcSpeedK: drag (launch faster than landing) × float (eases down to a
+  // minimum at the apex, then HOLDS there through the descent — a ball never speeds up
+  // going down; the profile is monotone non-increasing). Carry stays EXACT for ANY
+  // profile because the arc lands at a precomputed landD (see buildFlight); set
   // arcDecel:0 + arcFloat:0 for constant speed.
-  arcDecel: 0.18,        // aero drag: launch faster than landing (1+d early .. 1-d late)
-  arcFloat: 0.4,         // apex hang depth: apparent speed at the top ≈ (1-arcFloat)× the drag speed
+  arcDecel: 0.10,        // aero drag: launch faster than landing (1+d early .. 1-d late)
+  arcFloat: 0.25,        // apex hang depth; also the descent/landing speed (float holds past apex)
   arcFloatPow: 2.4,      // how tightly the hang concentrates at the very top (higher = tighter)
   arcApex: 1.2,          // global apex-height multiplier (1 = club maxH; >1 = ball flies higher, carry unchanged)
   arcLowSuppress: 1.0,   // how much the Low/knockdown button ignores the apex boost + float (1 = fully flat & penetrating)
@@ -700,7 +701,11 @@ const APPLE_MIN_DIST_M = 165;
 // window.__appleDrop overrides for live re-tuning via devdrive.
 const APPLE_ANCHOR_DROP_M = 2;
 let applePitch = 0;        // current MKMapCamera pitch, degrees (tweened)
-let applePitchT = 0;       // target — driven by the tilt toggle on Apple-ground courses
+let applePitchT = 0;       // target — appleUserPitch × zoom ramp on Apple-ground courses
+// Manual pitch set by the two-finger vertical drag (Apple-Maps-style tilt).
+// Degrees, 0 = overhead/2D, up to 65 leaning at the horizon. Resets to 0 on
+// every new hole and on every shot commit so each swing starts overhead.
+let appleUserPitch = 0;
 // The camera MapKit ACTUALLY applied (syncCamera's resolve value) + what we
 // had requested. MapKit silently clamps — flyover enforces a minimum camera
 // distance and a zoom-dependent max pitch — and at putt zoom that pushed the
@@ -1145,21 +1150,48 @@ let _nativeGreenReadyAt = 0; // when the last native overlay send resolved (Infi
 // pulled-on-green visibility flips — never a per-frame stream (the
 // static-contract rule; see CourseMap3DViewController).
 let _appleFlagKey = null;
+// Green-arrival latch: true once the ball is at rest ON the green AND the
+// camera has settled overhead (_apSettleN). Latched so a putt's roll (camera
+// re-following the ball) can't flicker the flag back; cleared when the ball
+// leaves the green or the hole changes (setHole). Drives the flag→cup swap:
+// the flag stays planted as the approach target through landing + camera
+// flight, and only when the camera is parked over the green does the flag
+// pull and the physical cup appear.
+let _gaLatch = false;
+function greenArrived() {
+  const b = state.ball;
+  if (surfaceAt(b.x, b.y) !== "green") { _gaLatch = false; return false; }
+  if (!_gaLatch && !state.moving && _apSettleN >= 4) _gaLatch = true;
+  return _gaLatch;
+}
 function syncAppleFlag() {
   if (!window.Capacitor || !window.Capacitor.Plugins.CourseMap3D) return;
-  const b = state.ball;
-  const onGreen = surfaceAt(b.x, b.y) === "green";
-  const visible = nativeGreenOverlay && !onGreen && !cine && !greenView &&
+  const visible = nativeGreenOverlay && !greenArrived() && !cine && !greenView &&
     mode === "course" && !HOLE.isRange;
-  // Perspective cue for a FIXED-screen-size annotation, keyed on the CAMERA
-  // distance (what you actually see), not the ball's position: apparent
-  // size ∝ 1/distance, so fs = REF/distM clamped — zoomed to the green the
-  // flag is full size, from a long-hole tee it reads small. (Ball-distance
-  // was the previous key — wrong reference frame; zooming without moving
-  // the ball left the flag size frozen.)
-  const camDistM = view.appleProj ? view.appleProj.reqDistM
-    : ((_appleMapH || window.innerHeight) / camera.scale) * M_PER_UNIT * APPLE_CAM_K;
-  const fs = Math.max(0.5, Math.min(1.15, 280 / camDistM));
+  // Perspective cue for a FIXED-screen-size annotation: apparent size ∝
+  // 1/(camera-eye → PIN distance) — not the camera's request distance, which
+  // is the same whether the pin sits at screen center or far up-range. Eye
+  // position is reconstructed from the live projection (look-at center,
+  // pulled back distM·sin(pitch) along the view direction, at altitude
+  // distM·cos(pitch)); a 500yd tee shot reads a small distant flag, a 100yd
+  // approach a big near one.
+  let eyeDistM;
+  const proj = view.appleProj;
+  if (proj) {
+    const hx = window.innerWidth / 2, hy = window.innerHeight / 2;
+    const c = appleUnproject(proj, hx, hy);              // look-at ground point (world units)
+    const u = appleUnproject(proj, hx, hy - 80);         // a point up-screen → view forward dir
+    let fx = u.x - c.x, fy = u.y - c.y;
+    const fl = Math.hypot(fx, fy) || 1; fx /= fl; fy /= fl;
+    const p = (proj.reqPitch || 0) * Math.PI / 180;
+    const backU = proj.reqDistM * Math.sin(p) / M_PER_UNIT; // eye sits behind center on the ground
+    const ex = c.x - fx * backU, ey = c.y - fy * backU;
+    const gapM = Math.hypot(HOLE.holePos.x - ex, HOLE.holePos.y - ey) * M_PER_UNIT;
+    eyeDistM = Math.hypot(gapM, proj.reqDistM * Math.cos(p));
+  } else {
+    eyeDistM = ((_appleMapH || window.innerHeight) / camera.scale) * M_PER_UNIT * APPLE_CAM_K;
+  }
+  const fs = Math.max(0.35, Math.min(1.6, 420 / eyeDistM));
   const fsBucket = Math.round(fs * 20) / 20;
   const gm = appleGeoAffine();
   const lat = gm[3] * HOLE.holePos.x + gm[4] * HOLE.holePos.y + gm[5];
@@ -1174,7 +1206,7 @@ function appleGreenDetailWanted() {
   const c = TUNE.clubs[selectedClub];
   const reach = c ? c.carry + 30 : 120;   // carry + generous rollout (putter: near the green anyway)
   const toPin = dist(state.ball.x, state.ball.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-  return toPin <= reach && _apSettleN >= 12;   // ~200ms parked before it appears
+  return toPin <= reach && _apSettleN >= 4;   // ~65ms parked — dashes land with the camera
 }
 function leaveAppleGround() {
   if (!_appleGroundEntered) return;
@@ -1506,11 +1538,14 @@ function arcSpeedK(fl, d) {
   // landD clamp pins the landing for ANY positive profile — this only sets the timing):
   //  - drag: launch faster than landing (aero drag bleeds ground speed monotonically).
   //  - float: apparent speed DIPS toward the apex (min at the top), because a real ball's
-  //    vertical velocity vanishes there — it hangs, then gravity pulls it down and it
-  //    drops away as the height falls back off.
+  //    vertical velocity vanishes there — it hangs. Past the apex the dip HOLDS at its
+  //    minimum instead of recovering with the falling height: a recovering float read as
+  //    the ball accelerating forward on the way down. With both terms monotone
+  //    non-increasing, k never rises anywhere on the arc.
   const prog = Math.min(Math.max(d / fl.C, 0), 1);
   const drag = 1 + TUNE.arcDecel * (1 - 2 * prog);
-  const zf = fl.H > 0 ? arcHeightZ(fl, d) / fl.H : 0;        // 0 at ground, 1 at apex
+  const zf = d > fl.xa ? 1                                   // descent: hold the apex dip
+           : fl.H > 0 ? arcHeightZ(fl, d) / fl.H : 0;        // ascent: 0 ground, 1 apex
   const float = 1 - TUNE.arcFloat * (fl.floatMul ?? 1) * Math.pow(zf, TUNE.arcFloatPow);
   return Math.max(0.06, drag * float);
 }
@@ -2422,8 +2457,11 @@ function swingStart(e) {
       dist: Math.hypot(dx, dy), angle: Math.atan2(dy, dx),
       camAngle: camera.angle, camScale: camera.scale,
       focusX: camera.focus.x, focusY: camera.focus.y,
+      pitch0: appleUserPitch, moveMode: null, // vertical drag = pitch (Apple ground), else pan
     };
-    if (earnMilestone("hint-camera")) showToast("Twist to aim · pinch to zoom", 2200, "gold");
+    if (earnMilestone("hint-camera")) showToast(appleGroundActive()
+      ? "Twist to aim · pinch to zoom · two-finger drag to tilt"
+      : "Twist to aim · pinch to zoom", 2200, "gold");
     return;
   }
   // grab the dropped rangefinder marker if the press lands on it (drag to move,
@@ -2473,6 +2511,20 @@ function swingMove(e) {
     camera.tAngle = camTouch.camAngle + dAng;
     camera.angle = camera.tAngle;
 
+    // Apple ground: a predominantly-VERTICAL two-finger drag is the tilt
+    // gesture (mirrors Apple Maps) — classify the gesture once after ~12px of
+    // centroid travel so pitch and pan never fight mid-gesture. Drag DOWN
+    // leans the camera toward the ground (more 3D), drag UP flattens to
+    // overhead. updateCamera's zoom ramp still forces overhead at putt zoom.
+    if (appleGroundActive()) {
+      const tdx = cx - camTouch.cx, tdy = cy - camTouch.cy;
+      if (!camTouch.moveMode && Math.hypot(tdx, tdy) > 12)
+        camTouch.moveMode = Math.abs(tdy) > Math.abs(tdx) * 1.2 ? "pitch" : "pan";
+      if (camTouch.moveMode === "pitch") {
+        appleUserPitch = Math.max(0, Math.min(65, camTouch.pitch0 + tdy * 0.25));
+        return;
+      }
+    }
     // pan: midpoint shift in world coords. Under the Apple 3D pinhole the
     // flat affine is wrong (pan speed/direction bend with pitch) — move by
     // the world delta between the previous and current midpoint UNPROJECTED
@@ -2548,6 +2600,7 @@ function slottedLaunch() {
   b.spin = 0;
   state.airborne = true;
   state.moving = true;
+  appleUserPitch = 0; // shot committed — camera returns to overhead for the flight
   haptic(9);
   state.strokesOffGreen++;
   state.strokes += 1;
@@ -2739,6 +2792,7 @@ function launchShot(ang, frac, spin, onGreen) {
   state.airborne = !trial.usePutter;
   if (trial.hiT !== 0) resetFlightBias(); // one-shot: the selector never silently carries to the next swing
   state.moving = true;
+  appleUserPitch = 0; // shot committed — camera returns to overhead for the flight
   haptic(trial.usePutter ? 3 : 9);  // light tick for putter, firm buzz for full shot
   if (trial.usePutter) playPutt(); else playStrike(trial.f);  // crack/tap on contact
   if (onGreen) {
@@ -3121,14 +3175,16 @@ function updateCamera() {
     const sMax = (_appleMapH || window.innerHeight) * M_PER_UNIT * APPLE_CAM_K / APPLE_MIN_DIST_M;
     if (camera.scale > sMax) camera.scale = sMax;
     if (camera.tScale > sMax) camera.tScale = sMax;
-    // Pitch rides the zoom: full 3D at hole-scale framings, easing to flat
-    // by putt zoom. Two reasons in one knob — top-down is the better read on
-    // the green anyway, and the replica-vs-flyover residual (terrain
-    // anchoring, no exact-projection API — see buildAppleProj) grows with
-    // tan(pitch) exactly where alignment matters most.
+    // Pitch = the user's two-finger tilt, scaled by the zoom ramp: full lean
+    // at hole-scale framings, easing to flat by putt zoom. The ramp stays for
+    // two reasons — top-down is the better read on the green anyway, and the
+    // replica-vs-flyover residual (terrain anchoring, no exact-projection
+    // API — see buildAppleProj) grows with tan(pitch) exactly where
+    // alignment matters most. (Old tilt-button auto-pitch removed; the
+    // gesture in swingMove owns appleUserPitch now.)
     const distNow = window.innerHeight / camera.scale * M_PER_UNIT * APPLE_CAM_K;
     const ramp = Math.min(1, Math.max(0, (distNow - 220) / (380 - 220)));
-    applePitchT = tiltView ? TUNE.applePitchDeg * ramp : 0;
+    applePitchT = appleUserPitch * ramp;
     // Green-detail settle gate: count consecutive frames with the camera
     // exactly parked (ease snaps make these strict equalities reachable).
     const parked = camera.angle === camera.tAngle && camera.scale === camera.tScale &&
@@ -3904,6 +3960,33 @@ function drawGreen(photo, only) {
       ctx.stroke();
     });
   }
+}
+
+// Apple-ground slope contours: dashed lines over the bare photo turf (the
+// look the native MKOverlay renderer had, minus its async tile-rasterization
+// lag). Clipped to each green poly; wx/wy route through the probe-calibrated
+// pinhole replica, and the caller only shows this once the camera has parked
+// (settle gate), exactly where that projection is trustworthy.
+function drawAppleGreenDashes(gs) {
+  ctx.strokeStyle = "rgba(25,52,30,0.55)";
+  ctx.lineWidth = 1.2;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.setLineDash([6, 5]);
+  for (const g of gs) {
+    if (!polyVisible(g.poly)) continue;
+    withClip(g.poly, () => {
+      ctx.beginPath();
+      for (const c of g.contours) {
+        const p = c.pts;
+        ctx.moveTo(wx(p[0].x, p[0].y), wy(p[0].x, p[0].y));
+        for (let i = 1; i < p.length; i++) ctx.lineTo(wx(p[i].x, p[i].y), wy(p[i].x, p[i].y));
+        if (c.closed) ctx.closePath();
+      }
+      ctx.stroke();
+    });
+  }
+  ctx.setLineDash([]);
 }
 
 // --- Subtle shaded-relief topo (replaces the loud rainbow heatmap) ---
@@ -5728,32 +5811,34 @@ function draw() {
     // treatment every aerial course gets, minus the aerial itself.
     if (!HOLE.isRange) {
       const gs = greensInPlay();
-      // Native tint+contours: always present for the greens in play, NOT
-      // gated behind the detail fade — the gate exists because the JS
-      // projection can't be trusted mid-camera-motion, which doesn't apply
-      // to native rendering (MapKit draws it exact, glued to its own
-      // imagery). The dedupe inside makes this a per-frame no-op until the
-      // set really changes. Relief below (still JS-projected) keeps the gate.
-      syncAppleGreenOverlay(gs);
-      syncAppleFlag(); // native pin flag — also dedupes internally
+      // Slope dashes are JS-drawn now (below): the native MKOverlay version
+      // rasterized its tiles asynchronously on every zoom change, so the
+      // dashes surfaced seconds AFTER the camera parked over the green.
+      // JS dashes ride the settle gate instead — the projection is
+      // probe-calibrated the moment the camera parks, so they appear the
+      // instant the camera is in position. The empty send clears any native
+      // overlay from a previous build (dedupe makes it a one-time call).
+      syncAppleGreenOverlay([]);
+      syncAppleFlag(); // native pin flag — dedupes internally
       // Green detail earns its screen time: only the greens in play, only
       // when the pin is in club reach AND the camera has settled (see
-      // appleGreenDetailWanted). Eased alpha so it fades in, never pops.
-      _apDetailA += ((appleGreenDetailWanted() ? 1 : 0) - _apDetailA) * 0.12;
+      // appleGreenDetailWanted). Short ease so it reads as a quick fade-in,
+      // not a pop — but never the slow crawl the native tiles had.
+      _apDetailA += ((appleGreenDetailWanted() ? 1 : 0) - _apDetailA) * 0.3;
       if (_apDetailA > 0.02) {
         ctx.save();
         ctx.globalAlpha = _apDetailA;
         if (!nativeGreenOverlay) {
           // Kill-switch fallback only: original JS-canvas tint + relief.
-          // With the native overlay on, the green shows the BARE photo turf
-          // with just the dashed slope contours (native) — the tint and the
-          // relief raster were both dropped by request (the pale hillshade +
-          // warm speckles read as a smudge over Apple's already-good photo).
           drawGreen(true, gs);
           for (const g of gs) {
             if (!polyVisible(g.poly)) continue;
             drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * _apDetailA, showSlope && breakArrows);
           }
+        } else {
+          // Bare photo turf + dashed slope contours only (tint and relief
+          // dropped by request — they smudged Apple's already-good photo).
+          drawAppleGreenDashes(gs);
         }
         ctx.restore();
       }
@@ -5830,11 +5915,11 @@ function draw() {
   // renders (and gets captured) in this same world projection, so drawing
   // the cup here keeps ball-into-hole visually exact by construction. A
   // native MapKit cup sat in the photo's frame instead and balls sank a few
-  // px beside it. BUT it waits for the native green tint to render first —
-  // a lone cup floating on the raw photo before the green appears reads as
-  // broken (grace covers MapKit's async tile rasterization after the add).
-  const cupHeld = appleGroundActive() && nativeGreenOverlay &&
-    !(performance.now() - _nativeGreenReadyAt > 250);
+  // px beside it. BUT on Apple ground it stays hidden until the ball is ON
+  // the green and the camera has parked overhead (greenArrived) — until that
+  // moment the native pin flag is the target; flag and cup swap in the same
+  // frame, so there's never a bare cup mid-approach or a flag+cup double.
+  const cupHeld = appleGroundActive() && nativeGreenOverlay && !greenArrived();
   if (!cupHeld) {
   const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
   ctx.beginPath();
@@ -6775,6 +6860,7 @@ function setHole(rec) {
   // live match: drop any in-flight shot marker / opponent tween from the last hole
   _shotFrom = null; oppShot = null; _spectating = false;
   shot.carry = shot.total = null; shot.mph = 0; // fresh hole — no stale HUD stats
+  appleUserPitch = 0; _gaLatch = false; // fresh hole — camera overhead, green-arrival latch cleared
   const glob = !!(course && course.global && !rec.world);
   const src = glob ? course : rec; // where world/surfaces/aerial come from
   const pin = pickPin(rec);
@@ -7701,7 +7787,9 @@ elTiltBtn.addEventListener("click", (e) => {
 // Camera toggle, so no ball-state gating — just not under the 3D overlays.
 let _tiltBtnShown = false;
 function updateTiltBtn() {
-  const show = (mode === "course" || mode === "range") && !greenView && !cine;
+  // Apple-ground courses have no button: the two-finger vertical drag IS the
+  // tilt control there (see swingMove's camTouch pitch branch).
+  const show = (mode === "course" || mode === "range") && !greenView && !cine && !appleGroundActive();
   if (show !== _tiltBtnShown) { _tiltBtnShown = show; elTiltBtn.classList.toggle("hidden", !show); }
 }
 // Show the read-green button exactly when green reading matters: in course
