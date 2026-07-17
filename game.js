@@ -267,6 +267,8 @@ const TUNE = {
   spinGrip: { green: 1.0, fairway: 0.5, tee: 0.5, rough: 0.12, bunker: 0.3, woods: 0, water: 0, ob: 0 },
   reachTotalK: 1.08,// club total-reach estimate (carry × K ≈ carry + rollout) — drives the
                     // Apple-ground club-reach camera framing (frameClubReach)
+  applePitchNearYds: 45,  // ball-to-pin yds where the camera is fully flat (auto-2D at the green)
+  applePitchFarYds: 110,  // …and where the tilt slider gets its full pitch back
   rolloutK: 7.0,    // CHIP release distance scale (× landing speed) — low skidding balls release more
   rolloutKFull: 4.0,// FULL-shot release scale: calibrated so totals match tour (driver ~305,
                     // hybrid ~246, 7i ~184); 7 made everything run ~2× real fairway rollout
@@ -3119,9 +3121,20 @@ function frameTarget(fx, fy) {
   camera.tFocus.x = (ox + HOLE.holePos.x) / 2;
   camera.tFocus.y = (oy + HOLE.holePos.y) / 2;
 }
-// Club-reach framing (Apple ground, off the green): the ball sits 75% down the
+// Pin-proximity pitch ramp: the camera auto-flattens to 2D as the ball nears
+// the green regardless of the tilt slider — inside applePitchNearYds fully
+// flat, beyond applePitchFarYds full slider pitch. Approach/green work reads
+// best top-down, and the flyover replica residual grows with tan(pitch)
+// exactly where alignment matters most (same rationale as the zoom ramp).
+function applePinRamp() {
+  if (!HOLE || HOLE.isRange) return 1;
+  const toPin = dist(state.ball.x, state.ball.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+  return Math.min(1, Math.max(0, (toPin - TUNE.applePitchNearYds) /
+    (TUNE.applePitchFarYds - TUNE.applePitchNearYds)));
+}
+// Club-reach framing (Apple ground, off the green): the ball sits 85% down the
 // play area and the farthest point the current club can reach (carry + rollout)
-// sits 25% from the top — the SAME screen anchors at every tilt, so sliding
+// sits 15% from the top — the SAME screen anchors at every tilt, so sliding
 // 2D↔3D pivots the view around a fixed ball and a fixed reach line, and the
 // player always has half the play area of forward context to gauge distance.
 // Closed-form perspective solve (no iteration over the projection): for the
@@ -3146,15 +3159,17 @@ function frameClubReach() {
   const a = camera.tAngle;
   const dirX = -Math.sin(a), dirY = -Math.cos(a);   // world direction that points up-screen
   const f = (mapH / 2) / Math.tan(15 * Math.PI / 180);
-  const uR = cssH / 2 - (rsv.top + 0.25 * availH);  // reach anchor, px above raw center
-  const uB = cssH / 2 - (rsv.top + 0.75 * availH);  // ball anchor (negative = below)
+  const uR = cssH / 2 - (rsv.top + 0.15 * availH);  // reach anchor, px above raw center
+  const uB = cssH / 2 - (rsv.top + 0.85 * availH);  // ball anchor (negative = below)
   // Two-pass pitch/ramp fold: the putt-zoom ramp (flat under 220 m) depends on
-  // the distance being solved — one re-solve converges it.
+  // the distance being solved — one re-solve converges it. The pin-proximity
+  // ramp (auto-2D near the green) folds in the same way.
+  const pinRamp = applePinRamp();
   let pDeg = appleUserPitch;
   let D = 400;
   for (let i = 0; i < 2; i++) {
     const ramp = Math.min(1, Math.max(0, (D - 220) / (380 - 220)));
-    pDeg = appleUserPitch * ramp;
+    pDeg = appleUserPitch * ramp * pinRamp;
     const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
     D = Rm / (uR / (f * cp - uR * sp) - uB / (f * cp - uB * sp));
   }
@@ -3292,7 +3307,8 @@ function updateCamera() {
     // gesture in swingMove owns appleUserPitch now.)
     const distNow = window.innerHeight / camera.scale * M_PER_UNIT * APPLE_CAM_K;
     const ramp = Math.min(1, Math.max(0, (distNow - 220) / (380 - 220)));
-    applePitchT = appleUserPitch * ramp;
+    applePitchT = appleUserPitch * ramp * applePinRamp(); // auto-2D near the green
+
     // Green-detail settle gate: count consecutive frames with the camera
     // exactly parked (ease snaps make these strict equalities reachable).
     const parked = camera.angle === camera.tAngle && camera.scale === camera.tScale &&
