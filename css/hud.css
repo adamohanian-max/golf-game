@@ -240,11 +240,49 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
 #tilt-view-btn.hidden { display: none; }
 #tilt-view-btn.active { background: rgba(46, 125, 79, 0.4); border-color: rgba(99, 185, 139, 0.5); }
 
+/* Apple-ground camera tilt slider — replaces #tilt-view-btn there. Same left
+   anchor as the button; vertical range shares the #attr-slider treatment
+   (top = 3D lean, bottom = 2D overhead). */
+#tilt-slider {
+  position: fixed;
+  left: var(--s-3);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 112px);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-1);
+  width: 44px;
+  background: var(--surface-hud);
+  backdrop-filter: blur(var(--blur-xs));
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  border: var(--border-hair);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+#tilt-slider.hidden { display: none; }
+#tilt-slider .cs-end {
+  font-size: var(--t-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+#tilt-range {
+  writing-mode: vertical-lr;      /* modern vertical range */
+  direction: rtl;                 /* top = max (3D), bottom = 0 (2D) */
+  -webkit-appearance: slider-vertical;  /* legacy WebKit fallback */
+  width: 24px;
+  height: 130px;
+  accent-color: var(--brass);
+}
+
 /* Inspect view open: clear the HUD out of the overlay's way */
 body.gv-open #hud-btn,
 body.gv-open #hm-club-row,
 body.gv-open #green-view-btn,
 body.gv-open #tilt-view-btn,
+body.gv-open #tilt-slider,
 body.gv-open #shot-power,
 body.gv-open #scorecard,
 body.gv-open #hint { display: none; }
@@ -585,6 +623,7 @@ body.is-mobile #scorecard .sc-right { column-gap: 12px; }
 /* left-column view buttons, stacked in the bottom-left corner (scorecard now up top) */
 body.is-mobile #green-view-btn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4)); }
 body.is-mobile #tilt-view-btn  { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 52px); }
+body.is-mobile #tilt-slider    { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 52px); }
 
 body.is-mobile #stats { column-gap: 12px; }
 body.is-mobile #stats .slabel { font-size: 9px; letter-spacing: 0.6px; }

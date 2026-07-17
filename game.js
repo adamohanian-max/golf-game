@@ -84,10 +84,25 @@ const TUNE = {
     water:   0.80,       // ball decelerates fast in water before penalty
     woods:   0.45,       // trees/brush kill the ball fast (then OB penalty)
     ob:      0.45,       // out of bounds (off the aerial mask) — same dead stop, penalty on rest
+    green:   0,          // COAST-phase multiplier (sp > greenCoastSpeed) — derived from greenSpeed below
   },
-  // The green rolls realistically: CONSTANT deceleration per frame (not a
-  // velocity multiplier), so the ball holds speed and glides, then dies — the
-  // way a real green / stimpmeter behaves. Derived from greenSpeed below.
+  // Non-green rolling surfaces get the same crisp finish as the green (below):
+  // below this speed, every non-chip shot switches from its normal exponential
+  // friction into a small constant-decel tail, sized to match that surface's
+  // instantaneous coast decel at the threshold (smooth handoff, no speed jump).
+  // Chips keep the old pure-exponential rollout (their skid/release is tuned by
+  // the spin slider alone, not this).
+  rollCoastSpeed: 0.02,
+  // Green roll is two-phase, so it's fast off the putter face and glides, then
+  // finishes crisply (real stimpmeter feel) WITHOUT losing resolution on short
+  // putts: above greenCoastSpeed the ball is in COAST phase — a per-frame velocity
+  // multiplier (friction.green), so speed decays exponentially (big losses while
+  // fast, tapering off). Below greenCoastSpeed it's in TAIL phase — the original
+  // constant deceleration per frame (greenDecel), which reaches exactly zero in a
+  // bounded number of frames and resolves fine sub-foot distances (lip-out re-pace,
+  // tap-ins) that an exponential model can't (its launch speed for a 1ft roll would
+  // round down to "stopped" on frame one). Both derived from greenSpeed below.
+  greenCoastSpeed: 0.06,   // above this speed: exponential coast. Below: constant-decel finish.
   greenDecel: 0,
   // Slope-aware putting: a rolling ball is pushed downhill along the synthetic
   // green field's gradient. slopeAccel folds the field's vertical scale + gravity
@@ -250,6 +265,8 @@ const TUNE = {
   // Backspin grip on landing, by surface (greens grab hardest -> can spin back;
   // rough is a flyer with little spin). 0..1 multiplier on the club's spin.
   spinGrip: { green: 1.0, fairway: 0.5, tee: 0.5, rough: 0.12, bunker: 0.3, woods: 0, water: 0, ob: 0 },
+  reachTotalK: 1.08,// club total-reach estimate (carry × K ≈ carry + rollout) — drives the
+                    // Apple-ground club-reach camera framing (frameClubReach)
   rolloutK: 7.0,    // CHIP release distance scale (× landing speed) — low skidding balls release more
   rolloutKFull: 4.0,// FULL-shot release scale: calibrated so totals match tour (driver ~305,
                     // hybrid ~246, 7i ~184); 7 made everything run ~2× real fairway rollout
@@ -290,10 +307,12 @@ const TUNE = {
   launchAngle: 0,
 };
 
-// Faster greens roll more (less deceleration) and are harder. Stimp -> green
-// deceleration: decel = GREEN_DECEL_K / stimp (higher stimp = ball glides
-// farther before stopping). Per-course later.
-const GREEN_DECEL_K = 0.008;   // lower = greens roll out farther (more glide / less friction)
+// Faster greens roll more and are harder. Stimp -> green deceleration (tail
+// phase): decel = GREEN_DECEL_K / stimp. Stimp -> coast-phase friction:
+// friction = 1 - GREEN_COAST_K / stimp (higher stimp = closer to 1 = glides
+// farther before dropping into the tail). Per-course later.
+const GREEN_DECEL_K = 0.008;   // lower = greens roll out farther in the finishing tail
+const GREEN_COAST_K = 0.11;    // lower = greens glide farther in the fast coast phase
 
 // Real-world yardages. A full swing CARRIES YARDS.maxCarry in the air (bounce +
 // rollout add more); a full putt on the green rolls at most YARDS.maxPutt.
@@ -330,10 +349,20 @@ let HOLE = null;
 //  only if the world scale or green speed changes.
 // =====================================================================
 let MAX_CARRY_UNITS = 0;
+// Launch speed needed for a green putt to roll distance D (world units), under
+// the two-phase model: quadratic (tail, v=sqrt(2*decel*d)) up to greenCoastSpeed,
+// then linear (coast, v=vt+(d-dTailMax)*(1-friction)) beyond it. Shared by
+// recalcPower and the on-green power calc so both agree on the same physics.
+function greenBaseSpeed(D) {
+  const vt = TUNE.greenCoastSpeed;
+  const dTailMax = (vt * vt) / (2 * TUNE.greenDecel);
+  if (D <= dTailMax) return Math.sqrt(2 * TUNE.greenDecel * D);
+  return vt + (D - dTailMax) * (1 - TUNE.friction.green);
+}
 function recalcPower() {
   // Full shots follow a per-club arc (see setupFlight); only the putt caps are
-  // derived here. Putts: roll distance D = v0^2 / (2*decel) -> v = sqrt(2*decel*D).
-  TUNE.puttMaxPower = Math.sqrt(2 * TUNE.greenDecel * (YARDS.maxPutt / YARDS_PER_UNIT));
+  // derived here.
+  TUNE.puttMaxPower = greenBaseSpeed(YARDS.maxPutt / YARDS_PER_UNIT);
   // Off-green putter (bump-and-run): fairway friction=0.97 → roll dist ≈ v/(1-friction).
   // Calibrate so a max swing rolls ~30 yards on fairway.
   TUNE.puttOffGreenPower = (30 / YARDS_PER_UNIT) * (1 - TUNE.friction.fairway);
@@ -343,6 +372,7 @@ function recalcPower() {
   }
 }
 TUNE.greenDecel = GREEN_DECEL_K / DEFAULT_STIMP;
+TUNE.friction.green = 1 - GREEN_COAST_K / DEFAULT_STIMP;
 recalcPower();
 
 // Bag order, longest carry -> shortest (for the +/- club selector). Putter last.
@@ -702,9 +732,10 @@ const APPLE_MIN_DIST_M = 165;
 const APPLE_ANCHOR_DROP_M = 2;
 let applePitch = 0;        // current MKMapCamera pitch, degrees (tweened)
 let applePitchT = 0;       // target — appleUserPitch × zoom ramp on Apple-ground courses
-// Manual pitch set by the two-finger vertical drag (Apple-Maps-style tilt).
-// Degrees, 0 = overhead/2D, up to 65 leaning at the horizon. Resets to 0 on
-// every new hole and on every shot commit so each swing starts overhead.
+// Manual pitch set by the left-side 2D↔3D slider (#tilt-range). Degrees,
+// 0 = overhead/2D, up to 65 leaning at the horizon. Persists across shots,
+// holes and sessions (golf.applePitch); the putt-zoom ramp in updateCamera
+// still auto-flattens it near the cup.
 let appleUserPitch = 0;
 // The camera MapKit ACTUALLY applied (syncCamera's resolve value) + what we
 // had requested. MapKit silently clamps — flyover enforces a minimum camera
@@ -1757,12 +1788,20 @@ function rollStep(b) {
       showToast("Contours show the break · arrows point downhill", 2400, "gold");
   }
   if (surf === "green") {
-    // Realistic green roll: subtract a constant deceleration from the speed
-    // (not a multiplier), so the ball glides and then stops crisply.
+    // Two-phase green roll: fast off the putter face, then a crisp finish.
+    // Above greenCoastSpeed: exponential coast (velocity multiplier, big losses
+    // while fast). Below it: the original constant deceleration per frame — exact,
+    // bounded stop, and the only way short/precise putts (lip-outs, tap-ins) still
+    // resolve (their launch speed would round down to "stopped" under pure coast).
     const sp = Math.hypot(b.vx, b.vy);
-    const k = sp > 0 ? Math.max(0, sp - TUNE.greenDecel) / sp : 0;
-    b.vx *= k;
-    b.vy *= k;
+    if (sp > TUNE.greenCoastSpeed) {
+      b.vx *= TUNE.friction.green;
+      b.vy *= TUNE.friction.green;
+    } else if (sp > 0) {
+      const k = Math.max(0, sp - TUNE.greenDecel) / sp;
+      b.vx *= k;
+      b.vy *= k;
+    }
     // Slope-aware break: accelerate downhill along the same synthetic green field
     // that draws the contours. Gated above a stop speed so a ball that comes to
     // rest on a slope stays put (the synthetic tilt can exceed greenDecel).
@@ -1779,8 +1818,21 @@ function rollStep(b) {
   } else {
     const sp = Math.hypot(b.vx, b.vy);
     const f = TUNE.friction[surf];
-    b.vx *= f;
-    b.vy *= f;
+    // Same two-phase finish as the green, for every non-chip shot (full swings,
+    // putts): fast exponential coast while moving, then a crisp constant-decel
+    // tail below rollCoastSpeed instead of the exponential's endless asymptotic
+    // creep. Chips (state.flight.noLandCheck) keep the old pure-coast rollout —
+    // their skid/release feel is tuned by the spin slider alone.
+    const isChip = !!(state.flight && state.flight.noLandCheck);
+    if (!isChip && sp <= TUNE.rollCoastSpeed && sp > 0) {
+      const tailDecel = TUNE.rollCoastSpeed * (1 - f); // matches coast's instantaneous decel at the handoff — no speed jump
+      const k = Math.max(0, sp - tailDecel) / sp;
+      b.vx *= k;
+      b.vy *= k;
+    } else {
+      b.vx *= f;
+      b.vy *= f;
+    }
     // Terrain slope on fairway/rough: roll downhill when DEM is available
     if (HOLE._dem && sp > TUNE.slopeStopSpeed) {
       const gv = HOLE._dem.gradAt(b.x, b.y);
@@ -1905,7 +1957,9 @@ function resolveCup(b, speed, airborne, rand) {
   b.y = HOLE.holePos.y + dy * (HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05);
   if (spd <= TUNE.lipOutMaxSpeed) {
     // catchable pace: the lip grabs it. Re-pace so it comes to rest 1–2 ft
-    // FROM THE CUP (green constant-decel model: dist = v²/(2·greenDecel)).
+    // FROM THE CUP (green constant-decel tail model: dist = v²/(2·greenDecel) —
+    // always a short re-pace, always well under greenCoastSpeed, so the tail-phase
+    // formula alone applies; the coast phase never enters into this).
     // The ball already sits ~1 ft out at the far lip, so subtract that and
     // roll the remainder. Stays grounded so the distance is exact (no skying).
     const ftU = 1 / (YARDS_PER_UNIT * 3);           // 1 foot in world units
@@ -2011,8 +2065,12 @@ function simShotRest(ball0, flight0) {
       const surf = surfaceAt(b.x, b.y);
       if (surf === "green") {
         const sp = Math.hypot(b.vx, b.vy);
-        const k = sp > 0 ? Math.max(0, sp - TUNE.greenDecel) / sp : 0;
-        b.vx *= k; b.vy *= k;
+        if (sp > TUNE.greenCoastSpeed) {
+          b.vx *= TUNE.friction.green; b.vy *= TUNE.friction.green;
+        } else if (sp > 0) {
+          const k = Math.max(0, sp - TUNE.greenDecel) / sp;
+          b.vx *= k; b.vy *= k;
+        }
         if (sp > TUNE.slopeStopSpeed) {
           const g = greenSlopeAt(b.x, b.y);
           if (g) {
@@ -2024,7 +2082,14 @@ function simShotRest(ball0, flight0) {
       } else {
         const sp = Math.hypot(b.vx, b.vy);
         const f = TUNE.friction[surf];
-        b.vx *= f; b.vy *= f;
+        const isChip = !!(state.flight && state.flight.noLandCheck);
+        if (!isChip && sp <= TUNE.rollCoastSpeed && sp > 0) {
+          const tailDecel = TUNE.rollCoastSpeed * (1 - f);
+          const k = Math.max(0, sp - tailDecel) / sp;
+          b.vx *= k; b.vy *= k;
+        } else {
+          b.vx *= f; b.vy *= f;
+        }
         if (HOLE._dem && sp > TUNE.slopeStopSpeed) {
           const gv = HOLE._dem.gradAt(b.x, b.y);
           b.vx -= TUNE.fairwaySlopeAccel * gv.x;
@@ -2457,11 +2522,8 @@ function swingStart(e) {
       dist: Math.hypot(dx, dy), angle: Math.atan2(dy, dx),
       camAngle: camera.angle, camScale: camera.scale,
       focusX: camera.focus.x, focusY: camera.focus.y,
-      pitch0: appleUserPitch, moveMode: null, // vertical drag = pitch (Apple ground), else pan
     };
-    if (earnMilestone("hint-camera")) showToast(appleGroundActive()
-      ? "Twist to aim · pinch to zoom · two-finger drag to tilt"
-      : "Twist to aim · pinch to zoom", 2200, "gold");
+    if (earnMilestone("hint-camera")) showToast("Twist to aim · pinch to zoom", 2200, "gold");
     return;
   }
   // grab the dropped rangefinder marker if the press lands on it (drag to move,
@@ -2511,20 +2573,6 @@ function swingMove(e) {
     camera.tAngle = camTouch.camAngle + dAng;
     camera.angle = camera.tAngle;
 
-    // Apple ground: a predominantly-VERTICAL two-finger drag is the tilt
-    // gesture (mirrors Apple Maps) — classify the gesture once after ~12px of
-    // centroid travel so pitch and pan never fight mid-gesture. Drag DOWN
-    // leans the camera toward the ground (more 3D), drag UP flattens to
-    // overhead. updateCamera's zoom ramp still forces overhead at putt zoom.
-    if (appleGroundActive()) {
-      const tdx = cx - camTouch.cx, tdy = cy - camTouch.cy;
-      if (!camTouch.moveMode && Math.hypot(tdx, tdy) > 12)
-        camTouch.moveMode = Math.abs(tdy) > Math.abs(tdx) * 1.2 ? "pitch" : "pan";
-      if (camTouch.moveMode === "pitch") {
-        appleUserPitch = Math.max(0, Math.min(65, camTouch.pitch0 + tdy * 0.25));
-        return;
-      }
-    }
     // pan: midpoint shift in world coords. Under the Apple 3D pinhole the
     // flat affine is wrong (pan speed/direction bend with pitch) — move by
     // the world delta between the previous and current midpoint UNPROJECTED
@@ -2600,7 +2648,6 @@ function slottedLaunch() {
   b.spin = 0;
   state.airborne = true;
   state.moving = true;
-  appleUserPitch = 0; // shot committed — camera returns to overhead for the flight
   haptic(9);
   state.strokesOffGreen++;
   state.strokes += 1;
@@ -2665,6 +2712,8 @@ function buildTrialShot(ang, frac, spin, onGreen) {
         // downhill putt launched at the old floor speed and died ~half way — the
         // cup was unreachable at ANY swing power. Piecewise instead: net decel
         // a1 = greenDecel − aid while above the gate, full greenDecel below it.
+        // (Tail-phase-only math — downhill putts stay short enough in practice
+        // that the coast phase never enters into it.)
         const gmAvg = -rise / Math.max(flatU, 1e-6);   // avg downhill gradient along the line
         const aid = Math.min(TUNE.slopeAccel * gmAvg, TUNE.greenDecel * TUNE.slopeCapFrac);
         const a1 = TUNE.greenDecel - aid;
@@ -2672,14 +2721,16 @@ function buildTrialShot(ang, frac, spin, onGreen) {
         const dGate = vg * vg / (2 * TUNE.greenDecel); // dist the gated (unaided) tail covers
         v2 = targetU <= dGate ? 2 * TUNE.greenDecel * targetU
                               : vg * vg + 2 * a1 * (targetU - dGate);
+        power = Math.sqrt(Math.max(v2, 1e-9));
       } else {
-        // Flat/uphill: energy budget, slope cost capped to what the roll's clamped
-        // force can actually apply over targetU (keeps v2 > 0 on steep climbs).
-        const slopeWork = 2 * TUNE.slopeAccel * rise;
-        const slopeCap = 2 * TUNE.greenDecel * TUNE.slopeCapFrac * targetU;
-        v2 = 2 * TUNE.greenDecel * targetU + Math.min(slopeCap, slopeWork);
+        // Flat/uphill: fold the slope drag into an EFFECTIVE extra distance (capped,
+        // same slopeCapFrac role as before) and hand it to the same two-phase
+        // coast/tail model recalcPower uses — keeps flat AND uphill lag putts
+        // correctly powered through the coast phase, not just short ones.
+        const slopeCostD = Math.min(TUNE.slopeCapFrac * targetU,
+                                     rise > 0 ? (TUNE.slopeAccel * rise) / TUNE.greenDecel : 0);
+        power = greenBaseSpeed(targetU + slopeCostD);
       }
-      power = Math.sqrt(Math.max(v2, 1e-9));
       // Short-putt floor: inside puttFloorFt never leave it short. Use at least the pace to
       // reach the cup on flat.
       if (flatU * YARDS_PER_UNIT * 3 <= TUNE.puttFloorFt) {
@@ -2792,7 +2843,6 @@ function launchShot(ang, frac, spin, onGreen) {
   state.airborne = !trial.usePutter;
   if (trial.hiT !== 0) resetFlightBias(); // one-shot: the selector never silently carries to the next swing
   state.moving = true;
-  appleUserPitch = 0; // shot committed — camera returns to overhead for the flight
   haptic(trial.usePutter ? 3 : 9);  // light tick for putter, firm buzz for full shot
   if (trial.usePutter) playPutt(); else playStrike(trial.f);  // crack/tap on contact
   if (onGreen) {
@@ -3054,15 +3104,73 @@ function frameScaleForAngle(angle, ox, oy) {
   return { w, h, scale: Math.min(availW / w, availH / (h * camera.tTilt)) };
 }
 // Target framing (focus = ball↔pin midpoint; scale = fit ball↔pin + pad at the
-// target angle). Tight near the cup (putts), wide off the tee.
+// target angle). Tight near the cup (putts), wide off the tee. On Apple-ground
+// courses (off the green) frameClubReach replaces this with the club-reach rule.
 function frameTarget(fx, fy) {
   // Focus point defaults to my ball; live spectating passes the opponent's ball.
   const ox = (fx == null) ? state.ball.x : fx, oy = (fy == null) ? state.ball.y : fy;
+  // Club-reach framing owns off-green Apple-ground shots (my ball only — a
+  // spectated opponent has no club context worth framing to).
+  if (fx == null && appleGroundActive() && mode === "course" &&
+      surfaceAt(ox, oy) !== "green") { frameClubReach(); return; }
   const r = frameScaleForAngle(camera.tAngle, ox, oy);
   camera._w = r.w; camera._h = r.h;
   camera.tScale = r.scale;
   camera.tFocus.x = (ox + HOLE.holePos.x) / 2;
   camera.tFocus.y = (oy + HOLE.holePos.y) / 2;
+}
+// Club-reach framing (Apple ground, off the green): the ball sits 75% down the
+// play area and the farthest point the current club can reach (carry + rollout)
+// sits 25% from the top — the SAME screen anchors at every tilt, so sliding
+// 2D↔3D pivots the view around a fixed ball and a fixed reach line, and the
+// player always has half the play area of forward context to gauge distance.
+// Closed-form perspective solve (no iteration over the projection): for the
+// look-at pinhole at pitch p, a ground point s metres ahead of the look-at L
+// projects u = f·s·cos p / (D + s·sin p) px above the raw screen center. Given
+// the two anchor offsets uR (reach) and uB (ball) and their span R metres,
+//   D = R / (uR/A(uR) − uB/A(uB)),  A(u) = f·cos p − u·sin p,
+// then sR = uR·D/A(uR) locates L on the aim line and D converts to the zoom
+// (scale = mapH·m·K / D). At p=0 this reduces exactly to the flat affine fit
+// (px/m = f/D — see the APPLE_CAM_K identity in buildAppleProj's comment).
+function frameClubReach() {
+  const cssH = window.innerHeight;
+  const mapH = _appleMapH || cssH;
+  const rsv = hudReserve();
+  const availH = Math.max(120, cssH - rsv.top - rsv.bot);
+  const playCy = (rsv.top + (cssH - rsv.bot)) / 2;
+  const b = state.ball;
+  const c = TUNE.clubs[selectedClub];
+  const reachYds = (c ? c.carry : 120) * TUNE.reachTotalK;
+  const Ru = reachYds / YARDS_PER_UNIT;             // reach span, world units
+  const Rm = Ru * M_PER_UNIT;                       // …in metres
+  const a = camera.tAngle;
+  const dirX = -Math.sin(a), dirY = -Math.cos(a);   // world direction that points up-screen
+  const f = (mapH / 2) / Math.tan(15 * Math.PI / 180);
+  const uR = cssH / 2 - (rsv.top + 0.25 * availH);  // reach anchor, px above raw center
+  const uB = cssH / 2 - (rsv.top + 0.75 * availH);  // ball anchor (negative = below)
+  // Two-pass pitch/ramp fold: the putt-zoom ramp (flat under 220 m) depends on
+  // the distance being solved — one re-solve converges it.
+  let pDeg = appleUserPitch;
+  let D = 400;
+  for (let i = 0; i < 2; i++) {
+    const ramp = Math.min(1, Math.max(0, (D - 220) / (380 - 220)));
+    pDeg = appleUserPitch * ramp;
+    const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
+    D = Rm / (uR / (f * cp - uR * sp) - uB / (f * cp - uB * sp));
+  }
+  D = Math.max(D, APPLE_MIN_DIST_M);                // flyover min distance (short clubs cap here)
+  const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
+  const sR = uR * D / (f * cp - uR * sp);           // reach point, metres ahead of look-at
+  const scale = mapH * M_PER_UNIT * APPLE_CAM_K / D;
+  const Lx = b.x + dirX * (Ru - sR / M_PER_UNIT);   // look-at = reach − sR back along aim
+  const Ly = b.y + dirY * (Ru - sR / M_PER_UNIT);
+  // The affine maps focus→play-area center but the pinhole looks at the world
+  // point under the RAW screen center — back the focus off by that gap.
+  const dyPx = cssH / 2 - playCy;
+  camera.tScale = scale;
+  camera.tFocus.x = Lx - (Math.sin(a) * dyPx) / scale;
+  camera.tFocus.y = Ly - (Math.cos(a) * dyPx) / scale;
+  camera._w = camera._h = Ru * 2;                   // rough span for consumers of the fit dims
 }
 function frameRemaining() { frameTarget(); }
 // Jump the camera straight to its target (no easing).
@@ -6867,7 +6975,7 @@ function setHole(rec) {
   // live match: drop any in-flight shot marker / opponent tween from the last hole
   _shotFrom = null; oppShot = null; _spectating = false;
   shot.carry = shot.total = null; shot.mph = 0; // fresh hole — no stale HUD stats
-  appleUserPitch = 0; _gaLatch = false; // fresh hole — camera overhead, green-arrival latch cleared
+  _gaLatch = false; // fresh hole — green-arrival latch cleared (slider pitch persists)
   const glob = !!(course && course.global && !rec.world);
   const src = glob ? course : rec; // where world/surfaces/aerial come from
   const pin = pickPin(rec);
@@ -6945,8 +7053,9 @@ function setHole(rec) {
   }
   WORLD.w = src.world.w;
   WORLD.h = src.world.h;
-  // green speed -> deceleration -> putt cap; then refresh power for this scale.
+  // green speed -> tail decel + coast friction -> putt cap; then refresh power for this scale.
   TUNE.greenDecel = GREEN_DECEL_K / HOLE.greenSpeed;
+  TUNE.friction.green = 1 - GREEN_COAST_K / HOLE.greenSpeed;
   recalcPower();
 
   resetState();
@@ -7792,13 +7901,32 @@ elTiltBtn.addEventListener("click", (e) => {
   camera.tTilt = (tiltView && !appleGroundActive()) ? TUNE.tiltCos : 1;
   if (mode === "course" || mode === "range") frameTarget(); // refit zoom for the new lean
 });
-// Camera toggle, so no ball-state gating — just not under the 3D overlays.
-let _tiltBtnShown = false;
+// Apple-ground 2D↔3D tilt slider (replaces the button there): top = 3D lean
+// (65°), bottom = 2D overhead. Persists per device; framing re-solves live on
+// every input so the ball and the club-reach line stay pinned while sliding.
+const elTiltSlider = document.getElementById("tilt-slider");
+const elTiltRange = document.getElementById("tilt-range");
+{
+  const saved = parseFloat(lsGet("golf.applePitch"));
+  if (Number.isFinite(saved)) {
+    elTiltRange.value = Math.max(0, Math.min(100, saved));
+    appleUserPitch = (elTiltRange.value / 100) * 65;
+  }
+}
+elTiltRange.addEventListener("input", () => {
+  appleUserPitch = (elTiltRange.value / 100) * 65;
+  lsSet("golf.applePitch", elTiltRange.value);
+  if (mode === "course") frameTarget();   // keep ball + reach anchors pinned mid-slide
+});
+// Camera controls, so no ball-state gating — just not under the 3D overlays.
+// Apple ground shows the slider; everything else the legacy tilt button.
+let _tiltBtnShown = false, _tiltSliderShown = false;
 function updateTiltBtn() {
-  // Apple-ground courses have no button: the two-finger vertical drag IS the
-  // tilt control there (see swingMove's camTouch pitch branch).
-  const show = (mode === "course" || mode === "range") && !greenView && !cine && !appleGroundActive();
-  if (show !== _tiltBtnShown) { _tiltBtnShown = show; elTiltBtn.classList.toggle("hidden", !show); }
+  const base = (mode === "course" || mode === "range") && !greenView && !cine;
+  const apple = appleGroundActive();
+  const showBtn = base && !apple, showSlider = base && apple && mode === "course";
+  if (showBtn !== _tiltBtnShown) { _tiltBtnShown = showBtn; elTiltBtn.classList.toggle("hidden", !showBtn); }
+  if (showSlider !== _tiltSliderShown) { _tiltSliderShown = showSlider; elTiltSlider.classList.toggle("hidden", !showSlider); }
 }
 // Show the read-green button exactly when green reading matters: in course
 // play, ball at rest, and a green in play (ball on one or pin's green).
@@ -8395,7 +8523,16 @@ function updateClubUI() {
     }
   }
   cwSetLive(idx, name, yds);
+  // Apple-ground club-reach framing keys the zoom off the selected club — a
+  // club change is a reframe event (only on an actual change; this function
+  // runs on every power-slider tick too).
+  if (!onGreen && selectedClub !== _framedClub && appleGroundActive() &&
+      mode === "course" && !state.moving) {
+    _framedClub = selectedClub;
+    frameTarget();
+  }
 }
+let _framedClub = null; // last club the camera framed for (see updateClubUI)
 function setAutoClub(on) {
   autoClubEnabled = on;
   const btn = document.getElementById("hm-autoclb");
