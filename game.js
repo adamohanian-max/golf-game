@@ -4,8 +4,8 @@
 //  Tunables — tweak these to change game feel
 // =====================================================================
 const TUNE = {
-  fullPowerSwipe: 1120,  // trackpad wheel swipe speed (world u/s) = max power
-  touchPowerSwipe: 400,  // touch/mouse flick speed (world u/s) = max power (calibrated to phone)
+  fullPowerSwipe: 560,   // trackpad wheel swipe speed (world u/s) = max power (halved: full power at half the flick)
+  touchPowerSwipe: 200,  // touch/mouse flick speed (world u/s) = max power (halved: full power at half the flick)
   wheelSensitivity: 1.0, // two-finger trackpad swipe -> swing power scaling
   wheelInvert: false,    // true if you use classic (non-natural) scrolling
   stopThreshold: 0.005,  // speed below this = ball stopped
@@ -37,7 +37,7 @@ const TUNE = {
                      // slopeStopSpeed before the downhill slope-aid it was discounted for kicks in)
   // Forgiveness: every full-swing club (incl. LW) flies ≥ clubMinFrac of its rated carry, so a
   // misread weak stroke can't dribble. Putter + greenside chips keep their own range/band.
-  clubMinFrac: 0.70,
+  clubMinFrac: 0.85,   // min full-swing carry fraction (raised to the 70–100% midpoint: weakest full swing flies 85%)
   // Pace forgiveness at the cup: a grounded putt that crosses near-dead-center at a good
   // (not rammed) pace is grabbed by the lip and drops, like real life. Off-center / faster
   // passes keep the normal lip-out. Only rewards already-good pace + line.
@@ -8368,10 +8368,12 @@ function updateClubUI() {
     const c = TUNE.clubs[selectedClub];
     elClubName.textContent = c.name;
     if (chipActiveNow()) {
-      // Chip: show where the ball LANDS (carry), which moves with the spin slider —
-      // more spin lands it deeper, less spin lands it short (rolls the rest to the pin).
+      // Chip: show where the ball LANDS (carry). Tracks the spin slider (landFrac — more
+      // spin lands deeper) AND the power slider (reach: previewFrac maps the chip across
+      // chipReachLo..Hi of the pin), matching buildTrialShot's chip carry exactly.
       const b = state.ball;
-      const land = playsLikeYards(b.x, b.y).plays * chipSpinParams().landFrac;
+      const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * previewFrac;
+      const land = Math.min(c.carry, playsLikeYards(b.x, b.y).plays * reach * chipSpinParams().landFrac);
       elClubYds.textContent = Math.round(land) + "y";
     } else {
       // Full shot: fold the Spin selector's carry cost AND the power slider's ceiling
