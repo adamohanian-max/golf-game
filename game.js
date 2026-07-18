@@ -267,8 +267,6 @@ const TUNE = {
   spinGrip: { green: 1.0, fairway: 0.5, tee: 0.5, rough: 0.12, bunker: 0.3, woods: 0, water: 0, ob: 0 },
   reachTotalK: 1.08,// club total-reach estimate (carry × K ≈ carry + rollout) — drives the
                     // Apple-ground club-reach camera framing (frameClubReach)
-  applePitchNearYds: 45,  // ball-to-pin yds where the camera is fully flat (auto-2D at the green)
-  applePitchFarYds: 110,  // …and where the tilt slider gets its full pitch back
   rolloutK: 7.0,    // CHIP release distance scale (× landing speed) — low skidding balls release more
   rolloutKFull: 4.0,// FULL-shot release scale: calibrated so totals match tour (driver ~305,
                     // hybrid ~246, 7i ~184); 7 made everything run ~2× real fairway rollout
@@ -3121,17 +3119,6 @@ function frameTarget(fx, fy) {
   camera.tFocus.x = (ox + HOLE.holePos.x) / 2;
   camera.tFocus.y = (oy + HOLE.holePos.y) / 2;
 }
-// Pin-proximity pitch ramp: the camera auto-flattens to 2D as the ball nears
-// the green regardless of the tilt slider — inside applePitchNearYds fully
-// flat, beyond applePitchFarYds full slider pitch. Approach/green work reads
-// best top-down, and the flyover replica residual grows with tan(pitch)
-// exactly where alignment matters most (same rationale as the zoom ramp).
-function applePinRamp() {
-  if (!HOLE || HOLE.isRange) return 1;
-  const toPin = dist(state.ball.x, state.ball.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-  return Math.min(1, Math.max(0, (toPin - TUNE.applePitchNearYds) /
-    (TUNE.applePitchFarYds - TUNE.applePitchNearYds)));
-}
 // Club-reach framing (Apple ground, off the green): the ball sits 85% down the
 // play area and the farthest point the current club can reach (carry + rollout)
 // sits 15% from the top — the SAME screen anchors at every tilt, so sliding
@@ -3167,14 +3154,12 @@ function frameClubReach(pNowDeg) {
   const uR = cssH / 2 - (rsv.top + 0.15 * availH);  // reach anchor, px above raw center
   const uB = cssH / 2 - (rsv.top + 0.85 * availH);  // ball anchor (negative = below)
   // Two-pass pitch/ramp fold: the putt-zoom ramp (flat under 220 m) depends on
-  // the distance being solved — one re-solve converges it. The pin-proximity
-  // ramp (auto-2D near the green) folds in the same way.
-  const pinRamp = applePinRamp();
+  // the distance being solved — one re-solve converges it.
   let pDeg = pNowDeg != null ? pNowDeg : appleUserPitch;
   let D = 400;
   for (let i = 0; i < 2; i++) {
     const ramp = Math.min(1, Math.max(0, (D - 220) / (380 - 220)));
-    if (pNowDeg == null) pDeg = appleUserPitch * ramp * pinRamp;
+    if (pNowDeg == null) pDeg = appleUserPitch * ramp;
     const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
     D = Rm / (uR / (f * cp - uR * sp) - uB / (f * cp - uB * sp));
   }
@@ -3312,11 +3297,10 @@ function updateCamera() {
     // gesture in swingMove owns appleUserPitch now.)
     const distNow = window.innerHeight / camera.scale * M_PER_UNIT * APPLE_CAM_K;
     const ramp = Math.min(1, Math.max(0, (distNow - 220) / (380 - 220)));
-    // Auto-2D near the green — but NEVER reorient while the ball is moving:
-    // the pin ramp shrinks DURING an approach shot, and flattening mid-follow
-    // swung the view off the ball. Pitch holds its value until the ball rests;
-    // the transition refit below then moves and flattens together.
-    if (!state.moving) applePitchT = appleUserPitch * ramp * applePinRamp();
+    // NEVER reorient while the ball is moving — flattening mid-follow swung
+    // the view off the ball. Pitch holds its value until the ball rests; the
+    // transition refit below then moves and flattens together.
+    if (!state.moving) applePitchT = appleUserPitch * ramp;
     // Green-detail settle gate: count consecutive frames with the camera
     // exactly parked (ease snaps make these strict equalities reachable).
     const parked = camera.angle === camera.tAngle && camera.scale === camera.tScale &&
