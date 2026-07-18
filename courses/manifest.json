@@ -1287,5 +1287,16 @@
     "location": "Ivins, UT",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "wachusett-cc",
+    "name": "Wachusett Country Club",
+    "sub": "West Boylston, MA · Par 72",
+    "par": 72,
+    "yards": 6567,
+    "holes": 18,
+    "location": "West Boylston, MA",
+    "region": "USA",
+    "tags": []
   }
 ]

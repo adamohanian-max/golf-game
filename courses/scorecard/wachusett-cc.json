@@ -1,0 +1,24 @@
+{
+  "name": "Wachusett Country Club",
+  "note": "Championship (blue) tees, par 72, 6567 yds. Source: golflink.com. Stroke index unpublished there — omitted (falls through).",
+  "holes": {
+    "1":  {"par": 4, "yards": 388},
+    "2":  {"par": 5, "yards": 518},
+    "3":  {"par": 4, "yards": 380},
+    "4":  {"par": 3, "yards": 142},
+    "5":  {"par": 5, "yards": 507},
+    "6":  {"par": 3, "yards": 157},
+    "7":  {"par": 4, "yards": 360},
+    "8":  {"par": 4, "yards": 436},
+    "9":  {"par": 4, "yards": 426},
+    "10": {"par": 5, "yards": 494},
+    "11": {"par": 4, "yards": 430},
+    "12": {"par": 4, "yards": 426},
+    "13": {"par": 3, "yards": 198},
+    "14": {"par": 4, "yards": 330},
+    "15": {"par": 5, "yards": 508},
+    "16": {"par": 4, "yards": 316},
+    "17": {"par": 4, "yards": 374},
+    "18": {"par": 3, "yards": 177}
+  }
+}

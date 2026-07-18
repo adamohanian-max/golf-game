@@ -119,6 +119,14 @@ var window = {
   scrollTo: __noop, setTimeout: setTimeout, clearTimeout: clearTimeout, fetch: fetch,
   history: { pushState: __noop, replaceState: __noop }
 };
+// game.js reads these as BARE globals at module load (location.search, history.replaceState,
+// new URLSearchParams(location.search)) — mirror window's onto the global scope + stub
+// URLSearchParams if JSC lacks it, so the harness doesn't ReferenceError before draw() runs.
+var location = window.location;
+var history = window.history;
+if (typeof URLSearchParams === "undefined") {
+  URLSearchParams = function(){ return { get: function(){ return null; }, has: function(){ return false; }, getAll: function(){ return []; }, toString: function(){ return ""; } }; };
+}
 var __RESULT__ = null;
 `;
 
