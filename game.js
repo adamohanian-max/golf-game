@@ -3145,7 +3145,12 @@ function applePinRamp() {
 // then sR = uR·D/A(uR) locates L on the aim line and D converts to the zoom
 // (scale = mapH·m·K / D). At p=0 this reduces exactly to the flat affine fit
 // (px/m = f/D — see the APPLE_CAM_K identity in buildAppleProj's comment).
-function frameClubReach() {
+// Optional pNowDeg: solve the framing for THAT exact pitch instead of the
+// slider/ramp target — used by updateCamera's pitch-transition refit, which
+// re-solves every frame at the CURRENT eased pitch so the ball and reach
+// anchors stay pinned while the camera is still leaning/flattening (the
+// camera moves WITH its reorientation, never before it).
+function frameClubReach(pNowDeg) {
   const cssH = window.innerHeight;
   const mapH = _appleMapH || cssH;
   const rsv = hudReserve();
@@ -3165,11 +3170,11 @@ function frameClubReach() {
   // the distance being solved — one re-solve converges it. The pin-proximity
   // ramp (auto-2D near the green) folds in the same way.
   const pinRamp = applePinRamp();
-  let pDeg = appleUserPitch;
+  let pDeg = pNowDeg != null ? pNowDeg : appleUserPitch;
   let D = 400;
   for (let i = 0; i < 2; i++) {
     const ramp = Math.min(1, Math.max(0, (D - 220) / (380 - 220)));
-    pDeg = appleUserPitch * ramp * pinRamp;
+    if (pNowDeg == null) pDeg = appleUserPitch * ramp * pinRamp;
     const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
     D = Rm / (uR / (f * cp - uR * sp) - uB / (f * cp - uB * sp));
   }
@@ -3307,8 +3312,11 @@ function updateCamera() {
     // gesture in swingMove owns appleUserPitch now.)
     const distNow = window.innerHeight / camera.scale * M_PER_UNIT * APPLE_CAM_K;
     const ramp = Math.min(1, Math.max(0, (distNow - 220) / (380 - 220)));
-    applePitchT = appleUserPitch * ramp * applePinRamp(); // auto-2D near the green
-
+    // Auto-2D near the green — but NEVER reorient while the ball is moving:
+    // the pin ramp shrinks DURING an approach shot, and flattening mid-follow
+    // swung the view off the ball. Pitch holds its value until the ball rests;
+    // the transition refit below then moves and flattens together.
+    if (!state.moving) applePitchT = appleUserPitch * ramp * applePinRamp();
     // Green-detail settle gate: count consecutive frames with the camera
     // exactly parked (ease snaps make these strict equalities reachable).
     const parked = camera.angle === camera.tAngle && camera.scale === camera.tScale &&
@@ -3320,6 +3328,16 @@ function updateCamera() {
     applePitchT = 0;
   }
   applePitch = ease(applePitch, applePitchT, 0.05);
+  // Pitch-transition refit: while the camera is still leaning/flattening
+  // (ball at rest, off green), re-solve the club-reach framing every frame at
+  // the CURRENT eased pitch — the ball and reach anchors stay pinned through
+  // the whole reorientation, so the camera never "orients first, moves after"
+  // and the ball never leaves the screen.
+  if (appleGroundActive() && mode === "course" && !state.moving && !camTouch &&
+      Math.abs(applePitch - applePitchT) > 0.1 &&
+      surfaceAt(state.ball.x, state.ball.y) !== "green") {
+    frameClubReach(applePitch);
+  }
   if (camPunch > 0.0005) camPunch *= 0.82; else camPunch = 0;  // ease the punch back
   applyView();
 }
