@@ -258,7 +258,12 @@ const TUNE = {
     "9i":   { name: "9 Iron", carry: 152, maxH: 32, land: 52, ball: 112, spin: 8793 },
     pw:     { name: "PW",     carry: 142, maxH: 32, land: 52, ball: 104, spin: 9316 },
     sw:     { name: "SW",     carry: 115, maxH: 31, land: 53, ball: 95,  spin: 10500 },
-    lw:     { name: "LW",     carry: 90,  maxH: 30, land: 55, ball: 82,  spin: 11500 },
+    // minFrac: LW's own floor, below clubMinFrac. Chip mode only engages BELOW
+    // TUNE.chipRangeYds (60yd) — above that a player is stuck with full swing, so
+    // the floor must reach down to that 60yd cutoff, not just to chip's asymptotic
+    // reachHi ceiling (~72yd, which only applies right at the 60yd edge itself).
+    // 90*0.667=60yd closes the dead zone for any toPin > 60. See buildTrialShot's ef calc.
+    lw:     { name: "LW",     carry: 90,  maxH: 30, land: 55, ball: 82,  spin: 11500, minFrac: 0.667 },
     putter: { name: "Putter", carry: 30,  maxH: 0,  land: 0,  ball: 0,   spin: 0    },
   },
 
@@ -378,10 +383,29 @@ recalcPower();
 // Bag order, longest carry -> shortest (for the +/- club selector). Putter last.
 const CLUB_ORDER = ["driver", "3w", "5w", "hybrid", "3i", "4i", "5i", "6i",
                     "7i", "8i", "9i", "pw", "sw", "lw", "putter"];
-// Club whose full carry is closest to a distance (yards). Never selects putter (manual only).
+// --- My Bag: the player's chosen 14 clubs (putter always in) ---------------
+// Real bag limit = 14 clubs. Putter is mandatory, so the player picks 13 of the
+// 14 non-putter clubs. Default drops the 5 Wood (driver + 3W + hybrid cover the
+// long game) so existing swing feel is unchanged out of the box.
+const DEFAULT_BAG = CLUB_ORDER.filter((id) => id !== "5w");
+function getBag() {
+  const b = lsGet("golf.bag", null);
+  if (!Array.isArray(b) || !b.length) return DEFAULT_BAG.slice();
+  const set = new Set(b.filter((id) => TUNE.clubs[id]));
+  set.add("putter"); // never removable
+  return CLUB_ORDER.filter((id) => set.has(id));
+}
+function setBag(list) { lsSet("golf.bag", CLUB_ORDER.filter((id) => id === "putter" || list.includes(id))); }
+// The in-play club order: CLUB_ORDER filtered to what's in the bag (putter forced
+// in), canonical longest->shortest order preserved. Drives club wheel + caddie.
+function bagOrder() { const s = new Set(getBag()); return CLUB_ORDER.filter((id) => id === "putter" || s.has(id)); }
+
+// Club whose full carry is closest to a distance (yards). Never selects putter
+// (manual only). Restricted to the clubs currently in the bag.
 function clubForYards(y) {
-  let best = CLUB_ORDER[0], bd = Infinity;
-  for (const k of CLUB_ORDER) {
+  const ord = bagOrder();
+  let best = ord[0], bd = Infinity;
+  for (const k of ord) {
     if (k === "putter") continue;
     const d = Math.abs(TUNE.clubs[k].carry - y);
     if (d < bd) { bd = d; best = k; }
@@ -485,10 +509,11 @@ function safeTeeAim() {
   if (!best && autoClubEnabled && !manualClubThisShot) {
     // Dogleg shorter than this club's carry: step down until a fairway aim exists.
     const club0 = selectedClub;
-    const stopIdx = CLUB_ORDER.indexOf(TUNE.teeAimMinClub);
-    let i = CLUB_ORDER.indexOf(selectedClub);
-    while (!best && ++i <= stopIdx) {
-      selectedClub = CLUB_ORDER[i];
+    const ord = bagOrder();
+    const stopIdx = ord.indexOf(TUNE.teeAimMinClub);
+    let i = ord.indexOf(selectedClub);
+    while (!best && stopIdx >= 0 && ++i <= stopIdx) {
+      selectedClub = ord[i];
       best = scanClub();
     }
     if (!best) selectedClub = club0; // nothing helped — restore the caddie's pick
@@ -2437,7 +2462,19 @@ function swipeToShot(dxs, dys, dt, powerScale) {
   const speed = (Math.hypot(dxs, dys) / refScale) / Math.max(dt, 0.001);
   const frac = Math.min(speed * swingSens / powerScale, 1);
   let ang;
-  if (view.appleProj) {
+  if (view.threeProj) {
+    // Three.js (Course3D) 3D: the camera's yaw/pitch don't map to a fixed
+    // view.angle (Course3D re-frames itself every shot, independent of the
+    // legacy 2D orbit angle) — same problem as Apple ground, same fix: unproject
+    // a short screen segment through the ball's screen position onto the
+    // ground plane via the engine's own project/unproject.
+    const b = state.ball;
+    const bh = terrainZ(b.x, b.y);
+    const s0 = window.Course3D.project(b.x, b.y, bh);
+    const p0 = window.Course3D.unproject(s0.x, s0.y, bh);
+    const p1 = window.Course3D.unproject(s0.x + dxs, s0.y + dys, bh);
+    ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+  } else if (view.appleProj) {
     // Apple-ground 3D: the affine inverse doesn't hold under the pitched
     // pinhole. Unproject the swipe as a short screen segment through the
     // ball's screen position onto the ground plane — the world direction the
@@ -2766,9 +2803,10 @@ function buildTrialShot(ang, frac, spin, onGreen) {
     const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * f;
     ef = Math.min(1, (toPin * reach * chipSpinParams().landFrac) / c.carry);
   } else {
-    // Min power floor for every full-swing club (incl. LW): an imprecise weak read can't
-    // dribble it — always flies ≥ clubMinFrac of its rated carry.
-    ef = Math.max(f, TUNE.clubMinFrac);
+    // Min power floor for every full-swing club: an imprecise weak read can't dribble
+    // it — always flies ≥ clubMinFrac of its rated carry (or the club's own minFrac
+    // override, e.g. LW drops lower to meet chip mode's ceiling with no gap).
+    ef = Math.max(f, c.minFrac ?? TUNE.clubMinFrac);
   }
   // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
   const lieSurf = surfaceAt(b.x, b.y);
@@ -7886,7 +7924,11 @@ const elHmCourseItems = document.getElementById("hm-course-items");
 const elHmClubRow = document.getElementById("hm-club-row");
 const elClubWheel = document.getElementById("club-wheel");
 const elClubStrip = document.getElementById("club-strip");
-let cwItems = []; // one .cw-item per CLUB_ORDER entry, built by buildClubWheel()
+let cwItems = []; // one .cw-item per WHEEL entry, built by buildClubWheel()
+// WHEEL = the clubs actually in the bag (bagOrder()), snapshot when the drum is
+// built. All wheel math indexes WHEEL, not CLUB_ORDER, so out-of-bag clubs never
+// appear on the reel. Rebuilt (with cwItems) by buildClubWheel() on a bag change.
+let WHEEL = bagOrder();
 const elMeasureBtn = document.getElementById("hm-measure");
 const elSlopeBtn = document.getElementById("hm-slope");
 const elArrowsBtn = document.getElementById("hm-arrows");
@@ -7932,19 +7974,39 @@ const elTiltRange = document.getElementById("tilt-range");
   }
 }
 elTiltRange.addEventListener("input", () => {
+  if (render3D) {
+    const v = Math.max(0, Math.min(100, elTiltRange.value)) / 100;
+    lsSet("golf.threePitch", elTiltRange.value);
+    if (window.Course3D) window.Course3D.setPitch(v);
+    return;
+  }
   appleUserPitch = (elTiltRange.value / 100) * 65;
   lsSet("golf.applePitch", elTiltRange.value);
   if (mode === "course") frameTarget();   // keep ball + reach anchors pinned mid-slide
 });
 // Camera controls, so no ball-state gating — just not under the 3D overlays.
-// Apple ground shows the slider; everything else the legacy tilt button.
+// Apple ground and Course3D (Four Oaks 3D) show the slider; everything else
+// the legacy tilt button.
 let _tiltBtnShown = false, _tiltSliderShown = false;
 function updateTiltBtn() {
   const base = (mode === "course" || mode === "range") && !greenView && !cine;
   const apple = appleGroundActive();
-  const showBtn = base && !apple, showSlider = base && apple && mode === "course";
+  const three = render3D;
+  const showBtn = base && !apple && !three, showSlider = base && (apple || three) && mode === "course";
   if (showBtn !== _tiltBtnShown) { _tiltBtnShown = showBtn; elTiltBtn.classList.toggle("hidden", !showBtn); }
-  if (showSlider !== _tiltSliderShown) { _tiltSliderShown = showSlider; elTiltSlider.classList.toggle("hidden", !showSlider); }
+  if (showSlider !== _tiltSliderShown) {
+    _tiltSliderShown = showSlider;
+    elTiltSlider.classList.toggle("hidden", !showSlider);
+    if (showSlider && three) {
+      const saved3 = parseFloat(lsGet("golf.threePitch"));
+      const v = Number.isFinite(saved3) ? Math.max(0, Math.min(100, saved3)) : 0;
+      elTiltRange.value = v;
+      if (window.Course3D) window.Course3D.setPitch(v / 100);
+    } else if (showSlider && !three) {
+      const savedA = parseFloat(lsGet("golf.applePitch"));
+      elTiltRange.value = Number.isFinite(savedA) ? Math.max(0, Math.min(100, savedA)) : 0;
+    }
+  }
 }
 // Show the read-green button exactly when green reading matters: in course
 // play, ball at rest, and a green in play (ball on one or pin's green).
@@ -8517,9 +8579,10 @@ function updateClubUI() {
   const onGreen = HOLE && !HOLE.isRange && surfaceAt(state.ball.x, state.ball.y) === "green";
   elHmClubRow.classList.toggle("putting", !!onGreen);
   let name, yds;
-  let idx = CLUB_ORDER.indexOf(selectedClub);
+  let idx = WHEEL.indexOf(selectedClub);
+  if (idx < 0) idx = 0;
   if (onGreen) {
-    name = "Putter"; yds = ""; idx = CLUB_ORDER.length - 1; // drum rolls to the putter slot; selectedClub untouched
+    name = "Putter"; yds = ""; idx = WHEEL.length - 1; // drum rolls to the putter slot; selectedClub untouched
   } else if (selectedClub === "putter") {
     name = "Putter"; yds = "~30y";
   } else {
@@ -8559,8 +8622,8 @@ function setAutoClub(on) {
 }
 function stepClub(delta) { // +1 = longer club, -1 = shorter
   manualClubThisShot = true; // override only this shot; auto resumes after it
-  const i = CLUB_ORDER.indexOf(selectedClub);
-  selectedClub = CLUB_ORDER[Math.max(0, Math.min(CLUB_ORDER.length - 1, i - delta))];
+  const i = WHEEL.indexOf(selectedClub);
+  selectedClub = WHEEL[Math.max(0, Math.min(WHEEL.length - 1, i - delta))];
   updateClubUI();
 }
 // ---- Rolling club wheel -----------------------------------------------------
@@ -8578,7 +8641,8 @@ function cwRated(id) {
 }
 function buildClubWheel() {
   elClubStrip.innerHTML = "";
-  cwItems = CLUB_ORDER.map((id) => {
+  WHEEL = bagOrder();
+  cwItems = WHEEL.map((id) => {
     const it = document.createElement("div");
     it.className = "cw-item";
     const [n, y] = cwRated(id);
@@ -8586,7 +8650,7 @@ function buildClubWheel() {
     elClubStrip.appendChild(it);
     return it;
   });
-  cw.pos = Math.max(0, CLUB_ORDER.indexOf(selectedClub));
+  cw.pos = Math.max(0, WHEEL.indexOf(selectedClub));
   cwRender();
 }
 function cwRender() {
@@ -8602,8 +8666,8 @@ function cwRender() {
 }
 // Live selection while the drum rolls: every detent crossing picks that club.
 function cwCommit() {
-  const i = Math.round(Math.min(Math.max(cw.pos, 0), CLUB_ORDER.length - 1));
-  const id = CLUB_ORDER[i];
+  const i = Math.round(Math.min(Math.max(cw.pos, 0), WHEEL.length - 1));
+  const id = WHEEL[i];
   if (id === selectedClub) return;
   manualClubThisShot = true;
   selectedClub = id;
@@ -8615,7 +8679,7 @@ function cwCommit() {
 function cwSetLive(idx, name, yds) {
   if (!cwItems.length || idx < 0) return;
   if (cw.live !== idx && cw.live >= 0) {
-    const [n, y] = cwRated(CLUB_ORDER[cw.live]);
+    const [n, y] = cwRated(WHEEL[cw.live]);
     cwItems[cw.live].innerHTML = "<b>" + n + "</b><small>" + y + "</small>";
   }
   cw.live = idx;
@@ -8629,7 +8693,7 @@ function cwStart() { if (!cw.raf) { cw.lastTs = 0; cw.raf = requestAnimationFram
 function cwTick(ts) {
   cw.raf = 0;
   const dt = Math.min(cw.lastTs ? ts - cw.lastTs : 16.7, 50); cw.lastTs = ts;
-  const N = CLUB_ORDER.length - 1, fr = dt / 16.7;
+  const N = WHEEL.length - 1, fr = dt / 16.7;
   if (!cw.drag) {
     if (cw.target != null) {
       // programmatic roll (auto-club, green entry/exit, keys): ease straight there
@@ -8658,7 +8722,7 @@ function cwTick(ts) {
   else { cw.lastTs = 0; if (cw.manual) { cwCommit(); cw.manual = false; } }
 }
 function cwClamped(p) { // rubber-band past the ends of the bag
-  const N = CLUB_ORDER.length - 1;
+  const N = WHEEL.length - 1;
   return p < 0 ? p * 0.35 : p > N ? N + (p - N) * 0.35 : p;
 }
 elClubWheel.addEventListener("pointerdown", (e) => {
@@ -8690,7 +8754,7 @@ function cwRelease(e) {
     // tap: step toward the tapped neighbour slot (old one-tap muscle memory)
     const r = elClubWheel.getBoundingClientRect();
     const off = Math.round((e.clientY - r.top - r.height / 2) / CW_H);
-    if (off) cw.target = Math.min(Math.max(Math.round(cw.pos) + off, 0), CLUB_ORDER.length - 1);
+    if (off) cw.target = Math.min(Math.max(Math.round(cw.pos) + off, 0), WHEEL.length - 1);
     cwStart();
     return;
   }
@@ -9303,17 +9367,8 @@ function updateAuthUI() {
   const on = isLoggedIn();
   signin.classList.toggle("hidden", on);
   account.classList.toggle("hidden", !on);
-  const acctBtn = document.getElementById("open-account");
-  if (acctBtn) acctBtn.classList.toggle("hidden", !on);
-  const friendsBtn = document.getElementById("menu-friends");
-  if (friendsBtn) friendsBtn.classList.toggle("hidden", !on);
-  const adminBtn = document.getElementById("menu-admin");
-  if (adminBtn) adminBtn.classList.toggle("hidden", !isTournamentAdmin());
-  const manageBtn = document.getElementById("menu-manage");
-  if (manageBtn) manageBtn.classList.toggle("hidden", !isTournamentAdmin());
-  const addBtn = document.getElementById("menu-add-course");
-  // "Add course" needs the local bake server (no /api on a static deploy) AND admin.
-  if (addBtn) addBtn.classList.toggle("hidden", !(isTournamentAdmin() && _bakeApi));
+  // My Account is always available (grid button); Friends/Admin/Manage/Add course
+  // now live as tiles inside the account hub, gated there by login / admin / bake API.
 }
 
 // True once GET /api/ping succeeds (i.e. bake_server.py is serving). Probed at boot.
@@ -9797,7 +9852,7 @@ function renderAccount(stats, trounds) {
     </div>`;
 
   if (!stats.rounds) {
-    body.innerHTML = idHtml + `<div class="av-empty">No rounds yet — play one and your stats appear here.</div>`;
+    body.innerHTML = acBackBar("Profile & Stats") + idHtml + `<div class="av-empty">No rounds yet — play one and your stats appear here.</div>`;
     wireAvEditName();
     return;
   }
@@ -9859,23 +9914,79 @@ function renderAccount(stats, trounds) {
       </tbody>
     </table>` : "";
 
-  body.innerHTML = idHtml + totals + bestRow + detail + byCourse + recent + trn;
+  body.innerHTML = acBackBar("Profile & Stats") + idHtml + totals + bestRow + detail + byCourse + recent + trn;
   wireAvEditName();
 }
 function wireAvEditName() {
+  wireAcBack();
   const e = document.getElementById("av-editname");
-  if (e) e.addEventListener("click", () => openNameEntry(() => openAccountViewer()));
+  if (e) e.addEventListener("click", () => openNameEntry(() => showAccountStats()));
   const eu = document.getElementById("av-edituname");
-  if (eu) eu.addEventListener("click", () => openUsernamePrompt(() => openAccountViewer()));
+  if (eu) eu.addEventListener("click", () => openUsernamePrompt(() => showAccountStats()));
+}
+// Sub-view chrome for the account hub: a back arrow that returns to the tile grid.
+function acBackBar(title) {
+  return `<div class="ac-back"><button id="av-back" class="ac-backbtn">‹ Back</button>` +
+    `<span class="ac-back-title">${escapeHTML(title)}</span></div>`;
+}
+function wireAcBack() {
+  const b = document.getElementById("av-back");
+  if (b) b.addEventListener("click", renderAccountHub);
 }
 
-async function openAccountViewer() {
-  if (!isLoggedIn()) { openAuthModal(); return; }
+// My Account is now a hub: a grid of tiles that either drill into a sub-view
+// (Profile & Stats, My Bag, Tour Winnings) or open an existing overlay on top
+// (Trophy Room, Friends, Admin). Opens for everyone — guests can reach Trophy
+// Room + My Bag (local), sign-in-gated tiles prompt auth when tapped.
+function openAccountViewer() {
   const ov = document.getElementById("account-viewer");
-  const body = document.getElementById("av-body");
-  if (!ov || !body) return;
+  if (!ov) return;
   ov.classList.remove("hidden");
-  body.innerHTML = `<div class="av-empty">Loading…</div>`;
+  renderAccountHub();
+}
+function renderAccountHub() {
+  const body = document.getElementById("av-body");
+  if (!body) return;
+  const signed = isLoggedIn();
+  const admin = isTournamentAdmin();
+  const tile = (id, label, sub) =>
+    `<button class="ac-tile" id="${id}"><span class="ac-tile-label">${label}</span>` +
+    `<span class="ac-tile-sub">${sub}</span></button>`;
+  let html = `<div class="ac-hub">`;
+  html += tile("ac-profile", "Profile & Stats", signed ? "Name, handicap, round history" : "Sign in to view");
+  html += tile("ac-trophy", "Trophy Room", "Achievements · courses · streak");
+  html += tile("ac-bag", "My Bag", "Choose your 14 clubs");
+  html += tile("ac-winnings", "Tour Winnings", fmtMoney(careerWinnings()) + " career");
+  html += tile("ac-friends", "Friends", signed ? "Requests & head-to-head" : "Sign in to view");
+  if (admin) {
+    html += tile("ac-admin", "Admin settings", "Global game defaults");
+    html += tile("ac-manage", "Manage tournaments", "Create & run events");
+    if (_bakeApi) html += tile("ac-addcourse", "Add course", "Bake a new course");
+  }
+  html += `</div>`;
+  body.innerHTML = html;
+
+  const on = (id, fn) => { const e = document.getElementById(id); if (e) e.addEventListener("click", fn); };
+  on("ac-profile", showAccountStats);
+  on("ac-trophy", () => { renderProgress(); document.getElementById("progress").classList.remove("hidden"); });
+  on("ac-bag", showBagEditor);
+  on("ac-winnings", showWinnings);
+  on("ac-friends", () => { if (!isLoggedIn()) { openAuthModal(); return; } openFriends(); });
+  on("ac-admin", openAdminPanel);
+  on("ac-manage", openTournamentManage);
+  on("ac-addcourse", openAddCourse);
+
+  const so = document.getElementById("av-signout");
+  if (so) so.classList.toggle("hidden", !signed);
+  const del = document.getElementById("av-delete");
+  if (del) del.classList.toggle("hidden", !signed);
+}
+async function showAccountStats() {
+  if (!isLoggedIn()) { openAuthModal(); return; }
+  const body = document.getElementById("av-body");
+  if (!body) return;
+  body.innerHTML = acBackBar("Profile & Stats") + `<div class="av-empty">Loading…</div>`;
+  wireAcBack();
   try {
     const [rounds, trounds] = await Promise.all([fetchMyRounds(), fetchMyTournamentRounds()]);
     const stats = computeMyStats(rounds);
@@ -9883,8 +9994,73 @@ async function openAccountViewer() {
     renderAccount(stats, trounds);
   } catch (e) {
     console.warn(e);
-    body.innerHTML = `<div class="av-empty">Couldn't load your stats. Try again.</div>`;
+    body.innerHTML = acBackBar("Profile & Stats") + `<div class="av-empty">Couldn't load your stats. Try again.</div>`;
+    wireAcBack();
   }
+}
+function showWinnings() {
+  const body = document.getElementById("av-body");
+  if (!body) return;
+  const total = careerWinnings();
+  const rows = Object.values(_tourMap()).filter((e) => e && e.payout > 0).sort((a, b) => b.payout - a.payout);
+  let html = acBackBar("Tour Winnings");
+  html += `<div class="ac-win-total">${fmtMoney(total)}<small>career earnings</small></div>`;
+  if (!rows.length) {
+    html += `<div class="av-empty">No winnings yet — finish a Tour Event on the weekend to bank a check.</div>`;
+  } else {
+    html += `<table class="lb-table av-table"><thead><tr><th>Event</th><th>Prize</th></tr></thead><tbody>` +
+      rows.map((e) => `<tr><td>${escapeHTML(e.name || "Event")}</td>` +
+        `<td class="lb-strk">${fmtMoney(e.payout)}</td></tr>`).join("") + `</tbody></table>`;
+  }
+  body.innerHTML = html;
+  wireAcBack();
+}
+// My Bag editor: pick exactly 14 clubs (putter locked in). Saving rebuilds the
+// club wheel so out-of-bag clubs vanish from the reel and the caddie won't pick them.
+function showBagEditor() {
+  const body = document.getElementById("av-body");
+  if (!body) return;
+  const bag = new Set(getBag());
+  const picks = CLUB_ORDER.filter((id) => id !== "putter"); // 14 selectable clubs
+  const count = () => CLUB_ORDER.filter((id) => id === "putter" || bag.has(id)).length;
+  const render = () => {
+    const n = count();
+    let html = acBackBar("My Bag");
+    html += `<div class="ac-bag-count">${n} / 14 clubs<small>Putter is always in the bag</small></div>`;
+    html += `<div class="ac-bag-list">`;
+    html += `<label class="ac-bag-row on ac-bag-locked"><input type="checkbox" checked disabled>` +
+      `<span class="ac-bag-name">Putter</span><span class="ac-bag-carry">~30y</span></label>`;
+    for (const id of picks) {
+      const c = TUNE.clubs[id]; const isOn = bag.has(id);
+      html += `<label class="ac-bag-row${isOn ? " on" : ""}"><input type="checkbox" data-club="${id}"${isOn ? " checked" : ""}>` +
+        `<span class="ac-bag-name">${escapeHTML(c.name)}</span>` +
+        `<span class="ac-bag-carry">${Math.round(c.carry)}y</span></label>`;
+    }
+    html += `</div><button id="ac-bag-save" class="menu-btn">Save bag</button>`;
+    body.innerHTML = html;
+    wireAcBack();
+    body.querySelectorAll("input[data-club]").forEach((inp) => {
+      inp.addEventListener("change", () => {
+        const id = inp.getAttribute("data-club");
+        if (inp.checked) {
+          if (count() >= 14) { inp.checked = false; showToast("Bag is full — 14 clubs max", 1500); return; }
+          bag.add(id);
+        } else { bag.delete(id); }
+        render();
+      });
+    });
+    const save = document.getElementById("ac-bag-save");
+    if (save) save.addEventListener("click", () => {
+      if (count() !== 14) { showToast("Pick exactly 14 clubs", 1500); return; }
+      setBag([...bag]);
+      if (!bagOrder().includes(selectedClub)) selectedClub = bagOrder()[0];
+      buildClubWheel();
+      if (mode === "course" || mode === "range") updateClubUI();
+      showToast("Bag saved", 1200);
+      renderAccountHub();
+    });
+  };
+  render();
 }
 function closeAccountViewer() {
   const ov = document.getElementById("account-viewer");
@@ -11273,7 +11449,9 @@ async function showTourResult(missedCut) {
     purseEl.textContent = "Prize finalizes when the event ends";
     return;
   }
-  payEl.textContent = fmtMoney(tourFinishPayout(me.pos, tieCount, results.payouts));
+  const prize = tourFinishPayout(me.pos, tieCount, results.payouts);
+  recordTourPayout(data.eventId, prize); // bank it for career winnings
+  payEl.textContent = fmtMoney(prize);
   purseEl.textContent = "from the " + (results.displayPurse || fmtMoney(results.purse)) + " purse";
 }
 function hideTourResult() {
@@ -11414,8 +11592,22 @@ function getTourEvent(id) {
 function setTourEvent(o) {
   if (!o || !o.eventId) return;
   const map = _tourMap();
-  map[o.eventId] = { name: o.name, rounds: o.rounds || [] };
+  const prev = map[o.eventId] || {};
+  map[o.eventId] = { name: o.name, rounds: o.rounds || [], payout: prev.payout || 0 };
   lsSet("golf.tourEvents", map);
+}
+// Bank the real prize the player earned in an event (recorded once the event is
+// finalized in showTourResult). Summed by careerWinnings() for the account hub.
+function recordTourPayout(eventId, amount) {
+  if (!eventId) return;
+  const map = _tourMap();
+  if (!map[eventId]) return;
+  map[eventId].payout = Math.max(0, Math.round(amount || 0));
+  lsSet("golf.tourEvents", map);
+}
+// Lifetime PGA Tour earnings across every event the player has cashed in.
+function careerWinnings() {
+  return Object.values(_tourMap()).reduce((s, e) => s + (e && e.payout || 0), 0);
 }
 function ensureTourEvent(eventId, name) {
   const map = _tourMap();
@@ -12192,6 +12384,10 @@ function closePlayMenu() {
   if (solo) solo.addEventListener("click", () => { closePlayMenu(); showCourseSelect(); });
   const tour = document.getElementById("pm-tour");
   if (tour) tour.addEventListener("click", () => { closePlayMenu(); openTourEvents(); });
+  const tourns = document.getElementById("pm-tournaments");
+  if (tourns) tourns.addEventListener("click", () => { closePlayMenu(); openTournamentLobby(); });
+  const lb = document.getElementById("pm-leaderboard");
+  if (lb) lb.addEventListener("click", () => { closePlayMenu(); openLeaderboard("menu"); });
   const back = document.getElementById("pm-back");
   if (back) back.addEventListener("click", () => { closePlayMenu(); showMenu(); });
 })();
@@ -14025,11 +14221,12 @@ function renderProgress() {
   body.innerHTML = html;
 }
 (function wireProgress() {
-  const open = document.getElementById("open-progress");
   const ov = document.getElementById("progress");
+  if (!ov) return;
+  // Opened from the My Account hub tile; keep legacy #open-progress support too.
+  const open = document.getElementById("open-progress");
+  if (open) open.addEventListener("click", () => { renderProgress(); ov.classList.remove("hidden"); });
   const close = document.getElementById("pr-close");
-  if (!open || !ov) return;
-  open.addEventListener("click", () => { renderProgress(); ov.classList.remove("hidden"); });
   if (close) close.addEventListener("click", () => ov.classList.add("hidden"));
 })();
 

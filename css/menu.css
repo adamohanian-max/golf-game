@@ -368,6 +368,32 @@
 .av-table .lb-topar { text-align: left; }
 .av-table .av-date { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* --- My Account hub (tile grid + sub-views) --- */
+.ac-hub { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s-2); }
+.ac-tile {
+  display: flex; flex-direction: column; gap: 3px; text-align: left;
+  background: var(--w-05); border: var(--border-hair); border-radius: var(--r-md);
+  padding: var(--s-3); cursor: pointer; transition: background 0.12s;
+}
+.ac-tile:hover { background: var(--w-08); }
+.ac-tile:active { transform: translateY(1px); }
+.ac-tile-label { color: var(--text); font-size: 15px; font-weight: var(--fw-black); }
+.ac-tile-sub { color: var(--text-dim); font-size: 11px; }
+.ac-back { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-3); }
+.ac-backbtn { background: none; border: none; color: var(--accent-bright); font-size: 14px; font-weight: var(--fw-bold); cursor: pointer; padding: 2px 0; }
+.ac-back-title { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: var(--fw-bold); }
+.ac-win-total { text-align: center; color: var(--accent-bright); font-size: 30px; font-weight: var(--fw-black); font-variant-numeric: tabular-nums; padding: var(--s-2) 0 var(--s-4); }
+.ac-win-total small { display: block; color: var(--text-dim); font-size: 11px; font-weight: var(--fw-med); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 2px; }
+.ac-bag-count { text-align: center; color: var(--text); font-size: 18px; font-weight: var(--fw-black); padding-bottom: var(--s-3); }
+.ac-bag-count small { display: block; color: var(--text-dim); font-size: 11px; font-weight: var(--fw-med); margin-top: 2px; }
+.ac-bag-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--s-3); }
+.ac-bag-row { display: flex; align-items: center; gap: var(--s-2); background: var(--w-05); border-radius: var(--r-md); padding: 8px var(--s-3); cursor: pointer; }
+.ac-bag-row.on { background: var(--w-08); }
+.ac-bag-row.ac-bag-locked { opacity: 0.7; cursor: default; }
+.ac-bag-row input { flex: none; accent-color: var(--accent-bright); }
+.ac-bag-name { flex: 1; color: var(--text); font-size: 14px; font-weight: var(--fw-med); }
+.ac-bag-carry { color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+
 .ne-box {
   width: min(340px, 88vw);
   background: var(--surface-panel);
