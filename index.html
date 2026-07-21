@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="css/base.css?v=67">
   <link rel="stylesheet" href="css/hud.css?v=94">
   <link rel="stylesheet" href="css/menu.css?v=73">
-  <link rel="stylesheet" href="css/locker.css?v=2">
+  <link rel="stylesheet" href="css/locker.css?v=5">
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=77">
   <link rel="stylesheet" href="css/tournament.css?v=58">
@@ -194,21 +194,19 @@
     <div class="menu-box locker-box">
       <div class="locker-scene">
         <div class="locker-lights" aria-hidden="true"></div>
-        <div class="locker-rail">
-          <h1 class="locker-sign">Yo Golf</h1>
-        </div>
+        <h1 class="locker-sign">Yo Golf</h1>
         <div class="locker-doors">
           <button id="play-course" class="menu-btn menu-btn-play locker-door">
-            <span class="ld-face"><span class="ld-vent"></span><span class="ld-plate">Play</span></span>
+            <span class="ld-face"></span><span class="ld-plate">Play</span>
           </button>
           <button id="play-daily" class="menu-btn secondary locker-door">
-            <span class="ld-face"><span class="ld-vent"></span><span class="ld-plate">Daily</span></span>
+            <span class="ld-face"></span><span class="ld-plate">Daily</span>
           </button>
           <button id="play-range" class="menu-btn secondary locker-door">
-            <span class="ld-face"><span class="ld-vent"></span><span class="ld-plate">Range</span></span>
+            <span class="ld-face"></span><span class="ld-plate">Range</span>
           </button>
           <button id="open-account" class="menu-btn secondary locker-door">
-            <span class="ld-face"><span class="ld-vent"></span><span class="ld-plate">Account</span><span id="fr-menu-dot" class="fr-dot hidden"></span></span>
+            <span class="ld-face"></span><span class="ld-plate">Account</span><span id="fr-menu-dot" class="fr-dot hidden"></span>
           </button>
         </div>
         <div class="locker-bench">
@@ -791,6 +789,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script defer src="game.js?v=296"></script>
+  <script defer src="game.js?v=298"></script>
 </body>
 </html>
