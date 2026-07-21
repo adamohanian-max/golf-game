@@ -11,7 +11,12 @@ const TUNE = {
   stopThreshold: 0.005,  // speed below this = ball stopped
   captureSpeed: 0.05,    // ball must be slower than this to drop in cup (low = hard)
   lipOutMaxSpeed: 0.18,  // putt at/under this that misses the cup is grabbed by the lip and dies 1–2 ft past; faster rams roll on
-  chipRangeYds: 60,      // greenside chip mode auto-engages within this distance to the pin
+  chipRangeYds: 75,      // greenside chip mode auto-engages within this distance to the pin.
+                         // Raised to 75 so the chip band (soft, pin-seeking) OVERLAPS the full-
+                         // swing LW range: LW full-swing floor is 60yd (carry 90 × minFrac 0.667),
+                         // so pins 60–75yd sit inside BOTH — chip mode wins there (auto), turning
+                         // the old muddy 60–75yd check-back seam into uniform chip-control ground.
+                         // No hard wall: chip ceiling (75) overlaps the full-LW floor (60).
   // Chip distance band: softest swipe flies chipReachLo×pin, hardest chipReachHi×pin (both
   // capped at club carry). Tight band -> a chip is never very short or very far from the hole.
   chipReachLo: 0.8,      // softest chip still flies 80% of the way to the pin
@@ -258,11 +263,12 @@ const TUNE = {
     "9i":   { name: "9 Iron", carry: 152, maxH: 32, land: 52, ball: 112, spin: 8793 },
     pw:     { name: "PW",     carry: 142, maxH: 32, land: 52, ball: 104, spin: 9316 },
     sw:     { name: "SW",     carry: 115, maxH: 31, land: 53, ball: 95,  spin: 10500 },
-    // minFrac: LW's own floor, below clubMinFrac. Chip mode only engages BELOW
-    // TUNE.chipRangeYds (60yd) — above that a player is stuck with full swing, so
-    // the floor must reach down to that 60yd cutoff, not just to chip's asymptotic
-    // reachHi ceiling (~72yd, which only applies right at the 60yd edge itself).
-    // 90*0.667=60yd closes the dead zone for any toPin > 60. See buildTrialShot's ef calc.
+    // minFrac: LW's own floor, below clubMinFrac. Full-swing LW floors at 90*0.667=60yd
+    // carry. With chipRangeYds raised to 75, that floor now sits 15yd INSIDE the chip
+    // ceiling — an intentional overlap (pins 60–75yd are chip-mode ground, but full swing
+    // can still reach down to 60), so there is no dead zone and no hard seam between the
+    // modes. Kept at 0.667 (not raised to match 75) precisely to preserve that overlap.
+    // See buildTrialShot's ef calc.
     lw:     { name: "LW",     carry: 90,  maxH: 30, land: 55, ball: 82,  spin: 11500, minFrac: 0.667 },
     putter: { name: "Putter", carry: 30,  maxH: 0,  land: 0,  ball: 0,   spin: 0    },
   },
