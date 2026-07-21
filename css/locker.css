@@ -1,0 +1,201 @@
+/* ============================================================
+   Locker-room home menu — "Yo Golf" clubhouse.
+   Reskins #menu: the 4 action buttons become locker doors that
+   swing open (CSS 3D) when tapped. Placeholder is fully CSS-drawn
+   (wood + brass gradients); drop assets/locker/room.jpg + door.png
+   in later and point the background rules at them — zero JS change.
+
+   Layering vs css/menu.css: loaded AFTER menu.css so equal-specificity
+   rules here win over the stock .menu-btn look.
+   ============================================================ */
+
+/* Warm the whole overlay so the native splash (#1b5e34) hands off
+   into a dim locker room rather than a flat scrim. */
+#menu {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(30, 22, 12, 0.55) 0%, rgba(8, 12, 9, 0.92) 100%),
+    var(--green-900);
+}
+
+.locker-box {
+  width: min(460px, 94vw);
+  animation: none;   /* the reveal owns the entrance; don't double up on panelIn */
+}
+
+/* ---- The room ---------------------------------------------- */
+.locker-scene {
+  position: relative;
+  border-radius: var(--r-lg, 16px);
+  padding: 0 0 var(--s-4);
+  overflow: hidden;
+  /* Placeholder "room" — swap for: url(../assets/locker/room.jpg) center/cover */
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.55)),
+    linear-gradient(180deg, #2a1d12 0%, #1c140d 60%, #120c08 100%);
+  box-shadow: var(--shadow-3, 0 24px 60px rgba(0,0,0,0.5)), inset 0 0 90px rgba(0,0,0,0.6);
+  perspective: 1400px;
+}
+
+/* Soft ceiling light wash — animated during the reveal. */
+.locker-lights {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 120% 60% at 50% -8%,
+    rgba(255, 224, 168, 0.28) 0%, rgba(255, 224, 168, 0.06) 40%, transparent 70%);
+  mix-blend-mode: screen;
+}
+
+/* ---- Brass rail + "Yo Golf" sign --------------------------- */
+.locker-rail {
+  position: relative;
+  padding: var(--s-5) var(--s-4) var(--s-4);
+  text-align: center;
+  background: linear-gradient(180deg, rgba(0,0,0,0.25), transparent);
+}
+.locker-rail::after {
+  content: "";
+  position: absolute;
+  left: 8%; right: 8%; bottom: 0; height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg,
+    transparent, var(--brass-600) 12%, var(--brass-400) 50%, var(--brass-600) 88%, transparent);
+  box-shadow: 0 1px 6px rgba(207, 168, 94, 0.4);
+}
+.locker-sign {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold, 700);
+  font-size: clamp(38px, 12vw, 60px);
+  line-height: 1;
+  letter-spacing: 1px;
+  color: var(--brass-400);
+  background: linear-gradient(180deg, #f0d79a 0%, var(--brass-400) 45%, var(--brass-600) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 18px rgba(207, 168, 94, 0.5), 0 0 2px rgba(240, 215, 154, 0.6);
+}
+
+/* ---- The bank of lockers (2×2) ----------------------------- */
+.locker-doors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  perspective: 1200px;
+}
+
+/* Each door sits in a dark "slot"; the face swings to reveal it. */
+.locker-door {
+  position: relative;
+  /* Override the stock .menu-btn box (fixed 260px + auto margin) so the
+     2×2 grid controls sizing and the doors don't overflow. */
+  display: block;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  height: 96px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: radial-gradient(ellipse at 50% 40%, #0d0906 0%, #050403 100%); /* interior */
+  cursor: pointer;
+  transform-style: preserve-3d;
+  overflow: visible;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.9);
+}
+
+.ld-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  transform-origin: left center;
+  transition: transform var(--dur-modal, 0.3s) var(--ease), filter var(--dur-modal) var(--ease);
+  /* Placeholder wood door — swap for: url(../assets/locker/door.png) center/cover */
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.06), transparent 22%),
+    repeating-linear-gradient(180deg, rgba(0,0,0,0.10) 0 3px, rgba(255,255,255,0.03) 3px 7px),
+    linear-gradient(160deg, #6b4a2b 0%, #4f3620 55%, #3a2716 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -8px 18px rgba(0,0,0,0.45),
+    0 6px 14px rgba(0,0,0,0.5);
+  backface-visibility: hidden;
+}
+.locker-door:active .ld-face { filter: brightness(1.08); }
+
+/* Door swung open on tap. */
+.locker-door.open .ld-face { transform: rotateY(-82deg); filter: brightness(0.7); }
+
+/* Brass air vent slats near the top of the door. */
+.ld-vent {
+  width: 44%;
+  height: 12px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(180deg,
+    var(--brass-600) 0 2px, rgba(0,0,0,0.5) 2px 4px);
+  box-shadow: inset 0 0 2px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.08);
+  opacity: 0.9;
+}
+
+/* Engraved brass nameplate = the menu label. */
+.ld-plate {
+  position: relative;
+  padding: 5px 14px;
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--fw-bold, 700);
+  letter-spacing: 0.5px;
+  color: #2a1c0c;
+  background: linear-gradient(180deg, #e6c988 0%, var(--brass-400) 50%, var(--brass-600) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.5);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+  white-space: nowrap;
+}
+/* Friends unread dot rides the Account plate. */
+.locker-door .fr-dot { position: absolute; top: -4px; right: -4px; }
+
+/* ---- Bench (player / auth / fineprint) --------------------- */
+.locker-bench {
+  padding: var(--s-2) var(--s-4) 0;
+  text-align: center;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.28));
+}
+.locker-bench .menu-player { margin-top: var(--s-3); }
+
+/* ---- First-launch reveal ("lights on") --------------------- */
+#menu.reveal .locker-scene { animation: lockerPushIn 1.1s var(--ease) both; }
+#menu.reveal .locker-lights { animation: lockerLightsOn 1.3s ease-out both; }
+#menu.reveal .locker-sign { animation: lockerSignGlow 1.4s ease-out 0.35s both; }
+#menu.reveal .locker-door { animation: lockerDoorIn 0.6s var(--ease) both; }
+#menu.reveal .locker-door:nth-child(1) { animation-delay: 0.45s; }
+#menu.reveal .locker-door:nth-child(2) { animation-delay: 0.55s; }
+#menu.reveal .locker-door:nth-child(3) { animation-delay: 0.65s; }
+#menu.reveal .locker-door:nth-child(4) { animation-delay: 0.75s; }
+#menu.reveal .locker-bench { animation: panelIn 0.5s var(--ease) 0.9s both; }
+
+@keyframes lockerPushIn {
+  from { transform: scale(1.08); filter: brightness(0.25); }
+  to   { transform: scale(1);    filter: brightness(1); }
+}
+@keyframes lockerLightsOn {
+  0%   { opacity: 0; }
+  60%  { opacity: 1; }
+  100% { opacity: 0.85; }
+}
+@keyframes lockerSignGlow {
+  from { opacity: 0; text-shadow: 0 0 0 rgba(207,168,94,0); }
+  to   { opacity: 1; text-shadow: 0 2px 18px rgba(207,168,94,0.5), 0 0 2px rgba(240,215,154,0.6); }
+}
+@keyframes lockerDoorIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Reduced motion: the global kill-switch (base.css) already zeroes these;
+   the door-swing timing is guarded in JS so navigation still fires. */

@@ -8813,6 +8813,15 @@ function showMenu() {
   // round. Online matches are left untouched here (their lifecycle is remote).
   if (cpuMatch && activeMatch) leaveMatch();
   elMenu.classList.remove("hidden");
+  // Locker doors reset to closed each time we land on the menu.
+  document.querySelectorAll(".locker-door.open").forEach((d) => d.classList.remove("open"));
+  // "Lights on" reveal cinematic plays once, ever (first launch on this device).
+  if (!lsGet("golf.lockerSeen", false)) {
+    elMenu.classList.add("reveal");
+    lsSet("golf.lockerSeen", true);
+  } else {
+    elMenu.classList.remove("reveal");
+  }
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
   elRangeUI.classList.add("hidden");
@@ -9074,6 +9083,31 @@ document.getElementById("play-course").addEventListener("click", openPlayMenu);
 const _playDaily = document.getElementById("play-daily");
 if (_playDaily) _playDaily.addEventListener("click", startDaily);
 document.getElementById("play-range").addEventListener("click", startRange);
+
+function prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+// Locker doors: a tap swings the door open (CSS 3D), THEN re-fires the click so
+// the door's real handler (openPlayMenu / startDaily / startRange / openAccountViewer)
+// runs — the door id keeps its original addEventListener wiring untouched.
+(function wireLockerDoors() {
+  const bank = document.querySelector(".locker-doors");
+  if (!bank) return;
+  let replaying = false;
+  bank.addEventListener("click", (e) => {
+    const door = e.target.closest(".locker-door");
+    if (!door || replaying) return;          // the re-dispatched click passes straight through
+    if (prefersReducedMotion()) return;      // no animation → let the original handler run now
+    e.preventDefault();
+    e.stopImmediatePropagation();            // block the button's own handler for this first click
+    door.classList.add("open");
+    setTimeout(() => {
+      replaying = true;
+      door.click();                          // now the real handler fires
+      replaying = false;
+    }, 300);
+  }, true);                                  // capture phase: runs before the button's bubble handler
+})();
 document.getElementById("range-menu-btn").addEventListener("click", showMenu);
 rangeSlider.addEventListener("input", () => {
   rangeTarget = parseInt(rangeSlider.value, 10);
