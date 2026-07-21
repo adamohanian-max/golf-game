@@ -3448,6 +3448,7 @@ function resize() {
   if (elHint && hudVis.hint && !elHint.classList.contains("hidden")) positionHint();
 }
 window.addEventListener("resize", resize);
+// Note: LockerRoom self-registers its own resize listener; nothing needed here.
 
 // Apple-ground 3D (view.appleProj set): every overlay vertex routes through
 // the MapKit pinhole replica instead of the affine — see buildAppleProj.
@@ -8813,15 +8814,18 @@ function showMenu() {
   // round. Online matches are left untouched here (their lifecycle is remote).
   if (cpuMatch && activeMatch) leaveMatch();
   elMenu.classList.remove("hidden");
-  // Locker doors reset to closed each time we land on the menu.
+  // Reset the flat CSS locker doors (fallback path).
   document.querySelectorAll(".locker-door.open").forEach((d) => d.classList.remove("open"));
-  // "Lights on" reveal cinematic plays once, ever (first launch on this device).
-  if (!lsGet("golf.lockerSeen", false)) {
-    elMenu.classList.add("reveal");
-    lsSet("golf.lockerSeen", true);
-  } else {
-    elMenu.classList.remove("reveal");
-  }
+  // First-launch cinematic gate (once ever per device) — drives BOTH the 3D
+  // camera dolly-in and, on the WebGL-fallback path, the flat CSS reveal.
+  const _firstLocker = !lsGet("golf.lockerSeen", false);
+  if (_firstLocker) lsSet("golf.lockerSeen", true);
+  // Prefer the real three.js room; fall back to the flat CSS locker if WebGL
+  // is unavailable or the module failed to init.
+  let _locker3d = false;
+  if (window.LockerRoom) { try { _locker3d = window.LockerRoom.enter(_firstLocker); } catch (e) { _locker3d = false; } }
+  document.body.classList.toggle("locker3d", _locker3d);
+  elMenu.classList.toggle("reveal", !_locker3d && _firstLocker);
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
   elRangeUI.classList.add("hidden");
@@ -14666,6 +14670,7 @@ function loop() {
   updateTiltBtn();
   update3DMode();  // cheap — no-ops unless mode/course actually changed
   if (render3D && window.Course3D) window.Course3D.render();
+  if (mode === "menu" && window.LockerRoom) window.LockerRoom.render();
   // Apple ground sync (Butter Brook) happens inside draw() itself — see
   // appleGroundActive()/syncAppleGround() above.
   draw();

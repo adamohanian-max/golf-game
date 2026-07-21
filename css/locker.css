@@ -13,9 +13,38 @@
    ============================================================ */
 
 #menu {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   background:
     radial-gradient(ellipse at 50% 30%, rgba(30, 22, 12, 0.5) 0%, rgba(8, 12, 9, 0.92) 100%),
     var(--green-900);
+}
+
+/* ============================================================
+   3D locker room (three.js) — full-bleed canvas + bottom chrome.
+   Active only when game.js sets body.locker3d (WebGL init ok).
+   Without it, the flat CSS locker below is the fallback.
+   ============================================================ */
+#clocker { display: none; }
+body.locker3d #clocker {
+  display: block;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 19;               /* below #menu chrome (bench at 21), above bg */
+  touch-action: none;
+}
+body.locker3d #menu { background: #120b06; }   /* behind the opaque canvas */
+body.locker3d .menu-box { display: none; }     /* hide the flat fallback */
+body.locker3d .locker-bench {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 21;
+  padding: var(--s-3) var(--s-4);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-3));
+  background: linear-gradient(180deg, transparent, rgba(6, 10, 7, 0.55) 35%, rgba(6, 10, 7, 0.8));
 }
 
 .locker-box {
