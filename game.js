@@ -325,8 +325,13 @@ const TUNE = {
 // phase): decel = GREEN_DECEL_K / stimp. Stimp -> coast-phase friction:
 // friction = 1 - GREEN_COAST_K / stimp (higher stimp = closer to 1 = glides
 // farther before dropping into the tail). Per-course later.
-const GREEN_DECEL_K = 0.008;   // lower = greens roll out farther in the finishing tail
-const GREEN_COAST_K = 0.11;    // lower = greens glide farther in the fast coast phase
+const GREEN_DECEL_K = 0.004;   // lower = greens roll out farther in the finishing tail
+                               // (0.004 → ~3.5 m/s² decel: real putt pace, not a hockey
+                               //  puck. Launch power is the inverse of this, so distances
+                               //  hold while the ball rolls out ~2× slower / more real.)
+const GREEN_COAST_K = 0.055;   // lower = greens glide farther in the fast coast phase
+                               // (kept at the same ratio to GREEN_DECEL_K so the coast↔tail
+                               //  handoff pace stays smooth after the slowdown)
 
 // Real-world yardages. A full swing CARRIES YARDS.maxCarry in the air (bounce +
 // rollout add more); a full putt on the green rolls at most YARDS.maxPutt.
