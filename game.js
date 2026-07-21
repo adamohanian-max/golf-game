@@ -116,7 +116,10 @@ const TUNE = {
   slopeAccel: 0.0036,         // break strength; capped at slopeCapFrac of greenDecel so ball can always stop
   slopeCapFrac: 0.82,         // slope force ceiling as a fraction of greenDecel (higher = more break on steep greens, but less guaranteed decel)
   fairwaySlopeAccel: 0.0003,  // terrain slope accel on fairway/rough (gentler than green break)
-  slopeStopSpeed: 0.028,
+  slopeStopSpeed: 0.009,      // break stays live until the ball is nearly stopped (just
+                              // above stopThreshold 0.005) so a putt breaks MOST during
+                              // its slow die-in, like real golf. slopeCapFrac still
+                              // guarantees net decel, so it settles instead of creeping.
   // Anti-pixelation detail grain: past the aerial's native resolution a
   // world-anchored procedural grass grain fades in (soft-light) so deep zoom
   // reads as fine turf texture instead of bilinear mush. Ramp is measured in
@@ -720,8 +723,19 @@ function update3DMode() {
 // a native MKMapView sits behind the transparent-there canvas, camera synced
 // each frame to the game's own view/camera state via course.geo.toLonLat
 // (tools/geo_anchor_course.py). See CourseMap3DPlugin.swift.
+// Courses whose ground is rendered by Apple's native Flyover (verified 3D-mesh
+// coverage + a geo anchor written by tools/geo_anchor_course.py). An explicit
+// allow-list, NOT `course.geo` alone: four-oaks-dracut also carries a geo block
+// but renders via the separate three.js path (window.Course3D) and must stay off
+// Apple ground. Add an id here only after confirming Flyover coverage on-device.
+const APPLE_FLYOVER_IDS = new Set([
+  "butter-brook-golf-club",
+  "pebble-beach-golf-course",
+  "liberty-national-golf-club",
+  "torrey-pines-south-course",
+]);
 function appleGroundActive() {
-  return !!(course && course.id === "butter-brook-golf-club" && course.geo &&
+  return !!(course && APPLE_FLYOVER_IDS.has(course.id) && course.geo &&
     mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
     window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
     window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D);
@@ -3153,10 +3167,12 @@ function frameScaleForAngle(angle, ox, oy) {
 function frameTarget(fx, fy) {
   // Focus point defaults to my ball; live spectating passes the opponent's ball.
   const ox = (fx == null) ? state.ball.x : fx, oy = (fy == null) ? state.ball.y : fy;
-  // Club-reach framing owns off-green Apple-ground shots (my ball only — a
-  // spectated opponent has no club context worth framing to).
-  if (fx == null && appleGroundActive() && mode === "course" &&
-      surfaceAt(ox, oy) !== "green") { frameClubReach(); return; }
+  // Club-reach framing owns off-green shots on EVERY course now — the view
+  // fits the current club's reach (ball ~85% down, reach line ~15% from top),
+  // re-zooming when you switch clubs, instead of the ball↔pin fit. My ball only
+  // (a spectated opponent has no club context worth framing to). At flat pitch
+  // (all non-Apple courses) frameClubReach reduces to the plain affine fit.
+  if (fx == null && mode === "course" && surfaceAt(ox, oy) !== "green") { frameClubReach(); return; }
   const r = frameScaleForAngle(camera.tAngle, ox, oy);
   camera._w = r.w; camera._h = r.h;
   camera.tScale = r.scale;

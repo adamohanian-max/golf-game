@@ -50,8 +50,9 @@ def find_boundary_way(near_lat, near_lon):
     return els[0]["type"], els[0]["id"]
 
 
-def fetch_holes_and_greens(near_lat, near_lon):
-    kind, bid = find_boundary_way(near_lat, near_lon)
+def fetch_holes_and_greens(near_lat, near_lon, kind=None, bid=None):
+    if bid is None:
+        kind, bid = find_boundary_way(near_lat, near_lon)
     sel = "rel" if kind == "relation" else "way"
     q = (f'[out:json][timeout:60];{sel}({bid})->.b;.b map_to_area->.oc;'
          f'(way(area.oc)["golf"="hole"];way(area.oc)["golf"="green"];);'
@@ -67,16 +68,23 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--id", required=True)
     ap.add_argument("--near", required=True, help="lat,lon near the course")
+    ap.add_argument("--boundary-rel", type=int, help="force OSM relation id as the course boundary (skip nearest-lookup)")
+    ap.add_argument("--boundary-way", type=int, help="force OSM way id as the course boundary (skip nearest-lookup)")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
 
     near_lat, near_lon = (float(v) for v in args.near.split(","))
+    ov_kind, ov_bid = None, None
+    if args.boundary_rel:
+        ov_kind, ov_bid = "relation", args.boundary_rel
+    elif args.boundary_way:
+        ov_kind, ov_bid = "way", args.boundary_way
     path = os.path.join(os.path.dirname(__file__), "..", "courses", f"{args.id}.json")
     course = json.load(open(path))
     if not course.get("global"):
         sys.exit(f"{args.id} is not a global-mode course — this script assumes no per-hole rotation.")
 
-    els = fetch_holes_and_greens(near_lat, near_lon)
+    els = fetch_holes_and_greens(near_lat, near_lon, ov_kind, ov_bid)
     hole_lines = {}
     greens = []
     for e in els:
