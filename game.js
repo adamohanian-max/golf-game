@@ -3370,16 +3370,8 @@ function updateCamera() {
     _apSettleN = parked ? _apSettleN + 1 : 0;
   } else {
     applePitchT = 0;
-    // Shared automatic zoom-in cap — the same ceiling the Apple-ground courses
-    // use (tied to flyover's min distance, APPLE_MIN_DIST_M), now applied to
-    // every course during normal play so max zoom is consistent. LIFTED on the
-    // green so putting keeps its deep close-up zoom. Course mode only (range /
-    // menu framings are left alone).
-    if (mode === "course" && surfaceAt(state.ball.x, state.ball.y) !== "green") {
-      const sMax = window.innerHeight * M_PER_UNIT * APPLE_CAM_K / APPLE_MIN_DIST_M;
-      if (camera.scale > sMax) camera.scale = sMax;
-      if (camera.tScale > sMax) camera.tScale = sMax;
-    }
+    // (No hard zoom cap here — club-reach framing now owns off-green zoom on
+    // every course, and its D≥APPLE_MIN_DIST_M floor already ceilings the zoom.)
   }
   applePitch = ease(applePitch, applePitchT, 0.05);
   // Pitch-transition refit: while the camera is still leaning/flattening
