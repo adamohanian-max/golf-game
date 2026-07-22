@@ -8853,6 +8853,7 @@ function showMenu() {
   setSlopeMode(true);   // slope relief on by default
   closeCourseMenu();
   renderMenuChips();
+  setMenuBackdrop();
   // Leaving to the menu ends any in-progress Tour Event round + hides the scorebug.
   tourPlayMode = false;
   stopTourPoll();
@@ -8860,29 +8861,63 @@ function showMenu() {
 }
 
 // Home-menu chips: daily streak + today's featured (free) course.
+// Broadcast tee-card: fill the mono "bug" (today's featured/free course as a
+// telecast location tag) + the ticker (daily streak line). Reuses the same
+// #menu-featured / #menu-streak elements the old chips used.
 function renderMenuChips() {
-  const wrap = document.getElementById("menu-chips");
-  if (!wrap) return;
-  const stEl = document.getElementById("menu-streak");
-  const ftEl = document.getElementById("menu-featured");
   const st = getDaily();
-  let any = false;
-  if (stEl) {
+  // Bug — today's featured (free) course.
+  const bug = document.getElementById("menu-bug");
+  const ftEl = document.getElementById("menu-featured");
+  const freeEl = document.getElementById("menu-free");
+  const fid = dailyFeaturedCourseId();
+  const c = fid && COURSES.find((x) => x.id === fid);
+  if (bug && ftEl) {
+    if (c) {
+      ftEl.textContent = c.name;
+      if (freeEl) freeEl.classList.remove("hidden");
+      bug.classList.remove("hidden");
+    } else {
+      if (freeEl) freeEl.classList.add("hidden");
+      bug.classList.add("hidden");
+    }
+  }
+  // Ticker — daily streak.
+  const ticker = document.getElementById("menu-ticker");
+  const stEl = document.getElementById("menu-streak");
+  if (ticker && stEl) {
     const show = (st.streak || 0) > 0;
     stEl.classList.toggle("hidden", !show);
     if (show) {
-      stEl.textContent = "Daily streak: " + st.streak +
-        (st.lastDate !== todayStr() ? " · play today to keep it" : "");
-      any = true;
+      stEl.textContent = "Daily streak " + st.streak +
+        (st.lastDate !== todayStr() ? " · play today to keep it" : " · going strong");
+      ticker.classList.remove("hidden");
+    } else {
+      ticker.classList.add("hidden");
     }
   }
-  if (ftEl) {
-    const fid = dailyFeaturedCourseId();
-    const c = fid && COURSES.find((x) => x.id === fid);
-    ftEl.classList.toggle("hidden", !c);
-    if (c) { ftEl.textContent = "Free today: " + c.name; any = true; }
-  }
-  wrap.classList.toggle("hidden", !any);
+}
+
+// Backdrop = the routing map of today's featured course, graded + drifting via
+// CSS. Probe candidates in order; first that loads wins, else the .menu-bg pine
+// fallback color shows (never a broken image).
+function setMenuBackdrop() {
+  const bg = document.querySelector("#menu .menu-bg");
+  if (!bg) return;
+  const fid = (typeof dailyFeaturedCourseId === "function" && dailyFeaturedCourseId()) || null;
+  const candidates = [];
+  if (fid) candidates.push("courses/img/" + fid + "/course.jpg");
+  candidates.push("courses/img/pebble-beach-golf-course/course.jpg");
+  let i = 0;
+  const tryNext = () => {
+    if (i >= candidates.length) return;
+    const url = candidates[i++];
+    const img = new Image();
+    img.onload = () => { bg.style.backgroundImage = "url('" + url + "')"; };
+    img.onerror = tryNext;
+    img.src = url;
+  };
+  tryNext();
 }
 
 // Switch the world scale (yards/unit) and refresh derived power if it changed.

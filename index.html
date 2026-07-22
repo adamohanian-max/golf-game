@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/tokens.css?v=57">
   <link rel="stylesheet" href="css/base.css?v=67">
   <link rel="stylesheet" href="css/hud.css?v=94">
-  <link rel="stylesheet" href="css/menu.css?v=72">
+  <link rel="stylesheet" href="css/menu.css?v=73">
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=77">
   <link rel="stylesheet" href="css/tournament.css?v=58">
@@ -190,29 +190,55 @@
   </div>
 
   <div id="menu">
+    <div class="menu-bg"></div>
+    <div class="menu-scrim"></div>
     <div class="menu-box">
-      <p class="menu-eyebrow">Tee it up</p>
-      <h1>GOLF</h1>
-      <div class="menu-divider"></div>
-      <button id="play-course" class="menu-btn menu-btn-play">Play</button>
-      <div class="menu-grid">
-        <button id="play-daily" class="menu-btn secondary">Daily Challenge</button>
-        <button id="play-range" class="menu-btn secondary">Driving Range</button>
-        <button id="open-account" class="menu-btn secondary">My Account<span id="fr-menu-dot" class="fr-dot hidden"></span></button>
+      <div id="menu-bug" class="menu-bug hidden">
+        <span id="menu-featured" class="menu-tag"></span>
+        <span id="menu-free" class="menu-tag menu-tag-free hidden">Free today</span>
       </div>
-      <div id="menu-chips" class="menu-chips hidden">
-        <span id="menu-streak" class="menu-chip hidden"></span>
-        <span id="menu-featured" class="menu-chip hidden"></span>
+      <div class="menu-wordmark">
+        <h1>Golf</h1>
+        <p class="menu-kicker">The clubhouse</p>
       </div>
-      <button id="menu-player" class="menu-player">Player: <b id="menu-player-name">Set name</b> <span class="ic ic-pencil"></span></button>
-      <div id="menu-auth" class="menu-auth">
-        <button id="menu-signin" class="menu-auth-link">Sign in / Create account</button>
-        <span id="menu-account" class="menu-auth-account hidden">Signed in · <button id="menu-signout" class="menu-auth-link">Sign out</button></span>
+      <div class="menu-actions">
+        <button id="play-course" class="menu-action menu-action--primary">
+          <span class="menu-rule"></span>
+          <span class="menu-action-label">Play</span>
+          <span class="menu-caret" aria-hidden="true">→</span>
+        </button>
+        <button id="play-daily" class="menu-action">
+          <span class="menu-rule"></span>
+          <span class="menu-action-label">Daily Challenge</span>
+          <span class="menu-caret" aria-hidden="true">→</span>
+        </button>
+        <button id="play-range" class="menu-action">
+          <span class="menu-rule"></span>
+          <span class="menu-action-label">Driving Range</span>
+          <span class="menu-caret" aria-hidden="true">→</span>
+        </button>
+        <button id="open-account" class="menu-action">
+          <span class="menu-rule"></span>
+          <span class="menu-action-label">My Account</span>
+          <span id="fr-menu-dot" class="fr-dot hidden"></span>
+          <span class="menu-caret" aria-hidden="true">→</span>
+        </button>
       </div>
-      <p class="menu-fineprint">
-        <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> ·
-        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors
-      </p>
+      <div id="menu-ticker" class="menu-ticker hidden">
+        <span class="menu-ticker-rule"><span>Today</span></span>
+        <span id="menu-streak" class="menu-ticker-line hidden"></span>
+      </div>
+      <div class="menu-foot">
+        <button id="menu-player" class="menu-player">Player: <b id="menu-player-name">Set name</b> <span class="ic ic-pencil"></span></button>
+        <div id="menu-auth" class="menu-auth">
+          <button id="menu-signin" class="menu-auth-link">Sign in / Create account</button>
+          <span id="menu-account" class="menu-auth-account hidden">Signed in · <button id="menu-signout" class="menu-auth-link">Sign out</button></span>
+        </div>
+        <p class="menu-fineprint">
+          <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> ·
+          Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors
+        </p>
+      </div>
     </div>
   </div>
 
@@ -777,6 +803,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script defer src="game.js?v=299"></script>
+  <script defer src="game.js?v=300"></script>
 </body>
 </html>

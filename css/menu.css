@@ -3,111 +3,250 @@
    auth, add-course, admin settings.
    ============================================================ */
 
-/* ---- Home menu -------------------------------------------- */
+/* ---- Home menu: broadcast tee-card ------------------------ */
+/* A golf-telecast lower-third: a left-anchored card with a hairline brass
+   frame + Fraunces wordmark + mono data bits, over a graded, slowly drifting
+   map of today's featured course. */
 #menu {
   position: fixed;
   inset: 0;
   display: flex;
-  /* margin:auto on the box centers when it fits AND stays scrollable when taller */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  background: radial-gradient(ellipse at 50% 38%, rgba(12, 26, 18, 0.62) 0%, rgba(5, 11, 8, 0.88) 100%);
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  backdrop-filter: blur(var(--blur-sm));
+  background: var(--green-900, #0e1f16);
   z-index: 20;
 }
 #menu.hidden { display: none; }
 
+/* Backdrop: today's featured-course routing map, graded + slow ken-burns.
+   background-image is set from JS (setMenuBackdrop); gradient here is the
+   final fallback when no map loads. */
+.menu-bg {
+  position: absolute;
+  inset: 0;
+  background-color: var(--green-900, #0e1f16);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: saturate(0.82) brightness(0.7) contrast(1.05);
+  transform-origin: 60% 45%;
+  animation: menuKenburns 40s ease-in-out infinite alternate;
+  will-change: transform;
+}
+/* Left→right pine scrim + vignette so the left-anchored card stays legible. */
+.menu-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(100deg,
+      rgba(6, 14, 9, 0.94) 0%,
+      rgba(8, 18, 12, 0.86) 34%,
+      rgba(10, 22, 15, 0.5) 68%,
+      rgba(10, 22, 15, 0.28) 100%),
+    radial-gradient(120% 90% at 30% 50%,
+      rgba(0, 0, 0, 0) 45%, rgba(3, 8, 5, 0.7) 100%);
+}
+
+/* The card itself — left-anchored, hairline brass frame with corner ticks. */
 .menu-box {
-  text-align: center;
-  margin: auto;
-  padding: var(--s-6) var(--s-5);
+  position: relative;
+  text-align: left;
+  margin: auto auto auto 0;
+  width: 380px;
+  max-width: 88vw;
+  padding: var(--s-6) var(--s-5) var(--s-5);
   padding-top: calc(env(safe-area-inset-top, 0px) + var(--s-6));
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-6));
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-5));
+  padding-left: calc(env(safe-area-inset-left, 0px) + var(--s-6));
+  margin-left: max(env(safe-area-inset-left, 0px), 3vw);
   animation: panelIn 0.55s var(--ease) both;
 }
-
-.menu-eyebrow {
-  color: var(--text-faint);
-  font-size: var(--t-micro);
-  font-weight: var(--fw-med);
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  margin-bottom: var(--s-4);
+/* Hairline brass frame + corner ticks (the broadcast "bug" chrome). */
+.menu-box::before {
+  content: "";
+  position: absolute;
+  inset: var(--s-3) 0 var(--s-3) 0;
+  border-left: 2px solid var(--brass, #b08d4a);
+  pointer-events: none;
+  opacity: 0.9;
 }
 
+/* Broadcast bug: mono location tag naming the live backdrop course. */
+.menu-bug {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+  animation: menuRise 0.5s var(--ease) both;
+  animation-delay: 0.05s;
+}
+.menu-bug.hidden { display: none; }
+.menu-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--brass-bright, #cfa85e);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  white-space: nowrap;
+}
+.menu-tag::before {
+  content: "▸";
+  color: var(--brass, #b08d4a);
+  font-size: 0.85em;
+}
+.menu-tag-free {
+  color: var(--green-900, #0e1f16);
+  background: var(--brass, #b08d4a);
+  border-radius: var(--r-sm, 4px);
+  padding: 2px 7px;
+  letter-spacing: 1.2px;
+}
+.menu-tag-free::before { content: none; }
+.menu-tag-free.hidden { display: none; }
+
+/* Wordmark: Fraunces serif + small kicker. */
+.menu-wordmark { margin-bottom: var(--s-5); }
+.menu-wordmark { animation: menuRise 0.55s var(--ease) both; animation-delay: 0.1s; }
 .menu-box h1 {
   color: var(--text);
   font-family: var(--font-display);
-  font-size: var(--t-display);
+  font-size: 68px;
   font-weight: var(--fw-bold);
-  letter-spacing: 4px;
-  line-height: 1;
-  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.45);
+  letter-spacing: 0.5px;
+  line-height: 0.92;
+  text-shadow: 0 6px 40px rgba(0, 0, 0, 0.55);
   margin: 0;
 }
-
-.menu-divider {
-  width: 36px;
-  height: 2px;
-  background: var(--brass);
-  margin: var(--s-5) auto var(--s-6);
-  border-radius: 2px;
-  opacity: 0.8;
-}
-
-/* ---- Home menu button tiers ------------------------------- */
-/* 2-up multiplayer row */
-.menu-row {
-  display: flex;
-  gap: var(--s-2);
-  width: 260px;
-  max-width: 82vw;
-  margin: var(--s-2) auto;
-}
-.menu-row .menu-btn {
-  width: auto;
-  max-width: none;
-  flex: 1;
-  margin: 0;
-  padding: 14px var(--s-2);
-  font-size: 14px;
-}
-
-/* 2×2 secondary grid */
-.menu-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s-2);
-  width: 260px;
-  max-width: 82vw;
-  margin: var(--s-2) auto;
-}
-.menu-grid .menu-btn {
-  width: auto;
-  max-width: none;
-  margin: 0;
-  padding: 13px var(--s-2);
-  font-size: var(--t-cap);
-}
-#open-progress { grid-column: 1 / -1; }
-
-/* Progress chips under the menu grid: streak + today's featured course */
-.menu-chips {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: var(--s-1);
-  margin-top: var(--s-2);
-}
-.menu-chip {
+.menu-kicker {
+  margin: var(--s-2) 0 0;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  color: var(--w-70, rgba(244,246,243,0.7));
-  border: 1px solid var(--brass-soft, rgba(176,141,74,0.14));
-  background: rgba(0,0,0,0.18);
-  border-radius: var(--r-pill, 999px);
-  padding: 4px 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Action rows: brass hairline rule + label + caret (no fake numbering). */
+.menu-actions {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 var(--s-4);
+}
+.menu-action {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  margin: 0;
+  padding: var(--s-3) var(--s-2) var(--s-3) 0;
+  background: none;
+  border: none;
+  border-top: var(--border-hair, 1px solid var(--w-08));
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--dur-fast), background var(--dur-fast);
+  animation: menuRise 0.5s var(--ease) both;
+}
+.menu-actions .menu-action:last-child { border-bottom: var(--border-hair, 1px solid var(--w-08)); }
+.menu-action:nth-child(1) { animation-delay: 0.16s; }
+.menu-action:nth-child(2) { animation-delay: 0.22s; }
+.menu-action:nth-child(3) { animation-delay: 0.28s; }
+.menu-action:nth-child(4) { animation-delay: 0.34s; }
+.menu-rule {
+  flex: 0 0 auto;
+  width: 3px;
+  height: 1.1em;
+  background: var(--brass, #b08d4a);
+  border-radius: 2px;
+  opacity: 0.55;
+  transition: height var(--dur-fast), opacity var(--dur-fast);
+}
+.menu-action-label {
+  flex: 1 1 auto;
+  font-size: var(--t-h2, 19px);
+  font-weight: var(--fw-med);
+  letter-spacing: 0.2px;
+}
+.menu-action--primary .menu-action-label {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.4px;
+}
+.menu-action--primary .menu-rule { opacity: 1; width: 4px; }
+.menu-caret {
+  flex: 0 0 auto;
+  color: var(--brass, #b08d4a);
+  font-size: 1.1em;
+  opacity: 0.6;
+  transform: translateX(0);
+  transition: transform var(--dur-fast), opacity var(--dur-fast);
+}
+.menu-action:hover { color: var(--brass-bright, #cfa85e); }
+.menu-action:hover .menu-rule { height: 1.5em; opacity: 1; }
+.menu-action:hover .menu-caret { transform: translateX(4px); opacity: 1; }
+.menu-action:active { background: var(--w-05); }
+.menu-action .fr-dot { margin-left: -0.2em; }
+
+/* Ticker: mono "Today" divider + streak line. */
+.menu-ticker {
+  margin: 0 0 var(--s-5);
+  animation: menuRise 0.5s var(--ease) both;
+  animation-delay: 0.4s;
+}
+.menu-ticker.hidden { display: none; }
+.menu-ticker-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: var(--s-2);
+}
+.menu-ticker-rule::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--w-08);
+}
+.menu-ticker-line {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+}
+.menu-ticker-line.hidden { display: none; }
+.menu-ticker-line::before {
+  content: "◷ ";
+  color: var(--brass, #b08d4a);
+}
+
+/* Footer strip: player / auth / fineprint, thin + muted, left-anchored. */
+.menu-foot { text-align: left; }
+
+@keyframes menuKenburns {
+  from { transform: scale(1.06) translate(0, 0); }
+  to   { transform: scale(1.14) translate(-2.5%, -1.5%); }
+}
+@keyframes menuRise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-bg { animation: none; transform: scale(1.06); }
+  .menu-box, .menu-bug, .menu-wordmark, .menu-action, .menu-ticker { animation: none; }
 }
 
 /* Small text-link rows (account / admin) */
@@ -176,7 +315,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4em;
-  margin: var(--s-4) auto 0;
+  margin: var(--s-4) 0 0;
   background: none;
   border: none;
   color: var(--text-dim);
@@ -188,7 +327,7 @@
 .menu-player .ic { font-size: 1em; color: var(--text-dim); }
 
 /* Auth control on menu */
-.menu-auth { margin-top: var(--s-1); text-align: center; }
+.menu-auth { margin-top: var(--s-1); text-align: left; }
 .menu-auth-link {
   background: none; border: none; cursor: pointer;
   color: var(--accent-bright); font-size: var(--t-cap); font-weight: var(--fw-med); letter-spacing: 0.3px;
@@ -199,7 +338,7 @@
 #menu-signin.hidden { display: none; }
 
 .menu-fineprint {
-  margin: var(--s-3) 0 0; text-align: center;
+  margin: var(--s-3) 0 0; text-align: left;
   color: var(--text-muted); font-size: 11px; line-height: 1.5; opacity: 0.85;
 }
 .menu-fineprint a { color: var(--text-muted); text-decoration: underline; }
@@ -500,5 +639,10 @@
    Desktop layout overrides (body.is-desktop) — home menu wider
    with more breathing room than the phone-stacked layout.
    ============================================================ */
-body.is-desktop .menu-box { padding: var(--s-6) var(--s-6); }
+body.is-desktop .menu-box {
+  width: 440px;
+  padding: var(--s-6) var(--s-6);
+  margin-left: max(env(safe-area-inset-left, 0px), 7vw);
+}
+body.is-desktop .menu-box h1 { font-size: 84px; }
 body.is-desktop #course-list { width: 340px; max-width: 70vw; }
