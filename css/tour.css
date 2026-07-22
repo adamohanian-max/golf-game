@@ -86,8 +86,11 @@
 #tour-board .tb-actions.hidden,
 #tb-back.hidden { display: none; }
 
-.tb-table-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.tb-table { width: 100%; border-collapse: collapse; }
+.tb-table-wrap { flex: 1; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* table-layout:fixed so the declared numeric column widths are honored and the
+   PLAYER cell takes the remainder + ellipsizes, instead of the name growing to
+   full content and shoving the table past a phone's width (clipping TOTAL). */
+.tb-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .tb-table thead th {
   position: sticky; top: 0;
   background: var(--tour-board-bg);
@@ -116,10 +119,18 @@
   font-family: var(--font-display);
   font-weight: 600;
   display: flex; align-items: center; gap: 8px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  overflow: hidden;                 /* clip the flex cell to its fixed-layout width */
 }
-.tb-table td.tb-total { font-weight: 700; width: 60px; }
-.tb-table td.tb-today, .tb-table td.tb-thru { width: 52px; color: var(--text-muted); font-size: 13px; }
+/* the name text ellipsizes (flag stays put); min-width:0 lets it shrink in flex */
+.tb-table td.tb-name .tb-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-table td.tb-total { font-weight: 700; }
+.tb-table td.tb-today, .tb-table td.tb-thru { color: var(--text-muted); font-size: 13px; }
+/* Column widths live on the HEADER row: with table-layout:fixed the browser
+   derives every column's width from the first row (thead), so widths on the
+   <td> alone are ignored and the columns split evenly (crushing PLAYER). */
+.tb-table thead th.tb-pos { width: 40px; }
+.tb-table thead th.tb-today, .tb-table thead th.tb-thru { width: 52px; }
+.tb-table thead th.tb-total { width: 60px; }
 
 .tb-flag { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; flex: none; background: var(--w-08); }
 
@@ -364,6 +375,14 @@
   .tbug-thru { width: 16px; font-size: 9px; }
   .tbug-total { width: 26px; }
   .tbug-cut { padding: 3px 6px; font-size: 8.5px; }
+
+  /* Leaderboard board: tighten cells + trim the numeric columns so the PLAYER
+     column keeps room on a ~390px phone (fixed layout ellipsizes the name). */
+  .tb-table thead th { padding: 8px 6px; }
+  .tb-table tbody td { padding: 9px 6px; font-size: 14px; }
+  .tb-table thead th.tb-pos  { width: 32px; }
+  .tb-table thead th.tb-today, .tb-table thead th.tb-thru { width: 42px; }
+  .tb-table thead th.tb-total { width: 48px; }
 }
 
 /* ---- Round-end "next round / cut / results" note ---------- */

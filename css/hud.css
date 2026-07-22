@@ -50,6 +50,8 @@
   left: var(--s-3);
   max-width: 52vw;
   white-space: nowrap;
+  overflow: hidden;              /* long hint clamps to max-width instead of spilling */
+  text-overflow: ellipsis;
   color: var(--w-85);
   background: rgba(0, 0, 0, 0.4);
   padding: var(--s-2) var(--s-3);

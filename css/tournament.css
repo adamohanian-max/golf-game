@@ -95,6 +95,9 @@
 .tm-sec input[type=text], .tm-sec input[type=number] { border-radius: var(--r-sm); padding: var(--s-3); background: var(--surface-raised); color: #fff; border: var(--border-edge); }
 .tm-times { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: center; gap: var(--s-2); color: var(--text); font-size: 14px; }
 .tm-times input { width: 100%; }
+/* Phone: two label+input pairs side-by-side squeeze the number inputs to a few
+   chars — stack to one label+input per row. */
+@media (max-width: 640px) { .tm-times { grid-template-columns: auto 1fr; } }
 .tm-deadlines { font-size: 11px; opacity: 0.6; color: var(--text); }
 .tm-save { width: auto; align-self: flex-start; margin: 0; padding: 9px var(--s-4); font-size: 14px; }
 .tm-players { display: flex; flex-direction: column; gap: var(--s-2); }

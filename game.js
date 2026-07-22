@@ -7023,7 +7023,10 @@ function showRoundSummary(midRound = false) {
   document.getElementById("re-share").classList.toggle("hidden", midRound || matchEnd);
   // Book CTA: only a finished round on a real (bookable) course — no CTA mid-round,
   // no CTA for fictional Originals, no CTA on the single-flow match end.
-  const showBookCta = !midRound && !matchEnd && courseIsReal(selectedCourseId);
+  // Gated OFF until the real GolfNow tee-time API is wired (the CTA opens a
+  // deep-link stub today). Flip BOOKING_ENABLED true then — all booking code
+  // (openBookSheet/searchTeeTimes/bookTeeTime/unlockCourseFromBooking) stays intact.
+  const showBookCta = BOOKING_ENABLED && !midRound && !matchEnd && courseIsReal(selectedCourseId);
   document.getElementById("re-book").classList.toggle("hidden", !showBookCta);
   if (showBookCta) track("book_cta_shown", { course: selectedCourseId });
   // reset to scorecard tab each open
@@ -7444,6 +7447,12 @@ function courseUnlockCount() {
   const vis = visibleCourses();
   return { unlocked: vis.filter((c) => courseUnlocked(c.id)).length, total: vis.length };
 }
+
+// Master switch for the "Book a real tee time" feature. OFF until the real
+// GolfNow tee-time API is wired — the round-end CTA currently opens only a
+// deep-link stub, so it's hidden (see showBookCta in the round-end open). Flip
+// to true to light the whole flow back up; no other code changes needed.
+const BOOKING_ENABLED = false;
 
 // A course record is "real" (bookable) unless it's a fictional Original or a
 // dev imagery-test entry — those have no real-world tee sheet to book.
@@ -11973,7 +11982,7 @@ function _tourRowHTML(p, posLabel) {
   const total = '<span class="' + _parClass(p.total) + '">' + _parText(p.total) + "</span>";
   return '<tr class="' + (p.isMe ? "tb-me" : "") + '">' +
     '<td class="tb-pos">' + posLabel + "</td>" +
-    '<td class="tb-name">' + flag + nm + "</td>" +
+    '<td class="tb-name">' + flag + '<span class="tb-nm">' + nm + "</span></td>" +
     '<td class="tb-today">' + today + "</td>" +
     '<td class="tb-thru">' + (p.thru == null ? "—" : p.thru) + "</td>" +
     '<td class="tb-total">' + total + "</td></tr>";

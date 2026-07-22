@@ -543,6 +543,9 @@
 .av-email { color: var(--text-dim); font-size: var(--t-cap); margin-top: 2px; }
 .av-joined { color: var(--text-faint); font-size: 12px; margin-top: 2px; }
 .av-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-2); margin-bottom: var(--s-3); }
+/* Phone: 4 stats across ~311px inner width squeezes each cell to ~70px and clips
+   the 19px values — drop to a 2×2 grid so each stat has room. */
+@media (max-width: 640px) { .av-grid { grid-template-columns: repeat(2, 1fr); } }
 .av-cell { background: var(--w-05); border-radius: var(--r-md); padding: var(--s-3) 6px; text-align: center; }
 .av-val { color: var(--text); font-size: 19px; font-weight: var(--fw-black); font-variant-numeric: tabular-nums; }
 .av-val small { font-size: 10px; font-weight: var(--fw-med); color: var(--text-faint); }
