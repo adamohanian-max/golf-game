@@ -116,7 +116,7 @@ const TUNE = {
   slopeAccel: 0.0036,         // break strength; capped at slopeCapFrac of greenDecel so ball can always stop
   slopeCapFrac: 0.82,         // slope force ceiling as a fraction of greenDecel (higher = more break on steep greens, but less guaranteed decel)
   fairwaySlopeAccel: 0.0003,  // terrain slope accel on fairway/rough (gentler than green break)
-  slopeStopSpeed: 0.009,      // break stays live until the ball is nearly stopped (just
+  slopeStopSpeed: 0.0185,     // break stays live until the ball is nearly stopped (just
                               // above stopThreshold 0.005) so a putt breaks MOST during
                               // its slow die-in, like real golf. slopeCapFrac still
                               // guarantees net decel, so it settles instead of creeping.
@@ -328,11 +328,12 @@ const TUNE = {
 // phase): decel = GREEN_DECEL_K / stimp. Stimp -> coast-phase friction:
 // friction = 1 - GREEN_COAST_K / stimp (higher stimp = closer to 1 = glides
 // farther before dropping into the tail). Per-course later.
-const GREEN_DECEL_K = 0.004;   // lower = greens roll out farther in the finishing tail
-                               // (0.004 → ~3.5 m/s² decel: real putt pace, not a hockey
-                               //  puck. Launch power is the inverse of this, so distances
-                               //  hold while the ball rolls out ~2× slower / more real.)
-const GREEN_COAST_K = 0.055;   // lower = greens glide farther in the fast coast phase
+const GREEN_DECEL_K = 0.006;   // lower = greens roll out farther in the finishing tail
+                               // (0.006 → ~5.4 m/s² decel: half-way back from the 0.004
+                               //  recalibration toward the old 0.008. Launch power is the
+                               //  inverse of this, so distances hold while rollout pace sits
+                               //  between the old snappy stop and the slow real die-in.)
+const GREEN_COAST_K = 0.0825;  // lower = greens glide farther in the fast coast phase
                                // (kept at the same ratio to GREEN_DECEL_K so the coast↔tail
                                //  handoff pace stays smooth after the slowdown)
 
