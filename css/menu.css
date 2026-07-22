@@ -11,8 +11,9 @@
   position: fixed;
   inset: 0;
   display: flex;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;               /* fit to screen — no scroll / rubber-band */
+  touch-action: none;
+  overscroll-behavior: none;
   background: var(--green-900, #0e1f16);
   z-index: 20;
 }
@@ -54,6 +55,7 @@
   margin: auto auto auto 0;
   width: 380px;
   max-width: 88vw;
+  max-height: 100dvh;
   padding: var(--s-6) var(--s-5) var(--s-5);
   padding-top: calc(env(safe-area-inset-top, 0px) + var(--s-6));
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-5));
@@ -136,7 +138,7 @@
 .menu-box h1 {
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 68px;
+  font-size: clamp(48px, 11vh, 68px);
   font-weight: var(--fw-bold);
   letter-spacing: 0.5px;
   line-height: 0.92;
@@ -268,6 +270,17 @@
 @media (prefers-reduced-motion: reduce) {
   .menu-bg { animation: none; transform: scale(1.06); }
   .menu-box, .menu-bug, .menu-wordmark, .menu-action, .menu-ticker { animation: none; }
+}
+
+/* Short-height guard: compress the card so the 7-row Play view (tallest case)
+   fits without scrolling on short phones (e.g. SE, landscape). */
+@media (max-height: 720px) {
+  .menu-box { padding-top: calc(env(safe-area-inset-top, 0px) + var(--s-4)); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-3)); }
+  .menu-box h1 { font-size: clamp(40px, 8.5vh, 52px); }
+  .menu-wordmark { margin-bottom: var(--s-3); }
+  .menu-bug { margin-bottom: var(--s-2); }
+  .menu-back { margin-bottom: var(--s-2); }
+  .pm-item { padding-top: var(--s-2); padding-bottom: var(--s-2); }
 }
 
 /* Small text-link rows (account / admin) */

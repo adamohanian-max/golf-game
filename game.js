@@ -2982,6 +2982,44 @@ canvas.addEventListener("mousedown", swingStart);
 canvas.addEventListener("mousemove", swingMove);
 window.addEventListener("mouseup", swingEnd);
 
+// --- Left-edge swipe = back (standard mobile UX) ---
+// Only arms when a "backable" overlay is open, so it never touches gameplay
+// swings. Reuses each screen's existing wired Back/Close control.
+(function initEdgeSwipeBack() {
+  // topmost-first: overlay id -> its existing back/close control
+  const BACK_TARGETS = [
+    ["play-menu", "pm-back"], ["course-select", "cs-back"],
+    ["account-viewer", "av-close"], ["leaderboard", "lb-close"],
+  ];
+  const EDGE = 24;        // px from the left edge to start the gesture
+  const MIN_DX = 60;      // horizontal travel to trigger
+  const MAX_MS = 600;
+  let g = null;           // { x, y, t }
+  const openTarget = () => BACK_TARGETS.find(([id]) => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains("hidden");
+  });
+  window.addEventListener("touchstart", (e) => {
+    g = null;
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if (t.clientX > EDGE) return;
+    if (!openTarget()) return;   // nothing to go back from -> ignore
+    g = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }, { passive: true });
+  window.addEventListener("touchend", (e) => {
+    if (!g) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - g.x, dy = t.clientY - g.y, dt = Date.now() - g.t;
+    g = null;
+    if (dx >= MIN_DX && dx >= 2 * Math.abs(dy) && dt < MAX_MS) {
+      const tgt = openTarget();
+      if (tgt) { const btn = document.getElementById(tgt[1]); if (btn) btn.click(); }
+    }
+  }, { passive: true });
+  window.addEventListener("touchcancel", () => { g = null; }, { passive: true });
+})();
+
 // --- Two-finger trackpad swipe (desktop) ---
 // A two-finger swipe arrives as a stream of wheel events. We collect them for a
 // short window from the first event, then launch in the swipe's direction. The
