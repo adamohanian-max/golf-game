@@ -1374,7 +1374,6 @@ let measureDragging = false;
 let markerDrag = null;     // active drag of the dropped marker: { moved, x, y } (screen px)
 const MARKER_HIT_PX = 22;  // touch/click radius around the marker to grab/dismiss it
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
-let rangeTarget = 150; // driving-range target distance (yards)
 let wind = { dir: 0, speed: 0 }; // dir = compass bearing wind comes FROM (radians, 0=N), speed in mph
 // Last-shot stats for the HUD (carry / ball speed / total / dist-to-pin).
 const shot = { startX: 0, startY: 0, mph: 0, carry: null, total: null, carried: false };
@@ -1940,18 +1939,9 @@ function rollStep(b) {
     state.moving = false;
     shot.total = dist(shot.startX, shot.startY, b.x, b.y) * YARDS_PER_UNIT;
     // Fairway-hit: tee shot on par 4/5 — check where ball came to rest
-    if (state._teeShot && !HOLE.isRange) {
+    if (state._teeShot) {
       state._teeShot = false;
       state.fairwayHit = surfaceAt(b.x, b.y) === "fairway";
-    }
-    if (HOLE.isRange) {
-      // range: report the shot, then tee up a fresh ball for the next swing
-      const delta = Math.round(shot.total - rangeTarget);
-      rangeFeedback(`Total ${Math.round(shot.total)} yds · ${delta >= 0 ? "+" : ""}${delta} to target`);
-      b.x = HOLE.teePos.x; b.y = HOLE.teePos.y; b.z = 0; b.vz = 0; b.spin = 0;
-      state.lastSafe = { x: b.x, y: b.y };
-      frameRange();
-      return;
     }
     const rest = surfaceAt(b.x, b.y);
     const isOB = rest === "woods" || rest === "ob"; // trees + out-of-bounds
@@ -6104,21 +6094,8 @@ function draw() {
     }
   }
 
-  // target rings on the range; the cup + flag on the course
-  if (HOLE.isRange) {
-    const tx = wx(HOLE.holePos.x, HOLE.holePos.y), ty = wy(HOLE.holePos.x, HOLE.holePos.y);
-    ctx.lineWidth = 2;
-    for (const rr of [9, 6, 3]) { // concentric yard rings
-      ctx.beginPath();
-      ctx.arc(tx, ty, ws(rr / YARDS_PER_UNIT), 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(230,40,40,0.85)";
-      ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.arc(tx, ty, Math.max(ws(1 / YARDS_PER_UNIT), 4), 0, Math.PI * 2);
-    ctx.fillStyle = "#e02a25";
-    ctx.fill();
-  } else {
+  // hole cup + flag
+  {
   if (!render3D) drawTeeMarkers();   // flank the tee box (WebGL draws the tee marker in 3D)
   // hole cup — dark hole with a bright rim so it reads on the photo. A circle
   // on the ground foreshortens with the camera tilt, so ry scales by view.tilt.
@@ -7789,11 +7766,7 @@ document.getElementById("pv-play").addEventListener("click", () => {
 // =====================================================================
 const elMenu = document.getElementById("menu");
 const elStats = document.getElementById("stats");
-const elRangeUI = document.getElementById("range-ui");
 const elScorecard = document.getElementById("scorecard");
-const rangeSlider = document.getElementById("range-slider");
-const elRangeYards = document.getElementById("range-yards");
-const elRangeResult = document.getElementById("range-result");
 const stLie = document.getElementById("st-lie");
 const stLieNote = document.getElementById("st-lie-note");
 const stCarry = document.getElementById("st-carry");
@@ -7833,8 +7806,6 @@ function updateWindChip() {
   const spd = Math.round(wind.speed);
   if (spd !== _windMphShown) { elWindMph.textContent = spd + " mph"; _windMphShown = spd; }
 }
-
-function rangeFeedback(msg) { if (elRangeResult) elRangeResult.textContent = msg; }
 
 // Human label for the ball's current lie (Tee/Fairway/Rough/Sand/...).
 const LIE_NAMES = { fairway: "Fairway", green: "Green", bunker: "Sand",
@@ -7926,36 +7897,6 @@ function updateStats() {
       rowPlays.style.display = "none";
     }
   }
-}
-
-// Synthetic driving range: a long turf strip, tee at the bottom, a target ring
-// `targetYds` up the range. No cup, no hazards.
-function buildRangeRec(targetYds) {
-  const ypu = YARDS_PER_UNIT;
-  const w = 54, h = 300 / ypu + 28;     // fits up to a 300-yd target + margin
-  const cx = w / 2, teeY = h - 12;
-  const tgtY = teeY - targetYds / ypu;
-  return {
-    num: 1, par: 0, yards: targetYds, world: { w, h },
-    tee: { x: cx, y: teeY }, pin: { x: cx, y: tgtY }, aerial: null,
-    surfaces: {
-      fairway: [[{ x: cx - 10, y: teeY + 4 }, { x: cx + 10, y: teeY + 4 },
-                 { x: cx + 8, y: 6 }, { x: cx - 8, y: 6 }]],
-      tee: [[{ x: cx - 2, y: teeY + 2 }, { x: cx + 2, y: teeY + 2 },
-             { x: cx + 2, y: teeY - 2 }, { x: cx - 2, y: teeY - 2 }]],
-      green: [], bunker: [], water: [], grass: [], woods: [], cartpath: [],
-    },
-  };
-}
-
-// Fixed range camera (angle 0): frame the tee and the target together.
-function frameRange() {
-  const t = HOLE.teePos, p = HOLE.holePos, pad = 8;
-  const w = Math.abs(t.x - p.x) + 2 * pad, h = Math.abs(t.y - p.y) + 2 * pad;
-  camera.tAngle = 0;
-  camera._w = w; camera._h = h;
-  camera.tScale = Math.min(window.innerWidth / w, window.innerHeight / h);
-  camera.tFocus = { x: (t.x + p.x) / 2, y: (t.y + p.y) / 2 };
 }
 
 const elCourseMenu = document.getElementById("course-menu");
@@ -8857,7 +8798,6 @@ function showMenu() {
   elMenu.classList.remove("hidden");
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
-  elRangeUI.classList.add("hidden");
   elStats.classList.add("hidden");
   elHudBtn.classList.add("hidden");
   elHmClubRow.classList.add("hidden");
@@ -8974,7 +8914,6 @@ function startCourse() {
   elMenu.classList.add("hidden");
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
-  elRangeUI.classList.add("hidden");
   document.getElementById("round-end").classList.add("hidden");
   elScorecard.style.display = "";
   elHudBtn.classList.remove("hidden");
@@ -9059,7 +8998,6 @@ async function startDaily() {
   elMenu.classList.add("hidden");
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
-  elRangeUI.classList.add("hidden");
   document.getElementById("round-end").classList.add("hidden");
   elScorecard.style.display = "";
   elHudBtn.classList.remove("hidden");
@@ -9111,57 +9049,9 @@ function finishDaily(totStrk) {
   } catch (e) {}
 }
 
-let rangeRec = null; // baked real driving range (Pinehurst practice range)
-async function startRange() {
-  mode = "range";
-  dailyMode = false;
-  elMenu.classList.add("hidden");
-  elScorecard.style.display = "none";
-  elRangeUI.classList.remove("hidden");
-  elHudBtn.classList.remove("hidden");
-  elHmClubRow.classList.remove("hidden");
-  elHmCourseItems.classList.add("hidden");   // no course tools in range mode
-  setMeasureMode(false);
-  setSlopeMode(true);   // keep slope on for when the player returns to a course
-  rangeTarget = parseInt(rangeSlider.value, 10);
-  if (!rangeRec) {
-    try {
-      const r = await fetch("courses/range.json");
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      rangeRec = await r.json();
-    } catch (e) {
-      console.warn("Range load failed, using synthetic range:", e);
-      rangeRec = buildRangeRec(rangeTarget); // offline fallback
-    }
-  }
-  setYardsPerUnit(rangeRec.yardsPerUnit);
-  setHole(rangeRec);
-  HOLE.isRange = true;
-  // target ring at the chosen yardage straight up the range from the tee
-  HOLE.holePos = { x: HOLE.teePos.x, y: HOLE.teePos.y - rangeTarget / YARDS_PER_UNIT };
-  HOLE.yards = rangeTarget;
-  frameRange();
-  snapCamera();
-  elHint.classList.add("hidden");   // setHole re-shows the hint; range uses its own feedback
-  shot.carry = shot.total = null; shot.mph = 0;
-  rangeFeedback("Aim up the range");
-}
-
 document.getElementById("play-course").addEventListener("click", openPlayMenu);
 const _playDaily = document.getElementById("play-daily");
 if (_playDaily) _playDaily.addEventListener("click", startDaily);
-document.getElementById("play-range").addEventListener("click", startRange);
-document.getElementById("range-menu-btn").addEventListener("click", showMenu);
-rangeSlider.addEventListener("input", () => {
-  rangeTarget = parseInt(rangeSlider.value, 10);
-  elRangeYards.textContent = rangeTarget;
-  if (mode === "range") {
-    HOLE.holePos = { x: HOLE.teePos.x, y: HOLE.teePos.y - rangeTarget / YARDS_PER_UNIT };
-    HOLE.yards = rangeTarget;
-    frameRange();
-    snapCamera();
-  }
-});
 
 // =====================================================================
 //  Leaderboard + Accounts — shared scores via Supabase REST (plain fetch).
