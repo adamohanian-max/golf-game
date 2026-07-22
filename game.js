@@ -2771,8 +2771,18 @@ function buildTrialShot(ang, frac, spin, onGreen) {
       const targetU = Math.min(flatU * band, YARDS.maxPutt / YARDS_PER_UNIT);  // world units
       // Climb cost in the SAME field/units the roll's slope force uses → dead pace reaches
       // the cup uphill and down (slope force opposes uphill, aids downhill — budget for it).
-      const hB = greenHeightAt(b.x, b.y), hP = greenHeightAt(HOLE.holePos.x, HOLE.holePos.y);
-      const rise = (hB == null || hP == null) ? 0 : (hP - hB);       // + uphill, − downhill
+      // Budget the climb the ball ACTUALLY experiences along its AIMED line (∇h·aim × dist),
+      // not the net straight ball→cup elevation delta. A cross-slope putt is aimed above the
+      // hole to hold the line, so it climbs above the cup's contour before breaking back down
+      // — net rise is ~0 but the ball must be hit firmer. Projecting the gradient onto the aim
+      // captures that; for a straight up/downhill putt (aim = cup line) it reduces to hP − hB.
+      const ux = Math.cos(ang), uy = Math.sin(ang);       // aim unit vector
+      const gA = greenSlopeAt(b.x, b.y);                  // uphill gradient ∇h at ball
+      const gF = greenSlopeAt(b.x + ux * flatU, b.y + uy * flatU); // …and along the aim (may be off-green → null)
+      let gproj = 0, gn = 0;
+      if (gA) { gproj += gA.x * ux + gA.y * uy; gn++; }   // + = aim climbs uphill
+      if (gF) { gproj += gF.x * ux + gF.y * uy; gn++; }
+      const rise = (gn ? gproj / gn : 0) * flatU;         // + uphill, − downhill (along the aimed line)
       let v2;
       if (rise < 0) {
         // Downhill: invert the ACTUAL roll model instead of an energy budget. The
@@ -12420,6 +12430,24 @@ function closePlayMenu() {
   const ov = document.getElementById("play-menu");
   if (ov) ov.classList.add("hidden");
 }
+// Back to landing: reveal the landing underneath, then slide the Play view off
+// to the right. Only this path animates — other exits (start a match etc.) go
+// straight to another screen, where a rightward slide would read wrong.
+function backToMenuFromPlay() {
+  const ov = document.getElementById("play-menu");
+  showMenu();   // landing paints beneath the still-visible Play view
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!ov || reduce) { closePlayMenu(); return; }
+  ov.classList.add("pm-exit");
+  const done = () => {
+    ov.classList.remove("pm-exit");
+    ov.classList.add("hidden");
+    ov.removeEventListener("animationend", done);
+    clearTimeout(fallback);
+  };
+  const fallback = setTimeout(done, 500);   // animationend may not fire
+  ov.addEventListener("animationend", done);
+}
 (function wirePlayMenu() {
   const play = document.getElementById("pm-random");
   if (play) play.addEventListener("click", () => { closePlayMenu(); ensureNameThen(openQuickMatch); });
@@ -12436,7 +12464,7 @@ function closePlayMenu() {
   const lb = document.getElementById("pm-leaderboard");
   if (lb) lb.addEventListener("click", () => { closePlayMenu(); openLeaderboard("menu"); });
   const back = document.getElementById("pm-back");
-  if (back) back.addEventListener("click", () => { closePlayMenu(); showMenu(); });
+  if (back) back.addEventListener("click", () => { backToMenuFromPlay(); });
 })();
 
 // --- Match menu (start / join) ---

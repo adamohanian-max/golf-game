@@ -267,9 +267,20 @@
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+/* Play menu -> landing: slide the Play view off to the right, revealing the
+   already-shown landing beneath it. Sits above #menu (z 20) while it plays. */
+#play-menu.pm-exit {
+  z-index: 21;
+  animation: pmSlideOut 0.34s var(--ease) both;
+}
+@keyframes pmSlideOut {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
   .menu-bg { animation: none; transform: scale(1.06); }
   .menu-box, .menu-bug, .menu-wordmark, .menu-action, .menu-ticker { animation: none; }
+  #play-menu.pm-exit { animation: none; }
 }
 
 /* Short-height guard: compress the card so the 7-row Play view (tallest case)
