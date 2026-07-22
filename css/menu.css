@@ -7,7 +7,7 @@
 /* A golf-telecast lower-third: a left-anchored card with a hairline brass
    frame + Fraunces wordmark + mono data bits, over a graded, slowly drifting
    map of today's featured course. */
-#menu {
+#menu, #play-menu {
   position: fixed;
   inset: 0;
   display: flex;
@@ -16,7 +16,7 @@
   background: var(--green-900, #0e1f16);
   z-index: 20;
 }
-#menu.hidden { display: none; }
+#menu.hidden, #play-menu.hidden { display: none; }
 
 /* Backdrop: today's featured-course routing map, graded + slow ken-burns.
    background-image is set from JS (setMenuBackdrop); gradient here is the
@@ -108,6 +108,27 @@
 }
 .menu-tag-free::before { content: none; }
 .menu-tag-free.hidden { display: none; }
+
+/* Back link (Play submenu) — mono brass, top of the card. */
+.menu-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0 0 var(--s-4);
+  padding: var(--s-1) 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--brass-bright, #cfa85e);
+  transition: color var(--dur-fast), transform var(--dur-fast);
+  animation: menuRise 0.5s var(--ease) both;
+}
+.menu-back:hover { color: var(--white, #ece5d3); transform: translateX(-2px); }
 
 /* Wordmark: Fraunces serif + small kicker. */
 .menu-wordmark { margin-bottom: var(--s-5); }
@@ -392,7 +413,7 @@
 
 /* ---- Name-entry / auth / add-course / admin / account: scrim */
 #name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer,
-#play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select,
+#match-menu, #match-lobby, #match-setup, #quick-match, #bot-select,
 #friends-modal, #friend-profile, #username-modal, #onboarding, #ad-stub, #progress {
   position: fixed;
   inset: 0;

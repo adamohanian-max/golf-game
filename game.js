@@ -8915,8 +8915,8 @@ function renderMenuChips() {
 // CSS. Probe candidates in order; first that loads wins, else the .menu-bg pine
 // fallback color shows (never a broken image).
 function setMenuBackdrop() {
-  const bg = document.querySelector("#menu .menu-bg");
-  if (!bg) return;
+  const bgs = document.querySelectorAll(".menu-bg");
+  if (!bgs.length) return;
   const fid = (typeof dailyFeaturedCourseId === "function" && dailyFeaturedCourseId()) || null;
   const candidates = [];
   if (fid) candidates.push("courses/img/" + fid + "/course.jpg");
@@ -8926,7 +8926,7 @@ function setMenuBackdrop() {
     if (i >= candidates.length) return;
     const url = candidates[i++];
     const img = new Image();
-    img.onload = () => { bg.style.backgroundImage = "url('" + url + "')"; };
+    img.onload = () => { bgs.forEach((bg) => { bg.style.backgroundImage = "url('" + url + "')"; }); };
     img.onerror = tryNext;
     img.src = url;
   };
@@ -12445,6 +12445,7 @@ function ensureNameThen(cb) {
 function openPlayMenu() {
   const ov = document.getElementById("play-menu");
   if (ov) ov.classList.remove("hidden");
+  setMenuBackdrop();   // paint the Play view's map so it matches the landing full-screen
 }
 function closePlayMenu() {
   const ov = document.getElementById("play-menu");

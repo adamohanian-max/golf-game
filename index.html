@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/tokens.css?v=57">
   <link rel="stylesheet" href="css/base.css?v=67">
   <link rel="stylesheet" href="css/hud.css?v=94">
-  <link rel="stylesheet" href="css/menu.css?v=74">
+  <link rel="stylesheet" href="css/menu.css?v=75">
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=78">
   <link rel="stylesheet" href="css/tournament.css?v=58">
@@ -676,9 +676,15 @@
   </div>
 
   <div id="play-menu" class="hidden">
-    <div class="ne-box">
-      <h2>Play</h2>
-      <p class="ne-sub">Pick how you want to play a round.</p>
+    <div class="menu-bg"></div>
+    <div class="menu-scrim"></div>
+    <div class="menu-box">
+      <button id="pm-back" class="menu-back">← Back</button>
+      <div class="menu-bug"><span class="menu-tag">Tee sheet</span></div>
+      <div class="menu-wordmark">
+        <h1>Play</h1>
+        <p class="menu-kicker">Choose your round</p>
+      </div>
       <div class="pm-list">
         <button class="pm-item" id="pm-random">
           <span class="pm-label">Random match</span>
@@ -708,9 +714,6 @@
           <span class="pm-label">Leaderboard</span>
           <span class="pm-sub">Best rounds by course</span>
         </button>
-      </div>
-      <div class="ne-actions">
-        <button id="pm-back" class="menu-btn secondary">Back</button>
       </div>
     </div>
   </div>
@@ -803,6 +806,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script defer src="game.js?v=301"></script>
+  <script defer src="game.js?v=302"></script>
 </body>
 </html>
