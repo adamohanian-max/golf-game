@@ -9914,8 +9914,24 @@ function renderAccount(stats, trounds) {
       ${joined ? `<div class="av-joined">Member since ${joined}</div>` : ""}
     </div>`;
 
+  // Bottom account-actions block (signed-in only; Profile is gated so always shown here).
+  const acctActions = `
+    <div class="av-account-actions">
+      <button id="av-signout" class="menu-btn secondary">Sign out</button>
+      <button id="av-delete" class="av-delete">Delete account &amp; data</button>
+    </div>`;
+  // Tab chrome: Stats | My Bag. Stats panel holds the grids/tables; My Bag panel
+  // is populated lazily by renderBagInto() when its tab is first shown.
+  const tabWrap = (statsInner) => acBackBar("Profile & Stats") + idHtml +
+    `<div class="re-tabs av-tabs">` +
+    `<button class="re-tab active" data-panel="stats">Stats</button>` +
+    `<button class="re-tab" data-panel="bag">My Bag</button></div>` +
+    `<div id="av-stats-panel">${statsInner}</div>` +
+    `<div id="av-bag-panel" class="hidden"></div>` +
+    acctActions;
+
   if (!stats.rounds) {
-    body.innerHTML = acBackBar("Profile & Stats") + idHtml + `<div class="av-empty">No rounds yet — play one and your stats appear here.</div>`;
+    body.innerHTML = tabWrap(`<div class="av-empty">No rounds yet — play one and your stats appear here.</div>`);
     wireAvEditName();
     return;
   }
@@ -9977,7 +9993,7 @@ function renderAccount(stats, trounds) {
       </tbody>
     </table>` : "";
 
-  body.innerHTML = acBackBar("Profile & Stats") + idHtml + totals + bestRow + detail + byCourse + recent + trn;
+  body.innerHTML = tabWrap(totals + bestRow + detail + byCourse + recent + trn);
   wireAvEditName();
 }
 function wireAvEditName() {
@@ -9986,6 +10002,26 @@ function wireAvEditName() {
   if (e) e.addEventListener("click", () => openNameEntry(() => showAccountStats()));
   const eu = document.getElementById("av-edituname");
   if (eu) eu.addEventListener("click", () => openUsernamePrompt(() => showAccountStats()));
+
+  // Stats | My Bag tabs.
+  const statsP = document.getElementById("av-stats-panel");
+  const bagP = document.getElementById("av-bag-panel");
+  let bagBuilt = false;
+  document.querySelectorAll(".av-tabs .re-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".av-tabs .re-tab").forEach((t) => t.classList.toggle("active", t === tab));
+      const bag = tab.getAttribute("data-panel") === "bag";
+      if (statsP) statsP.classList.toggle("hidden", bag);
+      if (bagP) bagP.classList.toggle("hidden", !bag);
+      if (bag && !bagBuilt && bagP) { renderBagInto(bagP); bagBuilt = true; }
+    });
+  });
+
+  // Sign out + delete live at the page bottom (re-wired each render).
+  const so = document.getElementById("av-signout");
+  if (so) so.addEventListener("click", async () => { await signOut(); closeAccountViewer(); updateMenuPlayerLine(); });
+  const del = document.getElementById("av-delete");
+  if (del) del.addEventListener("click", deleteMyAccount);
 }
 // Sub-view chrome for the account hub: a back arrow that returns to the tile grid.
 function acBackBar(title) {
@@ -9997,10 +10033,10 @@ function wireAcBack() {
   if (b) b.addEventListener("click", renderAccountHub);
 }
 
-// My Account is now a hub: a grid of tiles that either drill into a sub-view
-// (Profile & Stats, My Bag, Tour Winnings) or open an existing overlay on top
-// (Trophy Room, Friends, Admin). Opens for everyone — guests can reach Trophy
-// Room + My Bag (local), sign-in-gated tiles prompt auth when tapped.
+// My Account is now a hub: broadcast rows (landing language) that either drill
+// into a sub-view (Profile & Stats — which holds a My Bag tab) or open an
+// existing overlay on top (Trophy Room — which holds Tour Winnings — Friends,
+// Admin). Sign-in-gated rows prompt auth when tapped.
 function openAccountViewer() {
   const ov = document.getElementById("account-viewer");
   if (!ov) return;
@@ -10012,19 +10048,18 @@ function renderAccountHub() {
   if (!body) return;
   const signed = isLoggedIn();
   const admin = isTournamentAdmin();
-  const tile = (id, label, sub) =>
-    `<button class="ac-tile" id="${id}"><span class="ac-tile-label">${label}</span>` +
-    `<span class="ac-tile-sub">${sub}</span></button>`;
-  let html = `<div class="ac-hub">`;
-  html += tile("ac-profile", "Profile & Stats", signed ? "Name, handicap, round history" : "Sign in to view");
-  html += tile("ac-trophy", "Trophy Room", "Achievements · courses · streak");
-  html += tile("ac-bag", "My Bag", "Choose your 14 clubs");
-  html += tile("ac-winnings", "Tour Winnings", fmtMoney(careerWinnings()) + " career");
-  html += tile("ac-friends", "Friends", signed ? "Requests & head-to-head" : "Sign in to view");
+  // Broadcast rows, same language as the landing / Play menu (.pm-item).
+  const row = (id, label, sub) =>
+    `<button class="pm-item" id="${id}"><span class="pm-label">${label}</span>` +
+    `<span class="pm-sub">${sub}</span></button>`;
+  let html = `<div class="pm-list">`;
+  html += row("ac-profile", "Profile & Stats", signed ? "Name, handicap, round history · your bag" : "Sign in to view");
+  html += row("ac-trophy", "Trophy Room", "Achievements · courses · winnings");
+  html += row("ac-friends", "Friends", signed ? "Requests & head-to-head" : "Sign in to view");
   if (admin) {
-    html += tile("ac-admin", "Admin settings", "Global game defaults");
-    html += tile("ac-manage", "Manage tournaments", "Create & run events");
-    if (_bakeApi) html += tile("ac-addcourse", "Add course", "Bake a new course");
+    html += row("ac-admin", "Admin settings", "Global game defaults");
+    html += row("ac-manage", "Manage tournaments", "Create & run events");
+    if (_bakeApi) html += row("ac-addcourse", "Add course", "Bake a new course");
   }
   html += `</div>`;
   body.innerHTML = html;
@@ -10032,17 +10067,10 @@ function renderAccountHub() {
   const on = (id, fn) => { const e = document.getElementById(id); if (e) e.addEventListener("click", fn); };
   on("ac-profile", showAccountStats);
   on("ac-trophy", () => { renderProgress(); document.getElementById("progress").classList.remove("hidden"); });
-  on("ac-bag", showBagEditor);
-  on("ac-winnings", showWinnings);
   on("ac-friends", () => { if (!isLoggedIn()) { openAuthModal(); return; } openFriends(); });
   on("ac-admin", openAdminPanel);
   on("ac-manage", openTournamentManage);
   on("ac-addcourse", openAddCourse);
-
-  const so = document.getElementById("av-signout");
-  if (so) so.classList.toggle("hidden", !signed);
-  const del = document.getElementById("av-delete");
-  if (del) del.classList.toggle("hidden", !signed);
 }
 async function showAccountStats() {
   if (!isLoggedIn()) { openAuthModal(); return; }
@@ -10061,35 +10089,17 @@ async function showAccountStats() {
     wireAcBack();
   }
 }
-function showWinnings() {
-  const body = document.getElementById("av-body");
-  if (!body) return;
-  const total = careerWinnings();
-  const rows = Object.values(_tourMap()).filter((e) => e && e.payout > 0).sort((a, b) => b.payout - a.payout);
-  let html = acBackBar("Tour Winnings");
-  html += `<div class="ac-win-total">${fmtMoney(total)}<small>career earnings</small></div>`;
-  if (!rows.length) {
-    html += `<div class="av-empty">No winnings yet — finish a Tour Event on the weekend to bank a check.</div>`;
-  } else {
-    html += `<table class="lb-table av-table"><thead><tr><th>Event</th><th>Prize</th></tr></thead><tbody>` +
-      rows.map((e) => `<tr><td>${escapeHTML(e.name || "Event")}</td>` +
-        `<td class="lb-strk">${fmtMoney(e.payout)}</td></tr>`).join("") + `</tbody></table>`;
-  }
-  body.innerHTML = html;
-  wireAcBack();
-}
 // My Bag editor: pick exactly 14 clubs (putter locked in). Saving rebuilds the
-// club wheel so out-of-bag clubs vanish from the reel and the caddie won't pick them.
-function showBagEditor() {
-  const body = document.getElementById("av-body");
+// club wheel so out-of-bag clubs vanish from the reel and the caddie won't pick
+// them. Rendered as the My Bag tab inside Profile & Stats (host element passed in).
+function renderBagInto(body) {
   if (!body) return;
   const bag = new Set(getBag());
   const picks = CLUB_ORDER.filter((id) => id !== "putter"); // 14 selectable clubs
   const count = () => CLUB_ORDER.filter((id) => id === "putter" || bag.has(id)).length;
   const render = () => {
     const n = count();
-    let html = acBackBar("My Bag");
-    html += `<div class="ac-bag-count">${n} / 14 clubs<small>Putter is always in the bag</small></div>`;
+    let html = `<div class="ac-bag-count">${n} / 14 clubs<small>Putter is always in the bag</small></div>`;
     html += `<div class="ac-bag-list">`;
     html += `<label class="ac-bag-row on ac-bag-locked"><input type="checkbox" checked disabled>` +
       `<span class="ac-bag-name">Putter</span><span class="ac-bag-carry">~30y</span></label>`;
@@ -10101,7 +10111,6 @@ function showBagEditor() {
     }
     html += `</div><button id="ac-bag-save" class="menu-btn">Save bag</button>`;
     body.innerHTML = html;
-    wireAcBack();
     body.querySelectorAll("input[data-club]").forEach((inp) => {
       inp.addEventListener("change", () => {
         const id = inp.getAttribute("data-club");
@@ -10120,7 +10129,6 @@ function showBagEditor() {
       buildClubWheel();
       if (mode === "course" || mode === "range") updateClubUI();
       showToast("Bag saved", 1200);
-      renderAccountHub();
     });
   };
   render();
@@ -10134,10 +10142,8 @@ function closeAccountViewer() {
   if (open) open.addEventListener("click", openAccountViewer);
   const close = document.getElementById("av-close");
   if (close) close.addEventListener("click", closeAccountViewer);
-  const out = document.getElementById("av-signout");
-  if (out) out.addEventListener("click", async () => { await signOut(); closeAccountViewer(); updateMenuPlayerLine(); });
-  const del = document.getElementById("av-delete");
-  if (del) del.addEventListener("click", deleteMyAccount);
+  // Sign out + delete now live at the bottom of the Profile & Stats view and are
+  // wired per-render in wireAvEditName().
 })();
 
 // Self-serve account + data deletion (privacy.html / COPPA/GDPR right-to-erasure).
@@ -14385,6 +14391,16 @@ function renderProgress() {
       ? `Streak: ${st.streak}` + (st.lastDate !== todayStr() ? " · play today to keep it" : "")
       : "No streak yet — play today's daily") +
     `</span></div></div>`;
+  // Tour Winnings — career total + per-event payouts (prize-sorted).
+  const winRows = Object.values(_tourMap()).filter((e) => e && e.payout > 0).sort((a, b) => b.payout - a.payout);
+  html += `<div class="pr-section"><div class="pr-title">Tour Winnings</div>` +
+    `<div class="ac-win-total">${fmtMoney(careerWinnings())}<small>career earnings</small></div>` +
+    (winRows.length
+      ? `<table class="lb-table av-table"><thead><tr><th>Event</th><th>Prize</th></tr></thead><tbody>` +
+        winRows.map((e) => `<tr><td>${esc(e.name || "Event")}</td>` +
+          `<td class="lb-strk">${fmtMoney(e.payout)}</td></tr>`).join("") + `</tbody></table>`
+      : `<div class="pr-row pr-dim"><span>No winnings yet — finish a Tour Event on the weekend to bank a check.</span></div>`) +
+    `</div>`;
   body.innerHTML = html;
 }
 (function wireProgress() {
