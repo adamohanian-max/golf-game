@@ -354,6 +354,11 @@ let YARDS_PER_UNIT = 3.0;
 const HOLE_RADIUS_UNITS = 0.055;
 // Real golf ball: 1.68" diameter -> ~0.023 yd radius -> ~0.008 units.
 const BALL_RADIUS_UNITS = 0.008;
+// Exaggerated ball draw radius (world units) for the Apple-3D perspective path
+// only — the true 0.008u ball is sub-pixel and would always hit the 4px floor,
+// hiding the distance scaling the flyover should show. ~0.05u ≈ still small on
+// the ground but foreshortens visibly from tee framing (~4px) to putt zoom.
+const APPLE_BALL_DRAW_UNITS = 0.05;
 const DEFAULT_STIMP = 11;
 
 // =====================================================================
@@ -785,7 +790,7 @@ const APPLE_MIN_DIST_M = 165;
 // window.__appleDrop overrides for live re-tuning via devdrive.
 const APPLE_ANCHOR_DROP_M = 2;
 let applePitch = 0;        // current MKMapCamera pitch, degrees (tweened)
-let applePitchT = 0;       // target — appleUserPitch × zoom ramp on Apple-ground courses
+let applePitchT = 0;       // target — appleUserPitch on Apple-ground courses (constant across zoom; no flatten)
 // Manual pitch set by the left-side 2D↔3D slider (#tilt-range). Degrees,
 // 0 = overhead/2D, up to 65 leaning at the horizon. Persists across shots,
 // holes and sessions (golf.applePitch); the putt-zoom ramp in updateCamera
@@ -1170,7 +1175,7 @@ function syncAppleGround() {
 // cup + flag (drawn elsewhere) — also skipping the most projection-heavy
 // overlay work every frame the player is only looking at the hole.
 let _apSettleN = 0;    // consecutive settled camera frames (updateCamera)
-let _apDetailA = 0;    // green-detail fade alpha (eases in after settle)
+let _apDetailA = 0;    // green-detail fade alpha (eases in when a green is in reach; no park gate)
 // Native MKOverlay for the green fill + break contours, replacing the JS
 // canvas draw of the same for Apple ground — confirmed via an on-device spike
 // this session that MKOverlay drapes correctly onto the flyover 3D terrain
@@ -1246,7 +1251,13 @@ let _gaLatch = false;
 function greenArrived() {
   const b = state.ball;
   if (surfaceAt(b.x, b.y) !== "green") { _gaLatch = false; return false; }
-  if (!_gaLatch && !state.moving && _apSettleN >= 4) _gaLatch = true;
+  // Swap the flag for the cup when the ball comes to REST on the green — a
+  // natural gameplay beat — not when the camera finishes parking. The old
+  // _apSettleN park gate delayed the swap to a camera-timed pop; tying it to
+  // ball-rest keeps the flag planted as the target through the whole approach,
+  // then pulls it (and shows the cup) the instant the ball settles, glued
+  // through the camera's follow-in zoom.
+  if (!_gaLatch && !state.moving) _gaLatch = true;
   return _gaLatch;
 }
 function syncAppleFlag() {
@@ -1291,7 +1302,11 @@ function appleGreenDetailWanted() {
   const c = TUNE.clubs[selectedClub];
   const reach = c ? c.carry + 30 : 120;   // carry + generous rollout (putter: near the green anyway)
   const toPin = dist(state.ball.x, state.ball.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-  return toPin <= reach && _apSettleN >= 4;   // ~65ms parked — dashes land with the camera
+  // No camera-park (_apSettleN) gate: the reading aids project through the
+  // calibrated pinhole every frame, so they should stay glued to the map the
+  // moment the ball rests and ride the camera's zoom-in — not pop in after the
+  // camera parks. A zoom-readability ramp (draw side) handles wide framings.
+  return toPin <= reach;
 }
 function leaveAppleGround() {
   if (!_appleGroundEntered) return;
@@ -3256,22 +3271,17 @@ function frameClubReach(pNowDeg) {
   const f = (mapH / 2) / Math.tan(15 * Math.PI / 180);
   const uR = cssH / 2 - (rsv.top + 0.15 * availH);  // reach anchor, px above raw center
   const uB = cssH / 2 - (rsv.top + 0.85 * availH);  // ball anchor (negative = below)
-  // Two-pass pitch/ramp fold: the putt-zoom ramp (flat under 220 m) depends on
-  // the distance being solved — one re-solve converges it.
-  let pDeg = pNowDeg != null ? pNowDeg : appleUserPitch;
-  let D = 400;
-  for (let i = 0; i < 2; i++) {
-    const ramp = Math.min(1, Math.max(0, (D - 220) / (380 - 220)));
-    if (pNowDeg == null) pDeg = appleUserPitch * ramp;
-    const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
-    D = Rm / (uR / (f * cp - uR * sp) - uB / (f * cp - uB * sp));
-  }
+  // Pitch is constant across zoom now (no putt-zoom flatten ramp), so the
+  // framing distance solves in one pass at the fixed pitch.
+  const pDeg = pNowDeg != null ? pNowDeg : appleUserPitch;
+  const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
+  let D = Rm / (uR / (f * cp - uR * sp) - uB / (f * cp - uB * sp));
   // Flyover courses hold the MapKit min distance (map drifts off the overlay
   // below it); flat/vector courses have no such constraint, so a lower floor
   // lets greenside chips zoom in tighter.
   const distFloor = appleGroundActive() ? APPLE_MIN_DIST_M : TUNE.flatMinDistM;
   D = Math.max(D, distFloor);
-  const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
+  // p/cp/sp unchanged after the floor (pitch is constant), reuse from above.
   const sR = uR * D / (f * cp - uR * sp);           // reach point, metres ahead of look-at
   const scale = mapH * M_PER_UNIT * APPLE_CAM_K / D;
   const Lx = b.x + dirX * (Ru - sR / M_PER_UNIT);   // look-at = reach − sR back along aim
@@ -3337,6 +3347,15 @@ function applyView() {
   // affine plus the measured correction).
   view.appleProj = (typeof appleGroundActive === "function" && appleGroundActive())
     ? buildAppleProj(cssW, cssH) : null;
+  // Perspective screen-px-per-world-unit AT the ball under the Apple pinhole,
+  // so the ball (and cup) foreshorten with camera distance + pitch instead of
+  // using the flat top-down view.scale. Sampled like view.threeScale.
+  view.appleScale = 0;
+  if (view.appleProj) {
+    const b = state.ball, P = view.appleProj, gz = _apGroundZ(P, b.x, b.y);
+    const q0 = appleProjPt(P, b.x, b.y, gz), q1 = appleProjPt(P, b.x + 1, b.y, gz);
+    view.appleScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
+  }
   // Four Oaks three.js 3D: route wx/wy/screenToWorld through the live three.js
   // camera (Course3D.project) so the 2D gameplay layer glues onto its ground.
   view.threeProj = (render3D && window.Course3D && window.Course3D.project) ? true : null;
@@ -3402,12 +3421,13 @@ function updateCamera() {
     // API — see buildAppleProj) grows with tan(pitch) exactly where
     // alignment matters most. (Old tilt-button auto-pitch removed; the
     // gesture in swingMove owns appleUserPitch now.)
-    const distNow = window.innerHeight / camera.scale * M_PER_UNIT * APPLE_CAM_K;
-    const ramp = Math.min(1, Math.max(0, (distNow - 220) / (380 - 220)));
-    // NEVER reorient while the ball is moving — flattening mid-follow swung
-    // the view off the ball. Pitch holds its value until the ball rests; the
-    // transition refit below then moves and flattens together.
-    if (!state.moving) applePitchT = appleUserPitch * ramp;
+    // Pitch is held CONSTANT across zoom now (no putt-zoom flatten): the user
+    // wanted to stay in the 3D flyover on the green, not drop to top-down. The
+    // probe calibration runs at every pitch, so the near-green view stays
+    // aligned; the old zoom→flat `ramp` is gone.
+    // NEVER reorient while the ball is moving — reorienting mid-follow swung
+    // the view off the ball. Pitch holds its value until the ball rests.
+    if (!state.moving) applePitchT = appleUserPitch;
     // Green-detail settle gate: count consecutive frames with the camera
     // exactly parked (ease snaps make these strict equalities reachable).
     const parked = camera.angle === camera.tAngle && camera.scale === camera.tScale &&
@@ -6060,25 +6080,33 @@ function draw() {
       // overlay from a previous build (dedupe makes it a one-time call).
       syncAppleGreenOverlay([]);
       syncAppleFlag(); // native pin flag — dedupes internally
-      // Green detail earns its screen time: only the greens in play, only
-      // when the pin is in club reach AND the camera has settled (see
-      // appleGreenDetailWanted). Short ease so it reads as a quick fade-in,
-      // not a pop — but never the slow crawl the native tiles had.
+      // Green reading aids (dashed slope contours + shaded relief) stay glued
+      // to the moving flyover: greens in play whenever the pin is in club reach
+      // (appleGreenDetailWanted — no camera-park gate now), so they're present
+      // through the approach + zoom-in instead of popping in after the camera
+      // parks. A zoom-readability ramp (same as the flow dots) fades them out at
+      // wide framings so a distant green isn't cluttered.
       _apDetailA += ((appleGreenDetailWanted() ? 1 : 0) - _apDetailA) * 0.3;
-      if (_apDetailA > 0.02) {
+      const detZoom = Math.min(1, Math.max(0, (view.scale - TUNE.flowFadeLo) / (TUNE.flowFadeHi - TUNE.flowFadeLo)));
+      const detA = _apDetailA * detZoom;
+      if (detA > 0.02) {
         ctx.save();
-        ctx.globalAlpha = _apDetailA;
+        ctx.globalAlpha = detA;
         if (!nativeGreenOverlay) {
-          // Kill-switch fallback only: original JS-canvas tint + relief.
+          // Kill-switch fallback: original JS-canvas green tint + contours.
           drawGreen(true, gs);
-          for (const g of gs) {
-            if (!polyVisible(g.poly)) continue;
-            drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * _apDetailA, showSlope && breakArrows);
-          }
         } else {
-          // Bare photo turf + dashed slope contours only (tint and relief
-          // dropped by request — they smudged Apple's already-good photo).
+          // Dashed slope contours over Apple's photo (no flat green tint — it
+          // smudged the photo). Relief below adds the depth read.
           drawAppleGreenDashes(gs);
+        }
+        // Shaded relief draped on the green (subtle ambient, boosted by the
+        // slope toggle). drawGreenRelief linearizes the pinhole about the green
+        // centroid, so it stays glued under the pitched flyover. It sets its own
+        // globalAlpha, so bake the detail fade into the intensity.
+        for (const g of gs) {
+          if (!polyVisible(g.poly)) continue;
+          drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * detA, showSlope && breakArrows);
         }
         ctx.restore();
       }
@@ -6213,7 +6241,19 @@ function draw() {
       : ws(b.z);
     // Keep the ball clearly visible at every zoom (floor in screen px); real
     // scale only takes over when zoomed in far enough to exceed the floor.
-    const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
+    // Apple 3D: size off the ball-local PERSPECTIVE scale (view.appleScale) so
+    // the ball grows as the flyover camera closes in and shrinks when far —
+    // ws() there uses the flat view.scale, which never foreshortens. The true
+    // 1.68" ball (BALL_RADIUS_UNITS) stays sub-4px at every framing (always
+    // floored, no visible scaling), so use an exaggerated draw radius —
+    // golf-sim convention, same reason the three.js ball mesh is exaggerated —
+    // clamped so a far ball stays a readable dot and a putt-zoom ball never balloons.
+    let baseR;
+    if (view.appleProj) {
+      baseR = Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
+    } else {
+      baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
+    }
 
     // motion trail while airborne — dissolves from tail to ball
     if (b.z > 0.4) {
