@@ -4,7 +4,7 @@
 #course-select {
   position: fixed;
   inset: 0;
-  z-index: 22;
+  z-index: var(--z-course);
   display: flex;
   flex-direction: column;
   background:
@@ -12,7 +12,6 @@
     var(--green-900, #0e1f16);
   color: var(--white, #ece5d3);
 }
-#course-select.hidden { display: none; }
 
 #cs-top {
   display: flex;
@@ -58,7 +57,6 @@
   background: var(--brass-soft, rgba(176,141,74,0.14));
   border-bottom: 1px solid rgba(207,168,94,0.25);
 }
-#cs-context.hidden { display: none; }
 
 #cs-body {
   flex: 1;
@@ -252,10 +250,9 @@
 #preview {
   position: fixed;
   inset: 0;
-  z-index: 24;
+  z-index: var(--z-preview);
   pointer-events: none; /* canvas underneath stays visible; only controls catch input */
 }
-#preview.hidden { display: none; }
 #preview > * { pointer-events: auto; }
 
 #pv-top {

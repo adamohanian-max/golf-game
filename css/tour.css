@@ -21,7 +21,7 @@
 #tour-board {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: var(--z-sheet-low);
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -171,7 +171,7 @@
 #tour-result, #daily-result {
   position: fixed;
   inset: 0;
-  z-index: 40;                 /* above the board (30) */
+  z-index: var(--z-sheet);                 /* above the board */
   display: flex;
   align-items: center;
   justify-content: center;

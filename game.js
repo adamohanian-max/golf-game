@@ -3004,19 +3004,31 @@ window.addEventListener("mouseup", swingEnd);
 // Only arms when a "backable" overlay is open, so it never touches gameplay
 // swings. Reuses each screen's existing wired Back/Close control.
 (function initEdgeSwipeBack() {
-  // topmost-first: overlay id -> its existing back/close control
-  const BACK_TARGETS = [
-    ["play-menu", "pm-back"], ["course-select", "cs-back"],
-    ["account-viewer", "av-close"], ["leaderboard", "lb-close"],
-  ];
+  // Any overlay marks its back/close control with [data-back]; the swipe finds
+  // the one in the top-most visible overlay and clicks it. New overlays are
+  // covered automatically just by tagging their back button — no list to keep.
   const EDGE = 24;        // px from the left edge to start the gesture
   const MIN_DX = 60;      // horizontal travel to trigger
   const MAX_MS = 600;
   let g = null;           // { x, y, t }
-  const openTarget = () => BACK_TARGETS.find(([id]) => {
-    const el = document.getElementById(id);
-    return el && !el.classList.contains("hidden");
-  });
+  // z-index of the nearest fixed-position (overlay) ancestor — higher = on top.
+  const overlayZ = (btn) => {
+    let el = btn;
+    while (el && el !== document.body) {
+      const cs = getComputedStyle(el);
+      if (cs.position === "fixed") return parseInt(cs.zIndex, 10) || 0;
+      el = el.parentElement;
+    }
+    return 0;
+  };
+  const openTarget = () => {
+    // A back control is only laid out (getClientRects) when its overlay is
+    // shown — a hidden overlay is display:none, so its button has no rects.
+    const cands = Array.from(document.querySelectorAll("[data-back]"))
+      .filter(b => b.getClientRects().length > 0);
+    if (!cands.length) return null;
+    return cands.sort((a, b) => overlayZ(b) - overlayZ(a))[0];
+  };
   window.addEventListener("touchstart", (e) => {
     g = null;
     if (e.touches.length !== 1) return;
@@ -3031,8 +3043,8 @@ window.addEventListener("mouseup", swingEnd);
     const dx = t.clientX - g.x, dy = t.clientY - g.y, dt = Date.now() - g.t;
     g = null;
     if (dx >= MIN_DX && dx >= 2 * Math.abs(dy) && dt < MAX_MS) {
-      const tgt = openTarget();
-      if (tgt) { const btn = document.getElementById(tgt[1]); if (btn) btn.click(); }
+      const btn = openTarget();
+      if (btn) btn.click();
     }
   }, { passive: true });
   window.addEventListener("touchcancel", () => { g = null; }, { passive: true });
@@ -5889,66 +5901,6 @@ function showToast(text, ms, tone) {
   _toastTimer = setTimeout(() => { el.classList.remove("show"); el.classList.add("hidden"); }, ms || 1600);
 }
 
-function drawWindIndicator() {
-  if (!HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) return;
-  const cssW = window.innerWidth;
-
-  // Wind push vector in world space (FROM dir → pushes opposite)
-  const pwx = -Math.sin(wind.dir), pwy = Math.cos(wind.dir);
-  // Project to screen via view rotation (a,b,d,e)
-  const svx = view.a * pwx + view.b * pwy;
-  const svy = view.d * pwx + view.e * pwy;
-  const screenAngle = Math.atan2(svy, svx);
-
-  // Below the notch / Dynamic Island. On mobile the top bar cluster (scorecard
-  // + docked shot-info) spans the top-left, so anchor the pill just below
-  // whichever of those is currently the lowest, or it hides behind them.
-  let cx = cssW / 2, cy = safeInset.t + 22;
-  if (!IS_DESKTOP) {
-    const barEl = (elStats && !elStats.classList.contains("hidden")) ? elStats : elScorecard;
-    const b = barEl ? barEl.getBoundingClientRect().bottom : 0;
-    cy = (b > 0 ? b : safeInset.t + 47) + 20;
-  }
-  const spd = Math.round(wind.speed);
-  const label = spd + " mph";
-
-  ctx.save();
-  ctx.font = "bold 13px system-ui, sans-serif";
-  const tw = ctx.measureText(label).width;
-  const arrowGap = 26, pillW = arrowGap + 6 + tw + 10, pillH = 26, r = 7;
-  const px = cx - pillW / 2, py = cy - pillH / 2;
-
-  // pill background (matches --glass tokens)
-  ctx.fillStyle = "rgba(13,26,18,0.72)";
-  ctx.beginPath();
-  ctx.roundRect(px, py, pillW, pillH, r);
-  ctx.fill();
-
-  // arrow — points toward where wind blows on screen
-  const arrowCx = px + 16, arrowCy = cy;
-  const AL = 9, AH = 6; // shaft half-length, head size
-  const cos = Math.cos(screenAngle), sin = Math.sin(screenAngle);
-  ctx.strokeStyle = "#ece5d3"; ctx.lineWidth = 2; ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(arrowCx - cos * AL, arrowCy - sin * AL);
-  ctx.lineTo(arrowCx + cos * AL, arrowCy + sin * AL);
-  ctx.stroke();
-  ctx.fillStyle = "#ece5d3";
-  ctx.beginPath();
-  ctx.moveTo(arrowCx + cos * AL, arrowCy + sin * AL);
-  ctx.lineTo(arrowCx + cos * AL - cos * AH + sin * AH * 0.55,
-             arrowCy + sin * AL - sin * AH - cos * AH * 0.55);
-  ctx.lineTo(arrowCx + cos * AL - cos * AH - sin * AH * 0.55,
-             arrowCy + sin * AL - sin * AH + cos * AH * 0.55);
-  ctx.closePath();
-  ctx.fill();
-
-  // speed label
-  ctx.fillStyle = "rgba(236,229,211,0.92)";
-  ctx.textAlign = "left"; ctx.textBaseline = "middle";
-  ctx.fillText(label, px + arrowGap + 4, cy);
-  ctx.restore();
-}
 let _surround = null; // cached course-green surround gradient, keyed to viewport size
 // Flagstick on-screen scale. FLAG_H_UNITS = pole height in world units — the camera fits
 // ball↔pin, so ws() already shrinks the pin with distance (perspective); this is tuned up
@@ -7880,7 +7832,7 @@ let _windAngShown = null;
 
 // Wind readout as a DOM chip in the top HUD card. The arrow rotates with the
 // camera (same projection the old canvas pill used). Gating matches the old
-// drawWindIndicator: course mode, not range, wind actually blowing.
+// updateWindChip: course mode, not range, wind actually blowing.
 function updateWindChip() {
   if (!elWindChip) return;
   if (!HOLE || HOLE.isRange || mode !== "course" || wind.speed < 1) {
@@ -8523,7 +8475,7 @@ let hudVis = (() => {
 })();
 function applyHudVis() {
   for (const d of HUD_VIS_DEFS) {
-    if (!d.id) continue; // wind: guarded in drawWindIndicator()
+    if (!d.id) continue; // wind: guarded in updateWindChip()
     const el = document.getElementById(d.id);
     if (el) el.classList.toggle("hud-off", !hudVis[d.key]);
   }
@@ -12754,7 +12706,9 @@ function syncMatchLiveButton() {
   const can = ov.dataset.two === "1";
   if (!can) ov.dataset.live = "0";
   btn.classList.toggle("hidden", !can);
-  btn.classList.toggle("active", can && ov.dataset.live === "1");
+  const on = can && ov.dataset.live === "1";
+  btn.classList.toggle("active", on);
+  btn.setAttribute("aria-checked", on ? "true" : "false");
 }
 function closeMatchSetup() {
   const ov = document.getElementById("match-setup");

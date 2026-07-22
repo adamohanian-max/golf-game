@@ -17,13 +17,8 @@
   background: var(--surface-scrim);
   -webkit-backdrop-filter: blur(var(--blur-sm));
   backdrop-filter: blur(var(--blur-sm));
-  z-index: 30;
+  z-index: var(--z-sheet-low);
 }
-#tournament-lobby.hidden,
-#tournament-cut.hidden,
-#tournament-final.hidden,
-#tournament-standings.hidden,
-#tournament-admin.hidden { display: none; }
 
 /* ---- Lobby ------------------------------------------------ */
 .tl-name {

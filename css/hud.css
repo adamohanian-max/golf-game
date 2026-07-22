@@ -60,7 +60,8 @@
   pointer-events: none;
   transition: opacity 0.3s;
 }
-#hint.hidden { opacity: 0; }
+/* .hidden here means fade out, NOT remove — override the global display:none. */
+#hint.hidden { display: block !important; opacity: 0; }
 
 /* ---- Live match: whose-turn banner (bottom-left, small + out of the way) -- */
 /* Sits in the bottom-left corner as a compact pill. #hint only shows on
@@ -85,7 +86,8 @@
   z-index: 40;
   transition: opacity 0.25s;
 }
-#live-turn.hidden { opacity: 0; pointer-events: none; }
+/* .hidden here means fade out, NOT remove — override the global display:none. */
+#live-turn.hidden { display: block !important; opacity: 0; pointer-events: none; }
 #live-turn.lt-mine { background: rgba(46, 125, 79, 0.92); }   /* your turn — go */
 #live-turn.lt-wait { background: rgba(0, 0, 0, 0.55); }       /* watching opponent */
 /* Mobile: scorecard now sits in the bottom-left corner, so lift the turn banner above it. */
@@ -358,8 +360,8 @@ body.gv-open #hint { display: none; }
 #hm-club-row.putting #club-wheel { opacity: 0.8; cursor: default; }
 #hm-club-row.putting .cw-item.cw-sel b { color: var(--text-muted); }
 
-/* ---- HUD dropdown menu + settings sheet -------------------- */
-#hud-menu, #hud-settings {
+/* ---- HUD dropdown menu ------------------------------------- */
+#hud-menu {
   position: fixed;
   right: var(--s-3);
   top: calc(env(safe-area-inset-top, 0px) + 64px);
@@ -374,7 +376,7 @@ body.gv-open #hint { display: none; }
   box-shadow: var(--shadow-2);
   animation: panelIn 0.16s var(--ease) both;
 }
-#hud-menu.hidden, #hud-settings.hidden { display: none; }
+#hud-menu.hidden { display: none; }
 .hs-title {
   font-family: var(--font-display);
   font-weight: var(--fw-bold);
@@ -541,15 +543,13 @@ body.hud-edit .hud-dragging { cursor: grabbing; opacity: 0.85; }
    into the clear middle. (Canvas wind pill stays top-center.)
    ============================================================ */
 body.is-mobile #hud-menu,
-body.is-mobile #hud-settings,
 body.is-mobile #hm-club-row,
 body.is-mobile #hud-edit-bar {
   max-width: min(260px, 70vw);
   min-width: 0;
   box-sizing: border-box;
 }
-body.is-mobile #hud-menu .hm-item,
-body.is-mobile #hud-settings .hm-item { white-space: normal; }
+body.is-mobile #hud-menu .hm-item { white-space: normal; }
 body.is-mobile #club-wheel { width: 96px; }
 
 /* ---- Top HUD card spans as a slim top bar on mobile -------- */

@@ -135,4 +135,19 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 0.12s;
   --dur-modal: 0.3s;
+
+  /* ---- Z-index scale -------------------------------------
+     Named layers for full-screen overlays. Values preserve the
+     historical ad-hoc stacking order exactly (course/preview sat
+     BELOW the card submenus; friends above them; name gate on top). */
+  --z-course:      22;   /* course picker */
+  --z-preview:     24;   /* hole preview flyover */
+  --z-sheet-low:   30;   /* tour board, tournaments, add-course */
+  --z-sheet:       40;   /* play/match/quick/bot/progress/auth/account, book-sheet */
+  --z-friends:     42;
+  --z-friend-prof: 44;
+  --z-onboarding:  50;
+  --z-username:    55;
+  --z-gate:        60;   /* name-entry gate */
+  --z-adstub:      70;   /* rewarded-ad overlay */
 }

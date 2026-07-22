@@ -17,7 +17,6 @@
   background: var(--green-900, #0e1f16);
   z-index: 20;
 }
-#menu.hidden, #play-menu.hidden { display: none; }
 
 /* Backdrop: today's featured-course routing map, graded + slow ken-burns.
    background-image is set from JS (setMenuBackdrop); gradient here is the
@@ -451,10 +450,8 @@
   -webkit-backdrop-filter: blur(var(--blur-sm));
   backdrop-filter: blur(var(--blur-sm));
 }
-#onboarding { z-index: 50; }   /* over gameplay, under the name gate (60) */
-#onboarding.hidden { display: none; }
-#ad-stub { z-index: 70; }      /* rewarded-ad overlay: above the result modal */
-#ad-stub.hidden { display: none; }
+#onboarding { z-index: var(--z-onboarding); }   /* over gameplay, under the name gate */
+#ad-stub { z-index: var(--z-adstub); }      /* rewarded-ad overlay: above the result modal */
 .ad-stub-box {
   width: min(360px, 92vw); background: var(--surface-raised, var(--w-08));
   border: 1px solid var(--w-08); border-radius: var(--r-lg, 16px);
@@ -484,16 +481,13 @@
 .ob-list li { margin-bottom: var(--s-2); }
 .ob-list b { color: var(--text); }
 .ob-card .menu-btn { width: 100%; margin: 0; }
-#name-entry { z-index: 60; }   /* name gate: above match/auth/tournament overlays (z-index 40) */
-#username-modal { z-index: 55; }   /* above friends, below the name gate */
-#add-course { z-index: 30; }
-#auth-modal, #admin-settings, #account-viewer { z-index: 40; }
-#play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select, #progress { z-index: 40; }
-#friends-modal { z-index: 42; }
-#friend-profile { z-index: 44; }   /* above the friends list it opens from */
-#name-entry.hidden, #add-course.hidden, #auth-modal.hidden, #admin-settings.hidden, #account-viewer.hidden,
-#play-menu.hidden, #match-menu.hidden, #match-lobby.hidden, #match-setup.hidden, #quick-match.hidden, #bot-select.hidden,
-#friends-modal.hidden, #friend-profile.hidden, #username-modal.hidden, #progress.hidden { display: none; }
+#name-entry { z-index: var(--z-gate); }   /* name gate: above match/auth/tournament overlays */
+#username-modal { z-index: var(--z-username); }   /* above friends, below the name gate */
+#add-course { z-index: var(--z-sheet-low); }
+#auth-modal, #admin-settings, #account-viewer { z-index: var(--z-sheet); }
+#play-menu, #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select, #progress { z-index: var(--z-sheet); }
+#friends-modal { z-index: var(--z-friends); }
+#friend-profile { z-index: var(--z-friend-prof); }   /* above the friends list it opens from */
 
 /* Friends */
 .av-uname { color: var(--text-dim); font-size: var(--t-cap); margin-top: 2px; }
@@ -605,6 +599,42 @@
 .ne-sub { color: var(--text-dim); font-size: var(--t-cap); margin-bottom: var(--s-4); text-align: left; }
 .ne-actions { display: flex; gap: var(--s-3); margin-top: var(--s-4); }
 .ne-actions .menu-btn { flex: 1; margin: 0; padding: var(--s-3); font-size: var(--t-body); }
+
+/* ---- Play submenus: mirror the landing tee-card ------------------------
+   The play-flow overlays (Quick Match, Bots, Vs Friends, Lobby, Match
+   settings, Trophy Room) drop the centered-modal look and adopt the landing's
+   left-anchored broadcast card over a pine backdrop. The inner .ne-box / .lb-box
+   card already carries the brass rail + Fraunces title; here we swap the scrim
+   for the pine gradient and left-anchor the card so tapping into a submenu
+   feels like staying on the same screen, not opening a dialog. */
+#quick-match, #bot-select, #match-menu, #match-lobby, #match-setup, #progress {
+  justify-content: flex-start;
+  background:
+    linear-gradient(100deg,
+      rgba(6, 14, 9, 0.96) 0%,
+      rgba(8, 18, 12, 0.9) 34%,
+      rgba(10, 22, 15, 0.6) 68%,
+      rgba(10, 22, 15, 0.42) 100%),
+    radial-gradient(120% 90% at 30% 50%,
+      rgba(0, 0, 0, 0) 45%, rgba(3, 8, 5, 0.7) 100%),
+    var(--green-900);
+}
+#quick-match .ne-box, #bot-select .ne-box, #match-menu .ne-box,
+#match-setup .ne-box, #progress .ne-box, #match-lobby .lb-box {
+  margin: auto auto auto 0;
+  margin-left: max(env(safe-area-inset-left, 0px), 3vw);
+  width: min(400px, 92vw);
+  max-height: calc(100dvh - var(--s-5) * 2);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Fraunces title reads as a screen heading, matching the landing wordmark. */
+#quick-match .ne-box > h2, #bot-select .ne-box > h2, #match-menu .ne-box > h2,
+#match-setup .ne-box > h2, #progress .ne-box > h2 {
+  font-size: clamp(30px, 6vh, 40px); line-height: 1; margin-bottom: var(--s-3);
+}
+/* Back link sits at the very top of the card (like the Play picker). */
+.ne-box > .menu-back, .lb-box > .menu-back { margin-top: calc(env(safe-area-inset-top, 0px)); }
 
 /* Play-mode picker — broadcast rows: brass left rule + label/descriptor + caret,
    hairline separators (mirrors the landing's .menu-action). */

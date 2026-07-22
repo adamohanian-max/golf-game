@@ -12,14 +12,14 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1">
   <link rel="icon" type="image/png" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/tokens.css?v=57">
-  <link rel="stylesheet" href="css/base.css?v=67">
-  <link rel="stylesheet" href="css/hud.css?v=96">
-  <link rel="stylesheet" href="css/menu.css?v=79">
-  <link rel="stylesheet" href="css/courses.css?v=7">
-  <link rel="stylesheet" href="css/modals.css?v=78">
-  <link rel="stylesheet" href="css/tournament.css?v=59">
-  <link rel="stylesheet" href="css/tour.css?v=9">
+  <link rel="stylesheet" href="css/tokens.css?v=58">
+  <link rel="stylesheet" href="css/base.css?v=68">
+  <link rel="stylesheet" href="css/hud.css?v=97">
+  <link rel="stylesheet" href="css/menu.css?v=80">
+  <link rel="stylesheet" href="css/courses.css?v=8">
+  <link rel="stylesheet" href="css/modals.css?v=79">
+  <link rel="stylesheet" href="css/tournament.css?v=60">
+  <link rel="stylesheet" href="css/tour.css?v=10">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -230,7 +230,7 @@
   <!-- Course selection page: search + filter rail + card grid -->
   <div id="course-select" class="hidden">
     <header id="cs-top">
-      <button id="cs-back" class="cs-back" aria-label="Back"><span class="ic ic-chev-left"></span></button>
+      <button id="cs-back" class="cs-back" aria-label="Back" data-back><span class="ic ic-chev-left"></span></button>
       <input id="cs-search" type="search" placeholder="Search courses, locations…" autocomplete="off">
       <span id="cs-count" class="cs-count"></span>
     </header>
@@ -244,7 +244,7 @@
   <!-- Hole-by-hole preview (Trackman/EA-style flyover over the live canvas) -->
   <div id="preview" class="hidden">
     <header id="pv-top">
-      <button id="pv-close" class="pv-close" aria-label="Close preview"><span class="ic ic-x"></span></button>
+      <button id="pv-close" class="pv-close" aria-label="Close preview" data-back><span class="ic ic-x"></span></button>
       <div class="pv-title"><span id="pv-course"></span><span id="pv-hole"></span></div>
     </header>
     <footer id="pv-bottom">
@@ -320,7 +320,7 @@
       <div class="bk-header">
         <h2>Book a tee time</h2>
         <p id="bk-course-name"></p>
-        <button id="bk-close" class="bk-x" aria-label="Close">&times;</button>
+        <button id="bk-close" class="bk-x" aria-label="Close" data-back>&times;</button>
       </div>
       <div id="bk-list" class="bk-list"><div class="bk-loading">Finding tee times…</div></div>
       <p class="bk-foot">Booking unlocks this course to play, permanently.</p>
@@ -338,7 +338,7 @@
         </table>
         <div id="lb-empty" class="lb-empty hidden"></div>
       </div>
-      <button id="lb-close" class="menu-btn">Close</button>
+      <button id="lb-close" class="menu-btn" data-back>Close</button>
     </div>
   </div>
 
@@ -347,7 +347,7 @@
       <h2><span class="ic ic-user"></span>My Account</h2>
       <div id="av-body"></div>
       <div class="ne-actions">
-        <button id="av-close" class="menu-btn">Close</button>
+        <button id="av-close" class="menu-btn" data-back>Close</button>
       </div>
     </div>
   </div>
@@ -483,7 +483,7 @@
           <div id="tb-status" class="tb-round"></div>
           <div id="tb-course" class="tb-coursename"></div>
         </div>
-        <button id="tb-close" class="tb-x" aria-label="Close">✕</button>
+        <button id="tb-close" class="tb-x" aria-label="Close" data-back>✕</button>
       </div>
       <div id="tb-schedule" class="tb-schedule hidden"></div>
       <div class="tb-table-wrap">
@@ -555,7 +555,7 @@
       <div id="tl-field" class="tl-field"></div>
       <div id="tl-rounds" class="tl-rounds"></div>
       <button id="tl-start" class="menu-btn secondary hidden">+ Start Tournament</button>
-      <button id="tl-close" class="menu-btn secondary" style="margin-top:8px">Close</button>
+      <button id="tl-close" class="menu-btn secondary" style="margin-top:8px" data-back>Close</button>
     </div>
   </div>
 
@@ -609,27 +609,27 @@
       <h2 id="tm-title"><span class="ic ic-flag-checkered"></span>Manage Tournaments</h2>
       <div id="tm-status" class="tl-status"></div>
       <div id="tm-body"></div>
-      <button id="tm-close" class="menu-btn secondary" style="margin-top:10px">Close</button>
+      <button id="tm-close" class="menu-btn secondary" style="margin-top:10px" data-back>Close</button>
     </div>
   </div>
 
   <!-- ===== Multiplayer matches: menu, lobby, host setup, live standings ===== -->
   <div id="quick-match" class="hidden" data-holes="18" data-format="match">
     <div class="ne-box">
+      <button id="qm-close" class="menu-back" data-back>← Back</button>
       <h2>Quick Match</h2>
       <!-- Setup: pick format + length, then queue -->
       <div id="qm-setup">
         <p class="ne-sub">Get matched live with an opponent near your handicap.</p>
-        <div class="ms-len-row">
-          <button class="menu-btn secondary qm-fmt" data-format="match">Match play</button>
-          <button class="menu-btn secondary qm-fmt" data-format="stroke">Stroke play</button>
+        <div class="seg" role="radiogroup" aria-label="Format">
+          <button class="seg-btn qm-fmt" data-format="match" role="radio">Match play</button>
+          <button class="seg-btn qm-fmt" data-format="stroke" role="radio">Stroke play</button>
         </div>
-        <div class="ms-len-row">
-          <button class="menu-btn secondary qm-len" data-holes="9">9 holes</button>
-          <button class="menu-btn secondary qm-len" data-holes="18">18 holes</button>
+        <div class="seg" role="radiogroup" aria-label="Length">
+          <button class="seg-btn qm-len" data-holes="9" role="radio">9 holes</button>
+          <button class="seg-btn qm-len" data-holes="18" role="radio">18 holes</button>
         </div>
         <div class="ne-actions">
-          <button id="qm-close" class="menu-btn secondary">Back</button>
           <button id="qm-find" class="menu-btn menu-btn-play">Find opponent</button>
         </div>
       </div>
@@ -647,32 +647,28 @@
 
   <div id="bot-select" class="hidden" data-holes="9">
     <div class="ne-box bot-box">
+      <button id="bot-back" class="menu-back" data-back>← Back</button>
       <h2>Play a Bot</h2>
       <p class="ne-sub">Match play against the clubhouse roster. Beat a bot to unlock the next.</p>
       <p id="bot-admin-note" class="ne-sub bot-admin-note hidden">Admin — full roster unlocked</p>
-      <div class="ms-len-row">
-        <button class="menu-btn secondary bot-len" data-holes="9">9 holes</button>
-        <button class="menu-btn secondary bot-len" data-holes="18">18 holes</button>
+      <div class="seg" role="radiogroup" aria-label="Length">
+        <button class="seg-btn bot-len" data-holes="9" role="radio">9 holes</button>
+        <button class="seg-btn bot-len" data-holes="18" role="radio">18 holes</button>
       </div>
-      <div class="ms-len-row">
-        <button class="menu-btn secondary" id="bot-course-random">Random course</button>
-        <button class="menu-btn secondary" id="bot-course-pick">Choose course…</button>
+      <div class="seg" role="radiogroup" aria-label="Course">
+        <button class="seg-btn" id="bot-course-random" role="radio">Random course</button>
+        <button class="seg-btn" id="bot-course-pick" role="radio">Choose course…</button>
       </div>
       <div id="bot-list" class="bot-list"></div>
-      <div class="ne-actions">
-        <button id="bot-back" class="menu-btn secondary">Back</button>
-      </div>
     </div>
   </div>
 
   <div id="progress" class="hidden">
     <div class="ne-box pr-box">
+      <button id="pr-close" class="menu-back" data-back>← Back</button>
       <h2>Trophy Room</h2>
       <p class="ne-sub">Your progress — courses, ladder, achievements.</p>
       <div id="pr-body"></div>
-      <div class="ne-actions">
-        <button id="pr-close" class="menu-btn secondary">Close</button>
-      </div>
     </div>
   </div>
 
@@ -680,7 +676,7 @@
     <div class="menu-bg"></div>
     <div class="menu-scrim"></div>
     <div class="menu-box">
-      <button id="pm-back" class="menu-back">← Back</button>
+      <button id="pm-back" class="menu-back" data-back>← Back</button>
       <div class="menu-bug"><span class="menu-tag">Tee sheet</span></div>
       <div class="menu-wordmark">
         <h1>Play</h1>
@@ -721,6 +717,7 @@
 
   <div id="match-menu" class="hidden">
     <div class="ne-box">
+      <button id="mm-close" class="menu-back" data-back>← Back</button>
       <h2><span class="ic ic-user"></span>Match vs Friends</h2>
       <p class="ne-sub">Play a live round against friends. Lowest score wins.</p>
       <button id="mm-start" class="menu-btn menu-btn-play">Start a match</button>
@@ -728,7 +725,6 @@
       <input id="mm-code" type="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" autocorrect="off">
       <div id="mm-error" class="auth-error hidden"></div>
       <div class="ne-actions">
-        <button id="mm-close" class="menu-btn secondary">Cancel</button>
         <button id="mm-join" class="menu-btn">Join match</button>
       </div>
     </div>
@@ -736,6 +732,7 @@
 
   <div id="match-lobby" class="hidden">
     <div class="lb-box">
+      <button id="ml-leave" class="menu-back" data-back>← Leave</button>
       <h2><span class="ic ic-user"></span>Match Lobby</h2>
       <div class="ml-code-wrap">
         <span class="ml-code-label">Share this code</span>
@@ -749,27 +746,29 @@
       <ul id="ml-players" class="ml-players"></ul>
       <button id="ml-begin" class="menu-btn menu-btn-play hidden">Set up match</button>
       <div id="ml-waiting" class="tl-status hidden">Waiting for the host to start…</div>
-      <button id="ml-leave" class="menu-btn secondary" style="margin-top:8px">Leave</button>
     </div>
   </div>
 
   <div id="match-setup" class="hidden" data-holes="18">
     <div class="ne-box">
+      <button id="ms-back" class="menu-back" data-back>← Back</button>
       <h2><span class="ic ic-gear"></span>Match settings</h2>
       <p class="ne-sub">Format and length lock when the match begins. You'll pick the course next.</p>
-      <div class="ms-len-row">
-        <button class="menu-btn secondary ms-fmt" data-format="stroke">Stroke play</button>
-        <button class="menu-btn secondary ms-fmt" data-format="match">Match play</button>
+      <div class="seg" role="radiogroup" aria-label="Format">
+        <button class="seg-btn ms-fmt" data-format="stroke" role="radio">Stroke play</button>
+        <button class="seg-btn ms-fmt" data-format="match" role="radio">Match play</button>
       </div>
       <div id="ms-fmt-note" class="ne-sub ms-note"></div>
-      <div class="ms-len-row">
-        <button class="menu-btn secondary ms-len" data-holes="9">9 holes</button>
-        <button class="menu-btn secondary ms-len" data-holes="18">18 holes</button>
+      <div class="seg" role="radiogroup" aria-label="Length">
+        <button class="seg-btn ms-len" data-holes="9" role="radio">9 holes</button>
+        <button class="seg-btn ms-len" data-holes="18" role="radio">18 holes</button>
       </div>
-      <button id="ms-live" class="menu-btn secondary ms-live hidden">Live — take turns, watch each shot</button>
+      <button id="ms-live" class="switch ms-live hidden" role="switch" aria-checked="false">
+        <span class="switch-track"><span class="switch-knob"></span></span>
+        <span class="switch-label">Live — take turns, watch each shot</span>
+      </button>
       <div id="ms-status" class="ne-sub"></div>
       <div class="ne-actions">
-        <button id="ms-back" class="menu-btn secondary">Back</button>
         <button id="ms-confirm" class="menu-btn">Choose course</button>
       </div>
     </div>
@@ -807,6 +806,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script defer src="game.js?v=310"></script>
+  <script defer src="game.js?v=311"></script>
 </body>
 </html>
