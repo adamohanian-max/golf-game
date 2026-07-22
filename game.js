@@ -387,6 +387,27 @@ function greenBaseSpeed(D) {
   if (D <= dTailMax) return Math.sqrt(2 * TUNE.greenDecel * D);
   return vt + (D - dTailMax) * (1 - TUNE.friction.green);
 }
+// Launch speed that rolls exactly D (world units) along a line whose slope adds `aid`
+// per frame (+ downhill / − uphill; already capped to ±greenDecel·slopeCapFrac). Inverts
+// the SAME two-phase roll rollStep runs (exponential coast > greenCoastSpeed, constant-
+// decel tail below) with the slope gate (slopeStopSpeed) — including the coast phase the
+// old closed-form downhill branch dropped. Binary search; ~40 iters, monotonic so exact.
+function invertPuttPace(D, aid) {
+  const roll = (v0) => {
+    let v = v0, d = 0;
+    for (let i = 0; i < 20000 && v > 1e-4; i++) {
+      d += v;                                    // position advances by current v (matches rollStep order)
+      const sp0 = v;                             // gate/phase use pre-friction speed, as rollStep does
+      if (sp0 > TUNE.greenCoastSpeed) v *= TUNE.friction.green;
+      else v = Math.max(0, v - TUNE.greenDecel);
+      if (sp0 > TUNE.slopeStopSpeed) v = Math.max(0, v + aid);
+    }
+    return d;
+  };
+  let lo = 1e-4, hi = 1.2;
+  for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (roll(mid) < D) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
+}
 function recalcPower() {
   // Full shots follow a per-club arc (see setupFlight); only the putt caps are
   // derived here.
@@ -2769,49 +2790,20 @@ function buildTrialShot(ang, frac, spin, onGreen) {
       const flatU = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y);
       const band = TUNE.puttBandLo + (TUNE.puttBandHi - TUNE.puttBandLo) * f;
       const targetU = Math.min(flatU * band, YARDS.maxPutt / YARDS_PER_UNIT);  // world units
-      // Climb cost in the SAME field/units the roll's slope force uses → dead pace reaches
-      // the cup uphill and down (slope force opposes uphill, aids downhill — budget for it).
-      // Budget the climb the ball ACTUALLY experiences along its AIMED line (∇h·aim × dist),
-      // not the net straight ball→cup elevation delta. A cross-slope putt is aimed above the
-      // hole to hold the line, so it climbs above the cup's contour before breaking back down
-      // — net rise is ~0 but the ball must be hit firmer. Projecting the gradient onto the aim
-      // captures that; for a straight up/downhill putt (aim = cup line) it reduces to hP − hB.
-      const ux = Math.cos(ang), uy = Math.sin(ang);       // aim unit vector
-      const gA = greenSlopeAt(b.x, b.y);                  // uphill gradient ∇h at ball
-      const gF = greenSlopeAt(b.x + ux * flatU, b.y + uy * flatU); // …and along the aim (may be off-green → null)
-      let gproj = 0, gn = 0;
-      if (gA) { gproj += gA.x * ux + gA.y * uy; gn++; }   // + = aim climbs uphill
-      if (gF) { gproj += gF.x * ux + gF.y * uy; gn++; }
-      const rise = (gn ? gproj / gn : 0) * flatU;         // + uphill, − downhill (along the aimed line)
-      let v2;
-      if (rise < 0) {
-        // Downhill: invert the ACTUAL roll model instead of an energy budget. The
-        // roll's downhill aid is capped at greenDecel·slopeCapFrac (net decel is
-        // always positive — the ball can never run away) and gated off entirely
-        // below slopeStopSpeed. A raw work budget (2·slopeAccel·rise) credits
-        // gravity the roll never delivers, collapses v2 toward 0, and every
-        // downhill putt launched at the old floor speed and died ~half way — the
-        // cup was unreachable at ANY swing power. Piecewise instead: net decel
-        // a1 = greenDecel − aid while above the gate, full greenDecel below it.
-        // (Tail-phase-only math — downhill putts stay short enough in practice
-        // that the coast phase never enters into it.)
-        const gmAvg = -rise / Math.max(flatU, 1e-6);   // avg downhill gradient along the line
-        const aid = Math.min(TUNE.slopeAccel * gmAvg, TUNE.greenDecel * TUNE.slopeCapFrac);
-        const a1 = TUNE.greenDecel - aid;
-        const vg = TUNE.slopeStopSpeed;
-        const dGate = vg * vg / (2 * TUNE.greenDecel); // dist the gated (unaided) tail covers
-        v2 = targetU <= dGate ? 2 * TUNE.greenDecel * targetU
-                              : vg * vg + 2 * a1 * (targetU - dGate);
-        power = Math.sqrt(Math.max(v2, 1e-9));
-      } else {
-        // Flat/uphill: fold the slope drag into an EFFECTIVE extra distance (capped,
-        // same slopeCapFrac role as before) and hand it to the same two-phase
-        // coast/tail model recalcPower uses — keeps flat AND uphill lag putts
-        // correctly powered through the coast phase, not just short ones.
-        const slopeCostD = Math.min(TUNE.slopeCapFrac * targetU,
-                                     rise > 0 ? (TUNE.slopeAccel * rise) / TUNE.greenDecel : 0);
-        power = greenBaseSpeed(targetU + slopeCostD);
-      }
+      // Dead pace must die at the cup uphill AND down. Invert the ACTUAL roll model
+      // numerically along the ball→cup line (invertPuttPace) rather than a closed-form
+      // energy budget: the old split had a tail-phase-ONLY downhill branch that ignored
+      // the coast phase, so longer downhill putts — and "perpendicular" putts that catch
+      // any downhill component along the line — launched well short. gmAlong = the along-
+      // line gradient (+ downhill / − uphill); the slope force is folded in with the SAME
+      // cap (greenDecel·slopeCapFrac) and gate (slopeStopSpeed) rollStep applies, so we
+      // never credit gravity the roll won't deliver.
+      const hB = greenHeightAt(b.x, b.y), hP = greenHeightAt(HOLE.holePos.x, HOLE.holePos.y);
+      const rise = (hB == null || hP == null) ? 0 : (hP - hB);       // + uphill, − downhill
+      const gmAlong = -rise / Math.max(flatU, 1e-6);                 // + downhill, − uphill
+      const aid = Math.min(TUNE.slopeAccel * Math.abs(gmAlong),
+                           TUNE.greenDecel * TUNE.slopeCapFrac) * Math.sign(gmAlong);
+      power = invertPuttPace(targetU, aid);
       // Short-putt floor: inside puttFloorFt never leave it short. Use at least the pace to
       // reach the cup on flat.
       if (flatU * YARDS_PER_UNIT * 3 <= TUNE.puttFloorFt) {
