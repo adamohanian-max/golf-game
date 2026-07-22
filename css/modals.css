@@ -186,7 +186,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-scrim);
+  background:
+    linear-gradient(rgba(5, 11, 8, 0.5), rgba(5, 11, 8, 0.5)),
+    var(--surface-scrim);
   -webkit-backdrop-filter: blur(var(--blur-sm));
   backdrop-filter: blur(var(--blur-sm));
   z-index: 30;
@@ -199,15 +201,18 @@
   flex-direction: column;
   background: var(--surface-panel);
   border: var(--border-hair);
+  border-left: 2px solid var(--brass);
   border-radius: var(--r-lg);
   padding: var(--s-5) var(--s-4);
   box-shadow: var(--shadow-3);
   animation: panelIn var(--dur-modal) var(--ease) both;
 }
 .lb-box h2 {
-  display: flex; align-items: center; justify-content: center; gap: 0.4em;
-  color: var(--text); text-align: center; margin-bottom: var(--s-4); font-size: var(--t-h1);
+  display: flex; align-items: center; justify-content: flex-start; gap: 0.4em;
+  color: var(--text); text-align: left; margin-bottom: var(--s-4); font-size: var(--t-h1);
+  font-family: var(--font-display); font-weight: var(--fw-bold);
 }
+.lb-box h2 .ic { color: var(--brass); }
 .lb-course {
   width: 100%;
   margin-bottom: var(--s-4);
