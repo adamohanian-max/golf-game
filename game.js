@@ -6496,6 +6496,12 @@ function formatToPar(d) {
   if (d === 0) return "E";
   return d > 0 ? "+" + d : String(d);
 }
+// Single to-par color family used by EVERY scoreboard/score readout. Base colors
+// live in css/base.css (.tp-under/.tp-over/.tp-even); the dark Tour board scopes
+// its own over/even overrides. Was previously duplicated as _parClass +
+// inline "under"/"over"/"even" strings across scorecard, leaderboard, tour, etc.
+function toParClass(n) { return n == null ? "" : n < 0 ? "tp-under" : n > 0 ? "tp-over" : "tp-even"; }
+function toParHTML(n) { return '<span class="' + toParClass(n) + '">' + (n == null ? "—" : formatToPar(n)) + "</span>"; }
 function updateScorecard() {
   if (elCourse) elCourse.textContent = course ? course.name : "";
   if (elHoleLabel) elHoleLabel.textContent = "Hole " + (HOLE.num || 1);
@@ -6508,11 +6514,11 @@ function updateScorecard() {
     const mp = computeMatchPlay(me, lastOpp, matchHoleCount);
     if (elScoreLabel) elScoreLabel.textContent = "Match";
     elScore.textContent = mp.result || mp.status;
-    elScore.className = mp.diff > 0 ? "under" : mp.diff < 0 ? "over" : "even";
+    elScore.className = mp.diff > 0 ? "tp-under" : mp.diff < 0 ? "tp-over" : "tp-even";
   } else {
     if (elScoreLabel) elScoreLabel.textContent = "Score";
     elScore.textContent = formatToPar(round.score);
-    elScore.className = round.score < 0 ? "under" : round.score > 0 ? "over" : "even";
+    elScore.className = toParClass(round.score);
   }
   positionStatsBar();
 }
@@ -9714,7 +9720,7 @@ async function renderLeaderboard(courseId) {
     if (!rows || !rows.length) { empty.textContent = "No scores yet — be the first!"; return; }
     const me = getPlayerName().toLowerCase();
     list.innerHTML = rows.map((r, i) => {
-      const cls = r.to_par < 0 ? "under" : r.to_par > 0 ? "over" : "even";
+      const cls = toParClass(r.to_par);
       const mine = (r.name || "").toLowerCase() === me ? " lb-me" : "";
       return `<tr class="${mine}">
         <td class="lb-rank">${i + 1}</td>
@@ -9844,7 +9850,7 @@ function dateShort(iso) {
   return isNaN(dt) ? "" : (dt.getMonth() + 1) + "/" + dt.getDate() + "/" + String(dt.getFullYear()).slice(2);
 }
 function toparCell(v) {
-  const cls = v < 0 ? "under" : v > 0 ? "over" : "even";
+  const cls = toParClass(v);
   return `<span class="${cls}">${formatToPar(v)}</span>`;
 }
 
@@ -9872,14 +9878,20 @@ function renderAccount(stats, trounds) {
       <button id="av-signout" class="menu-btn secondary">Sign out</button>
       <button id="av-delete" class="av-delete">Delete account &amp; data</button>
     </div>`;
-  // Tab chrome: Stats | My Bag. Stats panel holds the grids/tables; My Bag panel
-  // is populated lazily by renderBagInto() when its tab is first shown.
+  // Tab chrome: Stats | My Bag | Winnings. Header (id + tabs) is fixed; only the
+  // .av-scroll region scrolls; account actions pin to the bottom. My Bag and
+  // Winnings panels build lazily on first tab visit (renderBagInto /
+  // renderWinningsInto).
   const tabWrap = (statsInner) => acBackBar("Profile & Stats") + idHtml +
     `<div class="re-tabs av-tabs">` +
     `<button class="re-tab active" data-panel="stats">Stats</button>` +
-    `<button class="re-tab" data-panel="bag">My Bag</button></div>` +
-    `<div id="av-stats-panel">${statsInner}</div>` +
-    `<div id="av-bag-panel" class="hidden"></div>` +
+    `<button class="re-tab" data-panel="bag">My Bag</button>` +
+    `<button class="re-tab" data-panel="winnings">Winnings</button></div>` +
+    `<div class="av-scroll">` +
+      `<div id="av-stats-panel" class="av-panel">${statsInner}</div>` +
+      `<div id="av-bag-panel" class="av-panel hidden"></div>` +
+      `<div id="av-win-panel" class="av-panel hidden"></div>` +
+    `</div>` +
     acctActions;
 
   if (!stats.rounds) {
@@ -9909,8 +9921,11 @@ function renderAccount(stats, trounds) {
       ${cell("Prox", stats.avgProx == null ? "—" : Math.round(stats.avgProx) + " ft")}
     </div>`;
 
-  const byCourse = stats.byCourse.length ? `
-    <div class="av-section">Best by course</div>
+  // Collapsible section (native <details>, default collapsed).
+  const collapse = (title, inner) => inner
+    ? `<details class="av-collapse"><summary>${title}</summary>${inner}</details>` : "";
+
+  const byCourse = collapse("Best by course", stats.byCourse.length ? `
     <table class="lb-table av-table">
       <thead><tr><th>Course</th><th>Best</th><th>Strokes</th></tr></thead>
       <tbody>${stats.byCourse.map((r) => `
@@ -9918,10 +9933,9 @@ function renderAccount(stats, trounds) {
         <td class="lb-topar">${toparCell(r.to_par)}</td>
         <td class="lb-strk">${r.strokes}</td></tr>`).join("")}
       </tbody>
-    </table>` : "";
+    </table>` : "");
 
-  const recent = `
-    <div class="av-section">Recent rounds</div>
+  const recent = collapse("Recent rounds", `
     <table class="lb-table av-table">
       <thead><tr><th>Date</th><th>Course</th><th>Score</th><th>Strk</th><th>Putts</th></tr></thead>
       <tbody>${stats._recent.map((r) => `
@@ -9931,10 +9945,9 @@ function renderAccount(stats, trounds) {
         <td class="lb-strk">${r.strokes}</td>
         <td class="lb-strk">${r.putts == null ? "—" : r.putts}</td></tr>`).join("")}
       </tbody>
-    </table>`;
+    </table>`);
 
-  const trn = (trounds && trounds.length) ? `
-    <div class="av-section">Tournament results</div>
+  const trn = collapse("Tournament results", (trounds && trounds.length) ? `
     <table class="lb-table av-table">
       <thead><tr><th>Date</th><th>Round</th><th>Score</th><th>Strk</th></tr></thead>
       <tbody>${trounds.map((t) => `
@@ -9943,7 +9956,7 @@ function renderAccount(stats, trounds) {
         <td class="lb-topar">${toparCell(t.to_par)}</td>
         <td class="lb-strk">${t.strokes}</td></tr>`).join("")}
       </tbody>
-    </table>` : "";
+    </table>` : "");
 
   body.innerHTML = tabWrap(totals + bestRow + detail + byCourse + recent + trn);
   wireAvEditName();
@@ -9955,17 +9968,19 @@ function wireAvEditName() {
   const eu = document.getElementById("av-edituname");
   if (eu) eu.addEventListener("click", () => openUsernamePrompt(() => showAccountStats()));
 
-  // Stats | My Bag tabs.
-  const statsP = document.getElementById("av-stats-panel");
-  const bagP = document.getElementById("av-bag-panel");
-  let bagBuilt = false;
+  // Stats | My Bag | Winnings tabs — map data-panel → panel; lazy-build bag/winnings.
+  const panels = { stats: "av-stats-panel", bag: "av-bag-panel", winnings: "av-win-panel" };
+  let bagBuilt = false, winBuilt = false;
   document.querySelectorAll(".av-tabs .re-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
+      const key = tab.getAttribute("data-panel");
       document.querySelectorAll(".av-tabs .re-tab").forEach((t) => t.classList.toggle("active", t === tab));
-      const bag = tab.getAttribute("data-panel") === "bag";
-      if (statsP) statsP.classList.toggle("hidden", bag);
-      if (bagP) bagP.classList.toggle("hidden", !bag);
-      if (bag && !bagBuilt && bagP) { renderBagInto(bagP); bagBuilt = true; }
+      for (const k in panels) {
+        const p = document.getElementById(panels[k]);
+        if (p) p.classList.toggle("hidden", k !== key);
+      }
+      if (key === "bag" && !bagBuilt) { const p = document.getElementById(panels.bag); if (p) { renderBagInto(p); bagBuilt = true; } }
+      if (key === "winnings" && !winBuilt) { const p = document.getElementById(panels.winnings); if (p) { renderWinningsInto(p); winBuilt = true; } }
     });
   });
 
@@ -10088,6 +10103,71 @@ function renderBagInto(body) {
 function closeAccountViewer() {
   const ov = document.getElementById("account-viewer");
   if (ov) ov.classList.add("hidden");
+}
+
+// Tour Winnings tab: career total + a collapsible list of banked events
+// (event · place · prize). Tapping a row opens that event's leaderboard.
+// Place isn't stored (golf.tourEvents only banks name/rounds/payout) so it's
+// derived per-event from the real ESPN leaderboard, lazily + in parallel.
+async function renderWinningsInto(el) {
+  if (!el) return;
+  const map = _tourMap();
+  const rows = Object.keys(map).map((id) => Object.assign({ id }, map[id]))
+    .filter((e) => e && e.payout > 0).sort((a, b) => b.payout - a.payout);
+  let html = `<div class="ac-win-total">${fmtMoney(careerWinnings())}<small>career earnings</small></div>`;
+  if (!rows.length) {
+    el.innerHTML = html + `<div class="av-empty">No winnings yet — finish a Tour Event on the weekend to bank a check.</div>`;
+    return;
+  }
+  html += `<details class="av-collapse" open><summary>Events (${rows.length})</summary><div class="aw-list">` +
+    rows.map((e) => `<button class="aw-row" data-id="${escapeHTML(e.id)}">` +
+      `<span class="aw-name">${escapeHTML(e.name || "Event")}</span>` +
+      `<span class="aw-place" data-id="${escapeHTML(e.id)}">—</span>` +
+      `<span class="aw-prize">${fmtMoney(e.payout)}</span></button>`).join("") +
+    `</div></details>`;
+  el.innerHTML = html;
+
+  // Schedule gives each event its start date (for the ESPN ?dates= fetch) + state.
+  let sched = _tourSchedule;
+  if (!sched) { try { sched = await fetchTourSchedule(); if (sched) _tourSchedule = sched; } catch (e) { sched = null; } }
+  const byId = {};
+  (sched || []).forEach((s) => { byId[s.id] = s; });
+
+  el.querySelectorAll(".aw-row").forEach((btn) => {
+    const ev = byId[btn.getAttribute("data-id")];
+    if (!ev) { btn.disabled = true; btn.classList.add("aw-disabled"); return; }
+    btn.addEventListener("click", () => { closeAccountViewer(); openTourEvent(ev); });
+  });
+
+  // Fill place cells lazily; skip anything with no schedule entry / no result.
+  rows.forEach((e) => {
+    const ev = byId[e.id];
+    if (!ev) return;
+    deriveMyTourPlace(e.id, ev.start, e.rounds).then((place) => {
+      if (!place) return;
+      const cell = el.querySelector('.aw-place[data-id="' + e.id + '"]');
+      if (cell && document.body.contains(cell)) cell.textContent = place;
+    }).catch(() => {});
+  });
+}
+
+// My finishing position for a completed event, computed from the real field:
+// fetch the leaderboard, splice in a "me" row built from my banked per-round
+// to-pars, project through the round I reached, and read the tied position.
+// Returns a label like "T12" / "3", or null if unavailable (offline / no rounds).
+async function deriveMyTourPlace(eventId, startISO, myRounds) {
+  if (!myRounds || !myRounds.length) return null;
+  const data = await fetchTourLeaderboard(eventId, startISO);
+  if (!data || !data.players) return null;
+  const n = Math.min(myRounds.length, 4);
+  const me = { name: getPlayerName() || "You", flag: null, isMe: true,
+    rounds: myRounds.map((tp, i) => ({ n: i + 1, toPar: tp })) };
+  let field = projectField(data.players.concat([me]), n);
+  // From R3 on, only players who reached round n remain (mirrors renderTourBoard).
+  if (n >= 3) field = field.filter((p) => p.isMe || (p.rounds || []).some((r) => r.n >= n));
+  const pos = tourPositionsByTotal(field);
+  const i = field.findIndex((p) => p.isMe);
+  return i < 0 ? null : tourPos(pos[i]);
 }
 (function wireAccountViewer() {
   const open = document.getElementById("open-account");
@@ -10750,6 +10830,32 @@ function rankMatchRows(rows) {
 }
 // "1st" / "T-2nd" position label for a ranked row.
 function posLabel(r) { return (r.tied ? "T-" : "") + ordinal(r.pos); }
+
+// ---- Unified standings-list renderer -----------------------------------
+// ONE flex/grid row family (.std-*) for every compact "who's winning" widget
+// (match live board #mb-list, match results #mr-list). Each row is a
+// normalized object; `cols` (array of preset keys) picks which columns show,
+// in order. Replaces the near-identical .mb-row / .mr-row (×2) builders.
+// To-par values run through toParHTML so colors match every other scoreboard.
+const STD_COL = {
+  pos:   (r) => `<span class="std-pos">${r.pos == null ? "" : r.pos}</span>`,
+  name:  (r) => `<span class="std-name">${esc(r.name)}` +
+                `${r.cpu ? ' <span class="cpu-chip">CPU</span>' : ""}` +
+                `${r.trophy ? ' <span class="ic ic-trophy std-trophy"></span>' : ""}</span>`,
+  score: (r) => `<span class="std-score">${toParHTML(r.score)}</span>`,
+  total: (r) => `<span class="std-score std-total">${toParHTML(r.total)}</span>`,
+  thru:  (r) => `<span class="std-thru">${r.finished ? '<span class="std-fin">F</span>'
+                : (r.thru == null ? "" : r.thru)}</span>`,
+};
+function renderStandingsList(host, rows, cols, empty) {
+  if (!host) return;
+  host.innerHTML = rows.map((r) => {
+    let cls = "std-row";
+    if (r.isMe) cls += " std-me";
+    if (r.lead) cls += " std-lead";
+    return `<div class="${cls}">` + cols.map((k) => STD_COL[k](r)).join("") + "</div>";
+  }).join("") || (empty ? `<div class="std-row std-empty">${empty}</div>` : "");
+}
 
 // --- Supabase helpers ---
 async function fetchActiveTournament(courseId) {
@@ -11565,7 +11671,7 @@ function _parseToPar(v) {
   const n = parseInt(s, 10);
   return isNaN(n) ? null : n;
 }
-function _parClass(n) { return n == null ? "" : n < 0 ? "tp-under" : n > 0 ? "tp-over" : "tp-even"; }
+function _parClass(n) { return toParClass(n); }   // alias — canonical is toParClass
 function _parText(n) { return n == null ? "—" : formatToPar(n); }
 
 // Leaderboard for a specific event (by id + start date) — or, with no args, the
@@ -13209,7 +13315,7 @@ async function renderMatchBoard() {
     const me = rows.find(isMeEntry), opp = rows.find(r => !isMeEntry(r));
     if (!me || !opp) {
       if (title) title.textContent = "Match play";
-      body.innerHTML = '<div class="mb-row mb-empty">Waiting for opponent…</div>';
+      body.innerHTML = '<div class="std-row std-empty">Waiting for opponent…</div>';
       return;
     }
     const mp = computeMatchPlay(me, opp, matchHoleCount);
@@ -13243,17 +13349,11 @@ async function renderMatchBoard() {
   const ranked = rankMatchRows(rows);
   const allDone = ranked.length && ranked.every(r => r.finished);
   if (title) title.textContent = allDone ? "Final standings" : "Match standings";
-  body.innerHTML = ranked.map(r => {
-    const me = isMeEntry(r) ? " mb-me" : "";
-    const lead = r.pos === 1 ? " mb-lead" : "";
-    const thru = r.finished ? '<span class="mb-fin">F</span>' : `${r.holes_played}/${matchHoleCount}`;
-    return `<div class="mb-row${me}${lead}">` +
-             `<span class="mb-pos">${posLabel(r)}</span>` +
-             `<span class="mb-name">${esc(r.player_name)}${cpuMatch && !isMeEntry(r) ? ' <span class="cpu-chip">CPU</span>' : ""}</span>` +
-             `<span class="mb-score">${formatToPar(r.score)}</span>` +
-             `<span class="mb-thru">${thru}</span>` +
-           `</div>`;
-  }).join("") || '<div class="mb-row mb-empty">No scores yet</div>';
+  renderStandingsList(body, ranked.map(r => ({
+    pos: posLabel(r), name: r.player_name, score: r.score,
+    thru: `${r.holes_played}/${matchHoleCount}`, finished: r.finished,
+    isMe: isMeEntry(r), lead: r.pos === 1, cpu: cpuMatch && !isMeEntry(r),
+  })), ["pos", "name", "score", "thru"], "No scores yet");
 }
 
 // =====================================================================
@@ -13374,16 +13474,11 @@ async function renderMatchResults() {
       showToast("First match win!", 2200, "gold");
       announceMilestoneUnlocks("match-win", 2600);
     }
-    listEl.innerHTML = rows.map(r => {
-      const meCls = isMeEntry(r) ? " mr-me" : "";
-      const thru = r.finished ? '<span class="mr-fin">F</span>' : `${r.holes_played}/${matchHoleCount}`;
-      return `<div class="mr-row${meCls}">` +
-               `<span class="mr-pos"></span>` +
-               `<span class="mr-name">${esc(r.player_name)}${cpuMatch && !isMeEntry(r) ? ' <span class="cpu-chip">CPU</span>' : ""}</span>` +
-               `<span class="mr-score">${formatToPar(r.score)}</span>` +
-               `<span class="mr-thru">${thru}</span>` +
-             `</div>`;
-    }).join("");
+    renderStandingsList(listEl, rows.map(r => ({
+      pos: null, name: r.player_name, score: r.score,
+      thru: `${r.holes_played}/${matchHoleCount}`, finished: r.finished,
+      isMe: isMeEntry(r), cpu: cpuMatch && !isMeEntry(r),
+    })), ["pos", "name", "score", "thru"]);
     return;
   }
 
@@ -13402,17 +13497,12 @@ async function renderMatchResults() {
     showToast("First match win!", 2200, "gold");
     announceMilestoneUnlocks("match-win", 2600);
   }
-  listEl.innerHTML = ranked.map(r => {
-    const meCls = isMeEntry(r) ? " mr-me" : "";
+  renderStandingsList(listEl, ranked.map(r => {
     const win = allDone && r.pos === 1;
-    const thru = r.finished ? '<span class="mr-fin">F</span>' : `${r.holes_played}/${matchHoleCount}`;
-    return `<div class="mr-row${meCls}${win ? " mr-win" : ""}">` +
-             `<span class="mr-pos">${posLabel(r)}</span>` +
-             `<span class="mr-name">${esc(r.player_name)}${cpuMatch && !isMeEntry(r) ? ' <span class="cpu-chip">CPU</span>' : ""}${win ? ' <span class="ic ic-trophy mr-trophy"></span>' : ""}</span>` +
-             `<span class="mr-score">${formatToPar(r.score)}</span>` +
-             `<span class="mr-thru">${thru}</span>` +
-           `</div>`;
-  }).join("") || '<div class="mr-row mb-empty">No scores yet</div>';
+    return { pos: posLabel(r), name: r.player_name, score: r.score,
+      thru: `${r.holes_played}/${matchHoleCount}`, finished: r.finished,
+      isMe: isMeEntry(r), lead: win, trophy: win, cpu: cpuMatch && !isMeEntry(r) };
+  }), ["pos", "name", "score", "thru"], "No scores yet");
 }
 
 // Tear down all match state (Home button, leaving a match).
@@ -14345,16 +14435,6 @@ function renderProgress() {
       ? `Streak: ${st.streak}` + (st.lastDate !== todayStr() ? " · play today to keep it" : "")
       : "No streak yet — play today's daily") +
     `</span></div></div>`;
-  // Tour Winnings — career total + per-event payouts (prize-sorted).
-  const winRows = Object.values(_tourMap()).filter((e) => e && e.payout > 0).sort((a, b) => b.payout - a.payout);
-  html += `<div class="pr-section"><div class="pr-title">Tour Winnings</div>` +
-    `<div class="ac-win-total">${fmtMoney(careerWinnings())}<small>career earnings</small></div>` +
-    (winRows.length
-      ? `<table class="lb-table av-table"><thead><tr><th>Event</th><th>Prize</th></tr></thead><tbody>` +
-        winRows.map((e) => `<tr><td>${esc(e.name || "Event")}</td>` +
-          `<td class="lb-strk">${fmtMoney(e.payout)}</td></tr>`).join("") + `</tbody></table>`
-      : `<div class="pr-row pr-dim"><span>No winnings yet — finish a Tour Event on the weekend to bank a check.</span></div>`) +
-    `</div>`;
   body.innerHTML = html;
 }
 (function wireProgress() {

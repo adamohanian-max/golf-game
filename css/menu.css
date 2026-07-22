@@ -525,9 +525,12 @@
 .fr-ok { color: var(--accent-bright); font-size: 13px; text-align: center; padding: 8px 0; }
 
 /* Account viewer internals */
-.av-box { width: min(420px, 92vw); max-height: 88vh; display: flex; flex-direction: column; text-align: left; }
+.av-box { width: min(420px, 92vw); max-height: min(88vh, 88dvh); display: flex; flex-direction: column; text-align: left; }
 .av-box h2 { text-align: left; }
-#av-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: var(--s-1) 0 var(--s-2); }
+/* Flex column: header (id + tabs) + footer (account actions) stay fixed; only
+   .av-scroll scrolls. Hub view fills it with a short .pm-list (no scroll needed). */
+#av-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin: var(--s-1) 0 var(--s-2); }
+.av-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .av-empty { text-align: center; color: var(--text-dim); padding: 28px var(--s-2); font-size: 14px; }
 .av-id { text-align: center; padding: var(--s-1) 0 var(--s-3); border-bottom: 1px solid var(--w-08); margin-bottom: var(--s-3); }
 .av-name { color: var(--text); font-size: var(--t-h1); font-weight: var(--fw-black); }
@@ -546,7 +549,7 @@
 .av-hcp { color: var(--accent-bright); }
 .av-lbl { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 3px; }
 .av-best { color: var(--w-70); font-size: var(--t-cap); text-align: center; margin: 2px 0 var(--s-3); }
-.av-best .under { color: var(--status-under); } .av-best .over { color: var(--status-over); } .av-best .even { color: var(--text); }
+/* to-par colors via shared .tp-under/.tp-over/.tp-even (css/base.css) */
 .av-section { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: var(--fw-bold); margin: var(--s-4) 0 6px; }
 .av-table .lb-topar { text-align: left; }
 .av-table .av-date { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -559,6 +562,35 @@
 }
 .av-account-actions .menu-btn { width: 100%; margin: 0; }
 .ac-back { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-3); }
+
+/* Collapsible stats section (native <details>) — .av-section label + brass caret. */
+.av-collapse { border-top: 1px solid var(--w-08); }
+.av-collapse > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px;
+  color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px;
+  font-weight: var(--fw-bold); padding: var(--s-3) 0 6px;
+}
+.av-collapse > summary::-webkit-details-marker { display: none; }
+.av-collapse > summary::before {
+  content: "›"; color: var(--brass); font-size: 14px; font-weight: var(--fw-bold);
+  display: inline-block; transition: transform var(--dur-fast, 0.12s);
+}
+.av-collapse[open] > summary::before { transform: rotate(90deg); }
+
+/* Tour Winnings tab: total (.ac-win-total, defined above) + event rows. */
+.aw-list { display: flex; flex-direction: column; gap: 2px; }
+.aw-row {
+  display: flex; align-items: center; gap: var(--s-2); width: 100%; text-align: left;
+  background: var(--w-05); border: none; border-radius: var(--r-md);
+  padding: 8px var(--s-3); cursor: pointer; color: var(--text);
+}
+.aw-row:hover { background: var(--w-08); }
+.aw-name { flex: 1; font-size: 14px; font-weight: var(--fw-med); }
+.aw-place { color: var(--brass-bright); font-size: 12px; font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+.aw-prize { color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums;
+  min-width: 64px; text-align: right; }
+.aw-disabled { opacity: 0.5; cursor: default; }
 .ac-backbtn { background: none; border: none; color: var(--accent-bright); font-size: 14px; font-weight: var(--fw-bold); cursor: pointer; padding: 2px 0; }
 .ac-back-title { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: var(--fw-bold); }
 .ac-win-total { text-align: center; color: var(--accent-bright); font-size: 30px; font-weight: var(--fw-black); font-variant-numeric: tabular-nums; padding: var(--s-2) 0 var(--s-4); }
