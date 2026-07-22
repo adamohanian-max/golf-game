@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="css/courses.css?v=7">
   <link rel="stylesheet" href="css/modals.css?v=78">
   <link rel="stylesheet" href="css/tournament.css?v=59">
-  <link rel="stylesheet" href="css/tour.css?v=8">
+  <link rel="stylesheet" href="css/tour.css?v=9">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -530,6 +530,24 @@
     </div>
   </div>
 
+  <!-- Auto-popup placement window when the player finishes the daily challenge. -->
+  <div id="daily-result" class="hidden">
+    <div class="tr-card">
+      <div id="dr-event" class="tr-event"></div>
+      <div class="tr-place-label">You finished</div>
+      <div id="dr-place" class="tr-place">—</div>
+      <div id="dr-place-sub" class="tr-place-sub"></div>
+      <div class="tr-money">
+        <div id="dr-score" class="tr-payout">—</div>
+        <div id="dr-streak" class="tr-purse"></div>
+      </div>
+      <div class="tr-actions">
+        <button id="dr-board" class="tb-btn-ghost">See full board</button>
+        <button id="dr-done" class="tb-btn-tee">Done</button>
+      </div>
+    </div>
+  </div>
+
   <div id="tournament-lobby" class="hidden">
     <div class="lb-box">
       <h2><span class="ic ic-flag-checkered"></span>Tournaments</h2>
@@ -791,6 +809,6 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script defer src="game.js?v=308"></script>
+  <script defer src="game.js?v=309"></script>
 </body>
 </html>

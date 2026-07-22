@@ -6681,6 +6681,7 @@ function showResult() {
   round.holesPlayed += 1;
   updateScorecard();
   if (tourPlayMode) updateTourBug();   // refresh the live scorebug with my new cumulative
+  if (dailyMode) updateDailyBug();     // daily reuses the same scorebug, real users instead of pros
   // Live match: push my score/progress + per-hole scores so the opponent's
   // standings (and match-play status) update.
   if (matchLive()) {
@@ -6782,8 +6783,6 @@ function showResult() {
 // Leave the result (modal tap OR the quick-path auto-advance) and move on.
 function advanceFromResult() {
   elResult.classList.add("hidden");
-  // Daily is a single hole → straight to the summary (streak + share live there)
-  if (dailyMode) { showRoundSummary(); return; }
   // Match play closed out (one player up by more than the holes left) → end now.
   if (matchDecided) { showRoundSummary(); return; }
   // Last hole → show full round summary instead of advancing. A match plays a
@@ -7055,7 +7054,12 @@ function showRoundSummary(midRound = false) {
       setTimeout(() => showToast("Broke par — milestone earned!", 2400, "gold"), 600);
       announceMilestoneUnlocks("break-par", 3200);
     }
-    if (dailyMode) finishDaily(totStrk);  // streak + share + daily board
+    if (dailyMode) {
+      finishDaily(totStrk);               // streak + share + daily board
+      // Auto-pop the placement card (short beat so the scorecard paints first),
+      // mirroring the tour finish. showDailyResult refreshes the field first.
+      setTimeout(showDailyResult, 350);
+    }
     submitFinishedRound();                // post to regular leaderboard
     handleTournamentRoundComplete();      // post to tournament (no-op if not in tournament)
     setupTourRoundEnd(recordTourRound()); // bank the tour round + show next-round / cut / results CTA
@@ -8897,8 +8901,9 @@ function showMenu() {
   closeCourseMenu();
   renderMenuChips();
   setMenuBackdrop();
-  // Leaving to the menu ends any in-progress Tour Event round + hides the scorebug.
+  // Leaving to the menu ends any in-progress Tour Event / daily round + hides the scorebug.
   tourPlayMode = false;
+  dailyMode = false;
   stopTourPoll();
   updateTourBug();
 }
@@ -9101,16 +9106,17 @@ async function startDaily() {
   try {
     if (!course || course.id !== c.id) await loadCourse(c.id);
     setYardsPerUnit(course.yardsPerUnit);
-    const idx = Math.floor(mulberry32(strSeed(dateStr + ":hole"))() * course.holes.length);
-    holeIndex = idx;
-    dailyInfo = { date: dateStr, courseId: c.id, holeNum: course.holes[idx].num || idx + 1 };
-    setHole(course.holes[idx]);
-    showToast(`Daily: ${c.name}, hole ${dailyInfo.holeNum}`, 2400);
+    holeIndex = 0;                         // front nine — play holes 1..9 in order
+    dailyInfo = { date: dateStr, courseId: c.id };
+    setHole(course.holes[0]);
+    showToast(`Daily: ${c.name} · Front 9`, 2400);
   } catch (e) {
     console.warn("daily load failed", e);
-    dailyInfo = { date: dateStr, courseId: c.id, holeNum: 1 };
+    dailyInfo = { date: dateStr, courseId: c.id };
     setHole(FALLBACK_HOLE);
   }
+  loadDailyBoard(dateStr);   // fetch today's field for the live scorebug (async, non-blocking)
+  updateDailyBug();
 }
 
 function getDaily() { return lsGet("golf.daily", { lastDate: null, streak: 0 }); }
@@ -9648,9 +9654,9 @@ function buildRoundPayload() {
   const proxHoles = stats.filter(h => h.proximity !== null);
   const avgProx = proxHoles.length ? proxHoles.reduce((s, h) => s + h.proximity, 0) / proxHoles.length : null;
   const strokes = stats.reduce((s, h) => s + h.strokes, 0);
-  // Daily forms its own date-keyed board (single hole), no schema change.
+  // Daily forms its own date-keyed board (front nine), no schema change.
   const courseId = dailyMode ? ("daily_" + ((dailyInfo && dailyInfo.date) || todayStr())) : selectedCourseId;
-  const holeCount = dailyMode ? 1 : course.holes.length;
+  const holeCount = dailyMode ? n : course.holes.length;   // holes actually played (9, or fewer on a short course)
   return {
     name: getPlayerName(), user_id: (currentUser() || {}).id || null,
     course_id: courseId, hole_count: holeCount,
@@ -11516,6 +11522,41 @@ function hideTourResult() {
   document.getElementById("round-end").classList.add("hidden");
 }
 
+// Daily challenge placement card — mirrors showTourResult, real users, no payout.
+async function showDailyResult() {
+  const modal = document.getElementById("daily-result");
+  if (!modal) return;
+  await loadDailyBoard((dailyInfo && dailyInfo.date) || todayStr());  // refresh with latest field
+  const { field, positions } = dailyMergedField();
+  const meIdx = field.findIndex((p) => p.isMe);
+  const me = positions[meIdx] || { pos: null, tied: false };
+  const myTotal = field[meIdx] ? field[meIdx].total : null;
+  const strokes = round.holeStats.reduce((s, h) => s + h.strokes, 0);
+  const st = getDaily();
+  document.getElementById("dr-event").textContent =
+    "Daily Challenge · " + ((dailyInfo && dailyInfo.date) || todayStr());
+  document.getElementById("dr-place").textContent =
+    me.pos == null ? "—" : (me.tied ? "T-" : "") + ordinal(me.pos);
+  document.getElementById("dr-place-sub").textContent =
+    (myTotal != null ? formatToPar(myTotal) + " · " : "") + "of " + field.length +
+    " player" + (field.length === 1 ? "" : "s");
+  document.getElementById("dr-score").textContent = strokes + " (" + formatToPar(round.score) + ")";
+  document.getElementById("dr-streak").textContent = st.streak ? "🔥 Streak " + st.streak : "";
+  modal.classList.remove("hidden");
+}
+function hideDailyResult() {
+  document.getElementById("daily-result").classList.add("hidden");
+  document.getElementById("round-end").classList.add("hidden");
+}
+// Open the leaderboard overlay on today's daily board (returns to round-end on close).
+function openDailyBoard() {
+  const date = (dailyInfo && dailyInfo.date) || todayStr();
+  _lbReturn = "round-end";
+  populateLbCourses();
+  document.getElementById("leaderboard").classList.remove("hidden");
+  renderLeaderboard("daily_" + date);
+}
+
 // Generic tokens dropped before matching ESPN venue names to our manifest.
 const _COURSE_STOP = new Set(["the","golf","club","course","country","links",
   "resort","gc","cc","no","and","at","complex","courses"]);
@@ -12125,6 +12166,45 @@ function updateTourBug() {
   }
 }
 
+// --- Daily challenge: reuse the tour scorebug + result card, real users ---
+// Today's daily leaderboard field (other players' completed front-nine rounds),
+// fetched once when the round starts. My own row is merged in live each hole.
+let _dailyBoard = null;   // [{name, to_par, user_id}] or null until fetched
+async function loadDailyBoard(dateStr) {
+  _dailyBoard = null;
+  if (!LB_ON()) return;
+  try {
+    const rows = await fetchLeaderboard("daily_" + (dateStr || todayStr()));
+    const me = currentUser(), meName = (getPlayerName() || "").toLowerCase();
+    // Drop my own prior row so I'm never listed twice (live row is added separately).
+    _dailyBoard = (rows || []).filter((r) =>
+      !(me && r.user_id && r.user_id === me.id) && (r.name || "").toLowerCase() !== meName);
+  } catch (e) { console.warn("daily board load failed", e); _dailyBoard = []; }
+  if (dailyMode) updateDailyBug();   // field arrived → refresh without waiting for a stroke
+}
+// Merge the fetched field with my live/final row, sorted best-first, positions attached.
+function dailyMergedField() {
+  const field = (_dailyBoard || []).map((r) => ({ name: r.name, total: r.to_par, thru: null, isMe: false }));
+  field.push({ name: getPlayerName() || "You", total: round.score, thru: round.holesPlayed, isMe: true });
+  field.sort((a, b) => (a.total == null) - (b.total == null) || a.total - b.total);
+  return { field, positions: tourPositionsByTotal(field) };
+}
+function updateDailyBug() {
+  const bug = document.getElementById("tour-bug");
+  if (!bug) return;
+  const show = dailyMode && mode === "course";
+  bug.classList.toggle("hidden", !show);
+  if (!show) return;
+  const { field, positions } = dailyMergedField();
+  const meIdx = field.findIndex((p) => p.isMe);
+  const rows = [];
+  for (let i = 0; i < Math.min(3, field.length); i++) rows.push([tourPos(positions[i]), field[i]]);
+  if (meIdx >= 3) rows.push([tourPos(positions[meIdx]), field[meIdx]]);
+  bug.querySelector(".tbug-head").textContent = "Daily · Front 9";
+  bug.querySelector(".tbug-list").innerHTML = rows.map(([r, p]) => _bugRowHTML(r, p)).join("");
+  bug.querySelector(".tbug-cut").classList.add("hidden");   // daily has no cut
+}
+
 (function wireTourEvents() {
   const close = document.getElementById("tb-close");
   if (close) close.addEventListener("click", closeTourEvents);
@@ -12135,11 +12215,21 @@ function updateTourBug() {
   const tee = document.getElementById("tb-tee");
   if (tee) tee.addEventListener("click", teeOffTourRound);
   const bug = document.getElementById("tour-bug");
-  if (bug) bug.addEventListener("click", () => { _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents(); });
+  if (bug) bug.addEventListener("click", () => {
+    if (dailyMode) { openDailyBoard(); return; }   // daily reuses the bug → open the daily board
+    _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents();
+  });
   const trBoard = document.getElementById("tr-board");
   if (trBoard) trBoard.addEventListener("click", () => { hideTourResult(); _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents(); });
   const trDone = document.getElementById("tr-done");
   if (trDone) trDone.addEventListener("click", () => { hideTourResult(); showMenu(); });
+  const drBoard = document.getElementById("dr-board");
+  if (drBoard) drBoard.addEventListener("click", () => {
+    document.getElementById("daily-result").classList.add("hidden");
+    openDailyBoard();
+  });
+  const drDone = document.getElementById("dr-done");
+  if (drDone) drDone.addEventListener("click", () => { hideDailyResult(); showMenu(); });
 })();
 
 // --- Wire-up ---
@@ -12412,6 +12502,7 @@ function pushMatchShot(extra) {
 // --- helpers shared with startCourse/play-again ---
 function roundHoleCount() {
   if (matchLive() && course) return Math.min(matchHoleCount, course.holes.length);
+  if (dailyMode && course) return Math.min(9, course.holes.length);   // daily = front nine
   return course ? course.holes.length : 18;
 }
 
