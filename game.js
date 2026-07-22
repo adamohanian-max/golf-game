@@ -281,6 +281,9 @@ const TUNE = {
   spinGrip: { green: 1.0, fairway: 0.5, tee: 0.5, rough: 0.12, bunker: 0.3, woods: 0, water: 0, ob: 0 },
   reachTotalK: 1.08,// club total-reach estimate (carry × K ≈ carry + rollout) — drives the
                     // Apple-ground club-reach camera framing (frameClubReach)
+  reachPinMarginYds: 12, // forward context kept beyond the pin when the reach span is clamped to it
+  reachMinYds: 20,       // reach-span floor — never over-zoom a tiny chip (the D floor usually bites first)
+  flatMinDistM: 90,      // close-shot camera-distance floor on non-Apple courses (Apple keeps APPLE_MIN_DIST_M)
   rolloutK: 7.0,    // CHIP release distance scale (× landing speed) — low skidding balls release more
   rolloutKFull: 4.0,// FULL-shot release scale: calibrated so totals match tour (driver ~305,
                     // hybrid ~246, 7i ~184); 7 made everything run ~2× real fairway rollout
@@ -3210,7 +3213,13 @@ function frameClubReach(pNowDeg) {
   const playCy = (rsv.top + (cssH - rsv.bot)) / 2;
   const b = state.ball;
   const c = TUNE.clubs[selectedClub];
-  const reachYds = (c ? c.carry : 120) * TUNE.reachTotalK;
+  // Frame the club's full reach — UNLESS the pin is closer than that, in which
+  // case clamp the span to the pin (+ a little context past it) so short
+  // approaches / chips zoom in instead of showing empty ground beyond the pin.
+  const clubReachYds = (c ? c.carry : 120) * TUNE.reachTotalK;
+  const pinDistYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+  const reachYds = Math.min(clubReachYds,
+    Math.max(TUNE.reachMinYds, pinDistYds + TUNE.reachPinMarginYds));
   const Ru = reachYds / YARDS_PER_UNIT;             // reach span, world units
   const Rm = Ru * M_PER_UNIT;                       // …in metres
   const a = camera.tAngle;
@@ -3228,7 +3237,11 @@ function frameClubReach(pNowDeg) {
     const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
     D = Rm / (uR / (f * cp - uR * sp) - uB / (f * cp - uB * sp));
   }
-  D = Math.max(D, APPLE_MIN_DIST_M);                // flyover min distance (short clubs cap here)
+  // Flyover courses hold the MapKit min distance (map drifts off the overlay
+  // below it); flat/vector courses have no such constraint, so a lower floor
+  // lets greenside chips zoom in tighter.
+  const distFloor = appleGroundActive() ? APPLE_MIN_DIST_M : TUNE.flatMinDistM;
+  D = Math.max(D, distFloor);
   const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
   const sR = uR * D / (f * cp - uR * sp);           // reach point, metres ahead of look-at
   const scale = mapH * M_PER_UNIT * APPLE_CAM_K / D;
