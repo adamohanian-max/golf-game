@@ -621,7 +621,8 @@
    card already carries the brass rail + Fraunces title; here we swap the scrim
    for the pine gradient and left-anchor the card so tapping into a submenu
    feels like staying on the same screen, not opening a dialog. */
-#quick-match, #bot-select, #match-menu, #match-lobby, #match-setup, #progress {
+#quick-match, #bot-select, #match-menu, #match-lobby, #match-setup, #progress,
+#leaderboard, #tournament-lobby {
   justify-content: flex-start;
   background:
     linear-gradient(100deg,
@@ -634,7 +635,8 @@
     var(--green-900);
 }
 #quick-match .ne-box, #bot-select .ne-box, #match-menu .ne-box,
-#match-setup .ne-box, #progress .ne-box, #match-lobby .lb-box {
+#match-setup .ne-box, #progress .ne-box, #match-lobby .lb-box,
+#leaderboard .lb-box, #tournament-lobby .lb-box {
   margin: auto auto auto 0;
   margin-left: max(env(safe-area-inset-left, 0px), 3vw);
   width: min(400px, 92vw);

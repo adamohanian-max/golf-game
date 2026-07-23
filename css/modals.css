@@ -211,6 +211,10 @@
   color: var(--text); text-align: left; margin-bottom: var(--s-4); font-size: var(--t-h1);
   font-family: var(--font-display); font-weight: var(--fw-bold);
 }
+.lb-box h2::before, .bk-header h2::before {
+  content: "▸"; color: var(--brass); font-family: var(--font-mono);
+  font-size: 0.7em; margin-right: 0.45em; vertical-align: middle;
+}
 .lb-box h2 .ic { color: var(--brass); }
 .lb-course {
   width: 100%;

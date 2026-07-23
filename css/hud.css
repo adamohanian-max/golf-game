@@ -33,9 +33,7 @@
 #scorecard b { font-family: var(--font); font-size: 16px; font-weight: var(--fw-bold); }
 #scorecard #course { color: var(--text-dim); font-size: 12px; font-weight: var(--fw-med); }
 #scorecard #score { font-family: var(--font); font-weight: var(--fw-bold); }
-#scorecard #score.under { color: var(--status-under); }
-#scorecard #score.over  { color: var(--status-over); }
-#scorecard #score.even  { color: var(--text); }
+/* to-par colors via shared .tp-under/.tp-over/.tp-even (css/base.css) */
 #scorecard .sc-right { display: flex; column-gap: 16px; margin-left: auto; }
 /* wind readout as a chip in the card (arrow rotates with the camera) */
 #scorecard .sc-wind { display: inline-flex; align-items: center; gap: 5px; color: var(--brass-400); font-size: var(--t-cap); font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }

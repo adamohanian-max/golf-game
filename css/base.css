@@ -293,3 +293,11 @@ html, body {
   font-weight: var(--fw-bold);
   letter-spacing: 0.3px;
 }
+
+/* ---- To-par numerals: ONE color family for every scoreboard/score readout
+   (scorecard, leaderboard, tour board/bug, tournament, account viewer).
+   Set via toParClass()/toParHTML() in game.js. The dark Tour board scopes its
+   own over/even overrides in tour.css. ---------------------------------- */
+.tp-under { color: var(--status-under); font-weight: var(--fw-bold, 700); }
+.tp-over  { color: var(--status-over); }
+.tp-even  { color: var(--text); }

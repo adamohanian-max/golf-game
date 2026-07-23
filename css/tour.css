@@ -12,10 +12,11 @@
   --tp-over:        #6fae5a;         /* over par — green numerals */
 }
 
-/* under/over/even numerals (shared by board + scorebug) */
-.tp-under { color: var(--status-under); font-weight: var(--fw-bold, 700); }
-.tp-over  { color: var(--tp-over); }
-.tp-even  { color: var(--text-muted); }
+/* To-par numerals: base colors live in css/base.css (.tp-under/over/even).
+   The board + scorebug sit on a dark Masters-green panel, so override over/even
+   here for contrast (green over-par, muted even). Under-par red is shared. */
+#tour-board .tp-over, #tour-bug .tp-over { color: var(--tp-over); }
+#tour-board .tp-even, #tour-bug .tp-even { color: var(--text-muted); }
 
 /* ---- Full-screen board ------------------------------------ */
 #tour-board {
