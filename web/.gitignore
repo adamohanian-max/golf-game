@@ -1,5 +1,8 @@
 node_modules/
 dist/
+.env
+.env.local
+.env.*.local
 shots/
 public/tiles/
 *.tsbuildinfo

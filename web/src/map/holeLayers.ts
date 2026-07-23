@@ -1,4 +1,4 @@
-import type { Map as MLMap } from "maplibre-gl";
+import type { Map as MBMap } from "mapbox-gl";
 import type { Hole } from "../game/types";
 
 // Course furniture = GeoJSON layers draped on terrain (spec §5). Tee/green fills
@@ -27,18 +27,49 @@ function arrowImage(size = 32): { width: number; height: number; data: Uint8Arra
   return { width: w, height: h, data };
 }
 
-export function addHoleLayers(map: MLMap, hole: Hole): void {
+export function addHoleLayers(map: MBMap, hole: Hole): void {
   if (!map.hasImage("slope-arrow")) {
     map.addImage("slope-arrow", arrowImage(), { pixelRatio: 2 });
   }
   map.addSource("hole", { type: "geojson", data: hole.featureCollection });
 
+  // Real course surfaces draped on the satellite. Tints kept translucent so the
+  // photo reads through — the aerial already SHOWS grass/sand/water; these are
+  // play-surface hints, not opaque paint (mirrors the game's photoreal overlay).
+  map.addLayer({
+    id: "fairway-fill",
+    type: "fill",
+    source: "hole",
+    filter: ["==", ["get", "kind"], "fairway"],
+    paint: { "fill-color": "#8ad98f", "fill-opacity": 0.14 },
+  });
+  map.addLayer({
+    id: "water-fill",
+    type: "fill",
+    source: "hole",
+    filter: ["==", ["get", "kind"], "water"],
+    paint: { "fill-color": "#1f6f8b", "fill-opacity": 0.35 },
+  });
+  map.addLayer({
+    id: "bunker-fill",
+    type: "fill",
+    source: "hole",
+    filter: ["==", ["get", "kind"], "bunker"],
+    paint: { "fill-color": "#e8d9a0", "fill-opacity": 0.28 },
+  });
   map.addLayer({
     id: "green-fill",
     type: "fill",
     source: "hole",
     filter: ["==", ["get", "kind"], "green"],
-    paint: { "fill-color": "#4ea24e", "fill-opacity": 0.55 },
+    paint: { "fill-color": "#4ea24e", "fill-opacity": 0.4 },
+  });
+  map.addLayer({
+    id: "green-outline",
+    type: "line",
+    source: "hole",
+    filter: ["==", ["get", "kind"], "green"],
+    paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.6 },
   });
   map.addLayer({
     id: "tee-fill",

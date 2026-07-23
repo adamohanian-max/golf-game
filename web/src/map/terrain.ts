@@ -1,4 +1,4 @@
-import type { Map as MLMap, RasterDEMSourceSpecification } from "maplibre-gl";
+import type { Map as MBMap, RasterDEMSourceSpecification } from "mapbox-gl";
 import type { Course } from "../game/types";
 
 // TERRAIN IS THE WHOLE BALLGAME (spec §4). A coarse global DEM (~10-30m effective
@@ -19,7 +19,7 @@ const GLOBAL_DEM: RasterDEMSourceSpecification = {
   attribution: "Elevation: Terrain Tiles / AWS Open Data",
 };
 
-export function addTerrain(map: MLMap, course: Course): void {
+export function addTerrain(map: MBMap, course: Course): void {
   if (course.terrainTiles) {
     // LiDAR-baked, Terrarium-encoded, per-course. maxzoom is high because the
     // whole point is detail — z18 is roughly sub-metre per pixel.
@@ -48,7 +48,7 @@ export function addTerrain(map: MLMap, course: Course): void {
 // shadows would need the three.js terrain-mesh path, deferred). Call AFTER
 // addTerrain (needs the 'dem' source) and BEFORE the hole overlays so tee/green
 // tints sit on top of the shading.
-export function addHillshade(map: MLMap): void {
+export function addHillshade(map: MBMap): void {
   map.addLayer({
     id: "hillshade",
     type: "hillshade",

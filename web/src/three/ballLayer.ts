@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { CustomLayerInterface, Map as MLMap } from "maplibre-gl";
+import type { CustomLayerInterface, Map as MBMap } from "mapbox-gl";
 import { modelMatrix } from "./modelMatrix";
 import { Ball } from "../game/ball";
 import type { Hole } from "../game/types";
@@ -7,7 +7,7 @@ import type { Hole } from "../game/types";
 // Radius in metres. Spec §6 uses 1m as a placeholder; a real golf ball (~21mm)
 // is invisible from broadcast distance, a 1m sphere is a beach ball (Gate B
 // fails both). 0.45m reads as a ball at this camera range without looking absurd.
-const BALL_RADIUS_M = 0.45;
+const BALL_RADIUS_M = 0.45; // reads as a ball at this camera range without looking absurd
 
 export interface BallLayer extends CustomLayerInterface {
   ball: Ball;
@@ -22,7 +22,7 @@ export function makeBallLayer(hole: Hole): BallLayer {
   let renderer: THREE.WebGLRenderer;
   let scene: THREE.Scene;
   let camera: THREE.Camera;
-  let map: MLMap;
+  let map: MBMap;
 
   return {
     id: "ball",
@@ -53,18 +53,20 @@ export function makeBallLayer(hole: Hole): BallLayer {
       renderer.autoClear = false;
     },
 
-    render(_gl, args) {
+    render(_gl, matrix) {
       // Advance ball; sample terrain so it sits on the ground. queryTerrainElevation
-      // returns null until DEM tiles load — guard with ?? 0 (spec §10). v5 takes
-      // just the lngLat (the v4 { exaggerated } options arg was removed).
+      // returns null until DEM tiles load — guard with ?? 0.
       ball.update();
       const groundM = map.queryTerrainElevation(ball.lngLat) ?? 0;
       const alt = groundM + ball.heightAboveGround;
 
       const l = modelMatrix(ball.lngLat, alt);
-      // v5: use args.defaultProjectionData.mainMatrix, NOT the old v4 positional
-      // `matrix` arg (spec §6, WORKFLOW hard constraint).
-      const m = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix);
+      // Mapbox GL v3: render(gl, matrix) passes the projection matrix POSITIONALLY
+      // (a number[] / Float64Array of the camera projection). This differs from
+      // MapLibre v5's args.defaultProjectionData.mainMatrix — the one behavioral
+      // diff in the port. Everything else (shared context, renderingMode '3d',
+      // queryTerrainElevation, modelMatrix) is identical across both libs.
+      const m = new THREE.Matrix4().fromArray(matrix as number[]);
       camera.projectionMatrix = m.multiply(l);
 
       renderer.resetState();

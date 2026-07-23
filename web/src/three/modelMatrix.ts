@@ -1,12 +1,13 @@
 import * as THREE from "three";
-import { MercatorCoordinate } from "maplibre-gl";
+import { MercatorCoordinate } from "mapbox-gl";
 import type { LngLat } from "../game/types";
 
 // Build a model matrix that places a Three.js object (Y-up, metres) at a
 // geographic location on the mercator map. Axis conventions are the #1 source of
-// bugs here — this matches the official MapLibre "Add a 3D model using three.js"
-// example. If the ball appears mirrored / sunk / floating, suspect THIS file
-// before anything else (spec §6, §10).
+// bugs here — this matches the official Mapbox "Add a 3D model with three.js"
+// example (identical to MapLibre's — MercatorCoordinate has the same shape in
+// both libs). If the ball appears mirrored / sunk / floating, suspect THIS file
+// before anything else.
 export function modelMatrix(lngLat: LngLat, altitudeM: number): THREE.Matrix4 {
   const mc = MercatorCoordinate.fromLngLat(lngLat, altitudeM);
   const s = mc.meterInMercatorCoordinateUnits();
