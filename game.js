@@ -7699,7 +7699,7 @@ document.getElementById("cs-back").addEventListener("click", () => {
   if (matchSetupMode) { matchSetupMode = false; openMatchSetup(true); return; }
   // Picking for a bot match → back returns to the roster, choice unchanged.
   if (botCoursePickMode) { botCoursePickMode = false; openBotSelect(); return; }
-  showMenu();
+  openPlayMenu();   // solo course pick → back = one layer → Play menu (not landing)
 });
 
 // ---------------------------------------------------------------------
@@ -9810,6 +9810,7 @@ function openLeaderboard(from) {
 function closeLeaderboard() {
   document.getElementById("leaderboard").classList.add("hidden");
   if (_lbReturn === "round-end") document.getElementById("round-end").classList.remove("hidden");
+  else if (_lbReturn === "menu") openPlayMenu();   // back = one layer → Play menu (not landing)
 }
 
 // =====================================================================
@@ -12200,7 +12201,10 @@ function closeTourEvents() {
   // instead of routing through showMenu(), which would abandon it.
   if (tourPlayMode && mode === "tour") { mode = "course"; updateTourBug(); return; }
   stopTourPoll();
+  // Abandoning an in-progress tour round drops to landing; opened from the Play
+  // menu (browsing) → back = one layer → Play menu.
   if (mode === "tour") showMenu();
+  else openPlayMenu();
 }
 
 function teeOffTourRound() {
@@ -12395,7 +12399,7 @@ function updateMatchBug(rows) {
   if (ot) ot.addEventListener("click", openTournamentLobby);
 
   const tlClose = document.getElementById("tl-close");
-  if (tlClose) tlClose.addEventListener("click", closeTournamentLobby);
+  if (tlClose) tlClose.addEventListener("click", () => { closeTournamentLobby(); openPlayMenu(); });   // back = one layer → Play menu
 
   const tlStart = document.getElementById("tl-start");
   if (tlStart) tlStart.addEventListener("click", async () => {
@@ -14550,7 +14554,7 @@ function renderProgress() {
   if (open) open.addEventListener("click", () => openMatchMenu());
 
   const mmClose = document.getElementById("mm-close");
-  if (mmClose) mmClose.addEventListener("click", closeMatchMenu);
+  if (mmClose) mmClose.addEventListener("click", () => { closeMatchMenu(); openPlayMenu(); });   // back = one layer → Play menu
   const mmStart = document.getElementById("mm-start");
   if (mmStart) mmStart.addEventListener("click", () => ensureNameThen(hostStartMatch));
   const mmJoin = document.getElementById("mm-join");
@@ -14561,7 +14565,7 @@ function renderProgress() {
   const mlBegin = document.getElementById("ml-begin");
   if (mlBegin) mlBegin.addEventListener("click", hostBeginPickCourse);
   const mlLeave = document.getElementById("ml-leave");
-  if (mlLeave) mlLeave.addEventListener("click", () => { leaveMatch(); closeMatchLobby(); showMenu(); });
+  if (mlLeave) mlLeave.addEventListener("click", () => { leaveMatch(); closeMatchLobby(); openMatchMenu(); });   // back = one layer → Match menu
   const mlCopy = document.getElementById("ml-copy");
   if (mlCopy) mlCopy.addEventListener("click", () => {
     const code = activeMatch ? activeMatch.code : "";
