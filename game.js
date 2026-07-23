@@ -387,25 +387,29 @@ function greenBaseSpeed(D) {
   if (D <= dTailMax) return Math.sqrt(2 * TUNE.greenDecel * D);
   return vt + (D - dTailMax) * (1 - TUNE.friction.green);
 }
-// Launch speed that rolls exactly D (world units) along a line whose slope adds `aid`
-// per frame (+ downhill / − uphill; already capped to ±greenDecel·slopeCapFrac). Inverts
-// the SAME two-phase roll rollStep runs (exponential coast > greenCoastSpeed, constant-
-// decel tail below) with the slope gate (slopeStopSpeed) — including the coast phase the
-// old closed-form downhill branch dropped. Binary search; ~40 iters, monotonic so exact.
-function invertPuttPace(D, aid) {
-  const roll = (v0) => {
-    let v = v0, d = 0;
-    for (let i = 0; i < 20000 && v > 1e-4; i++) {
-      d += v;                                    // position advances by current v (matches rollStep order)
-      const sp0 = v;                             // gate/phase use pre-friction speed, as rollStep does
-      if (sp0 > TUNE.greenCoastSpeed) v *= TUNE.friction.green;
-      else v = Math.max(0, v - TUNE.greenDecel);
-      if (sp0 > TUNE.slopeStopSpeed) v = Math.max(0, v + aid);
+// Launch speed so a putt from (x,y) aimed at `ang` rolls arc-length D (world units)
+// along its ACTUAL curved 2D path — the real per-step green friction AND break
+// (via the shared stepGreenRoll), not a straight-line/endpoint-secant estimate.
+// This makes dead-pace putts finish at the cup on big breakers (the curved arc is
+// longer than the straight ball→cup distance) and integrates the true gradient
+// along the whole path (not just a two-point secant). Binary search; monotonic in
+// launch speed, so ~40 iters lands it exactly.
+function invertPuttPaceCurved(x, y, ang, D) {
+  const dirx = Math.cos(ang), diry = Math.sin(ang);
+  const rollLen = (v0) => {
+    const b = { x, y, vx: dirx * v0, vy: diry * v0 };
+    let len = 0;
+    for (let i = 0; i < 20000; i++) {
+      const px = b.x, py = b.y;
+      b.x += b.vx; b.y += b.vy;                   // position first (matches rollStep order)
+      len += Math.hypot(b.x - px, b.y - py);
+      stepGreenRoll(b);                            // real friction + capped, gated break
+      if (Math.hypot(b.vx, b.vy) < TUNE.stopThreshold) break;
     }
-    return d;
+    return len;
   };
   let lo = 1e-4, hi = 1.2;
-  for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (roll(mid) < D) lo = mid; else hi = mid; }
+  for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (rollLen(mid) < D) lo = mid; else hi = mid; }
   return (lo + hi) / 2;
 }
 function recalcPower() {
@@ -1788,6 +1792,35 @@ function ballisticFlightStep(b) {
   }
 }
 
+// Green roll for one frame (velocity-only — caller advances position first).
+// Two-phase friction (exponential coast > greenCoastSpeed, constant-decel tail
+// below) plus the capped, gated downhill break. SINGLE source of truth shared by
+// the live rollStep, the launch-time prediction (simShotRest), and the pace
+// inversion (invertPuttPaceCurved) so all three can never drift apart.
+function stepGreenRoll(b) {
+  const sp = Math.hypot(b.vx, b.vy);
+  if (sp > TUNE.greenCoastSpeed) {
+    b.vx *= TUNE.friction.green;
+    b.vy *= TUNE.friction.green;
+  } else if (sp > 0) {
+    const k = Math.max(0, sp - TUNE.greenDecel) / sp;
+    b.vx *= k;
+    b.vy *= k;
+  }
+  // Slope-aware break: accelerate downhill along the same synthetic green field
+  // that draws the contours. Gated above a stop speed so a ball that comes to
+  // rest on a slope stays put (the synthetic tilt can exceed greenDecel). Force
+  // capped to slopeCapFrac of greenDecel — guarantees a net decel on any slope.
+  if (sp > TUNE.slopeStopSpeed) {
+    const g = greenSlopeAt(b.x, b.y);
+    if (g) {
+      const gm = Math.hypot(g.x, g.y);
+      const force = gm > 0 ? Math.min(TUNE.slopeAccel * gm, TUNE.greenDecel * TUNE.slopeCapFrac) / gm : 0;
+      b.vx -= force * g.x; b.vy -= force * g.y;
+    }
+  }
+}
+
 // --- Grounded: roll with per-surface friction, hole capture, water penalty ---
 function rollStep(b) {
   b.x += b.vx;
@@ -1806,33 +1839,10 @@ function rollStep(b) {
       showToast("Contours show the break · arrows point downhill", 2400, "gold");
   }
   if (surf === "green") {
-    // Two-phase green roll: fast off the putter face, then a crisp finish.
-    // Above greenCoastSpeed: exponential coast (velocity multiplier, big losses
-    // while fast). Below it: the original constant deceleration per frame — exact,
-    // bounded stop, and the only way short/precise putts (lip-outs, tap-ins) still
-    // resolve (their launch speed would round down to "stopped" under pure coast).
-    const sp = Math.hypot(b.vx, b.vy);
-    if (sp > TUNE.greenCoastSpeed) {
-      b.vx *= TUNE.friction.green;
-      b.vy *= TUNE.friction.green;
-    } else if (sp > 0) {
-      const k = Math.max(0, sp - TUNE.greenDecel) / sp;
-      b.vx *= k;
-      b.vy *= k;
-    }
-    // Slope-aware break: accelerate downhill along the same synthetic green field
-    // that draws the contours. Gated above a stop speed so a ball that comes to
-    // rest on a slope stays put (the synthetic tilt can exceed greenDecel).
-    if (sp > TUNE.slopeStopSpeed) {
-      const g = greenSlopeAt(b.x, b.y);
-      if (g) {
-        const gm = Math.hypot(g.x, g.y);
-        // Cap slope force to slopeCapFrac of greenDecel — guarantees a net decel on any
-        // slope, so the ball can always stop even on the steepest green.
-        const force = gm > 0 ? Math.min(TUNE.slopeAccel * gm, TUNE.greenDecel * TUNE.slopeCapFrac) / gm : 0;
-        b.vx -= force * g.x; b.vy -= force * g.y;
-      }
-    }
+    // Two-phase green roll + capped, gated slope break — shared helper (see
+    // stepGreenRoll). Fast off the putter face (coast), crisp constant-decel
+    // finish (tail), downhill break along the same field that draws the contours.
+    stepGreenRoll(b);
   } else {
     const sp = Math.hypot(b.vx, b.vy);
     const f = TUNE.friction[surf];
@@ -1871,11 +1881,14 @@ function rollStep(b) {
 
   // hole capture / lip-out (course only — the range has no cup). Test the ball's
   // PATH this frame against the cup (swept), so a putt rolling over the small
-  // real-scale hole can't step past it between frames. Skip once the ball has
-  // already lipped out this shot: a rammed lip-out hops the ball at the rim, and
-  // re-testing capture every frame would re-trigger the hop in place forever
-  // (ball stuck airborne over the cup, never settling → can't take the next shot).
-  if (!HOLE.isRange && !state._lippedThisShot) {
+  // real-scale hole can't step past it between frames. After a lip-out we normally
+  // skip capture — a rammed lip hops the ball at the rim, and re-testing every
+  // frame would re-trigger the hop in place forever (stuck airborne over the cup).
+  // BUT a ball that lipped out, curled back downhill on a slope, and is now
+  // GROUNDED and slow enough to drop should still fall — so re-allow capture once
+  // it's grounded and under captureSpeed (the anti-hop lock only needs to hold
+  // while the ball is fast/airborne).
+  if (!HOLE.isRange && (!state._lippedThisShot || (!state.airborne && speed < TUNE.captureSpeed))) {
     const cup = resolveCup(b, speed, state.airborne, Math.random);
     if (cup) {
       if (cup.holed) {
@@ -2073,21 +2086,7 @@ function simShotRest(ball0, flight0) {
       clampToWorld(b);
       const surf = surfaceAt(b.x, b.y);
       if (surf === "green") {
-        const sp = Math.hypot(b.vx, b.vy);
-        if (sp > TUNE.greenCoastSpeed) {
-          b.vx *= TUNE.friction.green; b.vy *= TUNE.friction.green;
-        } else if (sp > 0) {
-          const k = Math.max(0, sp - TUNE.greenDecel) / sp;
-          b.vx *= k; b.vy *= k;
-        }
-        if (sp > TUNE.slopeStopSpeed) {
-          const g = greenSlopeAt(b.x, b.y);
-          if (g) {
-            const gm = Math.hypot(g.x, g.y);
-            const force = gm > 0 ? Math.min(TUNE.slopeAccel * gm, TUNE.greenDecel * TUNE.slopeCapFrac) / gm : 0;
-            b.vx -= force * g.x; b.vy -= force * g.y;
-          }
-        }
+        stepGreenRoll(b);                          // shared with live rollStep
       } else {
         const sp = Math.hypot(b.vx, b.vy);
         const f = TUNE.friction[surf];
@@ -2106,7 +2105,9 @@ function simShotRest(ball0, flight0) {
         }
       }
       const speed = Math.hypot(b.vx, b.vy);
-      if (!HOLE.isRange && !lipped) {
+      // Mirror rollStep's gate: allow a re-drop when a lipped ball is grounded and
+      // slow (roll phase is always grounded here) so a slope-return still holes.
+      if (!HOLE.isRange && (!lipped || speed < TUNE.captureSpeed)) {
         const cup = resolveCup(b, speed, false, () => 0.5);
         if (cup) {
           if (cup.holed) return { holed: true, carry };
@@ -2720,19 +2721,13 @@ function buildTrialShot(ang, frac, spin, onGreen) {
       const band = TUNE.puttBandLo + (TUNE.puttBandHi - TUNE.puttBandLo) * f;
       const targetU = Math.min(flatU * band, YARDS.maxPutt / YARDS_PER_UNIT);  // world units
       // Dead pace must die at the cup uphill AND down. Invert the ACTUAL roll model
-      // numerically along the ball→cup line (invertPuttPace) rather than a closed-form
-      // energy budget: the old split had a tail-phase-ONLY downhill branch that ignored
-      // the coast phase, so longer downhill putts — and "perpendicular" putts that catch
-      // any downhill component along the line — launched well short. gmAlong = the along-
-      // line gradient (+ downhill / − uphill); the slope force is folded in with the SAME
-      // cap (greenDecel·slopeCapFrac) and gate (slopeStopSpeed) rollStep applies, so we
-      // never credit gravity the roll won't deliver.
-      const hB = greenHeightAt(b.x, b.y), hP = greenHeightAt(HOLE.holePos.x, HOLE.holePos.y);
-      const rise = (hB == null || hP == null) ? 0 : (hP - hB);       // + uphill, − downhill
-      const gmAlong = -rise / Math.max(flatU, 1e-6);                 // + downhill, − uphill
-      const aid = Math.min(TUNE.slopeAccel * Math.abs(gmAlong),
-                           TUNE.greenDecel * TUNE.slopeCapFrac) * Math.sign(gmAlong);
-      power = invertPuttPace(targetU, aid);
+      // by forward-simulating the real curved 2D path from the ball along the aim
+      // line (invertPuttPaceCurved) — real per-step friction AND break. The old
+      // estimate was 1D: it credited only the along-line gradient (a two-point
+      // secant) and assumed a straight path, so big breakers and "perpendicular"
+      // putts (which curl onto a longer arc) launched short. The 2D sim integrates
+      // the true gradient over the whole path and counts the real arc length.
+      power = invertPuttPaceCurved(b.x, b.y, ang, targetU);
       // Short-putt floor: inside puttFloorFt never leave it short. Use at least the pace to
       // reach the cup on flat.
       if (flatU * YARDS_PER_UNIT * 3 <= TUNE.puttFloorFt) {
