@@ -516,15 +516,15 @@ function addSurfaceTints() {
   } else {
     // Satellite: translucent game palette over the photo — stronger + a rough/
     // grass unify wash so the varied aerial greens read as one clean surface.
-    fill("rough-fill", "rough", "#2f7233", 0.42);
-    fill("grass-fill", "grass", "#3a9440", 0.34);
-    fill("fairway-fill", "fairway", "#4eb053", 0.42);
-    fill("water-fill", "water", "#1f6f8b", 0.5);
-    fill("bunker-fill", "bunker", "#e8d9a0", 0.4);
-    fill("green-fill", "green", "#6fbb79", 0.46);
+    fill("rough-fill", "rough", "#2f7233", 0.2);
+    fill("grass-fill", "grass", "#3a9440", 0.16);
+    fill("fairway-fill", "fairway", "#4eb053", 0.24);
+    fill("water-fill", "water", "#1f6f8b", 0.38);
+    fill("bunker-fill", "bunker", "#e8d9a0", 0.24);
+    fill("green-fill", "green", "#6fbb79", 0.3);
     map.addLayer({ id: "green-outline", type: "line", source: "holes",
-      filter: ["==", ["get", "kind"], "green"], paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.6 } });
-    fill("tee-fill", "tee", "#5cbf61", 0.42);
+      filter: ["==", ["get", "kind"], "green"], paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.5 } });
+    fill("tee-fill", "tee", "#5cbf61", 0.26);
   }
 }
 
