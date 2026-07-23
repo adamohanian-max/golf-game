@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>Google Photorealistic 3D Tiles — Course Backdrop</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0d10;
+        overflow: hidden;
+      }
+      #app {
+        position: absolute;
+        inset: 0;
+      }
+      /* Mandatory attribution overlay — Google logo + data credits. */
+      #attribution {
+        position: absolute;
+        left: 8px;
+        bottom: 6px;
+        z-index: 3;
+        max-width: 70vw;
+        font: 500 11px/1.4 system-ui, sans-serif;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+        pointer-events: none;
+      }
+      #status {
+        position: absolute;
+        left: 50%;
+        top: 16px;
+        transform: translateX(-50%);
+        z-index: 4;
+        display: none;
+        max-width: 80vw;
+        font: 600 13px/1.4 system-ui, sans-serif;
+        color: #fff;
+        background: rgba(20, 20, 24, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        padding: 10px 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="attribution"></div>
+    <div id="status"></div>
+    <script type="module" src="/src/g3d/main-g3d.ts"></script>
+  </body>
+</html>
