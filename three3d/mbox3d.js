@@ -137,6 +137,19 @@ function setCamera() {
 }
 let _lastCam = null;
 
+// Standard style config: strip the map furniture (POI / place / road / transit
+// labels — this is a golf course, not a street map) and turn ON Mapbox's global
+// 3D objects (buildings + trees + landmarks), so the clubhouse and canopy stand
+// up over the satellite like Apple Flyover.
+function configureBasemap() {
+  const set = (k, v) => { try { map.setConfigProperty("basemap", k, v); } catch (e) {} };
+  set("showPointOfInterestLabels", false);
+  set("showPlaceLabels", false);
+  set("showRoadLabels", false);
+  set("showTransitLabels", false);
+  set("show3dObjects", true);
+}
+
 // ---- terrain + overlays -----------------------------------------------------
 function addTerrain() {
   const course = gb().getCourse();
@@ -264,6 +277,7 @@ function enter(opts) {
     addSurfaceTints();
     addProjProbe();
     ready = true;
+    configureBasemap(); // labels off / 3D objects — after our layers, guarded
   });
   map.on("error", (ev) => { try { console.warn("[mbox3d]", ev && ev.error && ev.error.message || ev); } catch (e) {} });
 }
