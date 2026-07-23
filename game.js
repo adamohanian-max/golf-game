@@ -588,48 +588,6 @@ function track(event, props) {
 }
 
 // =====================================================================
-//  Ads — rewarded, opt-in ONLY (see ADS.md)
-// =====================================================================
-// Hard rule: an ad NEVER plays without an explicit player tap. No interstitials,
-// no banners over gameplay. showRewarded() is the single entry point; it's
-// provider-agnostic so the SDK can be swapped without touching game logic.
-const ADS = {
-  enabled: true,        // master switch (a future no-ads purchase also disables)
-  provider: "stub",     // "stub" (demo) | "crazygames" | "gam" — swap when a real SDK is wired
-};
-
-// May we offer an ad right now? (Respects the no-ads flag + age.) Callers gate
-// the *offer* on this; the ad itself still needs a tap.
-function adsAvailable() {
-  if (!ADS.enabled) return false;
-  if (lsGet("golf.noAds", false)) return false;         // future "remove ads" entitlement
-  if (lsGet("golf.under13", false)) return false;        // never serve ads to minors
-  // Esri World Imagery terms forbid monetized use — only NAIP (public-domain) or
-  // vector-only (no baked aerial) courses are ad-legal. Non-US/Originals courses
-  // still on Esri (st-andrews-old, arabian-ranches, faldo-course, blackwater-vale,
-  // crystal-lake-haverhill) stay ad-free until re-sourced.
-  if (course && course.aerial && course.aerial.src !== "naip") return false;
-  return true;
-}
-
-// Play a rewarded ad. Resolves true only if the player watched to the reward,
-// false if they closed early or none was available. PLAYER-INITIATED ONLY.
-function showRewarded(reason) {
-  track("ad_offer_taken", { reason, provider: ADS.provider });
-  try {
-    // Real providers (wire when ready) — both expose a promise/callback that
-    // resolves on reward. Keep the shapes here so swapping is a one-liner.
-    if (ADS.provider === "crazygames" &&
-        window.CrazyGames && CrazyGames.SDK && CrazyGames.SDK.ad) {
-      return CrazyGames.SDK.ad.requestAd("rewarded")
-        .then(() => true).catch(() => false);
-    }
-    // TODO(gam): Google H5 Games Ads rewarded via googletag.rewardedSlot().
-  } catch (e) { /* fall through to the demo */ }
-  return showStubAd(reason);   // dev/demo: a labelled placeholder, resolves true after a beat
-}
-
-// =====================================================================
 //  Sharing — native share sheet with clipboard fallback (viral loop)
 // =====================================================================
 // The public game URL every share points at (NOT location.origin — a share from
@@ -665,35 +623,6 @@ function roundShareText() {
   }
   const cn = course ? course.name : "Golf";
   return `⛳️ I shot ${totStrk} (${formatToPar(round.score)}) at ${cn} on Golf`;
-}
-
-// Demo "ad": a clearly-labelled placeholder so the rewarded flow is testable
-// before a real SDK exists. Never ships as a real ad — swap ADS.provider.
-function showStubAd(reason) {
-  return new Promise((resolve) => {
-    const ov = document.getElementById("ad-stub");
-    const claim = document.getElementById("ad-stub-claim");
-    const cancel = document.getElementById("ad-stub-cancel");
-    const count = document.getElementById("ad-stub-count");
-    if (!ov || !claim || !cancel) { resolve(true); return; }
-    let n = 3, timer = null;
-    const cleanup = (result) => {
-      if (timer) clearInterval(timer);
-      claim.onclick = cancel.onclick = null;
-      ov.classList.add("hidden");
-      resolve(result);
-    };
-    claim.disabled = true;
-    count.textContent = `Reward in ${n}…`;
-    ov.classList.remove("hidden");
-    timer = setInterval(() => {
-      n -= 1;
-      if (n <= 0) { clearInterval(timer); timer = null; claim.disabled = false; count.textContent = "Ready"; }
-      else count.textContent = `Reward in ${n}…`;
-    }, 1000);
-    claim.onclick = () => cleanup(true);
-    cancel.onclick = () => cleanup(false);
-  });
 }
 
 // =====================================================================
@@ -6686,16 +6615,9 @@ function showResult() {
   const conceded = state._conceded; state._conceded = false;
   const hb = (HOLE.isRange || conceded) ? { isBest: false } : recordHoleBest(holeNum, state.strokes);
 
-  // Rewarded "replay this hole": offered only on a bad solo-round hole (bogey+),
-  // once per hole, and only when an ad is available. Player-initiated (see ADS.md).
-  const canRetry = !HOLE.isRange && mode === "course" && !inMatch() && !dailyMode &&
-    !activeTournamentRound && course && d >= 1 &&
-    !(round._retried && round._retried.has(holeIndex)) && adsAvailable();
-
   // Ordinary hole (par or worse, no personal best, mid-round): skip the modal —
   // quick score toast + auto-advance. A forced tap on all 18 holes adds up.
-  // A retry-eligible blow-up forces the modal so the offer can be shown.
-  if ((level === 0 || conceded) && !hb.isBest && !dailyMode && !matchDecided && !canRetry &&
+  if ((level === 0 || conceded) && !hb.isBest && !dailyMode && !matchDecided &&
       !(course && holeIndex >= roundHoleCount() - 1)) {
     // Match play: say what the hole meant ("Hole lost · 2 down") when the
     // opponent's score is already in; otherwise the running score.
@@ -6714,11 +6636,6 @@ function showResult() {
   else if (hb.isBest && hb.prev == null && !HOLE.isRange) detail += `\nFirst time on this hole — best set`;
   else if (hb.prev != null) detail += `\nYour best: ${hb.prev}` + (state.strokes > hb.prev ? ` — ${state.strokes - hb.prev} to beat` : "");
   document.getElementById("result-detail").textContent = detail;
-  const retryBtn = document.getElementById("result-retry");
-  if (retryBtn) {
-    if (canRetry) { _retryCtx = { d, holeNum }; retryBtn.disabled = false; retryBtn.classList.remove("hidden"); }
-    else { _retryCtx = null; retryBtn.classList.add("hidden"); }
-  }
   elResult.classList.remove("hidden");
 
   // Juice: sound + confetti + camera punch scaled to the moment
@@ -6770,33 +6687,6 @@ function advanceFromResult() {
   doAdvance();
 }
 document.getElementById("play-again").addEventListener("click", advanceFromResult);
-
-// Rewarded "replay this hole": undo the just-folded hole score, then re-tee the
-// SAME hole. Only reachable from the modal button, which is shown only when
-// canRetry (bogey+ solo hole, once per hole, ad available). See showResult/ADS.md.
-let _retryCtx = null;
-(function wireRetryHole() {
-  const btn = document.getElementById("result-retry");
-  if (!btn) return;
-  btn.addEventListener("click", async () => {
-    const ctx = _retryCtx;
-    if (!ctx || !course) return;
-    btn.disabled = true;
-    const ok = await showRewarded("retry-hole");
-    if (!ok) { btn.disabled = false; return; }   // cancelled — no reward, modal stays
-    track("ad_reward_granted", { reason: "retry-hole" });
-    // reverse this hole's fold (mirror of showResult's score/stats update)
-    round.score -= ctx.d;
-    round.holesPlayed -= 1;
-    const j = round.holeStats.map(s => s.hole).lastIndexOf(ctx.holeNum);
-    if (j >= 0) round.holeStats.splice(j, 1);
-    (round._retried || (round._retried = new Set())).add(holeIndex);
-    _retryCtx = null;
-    updateScorecard();
-    elResult.classList.add("hidden");
-    advanceHole(() => setHole(course.holes[holeIndex]));   // replay same hole from the tee
-  });
-})();
 
 // =====================================================================
 //  Round-end summary
@@ -8978,7 +8868,6 @@ function startCourse() {
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
-  round._retried = new Set();   // hole indexes already replayed via a rewarded ad (once each)
   // Match + tournament pins are frozen per game so every entrant gets the same
   // pins; casual rounds get fresh pins each time.
   round.pinSeed = matchLive()
@@ -9041,13 +8930,83 @@ function dailyFeaturedCourseId() {
 }
 function isDailyFeatured(id) { return id === dailyFeaturedCourseId(); }
 
-async function startDaily() {
+// True once today's daily has been completed (streak record stamped in
+// finishDaily). This is the replay gate — one daily play per day.
+function dailyDoneToday() { return getDaily().lastDate === todayStr(); }
+
+// Pre-round Daily Challenge screen: today's course + live leaderboard + Play.
+// Once the player has finished today's daily they can't replay it (admins bypass
+// for testing). Wired to the #play-daily menu button.
+async function openDailyHome() {
+  const dateStr = todayStr();
+  const c = dailyCourseFor(dateStr);
+  const dateEl = document.getElementById("dh-date");
+  if (dateEl) {
+    try { dateEl.textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }); }
+    catch (e) { dateEl.textContent = dateStr; }
+  }
+  const par = c.par != null ? c.par : "—";
+  const yds = c.yards ? c.yards.toLocaleString() + " yds" : "";
+  const loc = c.location && c.location !== "Unknown" ? escapeHTML(c.location) : "";
+  const meta = [loc, "Par " + par, yds].filter(Boolean).join(" · ");
+  const cc = document.getElementById("dh-course");
+  if (cc) cc.innerHTML =
+    `<div class="dh-course-img"><img loading="lazy" src="${courseImg(c.id)}" alt="" onerror="this.style.display='none'"></div>` +
+    `<div class="dh-course-body"><div class="dh-course-name">${escapeHTML(c.name)}</div>` +
+    `<div class="dh-course-meta">${meta}</div></div>`;
+  const done = dailyDoneToday() && !isTournamentAdmin();
+  const playBtn = document.getElementById("dh-play");
+  const locked = document.getElementById("dh-locked");
+  if (playBtn) playBtn.classList.toggle("hidden", done);
+  if (locked) {
+    locked.classList.toggle("hidden", !done);
+    if (done) {
+      const st = getDaily();
+      const res = st.lastScore != null ? ` You shot ${st.lastScore} (${formatToPar(st.lastToPar || 0)}).` : "";
+      locked.textContent = `Today's daily is done —${res} Come back tomorrow.`;
+    }
+  }
+  elMenu.classList.add("hidden");
+  document.getElementById("daily-home").classList.remove("hidden");
+  renderDailyHomeBoard(dateStr);
+}
+
+// Render the daily field into the #dh-board table (same row markup as
+// renderLeaderboard so the .lb-* CSS is shared).
+async function renderDailyHomeBoard(dateStr) {
+  const tb = document.getElementById("dh-board");
+  const empty = document.getElementById("dh-board-empty");
+  if (!tb) return;
+  tb.innerHTML = "";
+  empty.textContent = "Loading…"; empty.classList.remove("hidden");
+  if (!LB_ON()) { empty.textContent = "Leaderboard not configured."; return; }
+  try {
+    const rows = await fetchLeaderboard("daily_" + (dateStr || todayStr()));
+    if (!rows || !rows.length) { empty.textContent = "No scores yet — be the first!"; return; }
+    const me = getPlayerName().toLowerCase();
+    tb.innerHTML = rows.map((r, i) => {
+      const cls = toParClass(r.to_par);
+      const mine = (r.name || "").toLowerCase() === me ? " lb-me" : "";
+      return `<tr class="${mine}">
+        <td class="lb-rank">${i + 1}</td>
+        <td class="lb-name">${escapeHTML(r.name)}</td>
+        <td class="lb-topar ${cls}">${formatToPar(r.to_par)}</td>
+        <td class="lb-strk">${r.strokes}</td></tr>`;
+    }).join("");
+    empty.classList.add("hidden");
+  } catch (e) {
+    console.warn(e); empty.textContent = "Leaderboard unavailable.";
+  }
+}
+
+async function startDailyRound() {
   const dateStr = todayStr();
   const c = dailyCourseFor(dateStr);
   mode = "course"; dailyMode = true; activeTournamentRound = null;
   track("round_start", { mode: "daily", course: c });
   activeSettings = normalizeSettings(gameDefaults);
   applySettings(activeSettings);
+  document.getElementById("daily-home").classList.add("hidden");
   elMenu.classList.add("hidden");
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
@@ -9059,7 +9018,6 @@ async function startDaily() {
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
-  round._retried = new Set();   // hole indexes already replayed via a rewarded ad (once each)
   round.pinSeed = strSeed(dateStr);  // date-seeded pins: same for everyone today
   try {
     if (!course || course.id !== c.id) await loadCourse(c.id);
@@ -9105,7 +9063,14 @@ function finishDaily(totStrk) {
 
 document.getElementById("play-course").addEventListener("click", openPlayMenu);
 const _playDaily = document.getElementById("play-daily");
-if (_playDaily) _playDaily.addEventListener("click", startDaily);
+if (_playDaily) _playDaily.addEventListener("click", openDailyHome);
+const _dhPlay = document.getElementById("dh-play");
+if (_dhPlay) _dhPlay.addEventListener("click", startDailyRound);
+const _dhClose = document.getElementById("dh-close");
+if (_dhClose) _dhClose.addEventListener("click", () => {
+  document.getElementById("daily-home").classList.add("hidden");
+  showMenu();
+});
 
 // =====================================================================
 //  Leaderboard + Accounts — shared scores via Supabase REST (plain fetch).

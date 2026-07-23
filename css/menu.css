@@ -437,7 +437,7 @@
 /* ---- Name-entry / auth / add-course / admin / account: scrim */
 #name-entry, #add-course, #auth-modal, #admin-settings, #account-viewer,
 #match-menu, #match-lobby, #match-setup, #quick-match, #bot-select,
-#friends-modal, #friend-profile, #username-modal, #onboarding, #ad-stub, #progress {
+#friends-modal, #friend-profile, #username-modal, #onboarding, #daily-home, #progress {
   position: fixed;
   inset: 0;
   display: flex;
@@ -451,24 +451,6 @@
   backdrop-filter: blur(var(--blur-sm));
 }
 #onboarding { z-index: var(--z-onboarding); }   /* over gameplay, under the name gate */
-#ad-stub { z-index: var(--z-adstub); }      /* rewarded-ad overlay: above the result modal */
-.ad-stub-box {
-  width: min(360px, 92vw); background: var(--surface-raised, var(--w-08));
-  border: 1px solid var(--w-08); border-radius: var(--r-lg, 16px);
-  padding: var(--s-5); text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
-}
-.ad-stub-tag { margin: 0 0 var(--s-2); font-size: 11px; letter-spacing: 1px;
-  text-transform: uppercase; color: var(--text-muted); font-weight: var(--fw-bold); }
-.ad-stub-msg { margin: 0 0 var(--s-3); font-size: 13px; color: var(--text-dim); line-height: 1.5; }
-.ad-stub-count { margin: 0 0 var(--s-4); font-size: 20px; font-weight: var(--fw-black); color: var(--text); }
-
-.result-retry { background: var(--w-05); border: 1px solid var(--w-08); }
-.result-retry.hidden { display: none; }
-.ad-badge {
-  display: inline-block; background: var(--brass, #b8894a); color: #14100a;
-  font-size: 10px; font-weight: var(--fw-black); letter-spacing: 0.5px;
-  border-radius: 4px; padding: 1px 5px; margin-right: 6px; vertical-align: 1px;
-}
 .ob-card {
   width: min(400px, 92vw); background: var(--surface-raised, var(--w-08));
   border: 1px solid var(--w-08); border-radius: var(--r-lg, 16px);

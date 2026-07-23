@@ -249,13 +249,63 @@
 .lb-table .lb-name { font-weight: var(--fw-med); }
 .lb-table .lb-topar { text-align: left; font-weight: var(--fw-black); font-variant-numeric: tabular-nums; }
 .lb-table .lb-strk { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.lb-table .under { color: var(--status-under); }
-.lb-table .over  { color: var(--status-over); }
-.lb-table .even  { color: var(--text); }
+/* to-par colors via shared .tp-under/.tp-over/.tp-even (css/base.css) */
 .lb-table tr.lb-me td { background: var(--accent-soft); }
 .lb-empty { text-align: center; color: var(--text-dim); padding: var(--s-5) var(--s-2); font-size: 14px; }
 .lb-empty.hidden { display: none; }
 .lb-box .menu-btn { margin: var(--s-4) auto 0; }
+
+/* ---- Daily Challenge home (pre-round: course + leaderboard + Play) ---- */
+.dh-box {
+  position: relative;
+  width: min(440px, 94vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-panel);
+  border: var(--border-hair);
+  border-left: 2px solid var(--brass);
+  border-radius: var(--r-lg);
+  padding: var(--s-5) var(--s-4);
+  box-shadow: var(--shadow-3);
+  animation: panelIn var(--dur-modal) var(--ease) both;
+}
+.dh-close {
+  position: absolute; top: var(--s-3); right: var(--s-3);
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: var(--border-hair); background: var(--w-05);
+  color: var(--text-dim); cursor: pointer;
+}
+.dh-close:hover { background: var(--w-08); color: var(--text); }
+.dh-head { margin-bottom: var(--s-3); }
+.dh-head h2 {
+  color: var(--text); text-align: left; margin: 0; font-size: var(--t-h1);
+  font-family: var(--font-display); font-weight: var(--fw-bold);
+}
+.dh-date { margin: 2px 0 0; color: var(--text-dim); font-size: 13px; font-weight: var(--fw-med); }
+.dh-course {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-2); margin-bottom: var(--s-4);
+  border: var(--border-hair); border-radius: var(--r-md); background: var(--w-05);
+}
+.dh-course-img {
+  width: 96px; height: 64px; flex: none; overflow: hidden;
+  border-radius: var(--r-sm); background: var(--green-700);
+}
+.dh-course-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dh-course-name { font-family: var(--font-display); font-weight: var(--fw-bold); font-size: 17px; color: var(--text); }
+.dh-course-meta { margin-top: 3px; color: var(--text-dim); font-size: 13px; }
+.dh-board-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 80px; }
+.dh-board-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text-dim); font-weight: var(--fw-med); margin-bottom: var(--s-1);
+}
+.dh-box .menu-btn { margin: var(--s-4) auto 0; }
+.dh-locked {
+  margin-top: var(--s-4); text-align: center; color: var(--text-dim);
+  font-size: 14px; line-height: 1.5; font-weight: var(--fw-med);
+}
+.dh-locked.hidden, .dh-course.hidden { display: none; }
 
 /* ---- Booking sheet ("Book a real tee time" CTA) ------------ */
 #book-sheet {
@@ -314,14 +364,24 @@
 /* ===== Multiplayer matches ===== */
 .mm-or { text-align: center; color: var(--text-dim); font-size: 13px; margin: var(--s-3) 0 var(--s-2); }
 #match-menu input#mm-code {
+  width: 100%;
+  margin-top: var(--s-1);
+  padding: 13px var(--s-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--w-14);
+  background: var(--surface-raised);
+  color: var(--text);
   text-align: center; letter-spacing: 4px; text-transform: uppercase;
   font-weight: var(--fw-bold); font-size: 20px;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
 }
+#match-menu input#mm-code::placeholder { color: var(--text-faint); letter-spacing: 4px; }
+#match-menu input#mm-code:focus { outline: none; border-color: var(--accent); background: var(--accent-soft); }
 
 /* Lobby */
 .ml-code-wrap { text-align: center; margin: var(--s-3) 0; }
 .ml-code-label { display: block; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
-.ml-code-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; }
+.ml-code-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; }
 .ml-code {
   display: inline-block; font-family: var(--font-display); font-weight: var(--fw-bold);
   font-size: 32px; letter-spacing: 6px; color: var(--accent-bright);
@@ -457,19 +517,26 @@ body.is-mobile #match-standings { width: min(240px, 60vw); min-width: 0; box-siz
 #mb-resync { font-size: 15px; line-height: 1; }
 #mb-resync:active { color: var(--accent); }
 .mb-list { padding: 6px; max-height: 50vh; overflow-y: auto; }
-.mb-row {
-  display: grid; grid-template-columns: 38px 1fr auto auto; gap: 8px; align-items: center;
-  padding: 6px 8px; border-radius: var(--r-sm); font-size: 14px; color: var(--text);
+
+/* ---- Unified standings list (.std-*) — ONE row family shared by the match
+   live board (#mb-list) and match results (#mr-list). Size/emphasis diffs are
+   scoped per host below. Replaces the old near-identical .mb-row + .mr-row. --- */
+.std-row {
+  display: grid; grid-template-columns: 44px 1fr auto auto; gap: 8px; align-items: center;
+  padding: 8px 9px; border-radius: var(--r-sm); font-size: 14px; color: var(--text);
+  border: 1px solid transparent;
 }
-.mb-row.mb-me { background: var(--accent-soft); }
-.mb-row.mb-lead .mb-name { font-weight: var(--fw-bold); }
-.mb-pos { color: var(--text-dim); text-align: left; font-size: 12px; }
-.mb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mb-score { font-weight: var(--fw-bold); }
-.mb-thru { color: var(--text-dim); font-size: 12px; min-width: 36px; text-align: right; }
-.mb-fin { color: var(--accent); font-weight: var(--fw-bold); }
-.mb-done { color: var(--accent); margin-left: 4px; }
-.mb-empty { color: var(--text-dim); justify-items: center; }
+.std-row.std-me { background: var(--accent-soft); }
+.std-row.std-lead .std-name { font-weight: var(--fw-bold); }
+.std-pos { color: var(--text-dim); text-align: left; font-size: 12px; font-weight: var(--fw-bold); }
+.std-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.std-score { font-weight: var(--fw-bold); min-width: 36px; text-align: right; }
+.std-thru { color: var(--text-dim); font-size: 12px; min-width: 38px; text-align: right; }
+.std-fin { color: var(--accent); font-weight: var(--fw-bold); }
+.std-trophy { color: var(--brass-bright); font-size: 0.9em; margin-left: 2px; }
+.std-empty { display: block; text-align: center; color: var(--text-dim); grid-template-columns: none; }
+/* live board: tighter */
+#mb-list .std-row { grid-template-columns: 38px 1fr auto auto; padding: 6px 8px; }
 
 /* CPU vs live distinction — chip on bot opponents, dot on live pairings */
 .cpu-chip {
@@ -518,19 +585,10 @@ body.is-mobile #match-standings { width: min(240px, 60vw); min-width: 0; box-siz
 }
 .mr-banner:empty { display: none; }
 .mr-list { display: flex; flex-direction: column; gap: 4px; }
-.mr-row {
-  display: grid; grid-template-columns: 48px 1fr auto auto; gap: 10px; align-items: center;
-  padding: 10px 10px; border-radius: var(--r-sm); font-size: 15px; color: var(--text);
-  border: 1px solid transparent;
-}
-.mr-row.mr-me { background: var(--accent-soft); }
-.mr-row.mr-win { border-color: var(--accent); }
-.mr-pos { color: var(--text-dim); font-size: 13px; font-weight: var(--fw-bold); }
-.mr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mr-score { font-weight: var(--fw-bold); min-width: 36px; text-align: right; }
-.mr-thru { color: var(--text-dim); font-size: 13px; min-width: 40px; text-align: right; }
-.mr-fin { color: var(--accent); font-weight: var(--fw-bold); }
-.mr-trophy { color: var(--brass-bright); font-size: 0.9em; margin-left: 2px; }
+/* results modal: roomier rows + winner border (shares .std-* base) */
+#mr-list .std-row { grid-template-columns: 48px 1fr auto auto; gap: 10px; padding: 10px; font-size: 15px; }
+#mr-list .std-row .std-pos, #mr-list .std-row .std-thru { font-size: 13px; }
+#mr-list .std-row.std-lead { border-color: var(--accent); }
 
 /* ===== Match play: format via .seg, Live via .switch (css/base.css) ===== */
 .ms-note { min-height: 14px; color: var(--text-dim); font-size: 12px; margin: 4px 0; }
