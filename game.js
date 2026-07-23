@@ -15002,6 +15002,19 @@ window.GolfBridge = {
   // world (game units) -> [lng,lat] affine for the Mapbox ground (mbox3d.js).
   // Same source as the Apple ground (course.geo.toLonLat + any imagery correction).
   geoAffine: () => appleGeoAffine(),
+  // Ball + club-reach anchor points (world units) for Mapbox framing — mirrors
+  // frameClubReach's reach math so the Mapbox camera can put the ball near the
+  // screen bottom and the club's landing near the top (same as the flat game).
+  frameAnchors: () => {
+    if (!HOLE || !state || !state.ball) return null;
+    const b = state.ball, c = TUNE.clubs[selectedClub];
+    const clubReachYds = (c ? c.carry : 120) * TUNE.reachTotalK;
+    const pinDistYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+    const reachYds = Math.min(clubReachYds, Math.max(TUNE.reachMinYds, pinDistYds + TUNE.reachPinMarginYds));
+    const Ru = reachYds / YARDS_PER_UNIT;
+    const a = camera.tAngle, dirX = -Math.sin(a), dirY = -Math.cos(a); // up-screen dir
+    return { bx: b.x, by: b.y, rx: b.x + dirX * Ru, ry: b.y + dirY * Ru, moving: !!state.moving };
+  },
   // Mirrors drawTrees()'s own cache/guard exactly (game.js ~3938-3947) so the
   // 3D renderer shares the identical tree list the 2D renderer already
   // computed — no duplicate compute, no divergent placement. Mask decodes

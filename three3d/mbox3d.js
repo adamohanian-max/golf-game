@@ -111,30 +111,51 @@ function unproject(sx, sy) {
 // camera.angle; pitch from the tilt slider. Fed to Mapbox via setFreeCameraOptions
 // (position + lookAtPoint) for exact framing parity.
 const EARTH_C = 40075016.686; // equatorial circumference (m)
+// Framing feedback state (converges over a few frames): pan bias of the map
+// center along the ball->reach line, and a zoom offset that corrects Mapbox's
+// wider FOV vs the flat game's 30° pinhole so the ball/reach hit exact screen %.
+let _ctrBias = 0.5, _zAdj = 0;
+const BALL_FRAC = 0.90;  // ball at 90% down (bottom 10%)
+const REACH_FRAC = 0.15; // club landing at 15% down (top 15%)
 function setCamera() {
   if (!ready || !map) return;
   const g = gb(), view = g.getView(), cam = g.getCamera(), geo = g.geoAffine(), m = M();
-  const cssW = window.innerWidth, mapH = window.innerHeight;
-  // Look-at O = world point at screen center under the flat view (game camera).
-  const det = view.a * view.e - view.b * view.d || 1;
-  const sx0 = cssW / 2 - view.c, sy0 = mapH / 2 - view.f;
-  const Ox = (view.e * sx0 - view.b * sy0) / det;
-  const Oy = (-view.d * sx0 + view.a * sy0) / det;
-  const reqLon = geo[0] * Ox + geo[1] * Oy + geo[2];
-  const reqLat = geo[3] * Ox + geo[4] * Oy + geo[5];
-  // Zoom from the flat view scale (px per world unit). Mapbox center ground
-  // resolution mpp = EARTH_C·cos(lat)/(512·2^zoom); match it to the game's mpp so
-  // the framing tracks the game camera. (center+zoom+pitch+bearing keeps Mapbox
-  // requesting tiles — setFreeCameraOptions per-frame stalled tile loading.)
+  const cssW = window.innerWidth, mapH = window.innerHeight, H = mapH;
   const scale = view.scale || cam.scale || 8;
-  // `view.scale` is DEVICE px per world unit; Mapbox zoom is defined in CSS px
-  // (512 CSS px world at z0). Divide by dpr so the framing matches the flat game
-  // camera exactly on any display (this is what the old +1.0 "boost" was really
-  // compensating for at dpr 2 = log2(2)). Optional fine-tune via __mboxZoomBoost.
+  // view.scale is DEVICE px/world-unit; Mapbox zoom is CSS-px based → ÷dpr.
   const dpr = window.devicePixelRatio || 1;
   const mpp = m * dpr / scale; // metres per CSS pixel
   const boost = typeof window.__mboxZoomBoost === "number" ? window.__mboxZoomBoost : 0;
-  let zoom = Math.log2(EARTH_C * Math.cos(reqLat * Math.PI / 180) / (512 * mpp)) + boost;
+  const baseZoom = (lat) => Math.log2(EARTH_C * Math.cos(lat * Math.PI / 180) / (512 * mpp)) + boost;
+  const toLL = (x, y) => [geo[0] * x + geo[1] * y + geo[2], geo[3] * x + geo[4] * y + geo[5]];
+
+  let reqLon, reqLat, zoom;
+  const A = g.frameAnchors ? g.frameAnchors() : null;
+  if (A && !A.moving && _projMatrix) {
+    // Measure where ball + club-reach currently land on screen (last frame's
+    // matrix) and nudge the pan-bias + zoom-offset toward the target fractions.
+    const bs = project(A.bx, A.by, 0), rs = project(A.rx, A.ry, 0);
+    if (bs.inFront && rs.inFront) {
+      const spanNow = bs.y - rs.y;                 // px, ball below reach
+      const spanWant = (BALL_FRAC - REACH_FRAC) * H;
+      _zAdj += 0.35 * Math.log2(spanWant / Math.max(spanNow, 8));
+      _zAdj = Math.max(-4, Math.min(4, _zAdj));
+      const eB = (bs.y - BALL_FRAC * H) / H;        // >0 = ball too low
+      _ctrBias -= 0.35 * eB;                        // pan bias toward ball raises it
+      _ctrBias = Math.max(-0.15, Math.min(1.15, _ctrBias));
+    }
+    const Ox = A.bx + _ctrBias * (A.rx - A.bx);
+    const Oy = A.by + _ctrBias * (A.ry - A.by);
+    [reqLon, reqLat] = toLL(Ox, Oy);
+    zoom = baseZoom(reqLat) + _zAdj;
+  } else {
+    // Flight / no hole: center on the flat view's screen-center world point.
+    const det = view.a * view.e - view.b * view.d || 1;
+    const sx0 = cssW / 2 - view.c, sy0 = mapH / 2 - view.f;
+    const Ox = (view.e * sx0 - view.b * sy0) / det, Oy = (-view.d * sx0 + view.a * sy0) / det;
+    [reqLon, reqLat] = toLL(Ox, Oy);
+    zoom = baseZoom(reqLat);
+  }
   zoom = Math.max(12, Math.min(20.5, zoom));
   const bearing = (((-cam.angle) * 180 / Math.PI) % 360 + 360) % 360;
   const pitch = Math.min(85, pitchDeg);
@@ -466,9 +487,11 @@ function addSurfaceTints() {
     }
   };
   const vec = styleMode === "vector";
-  // Vector mode paints the course opaquely from the game's arcade palette (no
-  // photo underneath), incl. a rough/grass base; satellite keeps faint tints.
-  if (vec) { pushPolys(surf.rough, "rough"); pushPolys(surf.grass, "grass"); }
+  // Both modes get a rough/grass base now — in satellite it's a translucent wash
+  // that UNIFIES the varied aerial greens toward one clean tone (user wanted the
+  // vector uniformity kept). Vector paints the palette opaquely.
+  pushPolys(surf.rough, "rough");
+  pushPolys(surf.grass, "grass");
   pushPolys(surf.fairway, "fairway");
   pushPolys(surf.water, "water");
   pushPolys(surf.bunker, "bunker");
@@ -491,13 +514,17 @@ function addSurfaceTints() {
       filter: ["==", ["get", "kind"], "green"], paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.7 } });
     fill("tee-fill", "tee", "#5cbf61", 0.92);
   } else {
-    fill("fairway-fill", "fairway", "#8ad98f", 0.13);
-    fill("water-fill", "water", "#1f6f8b", 0.35);
-    fill("bunker-fill", "bunker", "#e8d9a0", 0.26);
-    fill("green-fill", "green", "#4ea24e", 0.30);
+    // Satellite: translucent game palette over the photo — stronger + a rough/
+    // grass unify wash so the varied aerial greens read as one clean surface.
+    fill("rough-fill", "rough", "#2f7233", 0.42);
+    fill("grass-fill", "grass", "#3a9440", 0.34);
+    fill("fairway-fill", "fairway", "#4eb053", 0.42);
+    fill("water-fill", "water", "#1f6f8b", 0.5);
+    fill("bunker-fill", "bunker", "#e8d9a0", 0.4);
+    fill("green-fill", "green", "#6fbb79", 0.46);
     map.addLayer({ id: "green-outline", type: "line", source: "holes",
-      filter: ["==", ["get", "kind"], "green"], paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.55 } });
-    fill("tee-fill", "tee", "#2b6cb0", 0.45);
+      filter: ["==", ["get", "kind"], "green"], paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.6 } });
+    fill("tee-fill", "tee", "#5cbf61", 0.42);
   }
 }
 
@@ -604,7 +631,7 @@ function setStyleMode(mode) {
   if (!map) return;
   ready = false; _projMatrix = null;
   _treeInst = null; _treeTries = 0; _treeScene = null; // trees3d re-created on style.load
-  _lastCam = null; // force a camera resync on the new style
+  _lastCam = null; _ctrBias = 0.5; _zAdj = 0; // force a camera resync on the new style
   map.setStyle(STYLE_URLS[styleMode]);
 }
 function getStyleMode() { return styleMode; }
