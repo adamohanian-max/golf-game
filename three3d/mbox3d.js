@@ -165,32 +165,96 @@ async function addBuildings() {
     const data = await r.json();
     const list = (data && data.buildings) || [];
     const feats = [];
+    // Warm, slightly varied wall/roof palette so the extrusions read as a
+    // residential/clubhouse cluster instead of one flat gray block.
+    const PALETTE = ["#d8cbb2", "#cdb79a", "#c9c3b6", "#d9d2c4", "#c2a888", "#bfb49c"];
+    let n = 0;
     for (const b of list) {
       if (!b.poly || b.poly.length < 3) continue;
       const ring = b.poly.map((pt) => worldToLngLat(pt[0], pt[1]));
       ring.push(ring[0]);
-      feats.push({ type: "Feature", properties: { h: Math.max(b.h || 4, 4) * 1.6 },
+      // Deterministic per-building jitter (index hash) — height + color variety.
+      const hsh = ((n * 2654435761) >>> 0) / 4294967295;
+      const h = Math.max(b.h || 4, 4) * (1.5 + hsh * 1.1); // taller + varied
+      feats.push({ type: "Feature", properties: { h, c: PALETTE[n % PALETTE.length] },
         geometry: { type: "Polygon", coordinates: [ring] } });
+      n++;
     }
     if (!feats.length || !map) return;
     map.addSource("buildings", { type: "geojson", data: { type: "FeatureCollection", features: feats } });
     map.addLayer({
       id: "buildings-3d", type: "fill-extrusion", source: "buildings",
       paint: {
-        "fill-extrusion-color": "#cdbfa6", "fill-extrusion-height": ["get", "h"],
-        "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.92,
+        "fill-extrusion-color": ["get", "c"], "fill-extrusion-height": ["get", "h"],
+        "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.95,
+        "fill-extrusion-vertical-gradient": true,
       },
     });
   } catch (e) { /* no buildings file / offline */ }
 }
 
-// Trees: the game's own tree instances (GolfBridge.getTrees, world units) as a
-// three.js instanced-cone custom layer sharing Mapbox's GL context (the ball
-// layer technique). Instance matrices are baked in mercator space so the shared
-// projection matrix (render's `matrix` arg) places them; elevation from the
-// Mapbox terrain so they sit on the ground. Built lazily once trees + terrain
-// are ready (mask decodes async; DEM streams in).
+// Trees: the game's own tree instances (GolfBridge.getTrees, world units) as
+// textured CROSSED-QUAD BILLBOARDS in a three.js custom layer sharing Mapbox's GL
+// context (the ball-layer technique). Crossed quads + an alpha foliage texture
+// read as real canopy from every angle (vs the old flat cones); per-instance
+// scale/rotation/tint jitter + soft ground shadows + a little clump density kill
+// the "cardboard" look. Instance matrices baked in mercator space so the shared
+// projection matrix places them; elevation from the Mapbox terrain.
 let _treeRenderer = null, _treeScene = null, _treeCam = null, _treeInst = null, _treeTries = 0;
+
+// Canvas-drawn soft foliage sprite (alpha) — self-contained, no external asset
+// (works offline in Capacitor). Layered green clumps over a short trunk.
+function foliageTexture() {
+  const S = 256, cv = document.createElement("canvas"); cv.width = cv.height = S;
+  const c = cv.getContext("2d");
+  // trunk
+  c.fillStyle = "#5b4327";
+  c.fillRect(S * 0.46, S * 0.62, S * 0.08, S * 0.36);
+  // canopy: many soft radial blobs, 3 green shades, denser in the middle
+  const greens = ["#2f5230", "#3c6a37", "#4f7d41", "#274a29"];
+  let seed = 1234567;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  for (let i = 0; i < 220; i++) {
+    const a = rnd() * Math.PI * 2, rr = Math.pow(rnd(), 0.6) * S * 0.34;
+    const cx = S * 0.5 + Math.cos(a) * rr, cy = S * 0.36 + Math.sin(a) * rr * 0.9;
+    const rad = S * (0.05 + rnd() * 0.09);
+    const g = c.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    const col = greens[(rnd() * greens.length) | 0];
+    g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = g; c.globalAlpha = 0.55 + rnd() * 0.4;
+    c.beginPath(); c.arc(cx, cy, rad, 0, Math.PI * 2); c.fill();
+  }
+  c.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+// Soft radial ground-shadow sprite (dark -> transparent).
+function shadowTexture() {
+  const S = 128, cv = document.createElement("canvas"); cv.width = cv.height = S;
+  const c = cv.getContext("2d");
+  const g = c.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  g.addColorStop(0, "rgba(0,0,0,0.5)"); g.addColorStop(0.7, "rgba(0,0,0,0.22)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  c.fillStyle = g; c.fillRect(0, 0, S, S);
+  return new THREE.CanvasTexture(cv);
+}
+// Two vertical quads crossed at 90° (base y=0, top y=1, width 1 about x). Gives
+// the billboard volume from any viewing angle without per-frame facing.
+function crossedQuadGeometry() {
+  const g = new THREE.BufferGeometry();
+  const p = new Float32Array([
+    -0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0,   // quad A (faces z)
+    0, 0, -0.5, 0, 0, 0.5, 0, 1, 0.5, 0, 1, -0.5,   // quad B (faces x)
+  ]);
+  const uv = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1]);
+  const idx = [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7];
+  g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 function addTreeLayer() {
   map.addLayer({
     id: "trees3d", type: "custom", renderingMode: "3d",
@@ -198,8 +262,8 @@ function addTreeLayer() {
       _treeRenderer = new THREE.WebGLRenderer({ canvas: m.getCanvas(), context: gl, antialias: true });
       _treeRenderer.autoClear = false;
       _treeScene = new THREE.Scene();
-      _treeScene.add(new THREE.AmbientLight(0xffffff, 1.1));
-      const sun = new THREE.DirectionalLight(0xfff0e0, 1.0); sun.position.set(-0.6, -1, 0.8); _treeScene.add(sun);
+      _treeScene.add(new THREE.AmbientLight(0xffffff, 1.25));
+      const sun = new THREE.DirectionalLight(0xfff2e0, 0.9); sun.position.set(-0.6, -1, 0.8); _treeScene.add(sun);
       _treeCam = new THREE.Camera();
     },
     render(_gl, matrix) {
@@ -214,30 +278,67 @@ function addTreeLayer() {
 function buildTreeInstances() {
   if (_treeTries > 600 || !_treeScene) return;
   _treeTries++;
-  const trees = (gb().getTrees && gb().getTrees()) || [];
-  if (!trees.length) return;
+  const src = (gb().getTrees && gb().getTrees()) || [];
+  if (!src.length) return;
   const MC = window.mapboxgl.MercatorCoordinate;
-  const probe = map.queryTerrainElevation ? map.queryTerrainElevation(worldToLngLat(trees[0].x, trees[0].y)) : 0;
+  const probe = map.queryTerrainElevation ? map.queryTerrainElevation(worldToLngLat(src[0].x, src[0].y)) : 0;
   if (probe == null) return; // DEM not loaded yet — try again next frame
   const m = M();
-  const geo = new THREE.ConeGeometry(1, 1, 7); geo.translate(0, 0.5, 0); // base y=0, apex y=1
-  const mat = new THREE.MeshLambertMaterial({ color: 0x35502e });
-  const inst = new THREE.InstancedMesh(geo, mat, trees.length);
-  const rot = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-  const trn = new THREE.Matrix4(), scl = new THREE.Matrix4(), tmp = new THREE.Matrix4();
-  for (let i = 0; i < trees.length; i++) {
-    const t = trees[i];
-    const ll = worldToLngLat(t.x, t.y);
-    const g = (map.queryTerrainElevation ? map.queryTerrainElevation(ll) : 0) || 0;
-    const mc = MC.fromLngLat(ll, g);
-    const s = mc.meterInMercatorCoordinateUnits();
-    const hM = (t.h || 3) * m, rM = (t.r || (t.h || 3) * 0.34) * m;
-    trn.makeTranslation(mc.x, mc.y, mc.z);
-    scl.makeScale(rM * s, hM * s, rM * s);
-    tmp.multiplyMatrices(trn, rot).multiply(scl);
-    inst.setMatrixAt(i, tmp);
+  // Densify: each source tree spawns a small clump so the woods read full.
+  const DENS = 3;
+  let seed = 99887766;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const N = src.length * DENS;
+
+  // Canopy billboards
+  const geo = crossedQuadGeometry();
+  const mat = new THREE.MeshLambertMaterial({ map: foliageTexture(), alphaTest: 0.4, side: THREE.DoubleSide });
+  const inst = new THREE.InstancedMesh(geo, mat, N);
+  // Ground shadows
+  const sgeo = new THREE.PlaneGeometry(1, 1);
+  const smat = new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false, opacity: 0.6 });
+  const shad = new THREE.InstancedMesh(sgeo, smat, N);
+
+  const rotX = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+  const rotY = new THREE.Matrix4(), trn = new THREE.Matrix4(), scl = new THREE.Matrix4(), tmp = new THREE.Matrix4();
+  const col = new THREE.Color();
+  let k = 0;
+  for (let i = 0; i < src.length; i++) {
+    const t = src[i];
+    const baseH = t.h || 3, baseR = t.r || baseH * 0.42;
+    for (let d = 0; d < DENS; d++) {
+      // clump offset in world units (except the first, which sits on the point)
+      const ox = d === 0 ? 0 : (rnd() - 0.5) * baseR * 1.6;
+      const oy = d === 0 ? 0 : (rnd() - 0.5) * baseR * 1.6;
+      const ll = worldToLngLat(t.x + ox, t.y + oy);
+      const g = (map.queryTerrainElevation ? map.queryTerrainElevation(ll) : 0) || 0;
+      const mc = MC.fromLngLat(ll, g);
+      const s = mc.meterInMercatorCoordinateUnits();
+      const sizeJ = 0.8 + rnd() * 0.5;
+      const hM = baseH * sizeJ * m, rM = baseR * sizeJ * m;
+      trn.makeTranslation(mc.x, mc.y, mc.z);
+      rotY.makeRotationAxis(new THREE.Vector3(0, 1, 0), rnd() * Math.PI); // yaw variety
+      // canopy: T * rotX(up) * rotY(yaw) * scale(r,h,r)
+      scl.makeScale(rM * s, hM * s, rM * s);
+      tmp.multiplyMatrices(trn, rotX).multiply(rotY).multiply(scl);
+      inst.setMatrixAt(k, tmp);
+      // green tint jitter
+      col.setHSL(0.28 + (rnd() - 0.5) * 0.05, 0.45, 0.42 + (rnd() - 0.5) * 0.12);
+      inst.setColorAt(k, col);
+      // shadow: flat on ground, radius ~ canopy
+      const sR = rM * 1.5 * s;
+      scl.makeScale(sR, sR, sR);
+      trn.makeTranslation(mc.x, mc.y, mc.z);
+      tmp.multiplyMatrices(trn, rotX).multiply(scl); // PlaneGeometry(z-facing) -> rotX -> lies flat
+      shad.setMatrixAt(k, tmp);
+      k++;
+    }
   }
   inst.instanceMatrix.needsUpdate = true;
+  if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+  shad.instanceMatrix.needsUpdate = true;
+  shad.renderOrder = -1; // draw shadows under canopy
+  _treeScene.add(shad);
   _treeScene.add(inst);
   _treeInst = inst;
 }
