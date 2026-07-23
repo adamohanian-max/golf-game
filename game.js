@@ -6569,7 +6569,7 @@ function showResult() {
   updateScorecard();
   if (tourPlayMode) updateTourBug();   // refresh the live scorebug with my new cumulative
   if (dailyMode) updateDailyBug();     // daily reuses the same scorebug, real users instead of pros
-  if (cpuMatch) updateBotBug();        // bot match reuses the same scorebug, me vs the bot
+  if (inMatch()) updateMatchBug();     // any match reuses the same scorebug — instant on my hole
   // Live match: push my score/progress + per-hole scores so the opponent's
   // standings (and match-play status) update.
   if (matchLive()) {
@@ -12235,27 +12235,44 @@ function updateDailyBug() {
   bug.querySelector(".tbug-cut").classList.add("hidden");   // daily has no cut
 }
 
-// --- Bot / CPU match: reuse the same tour scorebug — me vs the bot, live to-par.
-// Two rows sorted best-first, thru = holes played. Complements the on-scorecard
-// match-play up/down status and the #match-standings panel with a TV lower-third.
-function botMergedField() {
-  const field = [{ name: getPlayerName() || "You", total: round.score, thru: round.holesPlayed, isMe: true }];
-  if (cpuOpp) field.push({ name: cpuOpp.player_name || "Opponent", total: cpuOpp.score, thru: cpuOpp.holes_played, isMe: false });
+// --- Any match (live human OR cpu bot): reuse the same tour scorebug as a TV
+// lower-third. Top-3 by to-par plus my row if I sit outside it; complements the
+// on-scorecard up/down status and the #match-standings panel. My live total
+// comes straight from round state so it never lags the fetched match feed.
+let _matchBugRows = null;   // last players list handed in by renderMatchBoard's fetch
+function matchBugField(rows) {
+  rows = rows || _matchBugRows || (cpuMatch ? cpuMatchRows() : []);
+  const field = rows.map((r) => {
+    const isMe = r._isMe || isMeEntry(r);
+    return {
+      name: r.player_name || r.name || "Player",
+      total: isMe ? round.score : (r.score || 0),
+      thru: isMe ? round.holesPlayed : (r.holes_played || 0),
+      isMe,
+    };
+  });
+  if (!field.some((p) => p.isMe))
+    field.push({ name: getPlayerName() || "You", total: round.score, thru: round.holesPlayed, isMe: true });
   field.sort((a, b) => a.total - b.total);
   return { field, positions: tourPositionsByTotal(field) };
 }
-function updateBotBug() {
+function updateMatchBug(rows) {
   const bug = document.getElementById("tour-bug");
   if (!bug) return;
-  const show = cpuMatch && mode === "course" && !dailyMode && !tourPlayMode;
+  if (rows) _matchBugRows = rows;
+  const show = inMatch() && mode === "course" && !dailyMode && !tourPlayMode;
   bug.classList.toggle("hidden", !show);
   if (!show) return;
-  const { field, positions } = botMergedField();
-  const rows = field.map((p, i) => [tourPos(positions[i]), p]);
+  const { field, positions } = matchBugField(rows);
+  const meIdx = field.findIndex((p) => p.isMe);
+  const out = [];
+  for (let i = 0; i < Math.min(3, field.length); i++) out.push([tourPos(positions[i]), field[i]]);
+  if (meIdx >= 3) out.push([tourPos(positions[meIdx]), field[meIdx]]);
+  const holes = (typeof matchHoleCount === "number" && matchHoleCount) ? matchHoleCount : roundHoleCount();
   const fmt = activeMatch && activeMatch.format === "match" ? "Match Play" : "Stroke Play";
-  bug.querySelector(".tbug-head").textContent = fmt + " · " + roundHoleCount() + " holes";
-  bug.querySelector(".tbug-list").innerHTML = rows.map(([r, p]) => _bugRowHTML(r, p)).join("");
-  bug.querySelector(".tbug-cut").classList.add("hidden");   // no cut in a 1v1 match
+  bug.querySelector(".tbug-head").textContent = fmt + " · " + holes + " holes";
+  bug.querySelector(".tbug-list").innerHTML = out.map(([r, p]) => _bugRowHTML(r, p)).join("");
+  bug.querySelector(".tbug-cut").classList.add("hidden");   // no cut line in a match
 }
 
 (function wireTourEvents() {
@@ -12269,7 +12286,7 @@ function updateBotBug() {
   if (tee) tee.addEventListener("click", teeOffTourRound);
   const bug = document.getElementById("tour-bug");
   if (bug) bug.addEventListener("click", () => {
-    if (cpuMatch) { toggleMatchBoard(); return; }   // bot match reuses the bug → open the match board
+    if (inMatch()) { toggleMatchBoard(); return; }   // any match reuses the bug → open the match board
     if (dailyMode) { openDailyBoard(); return; }   // daily reuses the bug → open the daily board
     _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents();
   });
@@ -13294,6 +13311,7 @@ async function renderMatchBoard() {
     if (!liveMatch()) { const opp = rows.find((r) => !isMeEntry(r)); if (opp) lastOpp = opp; }
     updateScorecard();
   }
+  updateMatchBug(rows);   // refresh the live tour-style scorebug every poll (board open or not)
   const panel = document.getElementById("match-standings");
   if (!panel || panel.classList.contains("hidden")) return; // board UI closed — skip the innerHTML rebuild below
   const title = document.getElementById("mb-title");
@@ -13779,7 +13797,7 @@ function cpuRecomputeScore() {
   for (const k in cpuOpp.hole_scores) { s += cpuOpp.hole_scores[k] - (cpuOpp.pars[k] || 0); n++; }
   cpuOpp.score = s; cpuOpp.holes_played = n;
   cpuOpp.finished = n >= roundHoleCount();
-  if (cpuMatch) updateBotBug();   // bot finished a hole → refresh the scorebug
+  if (cpuMatch) updateMatchBug();   // bot finished a hole → refresh the scorebug
 }
 // Synthesize the two match_players rows for a CPU match from local state.
 function cpuMatchRows() {
@@ -13796,6 +13814,7 @@ function cpuMatchRows() {
     hole_scores: hs, hole_prox: hp,
     cur_hole: (typeof HOLE !== "undefined" && HOLE && HOLE.num) || null,
     cur_to_pin: -1, cur_at_rest: true,
+    _isMe: true,   // stable self-marker: the CPU feed has no user_id/name to match on
   };
   return [me, cpuOpp];
 }
@@ -13918,7 +13937,7 @@ function startCpuMatch(format, holes, bot) {
     startCourse();
     startBoardPoll();
     autoShowMatchBoard();
-    updateBotBug();   // show the tour-style scorebug for the match
+    updateMatchBug();   // show the tour-style scorebug for the match
   };
   // Ladder: the player picked the opponent — skip the fake "Match found" beat.
   if (bot) enter();
