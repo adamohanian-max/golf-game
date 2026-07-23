@@ -116,8 +116,12 @@ function setCamera() {
   // requesting tiles — setFreeCameraOptions per-frame stalled tile loading.)
   const scale = view.scale || cam.scale || 8;
   const mpp = m / scale; // metres per screen pixel (flat)
-  let zoom = Math.log2(EARTH_C * Math.cos(reqLat * Math.PI / 180) / (512 * mpp));
-  zoom = Math.max(12, Math.min(20, zoom));
+  // ZOOM_BOOST tightens the framing vs the flat game camera (which frames the
+  // whole club-reach and reads too far under a 3D lean). Live-tunable via
+  // window.__mboxZoomBoost for dialing in.
+  const boost = typeof window.__mboxZoomBoost === "number" ? window.__mboxZoomBoost : 1.0;
+  let zoom = Math.log2(EARTH_C * Math.cos(reqLat * Math.PI / 180) / (512 * mpp)) + boost;
+  zoom = Math.max(12, Math.min(20.5, zoom));
   const bearing = (((-cam.angle) * 180 / Math.PI) % 360 + 360) % 360;
   const pitch = Math.min(85, pitchDeg);
   // Only move the map when the camera ACTUALLY changed — a per-frame jumpTo (even
@@ -147,7 +151,95 @@ function configureBasemap() {
   set("showPlaceLabels", false);
   set("showRoadLabels", false);
   set("showTransitLabels", false);
-  set("show3dObjects", true);
+  // NOTE: Mapbox's own show3dObjects does NOT render over the satellite style, so
+  // buildings + trees are our own geometry (addBuildings / addTreeLayer).
+}
+
+// Buildings: OSM footprints (world units, tools/fetch_buildings.py -> courses/
+// buildings/<id>.json) -> native fill-extrusion. Heights nudged up + floored so
+// low OSM defaults still read as buildings.
+async function addBuildings() {
+  try {
+    const r = await fetch("/courses/buildings/" + activeCourseId + ".json");
+    if (!r.ok) return;
+    const data = await r.json();
+    const list = (data && data.buildings) || [];
+    const feats = [];
+    for (const b of list) {
+      if (!b.poly || b.poly.length < 3) continue;
+      const ring = b.poly.map((pt) => worldToLngLat(pt[0], pt[1]));
+      ring.push(ring[0]);
+      feats.push({ type: "Feature", properties: { h: Math.max(b.h || 4, 4) * 1.6 },
+        geometry: { type: "Polygon", coordinates: [ring] } });
+    }
+    if (!feats.length || !map) return;
+    map.addSource("buildings", { type: "geojson", data: { type: "FeatureCollection", features: feats } });
+    map.addLayer({
+      id: "buildings-3d", type: "fill-extrusion", source: "buildings",
+      paint: {
+        "fill-extrusion-color": "#cdbfa6", "fill-extrusion-height": ["get", "h"],
+        "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.92,
+      },
+    });
+  } catch (e) { /* no buildings file / offline */ }
+}
+
+// Trees: the game's own tree instances (GolfBridge.getTrees, world units) as a
+// three.js instanced-cone custom layer sharing Mapbox's GL context (the ball
+// layer technique). Instance matrices are baked in mercator space so the shared
+// projection matrix (render's `matrix` arg) places them; elevation from the
+// Mapbox terrain so they sit on the ground. Built lazily once trees + terrain
+// are ready (mask decodes async; DEM streams in).
+let _treeRenderer = null, _treeScene = null, _treeCam = null, _treeInst = null, _treeTries = 0;
+function addTreeLayer() {
+  map.addLayer({
+    id: "trees3d", type: "custom", renderingMode: "3d",
+    onAdd(m, gl) {
+      _treeRenderer = new THREE.WebGLRenderer({ canvas: m.getCanvas(), context: gl, antialias: true });
+      _treeRenderer.autoClear = false;
+      _treeScene = new THREE.Scene();
+      _treeScene.add(new THREE.AmbientLight(0xffffff, 1.1));
+      const sun = new THREE.DirectionalLight(0xfff0e0, 1.0); sun.position.set(-0.6, -1, 0.8); _treeScene.add(sun);
+      _treeCam = new THREE.Camera();
+    },
+    render(_gl, matrix) {
+      if (!_treeInst) buildTreeInstances();
+      if (!_treeInst) return;
+      _treeCam.projectionMatrix.fromArray(matrix);
+      _treeRenderer.resetState();
+      _treeRenderer.render(_treeScene, _treeCam);
+    },
+  });
+}
+function buildTreeInstances() {
+  if (_treeTries > 600 || !_treeScene) return;
+  _treeTries++;
+  const trees = (gb().getTrees && gb().getTrees()) || [];
+  if (!trees.length) return;
+  const MC = window.mapboxgl.MercatorCoordinate;
+  const probe = map.queryTerrainElevation ? map.queryTerrainElevation(worldToLngLat(trees[0].x, trees[0].y)) : 0;
+  if (probe == null) return; // DEM not loaded yet — try again next frame
+  const m = M();
+  const geo = new THREE.ConeGeometry(1, 1, 7); geo.translate(0, 0.5, 0); // base y=0, apex y=1
+  const mat = new THREE.MeshLambertMaterial({ color: 0x35502e });
+  const inst = new THREE.InstancedMesh(geo, mat, trees.length);
+  const rot = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+  const trn = new THREE.Matrix4(), scl = new THREE.Matrix4(), tmp = new THREE.Matrix4();
+  for (let i = 0; i < trees.length; i++) {
+    const t = trees[i];
+    const ll = worldToLngLat(t.x, t.y);
+    const g = (map.queryTerrainElevation ? map.queryTerrainElevation(ll) : 0) || 0;
+    const mc = MC.fromLngLat(ll, g);
+    const s = mc.meterInMercatorCoordinateUnits();
+    const hM = (t.h || 3) * m, rM = (t.r || (t.h || 3) * 0.34) * m;
+    trn.makeTranslation(mc.x, mc.y, mc.z);
+    scl.makeScale(rM * s, hM * s, rM * s);
+    tmp.multiplyMatrices(trn, rot).multiply(scl);
+    inst.setMatrixAt(i, tmp);
+  }
+  inst.instanceMatrix.needsUpdate = true;
+  _treeScene.add(inst);
+  _treeInst = inst;
 }
 
 // ---- terrain + overlays -----------------------------------------------------
@@ -275,9 +367,11 @@ function enter(opts) {
     addTerrain();
     addHillshade();
     addSurfaceTints();
+    addBuildings();   // 3D extruded OSM buildings
+    addTreeLayer();   // 3D tree canopy (three.js custom layer)
     addProjProbe();
     ready = true;
-    configureBasemap(); // labels off / 3D objects — after our layers, guarded
+    configureBasemap(); // labels off — after our layers, guarded
   });
   map.on("error", (ev) => { try { console.warn("[mbox3d]", ev && ev.error && ev.error.message || ev); } catch (e) {} });
 }
@@ -299,7 +393,7 @@ function render() {
   // don't yet have a matrix, or tiles are still streaming in — so late-arriving
   // imagery actually composites. Once tiles are loaded AND the camera is parked,
   // stop repainting so the map idles (and tiles finish loading in the first place).
-  if (changed || !_projMatrix || !map.areTilesLoaded()) map.triggerRepaint();
+  if (changed || !_projMatrix || !_treeInst || !map.areTilesLoaded()) map.triggerRepaint();
 }
 
 function setPitch(deg) { pitchDeg = Math.max(0, Math.min(85, deg)); }
@@ -308,7 +402,9 @@ function isReady() { return ready && !!_projMatrix; }
 
 function debug() {
   return { ready, hasMatrix: !!_projMatrix, courseId: activeCourseId, pitch: pitchDeg,
-    center: map && map.getCenter(), zoom: map && map.getZoom() };
+    center: map && map.getCenter(), zoom: map && map.getZoom(),
+    trees: _treeInst ? _treeInst.count : 0, treeTries: _treeTries,
+    buildings: !!(map && map.getLayer && map.getLayer("buildings-3d")) };
 }
 
 window.Mbox3D = { enter, leave, render, resize, setPitch, project, unproject, isReady, debug,
