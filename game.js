@@ -392,24 +392,43 @@ function greenBaseSpeed(D) {
 // (via the shared stepGreenRoll), not a straight-line/endpoint-secant estimate.
 // This makes dead-pace putts finish at the cup on big breakers (the curved arc is
 // longer than the straight ball→cup distance) and integrates the true gradient
-// along the whole path (not just a two-point secant). Binary search; monotonic in
-// launch speed, so ~40 iters lands it exactly.
+// along the whole path (not just a two-point secant).
+//
+// Runs in the live preview (throttled, but per swing sample), so it's kept cheap:
+// the flat-green closed-form (greenBaseSpeed) seeds a TIGHT bracket around the real
+// answer — slope only shifts pace modestly — so the binary search re-rolls near-
+// real-length paths ~22× instead of 40× rolls from a 0..1.2 range (mid-guesses at
+// 0.6 units/frame simulated enormous putts). A ball not on any green skips the sim
+// entirely. The roll uses the SAME per-step greenSlopeAt scan as the live rollStep
+// (NOT a frozen start-green gradient — that diverges off green edges / across
+// Pinehurst's adjacent greens and mis-paces the putt).
 function invertPuttPaceCurved(x, y, ang, D) {
   const dirx = Math.cos(ang), diry = Math.sin(ang);
+  const base = greenBaseSpeed(D);
+  // On a green? (one scan). If not, no break — flat closed-form, skip the sim.
+  let onGreen = false;
+  for (const g of HOLE._greens || []) {
+    if (g.grad && pointInPoly(x, y, g.poly)) { onGreen = true; break; }
+  }
+  if (!onGreen) return base;
   const rollLen = (v0) => {
     const b = { x, y, vx: dirx * v0, vy: diry * v0 };
     let len = 0;
-    for (let i = 0; i < 20000; i++) {
+    for (let i = 0; i < 4000; i++) {
       const px = b.x, py = b.y;
       b.x += b.vx; b.y += b.vy;                   // position first (matches rollStep order)
       len += Math.hypot(b.x - px, b.y - py);
-      stepGreenRoll(b);                            // real friction + capped, gated break
+      stepGreenRoll(b);                            // per-step break scan — matches live rollStep
       if (Math.hypot(b.vx, b.vy) < TUNE.stopThreshold) break;
     }
     return len;
   };
-  let lo = 1e-4, hi = 1.2;
-  for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (rollLen(mid) < D) lo = mid; else hi = mid; }
+  // Bracket around the flat-green pace; widen only if slope pushes the root out
+  // (uphill needs more pace, downhill less). Bounded guard loops keep it O(1).
+  let lo = Math.max(1e-4, base * 0.2), hi = Math.max(base * 1.5, 1e-3), guard = 0;
+  while (rollLen(hi) < D && guard++ < 10) hi *= 1.5;
+  while (rollLen(lo) > D && guard++ < 20) lo *= 0.5;
+  for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; if (rollLen(mid) < D) lo = mid; else hi = mid; }
   return (lo + hi) / 2;
 }
 function recalcPower() {
@@ -698,7 +717,8 @@ function update3DMode() {
 // Apple ground. Add an id here only after confirming Flyover coverage on-device.
 const APPLE_FLYOVER_IDS = new Set([
   "butter-brook-golf-club",
-  "pebble-beach-golf-course",
+  // pebble-beach-golf-course moved to Mapbox GL ground (MAPBOX_IDS below) — one
+  // JS path on web + iOS-online, replacing the iOS-only Apple flyover for it.
   "liberty-national-golf-club",
   "torrey-pines-south-course",
 ]);
@@ -707,6 +727,28 @@ function appleGroundActive() {
     mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
     window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
     window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D);
+}
+// Mapbox GL 3D ground (three3d/mbox3d.js). Unlike Apple, this is NOT native-
+// gated — Mapbox GL JS runs on web AND in the iOS webview (online). Gated on the
+// course id, a geo anchor, a token being present, and the engine module loaded.
+const MAPBOX_IDS = new Set(["pebble-beach-golf-course"]);
+function mapboxGroundActive() {
+  return !!(course && MAPBOX_IDS.has(course.id) && course.geo &&
+    mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
+    window.MAPBOX_TOKEN && window.mapboxgl && window.Mbox3D);
+}
+let mboxGround = false;
+// Mirrors update3DMode: enter/leave the Mapbox engine only on change (not per
+// frame). Called from loop(). #game stays in layout (input bound to it) and goes
+// transparent via draw()'s clear so the map behind shows through.
+function updateMboxMode() {
+  const want = mapboxGroundActive();
+  if (want === mboxGround) return;
+  mboxGround = want;
+  if (mboxGround) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (window.Mbox3D) {
+    if (mboxGround) window.Mbox3D.enter({ courseId: course.id }); else window.Mbox3D.leave();
+  }
 }
 let _appleGroundEntered = false;
 let _lastAppleSync = 0;
@@ -3308,6 +3350,17 @@ function applyView() {
     const q0 = window.Course3D.project(b.x, b.y, tz), q1 = window.Course3D.project(b.x + 1, b.y, tz);
     view.threeScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
   }
+  // Mapbox GL 3D ground (Pebble) — route wx/wy/screenToWorld through the live
+  // Mapbox camera (Mbox3D.project). Mirrors the threeProj block exactly. Only
+  // active once the map's projection matrix is available (isReady) — until then
+  // fall back to the flat affine so the first frames render, not break.
+  view.mboxProj = (mboxGround && window.Mbox3D && window.Mbox3D.isReady()) ? true : null;
+  if (view.mboxProj) {
+    view.kz = 0; view.tilt = 1;
+    const b = state.ball, tz = terrainZ(b.x, b.y);
+    const q0 = window.Mbox3D.project(b.x, b.y, tz), q1 = window.Mbox3D.project(b.x + 1, b.y, tz);
+    view.mboxScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
+  }
 }
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
@@ -3505,11 +3558,23 @@ function _tPt(x, y) {
   _tLast = { wx: x, wy: y, gen: _tGen, x: q.x, y: q.y };
   return _tLast;
 }
-function wx(x, y) { return view.threeProj ? _tPt(x, y).x : view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
-function wy(x, y) { return view.threeProj ? _tPt(x, y).y : view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
-function ws(v) { return v * (view.threeProj ? view.threeScale : view.scale); }
+// Mapbox projection cache (mirrors _tPt). Ground points pass zUnits=0 — Mbox3D
+// places them on the MAPBOX terrain itself (queryTerrainElevation), unlike
+// Course3D which uses the game DEM (so _tPt passes terrainZ). Elevated points
+// (the ball arc) call Mbox3D.project directly with the height.
+let _mLast = null, _mGen = 0;
+function _mboxPt(x, y) {
+  if (_mLast && _mLast.wx === x && _mLast.wy === y && _mLast.gen === _mGen) return _mLast;
+  const q = window.Mbox3D.project(x, y, 0);
+  _mLast = { wx: x, wy: y, gen: _mGen, x: q.x, y: q.y };
+  return _mLast;
+}
+function wx(x, y) { return view.mboxProj ? _mboxPt(x, y).x : view.threeProj ? _tPt(x, y).x : view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
+function wy(x, y) { return view.mboxProj ? _mboxPt(x, y).y : view.threeProj ? _tPt(x, y).y : view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
+function ws(v) { return v * (view.mboxProj ? view.mboxScale : view.threeProj ? view.threeScale : view.scale); }
 // Inverse: screen px -> world coords (for the range finder).
 function screenToWorld(sx, sy) {
+  if (view.mboxProj) return window.Mbox3D.unproject(sx, sy) || { x: state.ball.x, y: state.ball.y };
   if (view.threeProj) return window.Course3D.unproject(sx, sy, terrainZ(state.ball.x, state.ball.y)) || { x: state.ball.x, y: state.ball.y };
   if (view.appleProj) return appleUnproject(view.appleProj, sx, sy);
   const det = view.a * view.e - view.b * view.d || 1;
@@ -3624,7 +3689,7 @@ function computeViewAABB() {
   _viewAABB = { minx, miny, maxx, maxy };
 }
 function polyVisible(poly) {
-  if (view.threeProj) return true; // _viewAABB is the affine's; the three.js camera view doesn't match it — don't cull
+  if (view.threeProj || view.mboxProj) return true; // _viewAABB is the affine's; the 3D/Mapbox camera view doesn't match it — don't cull
   if (!_viewAABB || !poly || poly.length < 2) return true;
   const bb = poly._bb || (poly._bb = polyBBox(poly)); // memoized
   const v = _viewAABB;
@@ -5911,7 +5976,7 @@ function draw() {
   // heavy tilt layers (photo-canopy extrusion) still cost one blit parked.
   // Butter Brook never engages this — real Apple tilt lands in a later stage
   // (see the plan) instead of the fake canvas warp.
-  const tilt3d = !appleGround && !render3D && !!(view.kz && !HOLE.isRange && !greenView && !cine);
+  const tilt3d = !appleGround && !mboxGround && !render3D && !!(view.kz && !HOLE.isRange && !greenView && !cine);
   _warpPad = tilt3d ? estimateWarpPad(cssW, cssH) : 0;
   computeViewAABB(); // for off-screen polygon culling this frame
   const warp = tilt3d;
@@ -5939,6 +6004,14 @@ function draw() {
     _tGen++;
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     if (!HOLE.isRange) drawGreen(true, greensInPlay());
+  } else if (mboxGround) {
+    // Mapbox GL is this course's ground (Pebble) — same model as Apple/three.js:
+    // the map paints behind the transparent #game canvas, the common tail draws
+    // cup/ball/aim/contours over it via view.mboxProj. Green tint + topo contours
+    // (the putting read) route through the Mapbox projection onto the green.
+    _mGen++;
+    ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
+    if (!HOLE.isRange && window.Mbox3D && window.Mbox3D.isReady()) drawGreen(true, greensInPlay());
   } else if (appleGround) {
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     syncAppleGround();
@@ -6112,7 +6185,9 @@ function draw() {
     // Screen pixels the ball floats above ground. Under the Apple pinhole the
     // height is projected for real (appleProjPt takes z) — flight arcs
     // foreshorten correctly instead of using the flat screen-lift.
-    const lift = view.threeProj
+    const lift = view.mboxProj
+      ? gy - window.Mbox3D.project(b.x, b.y, b.z).y // b.z = height above the Mapbox terrain
+      : view.threeProj
       ? gy - window.Course3D.project(b.x, b.y, terrainZ(b.x, b.y) + b.z).y
       : view.appleProj
       ? gy - appleProjPt(view.appleProj, b.x, b.y, b.z + _apGroundZ(view.appleProj, b.x, b.y)).y
@@ -6129,6 +6204,8 @@ function draw() {
     let baseR;
     if (view.appleProj) {
       baseR = Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
+    } else if (view.mboxProj) {
+      baseR = Math.max(4, Math.min(18, view.mboxScale * APPLE_BALL_DRAW_UNITS));
     } else {
       baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
     }
@@ -7901,6 +7978,13 @@ elTiltRange.addEventListener("input", () => {
     if (window.Course3D) window.Course3D.setPitch(v);
     return;
   }
+  if (mboxGround) {
+    const deg = (Math.max(0, Math.min(100, elTiltRange.value)) / 100) * 65;
+    lsSet("golf.mboxPitch", elTiltRange.value);
+    if (window.Mbox3D) window.Mbox3D.setPitch(deg);
+    if (mode === "course") frameTarget();
+    return;
+  }
   appleUserPitch = (elTiltRange.value / 100) * 65;
   lsSet("golf.applePitch", elTiltRange.value);
   if (mode === "course") frameTarget();   // keep ball + reach anchors pinned mid-slide
@@ -7913,7 +7997,8 @@ function updateTiltBtn() {
   const base = (mode === "course" || mode === "range") && !greenView && !cine;
   const apple = appleGroundActive();
   const three = render3D;
-  const showBtn = base && !apple && !three, showSlider = base && (apple || three) && mode === "course";
+  const mbox = mboxGround;
+  const showBtn = base && !apple && !three && !mbox, showSlider = base && (apple || three || mbox) && mode === "course";
   if (showBtn !== _tiltBtnShown) { _tiltBtnShown = showBtn; elTiltBtn.classList.toggle("hidden", !showBtn); }
   if (showSlider !== _tiltSliderShown) {
     _tiltSliderShown = showSlider;
@@ -7923,6 +8008,12 @@ function updateTiltBtn() {
       const v = Number.isFinite(saved3) ? Math.max(0, Math.min(100, saved3)) : 0;
       elTiltRange.value = v;
       if (window.Course3D) window.Course3D.setPitch(v / 100);
+    } else if (showSlider && mbox) {
+      // Default to a 3D lean (85 -> ~55°) so Pebble reads as flyover immediately.
+      const savedM = parseFloat(lsGet("golf.mboxPitch"));
+      const v = Number.isFinite(savedM) ? Math.max(0, Math.min(100, savedM)) : 85;
+      elTiltRange.value = v;
+      if (window.Mbox3D) window.Mbox3D.setPitch((v / 100) * 65);
     } else if (showSlider && !three) {
       const savedA = parseFloat(lsGet("golf.applePitch"));
       elTiltRange.value = Number.isFinite(savedA) ? Math.max(0, Math.min(100, savedA)) : 0;
@@ -14855,6 +14946,8 @@ function loop() {
   updateTiltBtn();
   update3DMode();  // cheap — no-ops unless mode/course actually changed
   if (render3D && window.Course3D) window.Course3D.render();
+  updateMboxMode(); // cheap — no-ops unless mode/course actually changed
+  if (mboxGround && window.Mbox3D) window.Mbox3D.render(); // sync map camera + matrix BEFORE draw()
   // Apple ground sync (Butter Brook) happens inside draw() itself — see
   // appleGroundActive()/syncAppleGround() above.
   draw();
@@ -14880,6 +14973,9 @@ window.GolfBridge = {
   terrainZ,
   surfaceAt,
   isRender3D: () => render3D,
+  // world (game units) -> [lng,lat] affine for the Mapbox ground (mbox3d.js).
+  // Same source as the Apple ground (course.geo.toLonLat + any imagery correction).
+  geoAffine: () => appleGeoAffine(),
   // Mirrors drawTrees()'s own cache/guard exactly (game.js ~3938-3947) so the
   // 3D renderer shares the identical tree list the 2D renderer already
   // computed — no duplicate compute, no divergent placement. Mask decodes

@@ -30,6 +30,19 @@
   }}
   </script>
 
+  <!-- Mapbox GL JS 3D ground (Pebble Beach) — vendored like three (Capacitor CSP);
+       tiles still need network at runtime. Token is a public pk. scoped key, shipped
+       inline like the Supabase anon key; URL-restrict it in the Mapbox dashboard.
+       Paste a token to enable; empty self-disables so there are no errors on a fork. -->
+  <link rel="stylesheet" href="./vendor/mapbox-gl/mapbox-gl.css" />
+  <script defer src="./vendor/mapbox-gl/mapbox-gl.js"></script>
+  <script>
+    // Paste a token here to enable for everyone; or set localStorage "golf.mapboxToken"
+    // to test on a device without committing a credential. Empty = self-disabled.
+    window.MAPBOX_TOKEN = "" ||
+      (function () { try { return localStorage.getItem("golf.mapboxToken") || ""; } catch (e) { return ""; } })();
+  </script>
+
   <!-- Analytics: PostHog, cookieless (localStorage id, no cookies -> no consent
        banner needed). Only measures product usage for retention/funnels; no ads,
        no session recording, no autocapture. Set POSTHOG_KEY to your project key
@@ -813,6 +826,7 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script defer src="game.js?v=317"></script>
+  <script type="module" src="./three3d/mbox3d.js?v=1"></script>
+  <script defer src="game.js?v=320"></script>
 </body>
 </html>
