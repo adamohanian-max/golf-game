@@ -127,11 +127,13 @@ function setCamera() {
   // the framing tracks the game camera. (center+zoom+pitch+bearing keeps Mapbox
   // requesting tiles — setFreeCameraOptions per-frame stalled tile loading.)
   const scale = view.scale || cam.scale || 8;
-  const mpp = m / scale; // metres per screen pixel (flat)
-  // ZOOM_BOOST tightens the framing vs the flat game camera (which frames the
-  // whole club-reach and reads too far under a 3D lean). Live-tunable via
-  // window.__mboxZoomBoost for dialing in.
-  const boost = typeof window.__mboxZoomBoost === "number" ? window.__mboxZoomBoost : 1.0;
+  // `view.scale` is DEVICE px per world unit; Mapbox zoom is defined in CSS px
+  // (512 CSS px world at z0). Divide by dpr so the framing matches the flat game
+  // camera exactly on any display (this is what the old +1.0 "boost" was really
+  // compensating for at dpr 2 = log2(2)). Optional fine-tune via __mboxZoomBoost.
+  const dpr = window.devicePixelRatio || 1;
+  const mpp = m * dpr / scale; // metres per CSS pixel
+  const boost = typeof window.__mboxZoomBoost === "number" ? window.__mboxZoomBoost : 0;
   let zoom = Math.log2(EARTH_C * Math.cos(reqLat * Math.PI / 180) / (512 * mpp)) + boost;
   zoom = Math.max(12, Math.min(20.5, zoom));
   const bearing = (((-cam.angle) * 180 / Math.PI) % 360 + 360) % 360;
@@ -561,7 +563,6 @@ function enter(opts) {
     addSurfaceTints();
     addBuildings();   // 3D extruded OSM buildings (inside boundary)
     addTreeLayer();   // 3D tree canopy (three.js custom layer)
-    addBoundaryMask(); // hide everything outside the course (topmost fill)
     addProjProbe();
     ready = true;
     configureBasemap(); // labels off / vector recolor — after our layers, guarded
