@@ -14,7 +14,7 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=59">
   <link rel="stylesheet" href="css/base.css?v=69">
-  <link rel="stylesheet" href="css/hud.css?v=98">
+  <link rel="stylesheet" href="css/hud.css?v=99">
   <link rel="stylesheet" href="css/menu.css?v=84">
   <link rel="stylesheet" href="css/courses.css?v=8">
   <link rel="stylesheet" href="css/modals.css?v=82">
@@ -121,6 +121,9 @@
   <button id="hud-btn" class="hidden" aria-label="Controls"><span class="ic ic-menu"></span></button>
   <button id="green-view-btn" class="hidden" aria-label="Read green"><span class="ic ic-green3d"></span></button>
   <button id="tilt-view-btn" class="hidden" aria-label="3D view"><span class="ic ic-tilt"></span></button>
+  <!-- Mapbox ground style toggle (Pebble): flip Satellite <-> Vector for comparison.
+       Visible only on the Mapbox ground (see updateMboxStyleBtn in game.js). -->
+  <button id="mbox-style-btn" class="hidden" aria-label="Map style">SAT</button>
   <!-- Apple-ground camera tilt: vertical slider, top = 3D lean, bottom = 2D
        overhead. Replaces #tilt-view-btn on courses with the native MapKit
        ground (see updateTiltBtn / #tilt-range wiring in game.js). -->
@@ -826,7 +829,7 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script type="module" src="./three3d/mbox3d.js?v=11"></script>
-  <script defer src="game.js?v=321"></script>
+  <script type="module" src="./three3d/mbox3d.js?v=12"></script>
+  <script defer src="game.js?v=322"></script>
 </body>
 </html>

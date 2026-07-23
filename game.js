@@ -7947,6 +7947,27 @@ elCineBtn.addEventListener("click", () => {
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
 // Slightly-3D tilted view: per-device camera preference (like break arrows).
+// Mapbox ground style toggle (Pebble): flip Satellite <-> Vector to compare.
+const elMboxStyleBtn = document.getElementById("mbox-style-btn");
+let _mboxStyleBtnShown = false;
+function syncMboxStyleBtn() {
+  if (elMboxStyleBtn && window.Mbox3D) elMboxStyleBtn.textContent = window.Mbox3D.getStyleMode() === "vector" ? "VEC" : "SAT";
+}
+if (elMboxStyleBtn) elMboxStyleBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (!window.Mbox3D) return;
+  const next = window.Mbox3D.getStyleMode() === "vector" ? "satellite" : "vector";
+  window.Mbox3D.setStyleMode(next);
+  syncMboxStyleBtn();
+});
+function updateMboxStyleBtn() {
+  const show = mboxGround && mode === "course";
+  if (show !== _mboxStyleBtnShown) {
+    _mboxStyleBtnShown = show;
+    if (elMboxStyleBtn) { elMboxStyleBtn.classList.toggle("hidden", !show); if (show) syncMboxStyleBtn(); }
+  }
+}
+
 const elTiltBtn = document.getElementById("tilt-view-btn");
 elTiltBtn.classList.toggle("active", tiltView);
 elTiltBtn.addEventListener("click", (e) => {
@@ -14948,6 +14969,7 @@ function loop() {
   updateWindChip();
   updateGreenViewBtn();
   updateTiltBtn();
+  updateMboxStyleBtn();
   update3DMode();  // cheap — no-ops unless mode/course actually changed
   if (render3D && window.Course3D) window.Course3D.render();
   updateMboxMode(); // cheap — no-ops unless mode/course actually changed

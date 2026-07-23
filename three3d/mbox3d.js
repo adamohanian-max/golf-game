@@ -19,7 +19,19 @@
 
 import * as THREE from "three";
 
-const STYLE_URL = "mapbox://styles/mapbox/standard-satellite";
+// Two ground looks the user compares via the HUD toggle:
+//  satellite = photoreal imagery, boundary-masked (spotlight the hole)
+//  vector    = Mapbox Standard illustrated vector, faded + recolored to golf greens
+const STYLE_URLS = {
+  satellite: "mapbox://styles/mapbox/standard-satellite",
+  vector: "mapbox://styles/mapbox/standard",
+};
+function readStyleMode() {
+  try { const v = localStorage.getItem("golf.mboxStyle"); if (v === "vector" || v === "satellite") return v; } catch (e) {}
+  return "satellite";
+}
+let styleMode = readStyleMode();
+const OFF_COURSE = "#13351c"; // dark course-green wash the game already uses outside the aerial
 const APPLE_CAM_K = 1.866; // 1/(2·tan15°) — the FOV constant the game camera math uses
 const M_FALLBACK = 2.7432; // metres per world unit (1 unit = 3 yd), matches game.js M_PER_UNIT
 
@@ -147,12 +159,61 @@ let _lastCam = null;
 // up over the satellite like Apple Flyover.
 function configureBasemap() {
   const set = (k, v) => { try { map.setConfigProperty("basemap", k, v); } catch (e) {} };
+  // Both modes: strip labels (golf course, not a street map).
   set("showPointOfInterestLabels", false);
   set("showPlaceLabels", false);
   set("showRoadLabels", false);
   set("showTransitLabels", false);
-  // NOTE: Mapbox's own show3dObjects does NOT render over the satellite style, so
-  // buildings + trees are our own geometry (addBuildings / addTreeLayer).
+  if (styleMode === "vector") {
+    // Clean illustrated look: faded theme, recolor land/greenspace/water to golf
+    // tones, and paint roads INTO the land tone so they disappear (roads can't be
+    // fully hidden in Standard). We draw our own trees, so kill Mapbox's 3D objects.
+    set("theme", "faded");
+    set("show3dObjects", false);
+    const land = "#2c6e30";
+    set("colorLand", land);
+    set("colorGreenspace", "#357a39");
+    set("colorWater", "#1f6f8b");
+    set("colorRoads", land);
+    set("colorMotorways", land);
+    set("colorTrunks", land);
+    set("showPedestrianRoads", false);
+    set("showAdminBoundaries", false);
+  }
+  // NOTE (satellite mode): Mapbox's own show3dObjects does NOT render over the
+  // satellite style, so buildings + trees are our own geometry.
+}
+
+// Point-in-polygon (ray cast) over a ring of {x,y} — for the tree boundary filter.
+function pointInRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].x, yi = ring[i].y, xj = ring[j].x, yj = ring[j].y;
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+// Focus on the course: a fill covering the whole map EXCEPT the course boundary
+// (huge outer box with the boundary ring as an interior hole), colored the dark
+// off-course green. Everything outside the course is hidden in BOTH modes.
+function addBoundaryMask() {
+  const course = gb().getCourse();
+  const b = course && course.boundary && course.boundary[0];
+  if (!b || b.length < 3) return;
+  const hole = b.map((pt) => worldToLngLat(pt.x, pt.y));
+  if (hole[0][0] !== hole[hole.length - 1][0] || hole[0][1] !== hole[hole.length - 1][1]) hole.push(hole[0]);
+  // Outer box around the course center, big enough to cover the whole visible map.
+  const c = worldToLngLat((course.world ? course.world.w : 100) / 2, (course.world ? course.world.h : 100) / 2);
+  const D = 0.35;
+  const outer = [
+    [c[0] - D, c[1] - D], [c[0] + D, c[1] - D], [c[0] + D, c[1] + D], [c[0] - D, c[1] + D], [c[0] - D, c[1] - D],
+  ];
+  map.addSource("coursemask", { type: "geojson", data: {
+    type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [outer, hole] },
+  } });
+  map.addLayer({ id: "coursemask-fill", type: "fill", source: "coursemask",
+    paint: { "fill-color": OFF_COURSE, "fill-opacity": 0.94 } });
 }
 
 // Buildings: OSM footprints (world units, tools/fetch_buildings.py -> courses/
@@ -168,9 +229,17 @@ async function addBuildings() {
     // Warm, slightly varied wall/roof palette so the extrusions read as a
     // residential/clubhouse cluster instead of one flat gray block.
     const PALETTE = ["#d8cbb2", "#cdb79a", "#c9c3b6", "#d9d2c4", "#c2a888", "#bfb49c"];
+    const course = gb().getCourse();
+    const bring = course && course.boundary && course.boundary[0];
     let n = 0;
     for (const b of list) {
       if (!b.poly || b.poly.length < 3) continue;
+      // Skip buildings outside the course boundary (they'd poke over the mask).
+      if (bring && bring.length > 2) {
+        const cx = b.poly.reduce((s, p) => s + p[0], 0) / b.poly.length;
+        const cy = b.poly.reduce((s, p) => s + p[1], 0) / b.poly.length;
+        if (!pointInRing(cx, cy, bring)) continue;
+      }
       const ring = b.poly.map((pt) => worldToLngLat(pt[0], pt[1]));
       ring.push(ring[0]);
       // Deterministic per-building jitter (index hash) — height + color variety.
@@ -278,7 +347,13 @@ function addTreeLayer() {
 function buildTreeInstances() {
   if (_treeTries > 600 || !_treeScene) return;
   _treeTries++;
-  const src = (gb().getTrees && gb().getTrees()) || [];
+  let src = (gb().getTrees && gb().getTrees()) || [];
+  if (!src.length) return;
+  // Keep only trees inside the course boundary so canopy never pokes over the
+  // off-course mask. (Fallback: keep all if no boundary.)
+  const course = gb().getCourse();
+  const bring = course && course.boundary && course.boundary[0];
+  if (bring && bring.length > 2) src = src.filter((t) => pointInRing(t.x, t.y, bring));
   if (!src.length) return;
   const MC = window.mapboxgl.MercatorCoordinate;
   const probe = map.queryTerrainElevation ? map.queryTerrainElevation(worldToLngLat(src[0].x, src[0].y)) : 0;
@@ -388,6 +463,10 @@ function addSurfaceTints() {
       feats.push({ type: "Feature", properties: { kind }, geometry: { type: "Polygon", coordinates: [ring] } });
     }
   };
+  const vec = styleMode === "vector";
+  // Vector mode paints the course opaquely from the game's arcade palette (no
+  // photo underneath), incl. a rough/grass base; satellite keeps faint tints.
+  if (vec) { pushPolys(surf.rough, "rough"); pushPolys(surf.grass, "grass"); }
   pushPolys(surf.fairway, "fairway");
   pushPolys(surf.water, "water");
   pushPolys(surf.bunker, "bunker");
@@ -398,15 +477,26 @@ function addSurfaceTints() {
     id, type: "fill", source: "holes", filter: ["==", ["get", "kind"], kind],
     paint: { "fill-color": color, "fill-opacity": op },
   });
-  fill("fairway-fill", "fairway", "#8ad98f", 0.13);
-  fill("water-fill", "water", "#1f6f8b", 0.35);
-  fill("bunker-fill", "bunker", "#e8d9a0", 0.26);
-  fill("green-fill", "green", "#4ea24e", 0.30);
-  map.addLayer({
-    id: "green-outline", type: "line", source: "holes", filter: ["==", ["get", "kind"], "green"],
-    paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.55 },
-  });
-  fill("tee-fill", "tee", "#2b6cb0", 0.45);
+  if (vec) {
+    // clean stylized golf palette (mirrors drawVectorSurfaces)
+    fill("rough-fill", "rough", "#2c6e30", 0.95);
+    fill("grass-fill", "grass", "#3a9440", 0.9);
+    fill("fairway-fill", "fairway", "#4eb053", 0.92);
+    fill("water-fill", "water", "#2a93d8", 0.9);
+    fill("bunker-fill", "bunker", "#f1e6c4", 0.92);
+    fill("green-fill", "green", "#8fce8f", 0.95);
+    map.addLayer({ id: "green-outline", type: "line", source: "holes",
+      filter: ["==", ["get", "kind"], "green"], paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.7 } });
+    fill("tee-fill", "tee", "#5cbf61", 0.92);
+  } else {
+    fill("fairway-fill", "fairway", "#8ad98f", 0.13);
+    fill("water-fill", "water", "#1f6f8b", 0.35);
+    fill("bunker-fill", "bunker", "#e8d9a0", 0.26);
+    fill("green-fill", "green", "#4ea24e", 0.30);
+    map.addLayer({ id: "green-outline", type: "line", source: "holes",
+      filter: ["==", ["get", "kind"], "green"], paint: { "line-color": "#eafff0", "line-width": 1.5, "line-opacity": 0.55 } });
+    fill("tee-fill", "tee", "#2b6cb0", 0.45);
+  }
 }
 
 // Invisible custom layer whose render(gl, matrix) captures the current projection
@@ -453,7 +543,7 @@ function enter(opts) {
   );
   map = new window.mapboxgl.Map({
     container,
-    style: STYLE_URL,
+    style: STYLE_URLS[styleMode],
     center,
     zoom: 16,
     pitch: Math.min(85, pitchDeg),
@@ -464,15 +554,17 @@ function enter(opts) {
   });
   map.addControl(new window.mapboxgl.AttributionControl({ compact: true }));
   window.__mbmap = map; // debug handle
+  // Re-runs on every setStyle() too, so one handler serves both style modes.
   map.on("style.load", () => {
     addTerrain();
     addHillshade();
     addSurfaceTints();
-    addBuildings();   // 3D extruded OSM buildings
+    addBuildings();   // 3D extruded OSM buildings (inside boundary)
     addTreeLayer();   // 3D tree canopy (three.js custom layer)
+    addBoundaryMask(); // hide everything outside the course (topmost fill)
     addProjProbe();
     ready = true;
-    configureBasemap(); // labels off — after our layers, guarded
+    configureBasemap(); // labels off / vector recolor — after our layers, guarded
   });
   map.on("error", (ev) => { try { console.warn("[mbox3d]", ev && ev.error && ev.error.message || ev); } catch (e) {} });
 }
@@ -501,6 +593,21 @@ function setPitch(deg) { pitchDeg = Math.max(0, Math.min(85, deg)); }
 function resize() { if (map) map.resize(); }
 function isReady() { return ready && !!_projMatrix; }
 
+// Flip between the two ground looks (satellite ⇄ vector). setStyle() clears the
+// style's layers/sources, so reset our per-style state and let the shared
+// style.load handler rebuild terrain/tints/buildings/trees/mask/probe.
+function setStyleMode(mode) {
+  if (mode !== "vector" && mode !== "satellite") return;
+  styleMode = mode;
+  try { localStorage.setItem("golf.mboxStyle", mode); } catch (e) {}
+  if (!map) return;
+  ready = false; _projMatrix = null;
+  _treeInst = null; _treeTries = 0; _treeScene = null; // trees3d re-created on style.load
+  _lastCam = null; // force a camera resync on the new style
+  map.setStyle(STYLE_URLS[styleMode]);
+}
+function getStyleMode() { return styleMode; }
+
 function debug() {
   return { ready, hasMatrix: !!_projMatrix, courseId: activeCourseId, pitch: pitchDeg,
     center: map && map.getCenter(), zoom: map && map.getZoom(),
@@ -509,4 +616,4 @@ function debug() {
 }
 
 window.Mbox3D = { enter, leave, render, resize, setPitch, project, unproject, isReady, debug,
-  worldToLngLat, lngLatToWorld };
+  worldToLngLat, lngLatToWorld, setStyleMode, getStyleMode };
