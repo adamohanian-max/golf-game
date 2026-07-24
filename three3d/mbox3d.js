@@ -111,12 +111,13 @@ function unproject(sx, sy) {
 // camera.angle; pitch from the tilt slider. Fed to Mapbox via setFreeCameraOptions
 // (position + lookAtPoint) for exact framing parity.
 const EARTH_C = 40075016.686; // equatorial circumference (m)
-// Framing feedback state (converges over a few frames): pan bias of the map
-// center along the ball->reach line, and a zoom offset that corrects Mapbox's
-// wider FOV vs the flat game's 30° pinhole so the ball/reach hit exact screen %.
-let _ctrBias = 0.5, _zAdj = 0;
-const BALL_FRAC = 0.90;  // ball at 90% down (bottom 10%)
-const REACH_FRAC = 0.15; // club landing at 15% down (top 15%)
+// Framing: put the ball at BALL_FRAC down (bottom of screen) and the club's
+// landing at REACH_FRAC (top). The ball is pinned deterministically with Mapbox
+// map PADDING (center on the ball, pad the top so its "center" sits low), and a
+// single-DOF zoom feedback slides the reach point to REACH_FRAC.
+let _zAdj = 0;
+const BALL_FRAC = 0.88;  // ball ~bottom 12%
+const REACH_FRAC = 0.16; // club landing ~top 16%
 function setCamera() {
   if (!ready || !map) return;
   const g = gb(), view = g.getView(), cam = g.getCamera(), geo = g.geoAffine(), m = M();
@@ -129,24 +130,22 @@ function setCamera() {
   const baseZoom = (lat) => Math.log2(EARTH_C * Math.cos(lat * Math.PI / 180) / (512 * mpp)) + boost;
   const toLL = (x, y) => [geo[0] * x + geo[1] * y + geo[2], geo[3] * x + geo[4] * y + geo[5]];
 
-  let reqLon, reqLat, zoom;
+  let reqLon, reqLat, zoom, padding = null;
   const A = g.frameAnchors ? g.frameAnchors() : null;
-  if (A && !A.moving && _projMatrix) {
-    // Measure where ball + club-reach currently land on screen (last frame's
-    // matrix) and nudge the pan-bias + zoom-offset toward the target fractions.
-    const bs = project(A.bx, A.by, 0), rs = project(A.rx, A.ry, 0);
-    if (bs.inFront && rs.inFront) {
-      const spanNow = bs.y - rs.y;                 // px, ball below reach
-      const spanWant = (BALL_FRAC - REACH_FRAC) * H;
-      _zAdj += 0.35 * Math.log2(spanWant / Math.max(spanNow, 8));
-      _zAdj = Math.max(-4, Math.min(4, _zAdj));
-      const eB = (bs.y - BALL_FRAC * H) / H;        // >0 = ball too low
-      _ctrBias -= 0.35 * eB;                        // pan bias toward ball raises it
-      _ctrBias = Math.max(-0.15, Math.min(1.15, _ctrBias));
+  if (A && !A.moving) {
+    // Center on the BALL. Top padding = 2*BALL_FRAC-1 of the height puts the
+    // padded-region center (= the ball) at BALL_FRAC down the real viewport.
+    [reqLon, reqLat] = toLL(A.bx, A.by);
+    padding = { top: (2 * BALL_FRAC - 1) * H, bottom: 0, left: 0, right: 0 };
+    // Single-DOF zoom feedback: slide the reach point to REACH_FRAC.
+    if (_projMatrix) {
+      const rs = project(A.rx, A.ry, 0);
+      if (rs.inFront) {
+        const eR = (rs.y - REACH_FRAC * H) / H;     // >0 reach too low → zoom IN
+        _zAdj += 0.85 * eR;                         // (ball pinned at center → higher zoom pushes reach up)
+        _zAdj = Math.max(-6, Math.min(6, _zAdj));
+      }
     }
-    const Ox = A.bx + _ctrBias * (A.rx - A.bx);
-    const Oy = A.by + _ctrBias * (A.ry - A.by);
-    [reqLon, reqLat] = toLL(Ox, Oy);
     zoom = baseZoom(reqLat) + _zAdj;
   } else {
     // Flight / no hole: center on the flat view's screen-center world point.
@@ -159,18 +158,18 @@ function setCamera() {
   zoom = Math.max(12, Math.min(20.5, zoom));
   const bearing = (((-cam.angle) * 180 / Math.PI) % 360 + 360) % 360;
   const pitch = Math.min(85, pitchDeg);
+  const padTop = padding ? padding.top : 0;
   // Only move the map when the camera ACTUALLY changed — a per-frame jumpTo (even
-  // to identical values) keeps Mapbox in a perpetual "moving" state and tiles
-  // never finish loading (measured: freezing the per-frame call flips
-  // areTilesLoaded false->true). So a resting camera settles + loads imagery.
+  // to identical values) keeps Mapbox "moving" and tiles never finish loading.
   const L = _lastCam;
   const changed = !L ||
     Math.abs(reqLon - L.lon) > 1e-7 || Math.abs(reqLat - L.lat) > 1e-7 ||
     Math.abs(zoom - L.zoom) > 0.01 || Math.abs(pitch - L.pitch) > 0.1 ||
+    Math.abs(padTop - L.padTop) > 1 ||
     Math.abs(((bearing - L.bearing + 540) % 360) - 180) > 0.1;
   if (changed) {
-    map.jumpTo({ center: [reqLon, reqLat], zoom, pitch, bearing });
-    _lastCam = { lon: reqLon, lat: reqLat, zoom, pitch, bearing };
+    map.jumpTo({ center: [reqLon, reqLat], zoom, pitch, bearing, padding: padding || { top: 0, bottom: 0, left: 0, right: 0 } });
+    _lastCam = { lon: reqLon, lat: reqLat, zoom, pitch, bearing, padTop };
   }
   return changed;
 }
@@ -588,7 +587,9 @@ function enter(opts) {
     addTerrain();
     addHillshade();
     addSurfaceTints();
-    addBuildings();   // 3D extruded OSM buildings (inside boundary)
+    // addBuildings(): DISABLED — fill-extrusion over 3D terrain spikes into giant
+    // columns (known Mapbox bug, #11516). Boxes weren't photoreal anyway; revisit
+    // with real 3D models or a terrain-relative base later.
     addTreeLayer();   // 3D tree canopy (three.js custom layer)
     addProjProbe();
     ready = true;
@@ -631,7 +632,7 @@ function setStyleMode(mode) {
   if (!map) return;
   ready = false; _projMatrix = null;
   _treeInst = null; _treeTries = 0; _treeScene = null; // trees3d re-created on style.load
-  _lastCam = null; _ctrBias = 0.5; _zAdj = 0; // force a camera resync on the new style
+  _lastCam = null; _zAdj = 0; // force a camera resync on the new style
   map.setStyle(STYLE_URLS[styleMode]);
 }
 function getStyleMode() { return styleMode; }
