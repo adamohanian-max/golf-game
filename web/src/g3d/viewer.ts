@@ -41,7 +41,7 @@ export interface PerfOptions {
 }
 
 export const DEFAULT_PERF: PerfOptions = {
-  errorTarget: 16,
+  errorTarget: 8,
   cacheMaxSize: 800,
   cacheMinSize: 600,
   pauseWhenIdle: true,
@@ -170,16 +170,18 @@ export function createViewer(
 
   // --- camera framing --------------------------------------------------------
   // After reorientation our site is at the origin with +y up. Place the camera
-  // back by radiusMeters, lifted, looking at the site along the requested
-  // heading. GlobeControls takes over on first user input.
+  // for a close, oblique "backdrop" framing along the requested heading — NOT
+  // pulled way back (that frames the distant low-LOD globe horizon instead of
+  // the refined near ground). `far` is kept tight for the same reason.
+  // GlobeControls takes over on first user input.
   function frameSite(cfg: CourseConfig) {
     const r = cfg.radiusMeters;
     const h = MathUtils.degToRad(cfg.headingDeg);
-    // Ground plane is x/z after +y-up reorientation.
-    camera.position.set(Math.sin(h) * r, r * 0.6, Math.cos(h) * r);
-    camera.lookAt(0, 0, 0);
-    camera.near = Math.max(1, r / 500);
-    camera.far = r * 100;
+    // Ground plane is x/z after +y-up reorientation. ~24° look-down.
+    camera.position.set(Math.sin(h) * r * 0.6, r * 0.45, Math.cos(h) * r * 0.6);
+    camera.lookAt(0, r * 0.05, 0);
+    camera.near = Math.max(1, r / 600);
+    camera.far = r * 20;
     camera.updateProjectionMatrix();
   }
   frameSite(config);
