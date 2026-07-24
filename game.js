@@ -10389,7 +10389,7 @@ async function renderWinningsInto(el) {
   html += `<details class="av-collapse" open><summary>Events (${rows.length})</summary><div class="aw-list">` +
     rows.map((e) => `<button class="aw-row" data-id="${escapeHTML(e.id)}">` +
       `<span class="aw-name">${escapeHTML(e.name || "Event")}</span>` +
-      `<span class="aw-place" data-id="${escapeHTML(e.id)}">—</span>` +
+      `<span class="aw-place" data-id="${escapeHTML(e.id)}">${e.place ? escapeHTML(e.place) : "—"}</span>` +
       `<span class="aw-prize">${fmtMoney(e.payout)}</span></button>`).join("") +
     `</div></details>`;
   el.innerHTML = html;
@@ -10406,8 +10406,10 @@ async function renderWinningsInto(el) {
     btn.addEventListener("click", () => { closeAccountViewer(); openTourEvent(ev); });
   });
 
-  // Fill place cells lazily; skip anything with no schedule entry / no result.
+  // Fill place cells lazily; skip anything with a stored place (already rendered),
+  // no schedule entry, or no result.
   rows.forEach((e) => {
+    if (e.place) return;   // persisted at payout time — no live re-fetch needed
     const ev = byId[e.id];
     if (!ev) return;
     deriveMyTourPlace(e.id, ev.start, e.rounds).then((place) => {
@@ -11714,6 +11716,18 @@ function _yyyymmdd(iso) {
 // State is derived from each event's dates, then OVERRIDDEN by the real
 // status.type.state + status.period for any event ESPN currently returns in
 // sb.events (this week) — that live period is what the round gate reads.
+// The season year of a schedule, as the most common start-year across its events
+// (a season spans a calendar boundary — majority year is the label PGA uses).
+function tourSeasonYear(evs) {
+  const yrs = {};
+  (evs || []).forEach((e) => {
+    const y = e && e.start ? new Date(e.start).getUTCFullYear() : null;
+    if (y && !isNaN(y)) yrs[y] = (yrs[y] || 0) + 1;
+  });
+  let best = null, bc = 0;
+  for (const y in yrs) if (yrs[y] > bc) { bc = yrs[y]; best = +y; }
+  return best || new Date().getUTCFullYear();
+}
 async function fetchTourSchedule() {
   if (_tourSchedCache && Date.now() - _tourSchedCache.at < TOUR_CACHE_MS) return _tourSchedCache.data;
   const sb = await fetchJSONRetry(TOUR_SCOREBOARD);
@@ -11847,7 +11861,8 @@ async function showTourResult(missedCut) {
     return;
   }
   const prize = tourFinishPayout(me.pos, tieCount, results.payouts);
-  recordTourPayout(data.eventId, prize); // bank it for career winnings
+  const placeLabel = me.pos == null ? null : (me.tied ? "T" : "") + me.pos;
+  recordTourPayout(data.eventId, prize, placeLabel); // bank prize + place for career winnings
   payEl.textContent = fmtMoney(prize);
   purseEl.textContent = "from the " + (results.displayPurse || fmtMoney(results.purse)) + " purse";
 }
@@ -12036,20 +12051,34 @@ function getTourEvent(id) {
   const e = _tourMap()[id];
   return e ? { eventId: id, name: e.name, rounds: e.rounds || [] } : null;
 }
+// The season (calendar year) an event belongs to, from its schedule start date.
+// Stamped on every golf.tourEvents entry so entries from different seasons stay
+// distinguishable — ESPN event ids are per-season and the map is never pruned.
+function _tourEventSeason(eventId) {
+  const ev = (_tourSchedule || []).find((e) => e.id === eventId)
+    || (_tourOpenEvent && _tourOpenEvent.id === eventId ? _tourOpenEvent : null);
+  const y = ev && ev.start ? new Date(ev.start).getUTCFullYear() : null;
+  return y && !isNaN(y) ? y : null;
+}
 function setTourEvent(o) {
   if (!o || !o.eventId) return;
   const map = _tourMap();
   const prev = map[o.eventId] || {};
-  map[o.eventId] = { name: o.name, rounds: o.rounds || [], payout: prev.payout || 0 };
+  map[o.eventId] = { name: o.name, rounds: o.rounds || [], payout: prev.payout || 0,
+    place: prev.place || null, season: prev.season || _tourEventSeason(o.eventId) };
   lsSet("golf.tourEvents", map);
 }
-// Bank the real prize the player earned in an event (recorded once the event is
-// finalized in showTourResult). Summed by careerWinnings() for the account hub.
-function recordTourPayout(eventId, amount) {
+// Bank the real prize + finishing place the player earned in an event (recorded
+// once the event is finalized in showTourResult). Place is persisted so the
+// Winnings tab shows it without a live re-fetch (ESPN feeds age out / 502). Prize
+// summed by careerWinnings() for the account hub.
+function recordTourPayout(eventId, amount, place) {
   if (!eventId) return;
   const map = _tourMap();
   if (!map[eventId]) return;
   map[eventId].payout = Math.max(0, Math.round(amount || 0));
+  if (place) map[eventId].place = place;
+  if (!map[eventId].season) map[eventId].season = _tourEventSeason(eventId);
   lsSet("golf.tourEvents", map);
 }
 // Lifetime PGA Tour earnings across every event the player has cashed in.
@@ -12058,7 +12087,10 @@ function careerWinnings() {
 }
 function ensureTourEvent(eventId, name) {
   const map = _tourMap();
-  if (!map[eventId]) { map[eventId] = { name, rounds: [] }; lsSet("golf.tourEvents", map); }
+  if (!map[eventId]) {
+    map[eventId] = { name, rounds: [], season: _tourEventSeason(eventId) };
+    lsSet("golf.tourEvents", map);
+  }
   return getTourEvent(eventId);
 }
 // My row for the merged board: cumulative to-par across completed rounds + the
@@ -12274,7 +12306,8 @@ function _schedRowHTML(e, info) {
 // bottom: Live now → Ready to play → Completed (watch only) → Upcoming.
 function renderTourSchedule(evs) {
   document.getElementById("tb-event").textContent = "Tour Events";
-  document.getElementById("tb-status").textContent = "Play a real 2026 PGA Tour event";
+  document.getElementById("tb-status").textContent =
+    "Play a real " + tourSeasonYear(evs) + " PGA Tour event";
   document.getElementById("tb-course").textContent = "";
   const rows = evs.map((e) => ({ e, info: tourEventPlayInfo(e) }));
   const recent = (a, b) => new Date(b.e.start) - new Date(a.e.start);
