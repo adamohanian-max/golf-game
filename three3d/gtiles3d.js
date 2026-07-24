@@ -193,13 +193,14 @@ function unproject(sx, sy) {
 }
 
 // ---- camera: drive the three camera from the game camera each frame ---------
-// Look-at O from frameAnchors (ball↔reach convergence), distance from view.scale,
-// bearing from cam.angle, pitch from the tilt slider — positions a free three
-// PerspectiveCamera in the reoriented scene, using a local ENU basis measured by
-// finite-differencing sceneAt() at O.
-let _ctrBias = 0.5, _zAdj = 0;
-const BALL_FRAC = 0.90;   // ball at 90% down
-const REACH_FRAC = 0.15;  // club landing at 15% down
+// DETERMINISTIC framing (no feedback loop). Look-at O = the flat view's screen-
+// centre world point — exactly what the 2D game centres on — so the 3D camera
+// tracks the known-good flat framing (ball near the bottom, pin up) in every
+// state and the ball can never fall behind the camera. Distance D comes straight
+// from view.scale. Bearing from cam.angle, pitch from the tilt slider. Position
+// is solved in a local ENU basis (finite differences of sceneAt at O).
+// (Replaced a ball↔reach convergence that railed on long holes and deadlocked
+// once the ball went behind the camera — see the camera audit.)
 const _O = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _north = new THREE.Vector3();
@@ -214,24 +215,18 @@ function setCamera() {
   const geo = g.geoAffine();
   const toLL = (x, y) => [geo[0] * x + geo[1] * y + geo[2], geo[3] * x + geo[4] * y + geo[5]];
 
-  // Look-at world point O.
-  let Ox, Oy;
+  // Look-at O = ball nudged a FIXED fraction toward the shot's landing (reach),
+  // so the ball sits in the lower third and the landing/pin sits up-screen — the
+  // golf-cam framing — in every state. Deterministic: no feedback, bias<1 keeps
+  // the ball in front of the camera always. On the green reach≈ball → O≈ball
+  // (ball centred, pin just above). Falls back to the flat screen-centre if the
+  // anchors aren't available (no active hole).
   const A = g.frameAnchors ? g.frameAnchors() : null;
-  if (A && !A.moving) {
-    // Nudge pan-bias + zoom-offset from where ball/reach landed last frame.
-    const bs = project(A.bx, A.by, g.terrainZ(A.bx, A.by));
-    const rs = project(A.rx, A.ry, g.terrainZ(A.rx, A.ry));
-    if (bs.inFront && rs.inFront) {
-      const spanNow = bs.y - rs.y;
-      const spanWant = (BALL_FRAC - REACH_FRAC) * H;
-      _zAdj += 0.35 * Math.log2(spanWant / Math.max(spanNow, 8));
-      _zAdj = Math.max(-3, Math.min(3, _zAdj));
-      const eB = (bs.y - BALL_FRAC * H) / H;
-      _ctrBias -= 0.35 * eB;
-      _ctrBias = Math.max(-0.15, Math.min(1.15, _ctrBias));
-    }
-    Ox = A.bx + _ctrBias * (A.rx - A.bx);
-    Oy = A.by + _ctrBias * (A.ry - A.by);
+  const OY_BIAS = 0.55;
+  let Ox, Oy;
+  if (A) {
+    Ox = A.bx + OY_BIAS * (A.rx - A.bx);
+    Oy = A.by + OY_BIAS * (A.ry - A.by);
   } else {
     const det = view.a * view.e - view.b * view.d || 1;
     const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
@@ -240,15 +235,19 @@ function setCamera() {
   }
 
   // Metres of vertical world span the flat game shows → camera distance for a
-  // 30° vertical FOV (matches the game's pinhole). _zAdj corrects framing drift.
+  // 30° vertical FOV (matches the game's pinhole). Tracks the flat zoom 1:1.
   const mpp = m * dpr / scale;         // metres per CSS px
   const spanM = mpp * H;
-  let D = spanM * APPLE_CAM_K * Math.pow(2, -_zAdj);
+  let D = spanM * APPLE_CAM_K;
   D = Math.max(20, Math.min(6000, D));
 
   // O in scene + local ENU basis (finite differences of sceneAt around O).
+  // Height MUST include offsetAt() — same mesh-anchoring project() uses — so the
+  // look-at sits on the real photoreal ground, not the game DEM (~40m off). Skip
+  // it and the close putting camera aims tens of metres off and throws the ball
+  // off-screen.
   const [Olon, Olat] = toLL(Ox, Oy);
-  const groundM = (g.terrainZ ? g.terrainZ(Ox, Oy) : 0) * m;
+  const groundM = (g.terrainZ ? g.terrainZ(Ox, Oy) : 0) * m + offsetAt(Ox, Oy);
   sceneAt(Olon, Olat, groundM, _O);
   sceneAt(Olon, Olat, groundM + 1, _up).sub(_O).normalize();          // ellipsoid up
   sceneAt(Olon, Olat + 1e-5, groundM, _north).sub(_O).normalize();    // +lat = north
