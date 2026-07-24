@@ -68,18 +68,106 @@ function sceneAt(lngDeg, latDeg, hM, out) {
   return out.copy(_cart).applyMatrix4(tiles.group.matrixWorld);
 }
 
+// ---- mesh-height anchoring --------------------------------------------------
+// The game DEM (terrainZ) is a LOCAL, relative field — NOT the mesh's absolute
+// ellipsoidal height. At Pebble the Google mesh sits ~40m off what terrainZ*M
+// implies (orthometric sea-level minus the ~+32m geoid separation), and at the
+// oblique camera that vertical gap smears overlays ~37yd horizontally off the
+// ground. Fix: measure the REAL mesh height at two anchors (ball + pin) each
+// frame and correct project()'s height by the (mesh − DEM) offset, lerped
+// between them. unproject() (a mesh raycast) is already truthful.
+const _mUp = new THREE.Vector3();
+const _mA = new THREE.Vector3();
+const _mB = new THREE.Vector3();
+const _mOrigin = new THREE.Vector3();
+const _mDown = new THREE.Vector3();
+const _hRay = new THREE.Raycaster();
+const _hInv = new THREE.Matrix4();
+const _hCart = { lat: 0, lon: 0, height: 0 };
+// Raycast the mesh straight down at world (x,y); return the surface ellipsoidal
+// height in metres, or null if no tile is loaded there yet. Takes the nearest
+// (top) hit — the photogrammetry mesh is effectively a single 2.5D surface (its
+// skirts/back-faces make "lowest hit" grab bogus points), so the top surface is
+// the right height; over dense tree columns it reads canopy, but those are
+// off-fairway and the grid neighbours keep the playable corridor accurate.
+function meshHeightAt(x, y) {
+  if (!tiles || !tiles.group) return null;
+  const ll = worldToLngLat(x, y);
+  sceneAt(ll[0], ll[1], 0, _mA);
+  sceneAt(ll[0], ll[1], 1, _mB);
+  _mUp.copy(_mB).sub(_mA).normalize();           // ellipsoid up at this column
+  _mOrigin.copy(_mA).addScaledVector(_mUp, 6000); // 6km above the surface
+  _mDown.copy(_mUp).multiplyScalar(-1);
+  _hRay.set(_mOrigin, _mDown);
+  _hRay.far = 12000;
+  const hits = _hRay.intersectObject(tiles.group, true);
+  if (!hits.length) return null;
+  _hInv.copy(tiles.group.matrixWorld).invert();
+  const ecef = hits[0].point.clone().applyMatrix4(_hInv);
+  WGS84_ELLIPSOID.getPositionToCartographic(ecef, _hCart);
+  return _hCart.height;
+}
+// Height-offset field (metres, = meshHeight − terrainZ*M) sampled on a grid over
+// the whole hole world, so overlays lock to the real mesh everywhere — not just
+// near two anchors (a linear ball→pin lerp still drifted ~26yd mid-hole where the
+// real terrain isn't linear). Cells refresh round-robin (~24/frame) so cost stays
+// tiny and the field fills in / self-heals as tiles stream. Terrain is static, so
+// a cell keeps its last good value; only null-until-loaded cells read 0.
+const GRID_SPACING = 14;   // world units between samples (~42 yд)
+let _grid = null;          // { x0,y0,dx,nx,ny, off:Float32Array, ok:Uint8Array }
+let _gridCursor = 0;
+function ensureGrid() {
+  const g = gb(); if (!g) return null;
+  const W = g.getWorld();
+  const w = (W && W.w) || 200, h = (W && W.h) || 200;
+  const nx = Math.max(2, Math.ceil(w / GRID_SPACING) + 1);
+  const ny = Math.max(2, Math.ceil(h / GRID_SPACING) + 1);
+  if (_grid && _grid.nx === nx && _grid.ny === ny) return _grid;
+  _grid = { x0: 0, y0: 0, dx: w / (nx - 1), dy: h / (ny - 1), nx, ny,
+    off: new Float32Array(nx * ny), ok: new Uint8Array(nx * ny) };
+  _gridCursor = 0;
+  return _grid;
+}
+function refreshGridBatch(n) {
+  const gr = ensureGrid(); if (!gr) return;
+  const g = gb(), m = M(), tz = g.terrainZ, total = gr.nx * gr.ny;
+  for (let k = 0; k < n; k++) {
+    const i = _gridCursor % total; _gridCursor++;
+    const gx = i % gr.nx, gy = (i / gr.nx) | 0;
+    const wx = gr.x0 + gx * gr.dx, wy = gr.y0 + gy * gr.dy;
+    const mh = meshHeightAt(wx, wy);
+    if (mh != null) { gr.off[i] = mh - (tz ? tz(wx, wy) : 0) * m; gr.ok[i] = 1; }
+  }
+  // Running mean of filled cells — the fallback for corners not yet sampled.
+  let sum = 0, cnt = 0;
+  for (let i = 0; i < total; i++) if (gr.ok[i]) { sum += gr.off[i]; cnt++; }
+  if (cnt) _gridMean = sum / cnt;
+}
+// Bilinear height correction (metres) at world (x,y) from the grid; unfilled
+// corners fall back to the field's running mean so early frames aren't at 0.
+let _gridMean = 0;
+function offsetAt(x, y) {
+  const gr = _grid; if (!gr) return 0;
+  const fx = (x - gr.x0) / gr.dx, fy = (y - gr.y0) / gr.dy;
+  const ix = Math.min(gr.nx - 2, Math.max(0, Math.floor(fx)));
+  const iy = Math.min(gr.ny - 2, Math.max(0, Math.floor(fy)));
+  const tx = Math.min(1, Math.max(0, fx - ix)), ty = Math.min(1, Math.max(0, fy - iy));
+  const at = (cx, cy) => { const i = cy * gr.nx + cx; return gr.ok[i] ? gr.off[i] : _gridMean; };
+  const a = at(ix, iy), b = at(ix + 1, iy), c = at(ix, iy + 1), d = at(ix + 1, iy + 1);
+  return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+}
+
 // ---- projection bridge -----------------------------------------------------
 // World (game coords, zUnits = height above ground in WORLD units) → screen CSS
-// px through the live three camera. Ground points arrive with zUnits already
-// carrying the game DEM ground height (game.js passes terrainZ), like Course3D —
-// so overlays sit on the LiDAR-derived elevation (close to Google's mesh at
-// Pebble; may float slightly where they disagree — prototype tradeoff).
+// px through the live three camera. Ground height is anchored to the REAL mesh
+// via offsetAt() (see above) so overlays lock onto the photoreal ground, not the
+// game DEM's relative elevation. Elevated points (ball arc) ride above it.
 const _p = new THREE.Vector3();
 function project(x, y, zUnits, out) {
   out = out || {};
   if (!ready || !tiles || !camera) { out.x = 0; out.y = 0; out.inFront = false; return out; }
   const ll = worldToLngLat(x, y);
-  sceneAt(ll[0], ll[1], (zUnits || 0) * M(), _p);
+  sceneAt(ll[0], ll[1], (zUnits || 0) * M() + offsetAt(x, y), _p);
   _p.project(camera); // → NDC
   out.inFront = _p.z < 1;
   out.x = (_p.x * 0.5 + 0.5) * window.innerWidth;
@@ -261,20 +349,30 @@ function leave() {
   document.body.style.background = "";
 }
 
-// Called each frame from game.js loop(): drive the camera, stream + render tiles.
+// Called each frame from game.js loop(): stream + render tiles, drive the camera.
+// Order matters: refresh the mesh + group matrix FIRST, then sample the mesh-
+// height anchors, THEN setCamera() — its framing convergence calls project(),
+// which needs this frame's height offset ready.
 function render() {
   if (!tiles || !camera || !renderer) return;
-  setCamera();
   tiles.setResolutionFromRenderer(camera, renderer);
   tiles.update();
   tiles.group.updateMatrixWorld(true);
-  renderer.render(scene, camera);
   // Ready once the root tileset has produced geometry near the anchor.
   if (!ready) {
     const s = new THREE.Sphere();
     ready = tiles.getBoundingSphere(s) && s.radius > 0;
   }
+  if (ready) {
+    // Reset the height field on a hole change (per-hole WORLD bounds + terrain).
+    const H = gb() && gb().getHole();
+    if (H !== _lastHole) { _grid = null; _lastHole = H; }
+    refreshGridBatch(24);
+  }
+  setCamera();
+  renderer.render(scene, camera);
 }
+let _lastHole = null;
 
 function resize() {
   if (!renderer) return;
