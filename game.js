@@ -288,6 +288,10 @@ const TUNE = {
                     // Apple-ground club-reach camera framing (frameClubReach)
   reachPinMarginYds: 12, // forward context kept beyond the pin when the reach span is clamped to it
   reachMinYds: 20,       // reach-span floor — never over-zoom a tiny chip (the D floor usually bites first)
+  flatReachK: 1.5,       // FLAT (non-Apple) courses only: inflate the club-reach span so the tee frame
+                         // extends toward the green instead of stopping at the driver's landing (still
+                         // clamped to pin+margin, so it never overshoots and approaches/chips are unchanged).
+                         // Apple/geo grounds keep the tight club-reach frame (1.0). Higher = more zoomed out.
   flatMinDistM: 90,      // close-shot camera-distance floor on non-Apple courses (Apple keeps APPLE_MIN_DIST_M)
   rolloutK: 7.0,    // CHIP release distance scale (× landing speed) — low skidding balls release more
   rolloutKFull: 4.0,// FULL-shot release scale: calibrated so totals match tour (driver ~305,
@@ -3250,7 +3254,12 @@ function frameClubReach(pNowDeg) {
   // Frame the club's full reach — UNLESS the pin is closer than that, in which
   // case clamp the span to the pin (+ a little context past it) so short
   // approaches / chips zoom in instead of showing empty ground beyond the pin.
-  const clubReachYds = (c ? c.carry : 120) * TUNE.reachTotalK;
+  // Flat courses zoom out toward the green (flatReachK); Apple/geo grounds keep the tight
+  // club-reach frame. The pin+margin clamp below still caps it, so this only widens tee/long
+  // shots — approaches (already pin-clamped) and chips are untouched.
+  const geoGround = appleGroundActive() || gtilesGroundActive();
+  const reachK = TUNE.reachTotalK * (geoGround ? 1 : TUNE.flatReachK);
+  const clubReachYds = (c ? c.carry : 120) * reachK;
   const pinDistYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
   const reachYds = Math.min(clubReachYds,
     Math.max(TUNE.reachMinYds, pinDistYds + TUNE.reachPinMarginYds));
