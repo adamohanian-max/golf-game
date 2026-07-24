@@ -745,7 +745,8 @@ const GTILES_IDS = new Set(["pebble-beach-golf-course"]);
 function gtilesGroundActive() {
   return !!(course && GTILES_IDS.has(course.id) && course.geo &&
     mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
-    window.GOOGLE_TILES_TOKEN && window.GTiles3D);
+    window.GOOGLE_TILES_TOKEN && window.GTiles3D &&
+    !(window.GTiles3D.failed && window.GTiles3D.failed()));  // offline/weak → 2D aerial
 }
 let gtilesGround = false;
 // Mirrors updateMboxMode for the Google photoreal ground.

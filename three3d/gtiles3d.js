@@ -42,6 +42,14 @@ let reorient = null;
 let ready = false;
 let activeCourseId = null;
 let pitchDeg = 55;      // camera pitch (0 = top-down, 90 = horizon)
+// Offline / weak-signal fallback: Google tiles can't be cached or used offline
+// (ToS). When they can't load, failed() flips true and game.js drops back to the
+// 2D baked aerial instead of showing a blank ground.
+let _failed = false;
+let _errCount = 0;
+let _enterAt = 0;
+const FAIL_ERRS = 8;        // this many load-errors before ready → give up
+const FAIL_TIMEOUT_MS = 9000; // no geometry within this after enter → give up
 
 // ---- bridge helpers ---------------------------------------------------------
 function gb() { return window.GolfBridge; }
@@ -206,6 +214,7 @@ const _up = new THREE.Vector3();
 const _north = new THREE.Vector3();
 const _east = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
+let _hold = null;   // {Ox,Oy,D} captured at rest, reused during flight (no follow)
 function setCamera() {
   if (!ready || !tiles || !camera) return;
   const g = gb(), view = g.getView(), cam = g.getCamera(), m = M();
@@ -217,28 +226,34 @@ function setCamera() {
 
   // Look-at O = ball nudged a FIXED fraction toward the shot's landing (reach),
   // so the ball sits in the lower third and the landing/pin sits up-screen — the
-  // golf-cam framing — in every state. Deterministic: no feedback, bias<1 keeps
-  // the ball in front of the camera always. On the green reach≈ball → O≈ball
-  // (ball centred, pin just above). Falls back to the flat screen-centre if the
-  // anchors aren't available (no active hole).
+  // golf-cam framing. Distance D frames the ball→reach SHOT (not the flat whole-
+  // hole zoom, which was far too wide). Both deterministic.
+  //
+  // In flight the camera DOES NOT follow the ball: reuse the framing captured on
+  // the last at-rest frame so the ball flies through a static frame. Resumes live
+  // (view-eased) framing on rest; cleared on hole change (_lastHole in render).
   const A = g.frameAnchors ? g.frameAnchors() : null;
-  const OY_BIAS = 0.55;
-  let Ox, Oy;
-  if (A) {
-    Ox = A.bx + OY_BIAS * (A.rx - A.bx);
-    Oy = A.by + OY_BIAS * (A.ry - A.by);
+  const OY_BIAS = 0.45;      // look-at = ball + this·(reach−ball): ball ~0.83, landing ~0.29
+  const FRAME_K = 2.0;       // ball→reach span × this → camera distance (shot fills ~54% vert)
+  const MIN_SHOT_M = 55;     // floor so the green (reach≈ball) still frames sensibly
+  let Ox, Oy, D;
+  if (A && A.moving && _hold) {
+    ({ Ox, Oy, D } = _hold);              // FROZEN framing while the ball is in flight
   } else {
-    const det = view.a * view.e - view.b * view.d || 1;
-    const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
-    Ox = (view.e * sx0 - view.b * sy0) / det;
-    Oy = (-view.d * sx0 + view.a * sy0) / det;
+    if (A) {
+      Ox = A.bx + OY_BIAS * (A.rx - A.bx);
+      Oy = A.by + OY_BIAS * (A.ry - A.by);
+      const shotM = Math.hypot(A.rx - A.bx, A.ry - A.by) * m;
+      D = Math.max(shotM, MIN_SHOT_M) * FRAME_K;
+    } else {
+      const det = view.a * view.e - view.b * view.d || 1;
+      const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
+      Ox = (view.e * sx0 - view.b * sy0) / det;
+      Oy = (-view.d * sx0 + view.a * sy0) / det;
+      D = (m * dpr / scale) * H * APPLE_CAM_K;   // flat-zoom fallback (no anchors)
+    }
+    if (!A || !A.moving) _hold = { Ox, Oy, D };  // capture the at-rest framing
   }
-
-  // Metres of vertical world span the flat game shows → camera distance for a
-  // 30° vertical FOV (matches the game's pinhole). Tracks the flat zoom 1:1.
-  const mpp = m * dpr / scale;         // metres per CSS px
-  const spanM = mpp * H;
-  let D = spanM * APPLE_CAM_K;
   D = Math.max(20, Math.min(6000, D));
 
   // O in scene + local ENU basis (finite differences of sceneAt around O).
@@ -264,7 +279,11 @@ function setCamera() {
   camera.position.copy(_O)
     .addScaledVector(_up, D * Math.cos(P))
     .addScaledVector(_tmp, -D * Math.sin(P));
-  camera.up.copy(_up);
+  // Up vector blended by pitch so it NEVER parallels the view direction (which
+  // caused a 90° gimbal flip at full-2D/top-down): at P=0 up = fwdHoriz (screen-
+  // up = play direction, matches the flat view heading), at high pitch → ellipsoid
+  // up (level horizon).
+  camera.up.copy(_tmp).multiplyScalar(Math.cos(P)).addScaledVector(_up, Math.sin(P)).normalize();
   camera.fov = 30;
   camera.near = Math.max(1, D / 500);
   camera.far = D * 60 + 8000;
@@ -327,12 +346,17 @@ function buildTiles() {
   scene.add(tiles.group);
   tiles.addEventListener("load-error", (e) => {
     try { console.warn("[gtiles3d]", (e && e.error && e.error.message) || e.url); } catch (err) {}
+    // A burst of load-errors before any geometry = Google unreachable → fall back.
+    if (!ready && ++_errCount >= FAIL_ERRS) _failed = true;
   });
 }
 
 function enter(opts) {
   activeCourseId = opts && opts.courseId;
   if (!window.GOOGLE_TILES_TOKEN) { try { console.warn("[gtiles3d] no GOOGLE_TILES_TOKEN"); } catch (e) {} return; }
+  // Known-offline up front → don't even try; game.js keeps the 2D aerial.
+  if (typeof navigator !== "undefined" && navigator.onLine === false) { _failed = true; return; }
+  _failed = false; _errCount = 0; _enterAt = performance.now();
   buildRenderer();
   container.style.display = "block";
   document.documentElement.style.background = "transparent";
@@ -343,6 +367,10 @@ function enter(opts) {
 
 function leave() {
   ready = false;
+  // NOTE: do NOT reset _failed here. leave() fires when gtilesGroundActive() flips
+  // false — which, on a failure, is BECAUSE _failed is true. Clearing it would
+  // re-enable the gate and re-enter next frame (flip-flop). _failed is sticky for
+  // the session; enter() clears it on a fresh course (a genuine retry).
   if (container) container.style.display = "none";
   document.documentElement.style.background = "";
   document.body.style.background = "";
@@ -361,11 +389,13 @@ function render() {
   if (!ready) {
     const s = new THREE.Sphere();
     ready = tiles.getBoundingSphere(s) && s.radius > 0;
+    // No geometry within the timeout (weak/no signal) → fall back to 2D aerial.
+    if (!ready && _enterAt && performance.now() - _enterAt > FAIL_TIMEOUT_MS) _failed = true;
   }
   if (ready) {
-    // Reset the height field on a hole change (per-hole WORLD bounds + terrain).
+    // Reset the height field + flight-hold on a hole change (per-hole WORLD).
     const H = gb() && gb().getHole();
-    if (H !== _lastHole) { _grid = null; _lastHole = H; }
+    if (H !== _lastHole) { _grid = null; _hold = null; _lastHole = H; }
     refreshGridBatch(24);
   }
   setCamera();
@@ -382,6 +412,7 @@ function resize() {
 
 function setPitch(deg) { pitchDeg = Math.max(0, Math.min(85, deg)); }
 function isReady() { return ready; }
+function failed() { return _failed; }  // Google unavailable → game.js uses 2D aerial
 
 // Google logo + data-credit strings (MANDATORY per Map Tiles API ToS). Typed
 // entries: image = logo (data URI), string = credits.
@@ -396,6 +427,6 @@ function debug() {
 }
 
 window.GTiles3D = {
-  enter, leave, render, resize, setPitch, project, unproject, isReady,
+  enter, leave, render, resize, setPitch, project, unproject, isReady, failed,
   getAttributions, worldToLngLat, lngLatToWorld, debug,
 };
