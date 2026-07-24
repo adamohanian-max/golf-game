@@ -156,7 +156,7 @@ const TUNE = {
   // True-3D relief in the tilted view: the DEM displaces the ground vertically
   // on screen (column-band warp), trees stand up from the woods mask, and a
   // hillshade overlay sells the slopes. All of it fades in with camera.tilt.
-  tExag: 1.8,            // terrain relief exaggeration (1 = true DEM scale)
+  tExag: 1.6,            // terrain relief exaggeration (1 = true DEM scale)
   // Synthetic elevation fed into terrainZ so the tilted view actually rolls even
   // on DEM-less courses (nearly all of them). Greens get a real, exaggerated
   // undulation you can read break off; the whole course gets gentle cosmetic swells.
@@ -186,7 +186,7 @@ const TUNE = {
   treeInteriorMul: 0.5,  // interior cells keep at this × base rate (pays for the edge boost)
   treeHMin: 3.5, treeHMax: 6.5, // tree height range, world units (~30–60 ft)
   canopyH: 4.6,          // photo-canopy extrusion height, world units (~40 ft)
-  tHillAlpha: 0.26,      // DEM hillshade overlay strength when fully tilted
+  tHillAlpha: 0.22,      // DEM hillshade overlay strength when fully tilted
   tPlanarTol: 3.0,       // css px: max plane-fit residual to warp with ONE affine draw
   tPadMax: 320,          // capture pad ceiling (putt-zoom canopy lift can reach ~250px)
   tPadQuant: 32,         // pad quantum — stops per-frame capture reallocs while zooming
@@ -204,22 +204,6 @@ const TUNE = {
   punchBallR: 4.5,       // world units: canopy punch-out radius around the ball
   punchCupR: 3.5,        // world units: around the cup
   punchGreenFeather: 2.0,// world units: soft falloff outside green-in-play polys
-  // --- 2.5D buildings (tilted view; data from courses/buildings/<id>.json) ---
-  bldgMinH: 3.0,         // world units: shortest wall; height heuristic floors here
-  bldgMaxH: 22,          // world units: tallest wall (matches course3d cap ÷ M_PER_UNIT ≈ 8)
-  bldgSunAz: -2.356,     // sun azimuth (rad, NW = -135°, matches buildDEMShade light)
-  bldgRoof: "#d8ccb4",   // roof cap (lightest warm-tan)
-  bldgWallSun: "#cbb896",// sun-facing wall
-  bldgWallSha: "#8f7d63",// shadowed wall
-  bldgEdge: "rgba(60,48,32,0.35)", // wall/roof outline
-  bldgContactA: 0.30,    // ground-contact shadow alpha
-  // --- tree / flag 2.5D polish knobs ---
-  treeShadeBoost: 0.35,  // sprite shadow-side lobe darkening (0 = old flat sprite)
-  treeContactA: 0.32,    // sprite ground-contact ellipse alpha
-  canopyWallDark: 0.88,  // photo-canopy side-wall silhouette alpha (higher = more solid)
-  cupDepthPx: 2.4,       // recessed-cup inner-shadow vertical offset (px, ×hr scale)
-  cupWallShade: 0.55,    // recessed-cup inner wall darkness (tilted only)
-  flagShadeK: 0.30,      // flag/pole 3D shading strength (tilted only)
   flowFadeLo: 8, flowFadeHi: 14, // view.scale ramp: flow dots fade out zoomed-out (tilted)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
@@ -701,14 +685,12 @@ let mode = "menu";
 // Gates the whole course-render half of draw() off; ball physics/HUD/scoring
 // are untouched either way (see window.GolfBridge + update3DMode below).
 let render3D = false;
-function render3DWanted() {
-  if (!course || course.id !== "four-oaks-dracut") return false;
-  if (mode !== "course" || (typeof HOLE !== "undefined" && HOLE && HOLE.isRange)) return false;
-  try {
-    if (/[?&]3d=1\b/.test(location.search)) return true;
-  } catch (e) { /* location unavailable, fall through to the stored toggle */ }
-  return lsGet("golf.render3D", false); // set by the "Play in 3D" course-card badge (renderCourseCards)
-}
+// The Four Oaks three.js 3D entry point (course-card "Play in 3D" badge + the
+// golf.render3D / ?3d=1 setting) was removed — a 3D control is now kept ONLY on
+// courses with a real photoreal ground (Google Photorealistic + Apple Flyover).
+// The Course3D engine itself is retained but dormant: render3D can never become
+// true, so update3DMode() never enters it and every render3D branch is dead code.
+function render3DWanted() { return false; }
 function update3DMode() {
   const want = render3DWanted();
   if (want === render3D) return;
@@ -1387,9 +1369,12 @@ let cineEnabled = lsGet("golf.cineLanding", true); // per-device toggle (HUD men
 // Slope-mode style: false = flow dots (default), true = static fall-line arrows.
 // Per-device cosmetic preference (localStorage), not a tournament setting.
 let breakArrows = lsGet("golf.breakArrows", false);
-// Dev hook (cousin of ?course=/?hole=): ?tilt=1 forces the 3D tilt on at
-// boot, so a simulator smoke test doesn't need to tap the HUD button.
-let tiltView = /[?&]tilt=1\b/.test(location.search) || lsGet("golf.tiltView", false); // slightly-3D tilted course camera (HUD button)
+// Fake 2.5D camera-lean, permanently off: the "3D view" HUD button + its
+// golf.tiltView / ?tilt=1 setting were removed (a 3D control is kept only on
+// courses with a real photoreal ground). Kept as a const-false var so the
+// dormant lean/warp render branches still compile; false ⇒ view.kz stays 0 ⇒
+// flat rendering, bit-identical to the kz=0 fast path.
+let tiltView = false;
 let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
@@ -4990,8 +4975,7 @@ function baseWarpKey(cssW, cssH) {
     ? Math.round(b.x / 2) + "." + Math.round(b.y / 2) : "-";
   return q(view.kz * 100) + "," + q(view.zFocus * 50) + "," +
          HOLE.num + "," + (showOOB ? 1 : 0) + (showSlope ? 1 : 0) + (breakArrows ? 1 : 0) +
-         (HOLE._imgReady ? 1 : 0) + (HOLE._mask && HOLE._mask.lab ? 1 : 0) +
-         ((course || HOLE)._buildings ? 1 : 0) + "," +
+         (HOLE._imgReady ? 1 : 0) + (HOLE._mask && HOLE._mask.lab ? 1 : 0) + "," +
          cssW + "x" + cssH + "," + _warpPad + "," + ballTerm;
 }
 function warpSig(cssW, cssH) {
@@ -5176,7 +5160,7 @@ function finishGroundWarp(cssW, cssH, sig, target) {
   // trees are static under the same sig — bake them into the cache so parked
   // frames are one blit
   const real = ctx;
-  ctx = g; drawBuildings(); drawTrees(); ctx = real;
+  ctx = g; drawTrees(); ctx = real;
   target.sig = sig;
   target.degraded = _warpMotion;
   if (usingDefault) ctx.drawImage(target.canvas, 0, 0, cssW, cssH);
@@ -5216,121 +5200,6 @@ function bakeBucket(bucketIndex, baseKey, cssW, cssH) {
   evictBucketsIfOverCap();
   Object.assign(view, savedView);
   _viewAABB = savedAABB; _warpPad = savedPad;
-}
-
-// --- 2.5D buildings (tilted view) ----------------------------------------
-// Extruded OSM footprint massing, drawn AFTER the ground warp (post-warp screen
-// space) so walls stay vertical — same bake slot as drawTrees. Data comes from
-// courses/buildings/<id>.json (world-unit polys + fabricated heights); only the
-// two courses with a baked file (four-oaks, pebble) draw anything, everything
-// else is a clean no-op. Static per-course, so it rides the warp cache with a
-// one-shot readiness bit in baseWarpKey — never a per-shot rebuild.
-function precomputeBuildings(list) {
-  const out = [];
-  if (!Array.isArray(list)) return out;
-  const m = M_PER_UNIT;
-  for (const b of list) {
-    const poly = b && b.poly;
-    if (!poly || poly.length < 3) continue;
-    // centroid + signed area (world units), skip degenerate footprints
-    let cx = 0, cy = 0, area2 = 0;
-    for (let i = 0; i < poly.length - 1; i++) {
-      const cr = poly[i][0] * poly[i + 1][1] - poly[i + 1][0] * poly[i][1];
-      area2 += cr;
-      cx += (poly[i][0] + poly[i + 1][0]) * cr;
-      cy += (poly[i][1] + poly[i + 1][1]) * cr;
-    }
-    if (Math.abs(area2) < 1e-6) continue;
-    cx /= 3 * area2; cy /= 3 * area2;
-    const areaM2 = Math.abs(area2 / 2) * m * m;
-    // OSM carries no height tags — vary height deterministically (seeded on the
-    // centroid) so massing isn't identical boxes, and make big footprints
-    // (clubhouse, cart barn) read taller. Mirrors course3d.buildBuildingsForCourse.
-    const rnd = mulberry32((Math.round(cx * 16) * 73856093 ^ Math.round(cy * 16) * 19349663) >>> 0);
-    let hM = (b.h || 4.5) * (0.85 + 0.4 * rnd());
-    if (areaM2 > 700) hM *= 1.7;
-    else if (areaM2 > 300) hM *= 1.3;
-    const hU = Math.max(TUNE.bldgMinH, Math.min(TUNE.bldgMaxH, hM / m));
-    out.push({ poly, cx, cy, hU });
-  }
-  return out;
-}
-function loadBuildings(id) {
-  fetch("courses/buildings/" + id + ".json")
-    .then((r) => (r.ok ? r.json() : null))
-    .then((data) => {
-      if (!course || course.id !== id) return; // course switched mid-fetch
-      course._buildings = (data && data.buildings) ? precomputeBuildings(data.buildings) : null;
-      course._buildingsForId = id;
-    })
-    .catch(() => { if (course && course.id === id) { course._buildings = null; course._buildingsForId = id; } });
-}
-function drawBuildings() {
-  if (!view.kz || !HOLE || HOLE.isRange || greenView || cine) return;
-  const B = (course || HOLE)._buildings;
-  if (!B || !B.length) return;
-  const v = _viewAABB, kz = view.kz;
-  const sunx = Math.cos(TUNE.bldgSunAz), suny = Math.sin(TUNE.bldgSunAz);
-  const cssW = window.innerWidth, cssH = window.innerHeight;
-  // cull + project footprint base(wyg) and roof-top; painter-sort by base y
-  const vis = [];
-  for (const b of B) {
-    if (b.cx < v.minx || b.cx > v.maxx || b.cy < v.miny || b.cy > v.maxy) continue;
-    const lift = ws(b.hU) * kz;
-    let baseY = -1e9, maxsx = -1e9, minsx = 1e9;
-    const base = [], top = [];
-    for (const p of b.poly) {
-      const sx = wx(p[0], p[1]), sy = wyg(p[0], p[1]);
-      base.push([sx, sy]); top.push([sx, sy - lift]);
-      if (sy > baseY) baseY = sy;
-      if (sx > maxsx) maxsx = sx; if (sx < minsx) minsx = sx;
-    }
-    if (maxsx < -40 || minsx > cssW + 40 || baseY < -80) continue;
-    vis.push({ b, base, top, baseY, lift });
-  }
-  if (!vis.length) return;
-  vis.sort((a, z) => a.baseY - z.baseY); // far (upper) buildings first
-  ctx.save();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = TUNE.bldgEdge;
-  for (const { base, top } of vis) {
-    const n = base.length;
-    // ground-contact shadow (soft, offset toward the sun-cast direction)
-    ctx.globalAlpha = TUNE.bldgContactA;
-    ctx.fillStyle = "#0a1508";
-    ctx.beginPath();
-    ctx.moveTo(base[0][0] - sunx * 3, base[0][1] - suny * 3 + 2);
-    for (let i = 1; i < n; i++) ctx.lineTo(base[i][0] - sunx * 3, base[i][1] - suny * 3 + 2);
-    ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 1;
-    // walls, per edge, back-to-front by edge midpoint depth (higher y = nearer)
-    const walls = [];
-    for (let i = 0; i < n - 1; i++) {
-      const a = base[i], c = base[i + 1];
-      const ex = c[0] - a[0], ey = c[1] - a[1];
-      // outward normal (screen). sun-facing if normal·sun > 0
-      const nx = ey, ny = -ex;
-      const lit = (nx * sunx + ny * suny) >= 0;
-      walls.push({ i, midY: (a[1] + c[1]) * 0.5, lit });
-    }
-    walls.sort((p, q) => p.midY - q.midY);
-    for (const w of walls) {
-      const i = w.i, a = base[i], c = base[i + 1], ta = top[i], tc = top[i + 1];
-      ctx.fillStyle = w.lit ? TUNE.bldgWallSun : TUNE.bldgWallSha;
-      ctx.beginPath();
-      ctx.moveTo(a[0], a[1]); ctx.lineTo(c[0], c[1]);
-      ctx.lineTo(tc[0], tc[1]); ctx.lineTo(ta[0], ta[1]);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-    // roof cap
-    ctx.fillStyle = TUNE.bldgRoof;
-    ctx.beginPath();
-    ctx.moveTo(top[0][0], top[0][1]);
-    for (let i = 1; i < n; i++) ctx.lineTo(top[i][0], top[i][1]);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-  }
-  ctx.restore();
-  ctx.globalAlpha = 1;
 }
 
 // --- Standing trees (tilted view) ----------------------------------------
@@ -5390,24 +5259,6 @@ function treeSprites() {
       rg.addColorStop(0, lite); rg.addColorStop(1, dark);
       g.fillStyle = rg;
       blobPath(g, cx, cy, r, 0.4, 9, rnd, 0.92);
-      g.fill();
-    }
-    // Directional read: a dark shadow-side wash (lower-right) + a bright sun-side
-    // highlight (upper-left, NW light) so the crown reads as a lit sphere/volume
-    // instead of a flat blob. Both are soft radial gradients fading to transparent.
-    const boost = TUNE.treeShadeBoost;
-    if (boost > 0) {
-      const sh = g.createRadialGradient(S * 0.62, S * 0.62, S * 0.05, S * 0.62, S * 0.62, S * 0.5);
-      sh.addColorStop(0, "rgba(6,20,10," + (0.55 * boost).toFixed(3) + ")");
-      sh.addColorStop(1, "rgba(6,20,10,0)");
-      g.fillStyle = sh;
-      blobPath(g, S * 0.5, S * 0.5, S * 0.4, 0.35, 9, mulberry32(seed ^ 0x5f3759df), 0.92);
-      g.fill();
-      const hl = g.createRadialGradient(S * 0.36, S * 0.34, S * 0.03, S * 0.36, S * 0.34, S * 0.34);
-      hl.addColorStop(0, "rgba(190,225,150," + (0.5 * boost).toFixed(3) + ")");
-      hl.addColorStop(1, "rgba(190,225,150,0)");
-      g.fillStyle = hl;
-      blobPath(g, S * 0.5, S * 0.5, S * 0.4, 0.35, 9, mulberry32(seed ^ 0x9e3779b9), 0.92);
       g.fill();
     }
     // small mottled puffs on top for dappled internal texture
@@ -5627,7 +5478,7 @@ function drawTrees() {
   ctx.save();
   for (const { t, sx, sy } of drawn) {
     const rr = ws(t.r), lift = ws(t.h) * kz;
-    ctx.globalAlpha = TUNE.treeContactA;
+    ctx.globalAlpha = 0.32;
     ctx.fillStyle = "#08170c";
     ctx.beginPath();
     ctx.ellipse(sx + rr * 0.35, sy + rr * 0.12, rr * 0.95, rr * 0.42, 0, 0, Math.PI * 2);
@@ -5739,7 +5590,7 @@ function buildCanopyLayer(m, img, a) {
       qg.imageSmoothingEnabled = true;
       qg.drawImage(c, 0, 0, q.width, q.height);
       qg.globalCompositeOperation = "source-atop";
-      qg.fillStyle = "rgba(10,26,12," + TUNE.canopyWallDark.toFixed(2) + ")";
+      qg.fillStyle = "rgba(10,26,12,0.88)";
       qg.fillRect(0, 0, q.width, q.height);
       const d = document.createElement("canvas");
       d.width = q.width; d.height = q.height;
@@ -6295,24 +6146,6 @@ function draw() {
   ctx.ellipse(hx, hy, hr, hr * view.tilt, 0, 0, Math.PI * 2);
   ctx.fillStyle = "#0a1f0f";
   ctx.fill();
-  // Tilted: recess the cup — an inner ellipse pushed up-screen leaves a crescent
-  // of near-side wall (lit) below and darkens the far rim, so the hole reads sunk
-  // instead of painted-on. Flat mode keeps the single flat ellipse.
-  if (view.kz) {
-    const d = TUNE.cupDepthPx * (hr / 3);
-    ctx.save();
-    ctx.beginPath(); // clip to the cup mouth
-    ctx.ellipse(hx, hy, hr, hr * view.tilt, 0, 0, Math.PI * 2); ctx.clip();
-    ctx.beginPath(); // near-side wall crescent, catching light
-    ctx.ellipse(hx, hy - d, hr, hr * view.tilt, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(60,80,55," + TUNE.cupWallShade.toFixed(2) + ")";
-    ctx.fill();
-    ctx.beginPath(); // the sunk floor itself
-    ctx.ellipse(hx, hy - d, hr * 0.86, hr * 0.86 * view.tilt, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "#06160c";
-    ctx.fill();
-    ctx.restore();
-  }
   ctx.lineWidth = Math.max(hr * 0.18, 1);
   ctx.strokeStyle = "rgba(245,245,235,0.85)";
   ctx.stroke();
@@ -6330,14 +6163,11 @@ function draw() {
     // never balloons. Everything else scales off poleH so proportions hold at any size.
     const poleH = Math.max(FLAG_MIN_PX, Math.min(FLAG_MAX_PX, ws(FLAG_H_UNITS)));
     const topX = hx, topY = hy - poleH;
-    const k3 = view.kz ? TUNE.flagShadeK : 0; // 0 in flat mode → identical to before
-    // ground shadow of the stick — lengthened + laid flatter along the ground
-    // plane when tilted (a real stick's shadow rakes across the turf).
-    ctx.strokeStyle = "rgba(0,0,0,0.28)";
+    ctx.strokeStyle = "rgba(0,0,0,0.28)";   // short ground shadow of the stick
     ctx.lineWidth = Math.max(1, poleH * 0.11);
     ctx.beginPath();
     ctx.moveTo(hx, hy);
-    ctx.lineTo(hx + poleH * (0.9 + k3 * 1.4), hy + poleH * (0.14 + k3 * 0.12));
+    ctx.lineTo(hx + poleH * 0.9, hy + poleH * 0.14);
     ctx.stroke();
     ctx.strokeStyle = "#f4f4f0";             // the pole
     ctx.lineWidth = Math.max(1.5, poleH * 0.09);
@@ -6345,14 +6175,6 @@ function draw() {
     ctx.moveTo(hx, hy);
     ctx.lineTo(topX, topY);
     ctx.stroke();
-    if (k3) {                                // cylindrical shading: dark right edge
-      ctx.strokeStyle = "rgba(70,70,60," + (0.9 * k3 + 0.2).toFixed(2) + ")";
-      ctx.lineWidth = Math.max(0.75, poleH * 0.03);
-      ctx.beginPath();
-      ctx.moveTo(hx + poleH * 0.03, hy);
-      ctx.lineTo(topX + poleH * 0.03, topY);
-      ctx.stroke();
-    }
     const t = performance.now() / 180;       // waving red pennant flying right
     const flagL = poleH * 0.64, flagH = poleH * 0.41;
     const w1 = Math.sin(t) * poleH * 0.07, w2 = Math.sin(t + 1.2) * poleH * 0.09;
@@ -6361,13 +6183,7 @@ function draw() {
     ctx.quadraticCurveTo(topX + flagL * 0.5, topY - w1, topX + flagL, topY + flagH * 0.5 + w2);
     ctx.quadraticCurveTo(topX + flagL * 0.5, topY + flagH * 0.5 + w1, topX, topY + flagH);
     ctx.closePath();
-    if (k3) { // spanwise shading: lit at the pole (leading), shadowed at the fly
-      const fg = ctx.createLinearGradient(topX, topY, topX + flagL, topY);
-      fg.addColorStop(0, "#f0463f"); fg.addColorStop(1, "#b81c18");
-      ctx.fillStyle = fg;
-    } else {
-      ctx.fillStyle = "#e02a25";
-    }
+    ctx.fillStyle = "#e02a25";
     ctx.fill();
     ctx.strokeStyle = "rgba(120,15,12,0.6)";
     ctx.lineWidth = 1;
@@ -7444,11 +7260,8 @@ async function loadCourse(id) {
   YARDS_PER_UNIT = course.yardsPerUnit || YARDS_PER_UNIT;
   course._greens = null; course._img = undefined; course._imgReady = false; // shared caches
   course._mask = undefined;
-  course.id = course.id || id;
-  course._buildings = undefined; course._buildingsForId = null; // 2.5D massing (async)
   holeIndex = 0;
   setHole(course.holes[holeIndex]);
-  loadBuildings(id);
   loadAppleCorrection(id);
 }
 
@@ -7821,17 +7634,6 @@ function renderCourseCards() {
     if (featured && !isTournamentAdmin()) badges += `<span class="cs-badge featured">Free today</span>`;
     if (tags.includes("pgaTour")) badges += `<span class="cs-badge pga">PGA Tour</span>`;
     if (tags.includes("major")) badges += `<span class="cs-badge major">Major</span>`;
-    // Four Oaks 3D (three.js) is WIP — still hidden from the public picker via
-    // HIDDEN_COURSE_IDS (only admins reach this card at all, see
-    // visibleCourses()). This toggle replaces the dev-only `?3d=1` URL param
-    // as the real entry point; render3DWanted() (top of file) already reads
-    // this same localStorage key every frame, so flipping it takes effect
-    // immediately, no reload needed.
-    const is3D = c.id === "four-oaks-dracut";
-    if (is3D) {
-      const on = lsGet("golf.render3D", false);
-      badges += `<span class="cs-badge cs-badge-3d${on ? " on" : ""}" data-three-d-toggle>${on ? "3D ✓" : "Play in 3D"}</span>`;
-    }
     const par = c.par != null ? c.par : "—";
     const yds = c.yards ? c.yards.toLocaleString() + " yds" : "";
     const loc = c.location && c.location !== "Unknown" ? esc(c.location) : "";
@@ -7855,14 +7657,6 @@ function renderCourseCards() {
     const play = card.querySelector(".cs-play");
     if (play) play.addEventListener("click", () => { selectedCourseId = c.id; startCourse(); });
     card.querySelector(".cs-preview").addEventListener("click", () => openPreview(c.id));
-    if (is3D) {
-      const toggle = card.querySelector("[data-three-d-toggle]");
-      toggle.addEventListener("click", (e) => {
-        e.stopPropagation();
-        lsSet("golf.render3D", !lsGet("golf.render3D", false));
-        renderCourseCards(); // re-render so the badge label/state reflects the flip immediately
-      });
-    }
     frag.appendChild(card);
   }
   elCsGrid.innerHTML = "";
@@ -8159,20 +7953,9 @@ elCineBtn.addEventListener("click", () => {
 });
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
-// Slightly-3D tilted view: per-device camera preference (like break arrows).
-const elTiltBtn = document.getElementById("tilt-view-btn");
-elTiltBtn.classList.toggle("active", tiltView);
-elTiltBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  tiltView = !tiltView;
-  lsSet("golf.tiltView", tiltView);
-  elTiltBtn.classList.toggle("active", tiltView);
-  // Apple-ground courses: the toggle pitches the REAL map camera instead
-  // (applePitchT in updateCamera); the canvas squash must stay off there.
-  camera.tTilt = (tiltView && !appleGroundActive()) ? TUNE.tiltCos : 1;
-  if (mode === "course" || mode === "range") frameTarget(); // refit zoom for the new lean
-});
-// Apple-ground 2D↔3D tilt slider (replaces the button there): top = 3D lean
+// The fake tilt "3D view" button was removed; a 3D control is kept only on
+// Google/Apple photoreal grounds, via the 2D↔3D tilt slider wired below.
+// Apple/Google-ground 2D↔3D tilt slider: top = 3D lean
 // (65°), bottom = 2D overhead. Persists per device; framing re-solves live on
 // every input so the ball and the club-reach line stay pinned while sliding.
 const elTiltSlider = document.getElementById("tilt-slider");
@@ -8185,12 +7968,6 @@ const elTiltRange = document.getElementById("tilt-range");
   }
 }
 elTiltRange.addEventListener("input", () => {
-  if (render3D) {
-    const v = Math.max(0, Math.min(100, elTiltRange.value)) / 100;
-    lsSet("golf.threePitch", elTiltRange.value);
-    if (window.Course3D) window.Course3D.setPitch(v);
-    return;
-  }
   if (gtilesGround) {
     const deg = (Math.max(0, Math.min(100, elTiltRange.value)) / 100) * 65;
     lsSet("golf.gtilesPitch", elTiltRange.value);
@@ -8202,32 +7979,25 @@ elTiltRange.addEventListener("input", () => {
   lsSet("golf.applePitch", elTiltRange.value);
   if (mode === "course") frameTarget();   // keep ball + reach anchors pinned mid-slide
 });
-// Camera controls, so no ball-state gating — just not under the 3D overlays.
-// Apple ground and Course3D (Four Oaks 3D) show the slider; everything else
-// the legacy tilt button.
-let _tiltBtnShown = false, _tiltSliderShown = false;
+// Camera control (no ball-state gating). The 2D↔3D tilt slider shows ONLY on
+// courses with a real photoreal ground — Google Photorealistic (gtiles) or
+// Apple Flyover; every other course has no 3D control at all.
+let _tiltSliderShown = false;
 function updateTiltBtn() {
   const base = (mode === "course" || mode === "range") && !greenView && !cine;
   const apple = appleGroundActive();
-  const three = render3D;
   const gt = gtilesGround;
-  const showBtn = base && !apple && !three && !gt, showSlider = base && (apple || three || gt) && mode === "course";
-  if (showBtn !== _tiltBtnShown) { _tiltBtnShown = showBtn; elTiltBtn.classList.toggle("hidden", !showBtn); }
+  const showSlider = base && (apple || gt) && mode === "course";
   if (showSlider !== _tiltSliderShown) {
     _tiltSliderShown = showSlider;
     elTiltSlider.classList.toggle("hidden", !showSlider);
-    if (showSlider && three) {
-      const saved3 = parseFloat(lsGet("golf.threePitch"));
-      const v = Number.isFinite(saved3) ? Math.max(0, Math.min(100, saved3)) : 0;
-      elTiltRange.value = v;
-      if (window.Course3D) window.Course3D.setPitch(v / 100);
-    } else if (showSlider && gt) {
+    if (showSlider && gt) {
       // Default to a 3D lean (85 -> ~55°) so Pebble reads as flyover immediately.
       const savedG = parseFloat(lsGet("golf.gtilesPitch"));
       const v = Number.isFinite(savedG) ? Math.max(0, Math.min(100, savedG)) : 85;
       elTiltRange.value = v;
       if (window.GTiles3D) window.GTiles3D.setPitch((v / 100) * 65);
-    } else if (showSlider && !three) {
+    } else if (showSlider) {
       const savedA = parseFloat(lsGet("golf.applePitch"));
       elTiltRange.value = Number.isFinite(savedA) ? Math.max(0, Math.min(100, savedA)) : 0;
     }

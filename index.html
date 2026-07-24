@@ -123,10 +123,10 @@
 
   <button id="hud-btn" class="hidden" aria-label="Controls"><span class="ic ic-menu"></span></button>
   <button id="green-view-btn" class="hidden" aria-label="Read green"><span class="ic ic-green3d"></span></button>
-  <button id="tilt-view-btn" class="hidden" aria-label="3D view"><span class="ic ic-tilt"></span></button>
-  <!-- Apple-ground camera tilt: vertical slider, top = 3D lean, bottom = 2D
-       overhead. Replaces #tilt-view-btn on courses with the native MapKit
-       ground (see updateTiltBtn / #tilt-range wiring in game.js). -->
+  <!-- 2D↔3D camera tilt: vertical slider, top = 3D lean, bottom = 2D overhead.
+       Shown ONLY on courses with a real photoreal ground (Google Photorealistic
+       + Apple Flyover) — see updateTiltBtn / #tilt-range wiring in game.js.
+       (The old fake-tilt "3D view" button was removed.) -->
   <div id="tilt-slider" class="hidden">
     <span class="cs-end cs-top">3D</span>
     <input id="tilt-range" type="range" min="0" max="100" value="0">
@@ -829,7 +829,7 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script type="module" src="./three3d/gtiles3d.js?v=5"></script>
-  <script defer src="game.js?v=328"></script>
+  <script type="module" src="./three3d/gtiles3d.js?v=7"></script>
+  <script defer src="game.js?v=329"></script>
 </body>
 </html>
