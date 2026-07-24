@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify": "tsc --noEmit && vitest run && vite build",
-    "shoot": "node scripts/shoot.mjs"
+    "shoot": "node scripts/shoot.mjs",
+    "build:gtiles": "node scripts/build-gtiles.mjs"
   },
   "dependencies": {
     "3d-tiles-renderer": "^0.5.0",

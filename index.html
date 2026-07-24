@@ -26,8 +26,21 @@
   <script type="importmap">
   { "imports": {
       "three": "./vendor/three/three.module.min.js",
-      "three/addons/": "./vendor/three/addons/"
+      "three/addons/": "./vendor/three/addons/",
+      "gtiles": "./vendor/gtiles/gtiles.js"
   }}
+  </script>
+  <!-- "gtiles" = 3d-tiles-renderer + its OWN bundled three@0.179 (the root three
+       is r160, too old for the renderer). Powers the Google Photorealistic 3D
+       ground prototype (three3d/gtiles3d.js) for Pebble only. Rebuild via
+       `cd web && npm run build:gtiles`. -->
+  <script>
+    // Google Maps Platform key with the Map Tiles API enabled — powers the
+    // experimental Google photoreal ground for Pebble. Empty = self-disabled.
+    // WEB-ONLY (online + billed; Capacitor offline CSP blocks it). Set
+    // localStorage "golf.googleTilesToken" + "golf.pebbleGround"="gtiles" to try.
+    window.GOOGLE_TILES_TOKEN = "" ||
+      (function () { try { return localStorage.getItem("golf.googleTilesToken") || ""; } catch (e) { return ""; } })();
   </script>
 
   <!-- Mapbox GL JS 3D ground (Pebble Beach) — vendored like three (Capacitor CSP);
@@ -830,6 +843,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
   <script type="module" src="./three3d/mbox3d.js?v=17"></script>
-  <script defer src="game.js?v=323"></script>
+  <script type="module" src="./three3d/gtiles3d.js?v=1"></script>
+  <script defer src="game.js?v=324"></script>
 </body>
 </html>

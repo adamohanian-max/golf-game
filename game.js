@@ -732,10 +732,28 @@ function appleGroundActive() {
 // gated — Mapbox GL JS runs on web AND in the iOS webview (online). Gated on the
 // course id, a geo anchor, a token being present, and the engine module loaded.
 const MAPBOX_IDS = new Set(["pebble-beach-golf-course"]);
+// Experimental: swap Pebble's ground between Mapbox and Google Photorealistic 3D
+// Tiles (three3d/gtiles3d.js) via a per-device toggle so both can be A/B'd
+// in-game. Default Mapbox. WEB-ONLY (Google is online+billed; Capacitor offline
+// CSP blocks it — never enable on native).
+function pebbleGroundMode() {
+  try { return localStorage.getItem("golf.pebbleGround") === "gtiles" ? "gtiles" : "mbox"; }
+  catch (e) { return "mbox"; }
+}
 function mapboxGroundActive() {
   return !!(course && MAPBOX_IDS.has(course.id) && course.geo &&
     mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
-    window.MAPBOX_TOKEN && window.mapboxgl && window.Mbox3D);
+    window.MAPBOX_TOKEN && window.mapboxgl && window.Mbox3D &&
+    pebbleGroundMode() !== "gtiles");
+}
+// Google Photorealistic 3D Tiles ground (Pebble, opt-in). Same gating as Mapbox
+// but requires the Google token + the gtiles engine + the toggle on. Not native-
+// gated in code, but the token stays empty on native builds (offline CSP).
+function gtilesGroundActive() {
+  return !!(course && MAPBOX_IDS.has(course.id) && course.geo &&
+    mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
+    window.GOOGLE_TILES_TOKEN && window.GTiles3D &&
+    pebbleGroundMode() === "gtiles");
 }
 let mboxGround = false;
 // Mirrors update3DMode: enter/leave the Mapbox engine only on change (not per
@@ -748,6 +766,17 @@ function updateMboxMode() {
   if (mboxGround) ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (window.Mbox3D) {
     if (mboxGround) window.Mbox3D.enter({ courseId: course.id }); else window.Mbox3D.leave();
+  }
+}
+let gtilesGround = false;
+// Mirrors updateMboxMode for the Google photoreal ground.
+function updateGtilesMode() {
+  const want = gtilesGroundActive();
+  if (want === gtilesGround) return;
+  gtilesGround = want;
+  if (gtilesGround) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (window.GTiles3D) {
+    if (gtilesGround) window.GTiles3D.enter({ courseId: course.id }); else window.GTiles3D.leave();
   }
 }
 let _appleGroundEntered = false;
@@ -3361,6 +3390,16 @@ function applyView() {
     const q0 = window.Mbox3D.project(b.x, b.y, tz), q1 = window.Mbox3D.project(b.x + 1, b.y, tz);
     view.mboxScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
   }
+  // Google photoreal ground (Pebble, opt-in) — same shape as mboxProj. Ground
+  // points pass terrainZ (the game DEM) like Course3D; gtiles3d places them on
+  // the ellipsoid at that height.
+  view.gtilesProj = (gtilesGround && window.GTiles3D && window.GTiles3D.isReady()) ? true : null;
+  if (view.gtilesProj) {
+    view.kz = 0; view.tilt = 1;
+    const b = state.ball, tz = terrainZ(b.x, b.y);
+    const q0 = window.GTiles3D.project(b.x, b.y, tz), q1 = window.GTiles3D.project(b.x + 1, b.y, tz);
+    view.gtilesScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
+  }
 }
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
@@ -3528,6 +3567,9 @@ function resize() {
   // Re-anchor the swing hint above the ball if the viewport changed while it's
   // still showing (orientation flip before the player's first swing).
   if (elHint && hudVis.hint && !elHint.classList.contains("hidden")) positionHint();
+  // three-based grounds size their own canvas (Mapbox self-observes; the gtiles
+  // WebGLRenderer does not) — push the new viewport through.
+  if (window.GTiles3D && window.GTiles3D.resize) window.GTiles3D.resize();
 }
 window.addEventListener("resize", resize);
 
@@ -3569,11 +3611,22 @@ function _mboxPt(x, y) {
   _mLast = { wx: x, wy: y, gen: _mGen, x: q.x, y: q.y };
   return _mLast;
 }
-function wx(x, y) { return view.mboxProj ? _mboxPt(x, y).x : view.threeProj ? _tPt(x, y).x : view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
-function wy(x, y) { return view.mboxProj ? _mboxPt(x, y).y : view.threeProj ? _tPt(x, y).y : view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
-function ws(v) { return v * (view.mboxProj ? view.mboxScale : view.threeProj ? view.threeScale : view.scale); }
+// Google photoreal projection cache. Ground points pass terrainZ (game DEM) like
+// _tPt (Course3D) — gtiles3d has no terrain query of its own; elevated points
+// (ball arc) call GTiles3D.project directly with the height.
+let _gLast = null, _gGen = 0;
+function _gtPt(x, y) {
+  if (_gLast && _gLast.wx === x && _gLast.wy === y && _gLast.gen === _gGen) return _gLast;
+  const q = window.GTiles3D.project(x, y, terrainZ(x, y));
+  _gLast = { wx: x, wy: y, gen: _gGen, x: q.x, y: q.y };
+  return _gLast;
+}
+function wx(x, y) { return view.gtilesProj ? _gtPt(x, y).x : view.mboxProj ? _mboxPt(x, y).x : view.threeProj ? _tPt(x, y).x : view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
+function wy(x, y) { return view.gtilesProj ? _gtPt(x, y).y : view.mboxProj ? _mboxPt(x, y).y : view.threeProj ? _tPt(x, y).y : view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
+function ws(v) { return v * (view.gtilesProj ? view.gtilesScale : view.mboxProj ? view.mboxScale : view.threeProj ? view.threeScale : view.scale); }
 // Inverse: screen px -> world coords (for the range finder).
 function screenToWorld(sx, sy) {
+  if (view.gtilesProj) return window.GTiles3D.unproject(sx, sy) || { x: state.ball.x, y: state.ball.y };
   if (view.mboxProj) return window.Mbox3D.unproject(sx, sy) || { x: state.ball.x, y: state.ball.y };
   if (view.threeProj) return window.Course3D.unproject(sx, sy, terrainZ(state.ball.x, state.ball.y)) || { x: state.ball.x, y: state.ball.y };
   if (view.appleProj) return appleUnproject(view.appleProj, sx, sy);
@@ -6012,6 +6065,12 @@ function draw() {
     _mGen++;
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     if (!HOLE.isRange && window.Mbox3D && window.Mbox3D.isReady()) drawGreen(true, greensInPlay());
+  } else if (gtilesGround) {
+    // Google photoreal tiles are Pebble's ground (opt-in) — identical model to
+    // the Mapbox branch, projected via view.gtilesProj.
+    _gGen++;
+    ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
+    if (!HOLE.isRange && window.GTiles3D && window.GTiles3D.isReady()) drawGreen(true, greensInPlay());
   } else if (appleGround) {
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     syncAppleGround();
@@ -6430,10 +6489,22 @@ function drawAttribution() {
   const meta = COURSES.find((c) => c.id === selectedCourseId);
   const isOriginal = meta && meta.region === "Originals";
   const src = HOLE.aerial && HOLE.aerial.src;
-  const lines = [
-    isOriginal ? "" : "© OpenStreetMap contributors",
-    HOLE.aerial ? (src === "naip" ? "Imagery: USGS / NAIP" : "Imagery © Esri") : "",
-  ].filter(Boolean);
+  let lines;
+  if (gtilesGround && window.GTiles3D) {
+    // Google Photorealistic ground — the tiles' own credits REPLACE the
+    // OSM/Esri lines (Map Tiles API ToS mandates showing them). Logo TODO
+    // before ship; text credits (start with "Google") cover the prototype.
+    const cred = window.GTiles3D.getAttributions()
+      .filter((a) => a && a.type !== "image" && a.value)
+      .map((a) => String(a.value))
+      .join(" · ");
+    lines = [cred || "Google"];
+  } else {
+    lines = [
+      isOriginal ? "" : "© OpenStreetMap contributors",
+      HOLE.aerial ? (src === "naip" ? "Imagery: USGS / NAIP" : "Imagery © Esri") : "",
+    ].filter(Boolean);
+  }
   if (!lines.length) return;
   ctx.save();
   ctx.font = "10px system-ui, -apple-system, sans-serif";
@@ -8006,6 +8077,13 @@ elTiltRange.addEventListener("input", () => {
     if (mode === "course") frameTarget();
     return;
   }
+  if (gtilesGround) {
+    const deg = (Math.max(0, Math.min(100, elTiltRange.value)) / 100) * 65;
+    lsSet("golf.gtilesPitch", elTiltRange.value);
+    if (window.GTiles3D) window.GTiles3D.setPitch(deg);
+    if (mode === "course") frameTarget();
+    return;
+  }
   appleUserPitch = (elTiltRange.value / 100) * 65;
   lsSet("golf.applePitch", elTiltRange.value);
   if (mode === "course") frameTarget();   // keep ball + reach anchors pinned mid-slide
@@ -8019,7 +8097,8 @@ function updateTiltBtn() {
   const apple = appleGroundActive();
   const three = render3D;
   const mbox = mboxGround;
-  const showBtn = base && !apple && !three && !mbox, showSlider = base && (apple || three || mbox) && mode === "course";
+  const gt = gtilesGround;
+  const showBtn = base && !apple && !three && !mbox && !gt, showSlider = base && (apple || three || mbox || gt) && mode === "course";
   if (showBtn !== _tiltBtnShown) { _tiltBtnShown = showBtn; elTiltBtn.classList.toggle("hidden", !showBtn); }
   if (showSlider !== _tiltSliderShown) {
     _tiltSliderShown = showSlider;
@@ -14974,6 +15053,8 @@ function loop() {
   if (render3D && window.Course3D) window.Course3D.render();
   updateMboxMode(); // cheap — no-ops unless mode/course actually changed
   if (mboxGround && window.Mbox3D) window.Mbox3D.render(); // sync map camera + matrix BEFORE draw()
+  updateGtilesMode(); // cheap — no-ops unless mode/course actually changed
+  if (gtilesGround && window.GTiles3D) window.GTiles3D.render(); // sync camera + tiles BEFORE draw()
   // Apple ground sync (Butter Brook) happens inside draw() itself — see
   // appleGroundActive()/syncAppleGround() above.
   draw();
