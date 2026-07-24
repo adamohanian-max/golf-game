@@ -48,19 +48,10 @@ html, body {
   touch-action: none;
 }
 
-/* Mapbox GL 3D ground (Pebble Beach). Same behind-#game stacking + rationale as
-   #c3d above: swing input is bound to #game, so #game stays on top and goes
-   transparent (draw() clears it) to reveal the Mapbox map underneath. Hidden
-   until Mbox3D.enter() sets display:block (see three3d/mbox3d.js). */
-#cmbox {
-  display: none;
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100dvh;
-  touch-action: none;
-}
-#cmbox .mapboxgl-ctrl-attrib { font-size: 10px; }
+/* Google photoreal 3D ground (Pebble). Same behind-#game stacking as #c3d: swing
+   input is bound to #game, so #game stays on top and goes transparent (draw()
+   clears it) to reveal the tiles canvas underneath. The #cgt canvas is created +
+   styled inline by three3d/gtiles3d.js, inserted before #game. */
 
 /* iOS haptic switch — present but off-screen (display:none would disable the haptic) */
 #haptic-switch {

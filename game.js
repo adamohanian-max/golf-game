@@ -78,6 +78,11 @@ const TUNE = {
   // Lie spin penalty: backspin multiplier by the surface you're hitting FROM. Rough = "flyer"
   // (grass between club & ball kills backspin -> ball releases and runs out); sand also robs spin.
   lieSpin: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.55, bunker: 0.6, water: 0.6, woods: 0.6, ob: 0.6 },
+  // Chip lie penalty: chips already solve carry off the pin gap directly, so the full `lie`
+  // factor (which robs full-shot distance) would double-count and leave chips stranded short
+  // (bunker 0.5 -> ball lands halfway, unreachable). A gentler tax keeps sand/rough harder while
+  // staying recoverable with the reach slider (max 1.2x -> 1.2*0.82 ~ 0.98, can still find the pin).
+  lieChip: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.9, bunker: 0.82, water: 0.82, woods: 0.82, ob: 0.82 },
   // Lie land-angle penalty: a flyer from rough comes in SHALLOWER as well as lower-spin
   // (less lift), so it releases even more on landing. Multiplier on the club's land angle.
   lieLand: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.88, bunker: 0.92, water: 1.0, woods: 1.0, ob: 1.0 },
@@ -151,7 +156,7 @@ const TUNE = {
   // True-3D relief in the tilted view: the DEM displaces the ground vertically
   // on screen (column-band warp), trees stand up from the woods mask, and a
   // hillshade overlay sells the slopes. All of it fades in with camera.tilt.
-  tExag: 1.6,            // terrain relief exaggeration (1 = true DEM scale)
+  tExag: 1.8,            // terrain relief exaggeration (1 = true DEM scale)
   // Synthetic elevation fed into terrainZ so the tilted view actually rolls even
   // on DEM-less courses (nearly all of them). Greens get a real, exaggerated
   // undulation you can read break off; the whole course gets gentle cosmetic swells.
@@ -181,7 +186,7 @@ const TUNE = {
   treeInteriorMul: 0.5,  // interior cells keep at this × base rate (pays for the edge boost)
   treeHMin: 3.5, treeHMax: 6.5, // tree height range, world units (~30–60 ft)
   canopyH: 4.6,          // photo-canopy extrusion height, world units (~40 ft)
-  tHillAlpha: 0.22,      // DEM hillshade overlay strength when fully tilted
+  tHillAlpha: 0.26,      // DEM hillshade overlay strength when fully tilted
   tPlanarTol: 3.0,       // css px: max plane-fit residual to warp with ONE affine draw
   tPadMax: 320,          // capture pad ceiling (putt-zoom canopy lift can reach ~250px)
   tPadQuant: 32,         // pad quantum — stops per-frame capture reallocs while zooming
@@ -199,6 +204,22 @@ const TUNE = {
   punchBallR: 4.5,       // world units: canopy punch-out radius around the ball
   punchCupR: 3.5,        // world units: around the cup
   punchGreenFeather: 2.0,// world units: soft falloff outside green-in-play polys
+  // --- 2.5D buildings (tilted view; data from courses/buildings/<id>.json) ---
+  bldgMinH: 3.0,         // world units: shortest wall; height heuristic floors here
+  bldgMaxH: 22,          // world units: tallest wall (matches course3d cap ÷ M_PER_UNIT ≈ 8)
+  bldgSunAz: -2.356,     // sun azimuth (rad, NW = -135°, matches buildDEMShade light)
+  bldgRoof: "#d8ccb4",   // roof cap (lightest warm-tan)
+  bldgWallSun: "#cbb896",// sun-facing wall
+  bldgWallSha: "#8f7d63",// shadowed wall
+  bldgEdge: "rgba(60,48,32,0.35)", // wall/roof outline
+  bldgContactA: 0.30,    // ground-contact shadow alpha
+  // --- tree / flag 2.5D polish knobs ---
+  treeShadeBoost: 0.35,  // sprite shadow-side lobe darkening (0 = old flat sprite)
+  treeContactA: 0.32,    // sprite ground-contact ellipse alpha
+  canopyWallDark: 0.88,  // photo-canopy side-wall silhouette alpha (higher = more solid)
+  cupDepthPx: 2.4,       // recessed-cup inner-shadow vertical offset (px, ×hr scale)
+  cupWallShade: 0.55,    // recessed-cup inner wall darkness (tilted only)
+  flagShadeK: 0.30,      // flag/pole 3D shading strength (tilted only)
   flowFadeLo: 8, flowFadeHi: 14, // view.scale ramp: flow dots fade out zoomed-out (tilted)
   // 3D green inspect view (the "read green" button)
   gvGrid: 36,            // mesh cells per axis
@@ -717,8 +738,8 @@ function update3DMode() {
 // Apple ground. Add an id here only after confirming Flyover coverage on-device.
 const APPLE_FLYOVER_IDS = new Set([
   "butter-brook-golf-club",
-  // pebble-beach-golf-course moved to Mapbox GL ground (MAPBOX_IDS below) — one
-  // JS path on web + iOS-online, replacing the iOS-only Apple flyover for it.
+  // pebble-beach-golf-course renders via Google Photorealistic 3D Tiles
+  // (GTILES_IDS below) — one JS path on web + iOS-online, not Apple flyover.
   "liberty-national-golf-club",
   "torrey-pines-south-course",
 ]);
@@ -728,45 +749,17 @@ function appleGroundActive() {
     window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
     window.Capacitor.Plugins && window.Capacitor.Plugins.CourseMap3D);
 }
-// Mapbox GL 3D ground (three3d/mbox3d.js). Unlike Apple, this is NOT native-
-// gated — Mapbox GL JS runs on web AND in the iOS webview (online). Gated on the
-// course id, a geo anchor, a token being present, and the engine module loaded.
-const MAPBOX_IDS = new Set(["pebble-beach-golf-course"]);
-// Experimental: swap Pebble's ground between Mapbox and Google Photorealistic 3D
-// Tiles (three3d/gtiles3d.js) via a per-device toggle so both can be A/B'd
-// in-game. Default Mapbox. WEB-ONLY (Google is online+billed; Capacitor offline
-// CSP blocks it — never enable on native).
-function pebbleGroundMode() {
-  try { return localStorage.getItem("golf.pebbleGround") === "gtiles" ? "gtiles" : "mbox"; }
-  catch (e) { return "mbox"; }
-}
-function mapboxGroundActive() {
-  return !!(course && MAPBOX_IDS.has(course.id) && course.geo &&
-    mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
-    window.MAPBOX_TOKEN && window.mapboxgl && window.Mbox3D &&
-    pebbleGroundMode() !== "gtiles");
-}
-// Google Photorealistic 3D Tiles ground (Pebble, opt-in). Same gating as Mapbox
-// but requires the Google token + the gtiles engine + the toggle on. Not native-
-// gated in code, but the token stays empty on native builds (offline CSP).
+// Google Photorealistic 3D Tiles ground (three3d/gtiles3d.js). Pebble's 3D
+// ground on web AND the iOS webview (the native app is a webview onto the live
+// site — inherently online, no CSP block). Gated on the course id, a geo anchor,
+// the Google token, and the engine module loaded; without a token the course
+// falls through to the normal flat 2D baked aerial. (Replaced the old Mapbox
+// ground, deleted 2026-07-24.)
+const GTILES_IDS = new Set(["pebble-beach-golf-course"]);
 function gtilesGroundActive() {
-  return !!(course && MAPBOX_IDS.has(course.id) && course.geo &&
+  return !!(course && GTILES_IDS.has(course.id) && course.geo &&
     mode === "course" && !(typeof HOLE !== "undefined" && HOLE && HOLE.isRange) &&
-    window.GOOGLE_TILES_TOKEN && window.GTiles3D &&
-    pebbleGroundMode() === "gtiles");
-}
-let mboxGround = false;
-// Mirrors update3DMode: enter/leave the Mapbox engine only on change (not per
-// frame). Called from loop(). #game stays in layout (input bound to it) and goes
-// transparent via draw()'s clear so the map behind shows through.
-function updateMboxMode() {
-  const want = mapboxGroundActive();
-  if (want === mboxGround) return;
-  mboxGround = want;
-  if (mboxGround) ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (window.Mbox3D) {
-    if (mboxGround) window.Mbox3D.enter({ courseId: course.id }); else window.Mbox3D.leave();
-  }
+    window.GOOGLE_TILES_TOKEN && window.GTiles3D);
 }
 let gtilesGround = false;
 // Mirrors updateMboxMode for the Google photoreal ground.
@@ -1359,7 +1352,7 @@ let _tourSchedule = null;         // cached full-season schedule (array of event
 let _tourSchedCache = null;       // { at, data } schedule fetch cache
 let _tourOpenEvent = null;        // schedule event whose board is currently open {id,name,start,end,state,period}
 let _tourActiveEventId = null;    // eventId of the round currently being played (tourPlayMode)
-let _tourResultsCache = {};       // { [eventId]: {purse, displayPurse, payouts:[$ desc]} }
+let _tourResultsCache = {};       // { [eventId]: {at, data:{purse, displayPurse, payouts:[$ desc]}} }
 let _tourVenueMap = null;         // { [eventId]: {courseId, courseName, venue} } — baked, for schedule playability
 // Match state — live head-to-head game with friends (see "Multiplayer matches").
 let activeMatch = null;      // full matches row from Supabase (null when not in a match)
@@ -2842,6 +2835,9 @@ function buildTrialShot(ang, frac, spin, onGreen) {
   // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
   const lieSurf = surfaceAt(b.x, b.y);
   const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
+  // Chips carry off a mild lie tax (see TUNE.lieChip) instead of the full full-shot lie —
+  // `ef` above already solved carry to the pin gap, so the full factor would double-count.
+  const chipLieMul = (lieEffectEnabled && chipActive) ? (TUNE.lieChip[lieSurf] ?? 1) : 1;
   // Flight selector (right gutter, full shots): -1 Low knockdown .. 0 Stock .. +1 High
   // spinner. hiT's SIGN picks which endpoint set (flightHi*/flightLo*) applies; its
   // magnitude (t) is the lerp fraction toward that endpoint. hiT >= 0 reduces byte-for-
@@ -2853,7 +2849,7 @@ function buildTrialShot(ang, frac, spin, onGreen) {
   const spinK  = hiT >= 0 ? TUNE.flightHiSpin  : TUNE.flightLoSpin;
   const carryK = hiT >= 0 ? TUNE.flightHiCarry : TUNE.flightLoCarry;
   const windK  = hiT >= 0 ? TUNE.flightHiWind  : TUNE.flightLoWind;
-  let C = (c.carry / YARDS_PER_UNIT) * ef * lieMul * (1 - (1 - carryK) * t); // carry (world units)
+  let C = (c.carry / YARDS_PER_UNIT) * ef * (chipActive ? chipLieMul : lieMul) * (1 - (1 - carryK) * t); // carry (world units)
   // Elevation: make a full shot finish at the plays-like distance (uphill shorter,
   // downhill longer). Chips already fold plays-like into their reach, so skip them.
   if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
@@ -3379,20 +3375,12 @@ function applyView() {
     const q0 = window.Course3D.project(b.x, b.y, tz), q1 = window.Course3D.project(b.x + 1, b.y, tz);
     view.threeScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
   }
-  // Mapbox GL 3D ground (Pebble) — route wx/wy/screenToWorld through the live
-  // Mapbox camera (Mbox3D.project). Mirrors the threeProj block exactly. Only
-  // active once the map's projection matrix is available (isReady) — until then
-  // fall back to the flat affine so the first frames render, not break.
-  view.mboxProj = (mboxGround && window.Mbox3D && window.Mbox3D.isReady()) ? true : null;
-  if (view.mboxProj) {
-    view.kz = 0; view.tilt = 1;
-    const b = state.ball, tz = terrainZ(b.x, b.y);
-    const q0 = window.Mbox3D.project(b.x, b.y, tz), q1 = window.Mbox3D.project(b.x + 1, b.y, tz);
-    view.mboxScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
-  }
-  // Google photoreal ground (Pebble, opt-in) — same shape as mboxProj. Ground
-  // points pass terrainZ (the game DEM) like Course3D; gtiles3d places them on
-  // the ellipsoid at that height.
+  // Google photoreal ground (Pebble) — route wx/wy/screenToWorld through the
+  // live gtiles camera (GTiles3D.project). Mirrors the threeProj block. Only
+  // active once tiles have produced geometry (isReady) — until then fall back to
+  // the flat affine so the first frames render, not break. Ground points pass
+  // terrainZ (the game DEM) like Course3D; gtiles3d places them on the ellipsoid
+  // at that height.
   view.gtilesProj = (gtilesGround && window.GTiles3D && window.GTiles3D.isReady()) ? true : null;
   if (view.gtilesProj) {
     view.kz = 0; view.tilt = 1;
@@ -3600,20 +3588,9 @@ function _tPt(x, y) {
   _tLast = { wx: x, wy: y, gen: _tGen, x: q.x, y: q.y };
   return _tLast;
 }
-// Mapbox projection cache (mirrors _tPt). Ground points pass zUnits=0 — Mbox3D
-// places them on the MAPBOX terrain itself (queryTerrainElevation), unlike
-// Course3D which uses the game DEM (so _tPt passes terrainZ). Elevated points
-// (the ball arc) call Mbox3D.project directly with the height.
-let _mLast = null, _mGen = 0;
-function _mboxPt(x, y) {
-  if (_mLast && _mLast.wx === x && _mLast.wy === y && _mLast.gen === _mGen) return _mLast;
-  const q = window.Mbox3D.project(x, y, 0);
-  _mLast = { wx: x, wy: y, gen: _mGen, x: q.x, y: q.y };
-  return _mLast;
-}
-// Google photoreal projection cache. Ground points pass terrainZ (game DEM) like
-// _tPt (Course3D) — gtiles3d has no terrain query of its own; elevated points
-// (ball arc) call GTiles3D.project directly with the height.
+// Google photoreal projection cache (mirrors _tPt). Ground points pass terrainZ
+// (game DEM) like _tPt (Course3D) — gtiles3d has no terrain query of its own;
+// elevated points (the ball arc) call GTiles3D.project directly with the height.
 let _gLast = null, _gGen = 0;
 function _gtPt(x, y) {
   if (_gLast && _gLast.wx === x && _gLast.wy === y && _gLast.gen === _gGen) return _gLast;
@@ -3621,13 +3598,12 @@ function _gtPt(x, y) {
   _gLast = { wx: x, wy: y, gen: _gGen, x: q.x, y: q.y };
   return _gLast;
 }
-function wx(x, y) { return view.gtilesProj ? _gtPt(x, y).x : view.mboxProj ? _mboxPt(x, y).x : view.threeProj ? _tPt(x, y).x : view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
-function wy(x, y) { return view.gtilesProj ? _gtPt(x, y).y : view.mboxProj ? _mboxPt(x, y).y : view.threeProj ? _tPt(x, y).y : view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
-function ws(v) { return v * (view.gtilesProj ? view.gtilesScale : view.mboxProj ? view.mboxScale : view.threeProj ? view.threeScale : view.scale); }
+function wx(x, y) { return view.gtilesProj ? _gtPt(x, y).x : view.threeProj ? _tPt(x, y).x : view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
+function wy(x, y) { return view.gtilesProj ? _gtPt(x, y).y : view.threeProj ? _tPt(x, y).y : view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
+function ws(v) { return v * (view.gtilesProj ? view.gtilesScale : view.threeProj ? view.threeScale : view.scale); }
 // Inverse: screen px -> world coords (for the range finder).
 function screenToWorld(sx, sy) {
   if (view.gtilesProj) return window.GTiles3D.unproject(sx, sy) || { x: state.ball.x, y: state.ball.y };
-  if (view.mboxProj) return window.Mbox3D.unproject(sx, sy) || { x: state.ball.x, y: state.ball.y };
   if (view.threeProj) return window.Course3D.unproject(sx, sy, terrainZ(state.ball.x, state.ball.y)) || { x: state.ball.x, y: state.ball.y };
   if (view.appleProj) return appleUnproject(view.appleProj, sx, sy);
   const det = view.a * view.e - view.b * view.d || 1;
@@ -3742,7 +3718,7 @@ function computeViewAABB() {
   _viewAABB = { minx, miny, maxx, maxy };
 }
 function polyVisible(poly) {
-  if (view.threeProj || view.mboxProj) return true; // _viewAABB is the affine's; the 3D/Mapbox camera view doesn't match it — don't cull
+  if (view.threeProj || view.gtilesProj) return true; // _viewAABB is the affine's; the 3D/photoreal camera view doesn't match it — don't cull
   if (!_viewAABB || !poly || poly.length < 2) return true;
   const bb = poly._bb || (poly._bb = polyBBox(poly)); // memoized
   const v = _viewAABB;
@@ -5014,7 +4990,8 @@ function baseWarpKey(cssW, cssH) {
     ? Math.round(b.x / 2) + "." + Math.round(b.y / 2) : "-";
   return q(view.kz * 100) + "," + q(view.zFocus * 50) + "," +
          HOLE.num + "," + (showOOB ? 1 : 0) + (showSlope ? 1 : 0) + (breakArrows ? 1 : 0) +
-         (HOLE._imgReady ? 1 : 0) + (HOLE._mask && HOLE._mask.lab ? 1 : 0) + "," +
+         (HOLE._imgReady ? 1 : 0) + (HOLE._mask && HOLE._mask.lab ? 1 : 0) +
+         ((course || HOLE)._buildings ? 1 : 0) + "," +
          cssW + "x" + cssH + "," + _warpPad + "," + ballTerm;
 }
 function warpSig(cssW, cssH) {
@@ -5199,7 +5176,7 @@ function finishGroundWarp(cssW, cssH, sig, target) {
   // trees are static under the same sig — bake them into the cache so parked
   // frames are one blit
   const real = ctx;
-  ctx = g; drawTrees(); ctx = real;
+  ctx = g; drawBuildings(); drawTrees(); ctx = real;
   target.sig = sig;
   target.degraded = _warpMotion;
   if (usingDefault) ctx.drawImage(target.canvas, 0, 0, cssW, cssH);
@@ -5239,6 +5216,121 @@ function bakeBucket(bucketIndex, baseKey, cssW, cssH) {
   evictBucketsIfOverCap();
   Object.assign(view, savedView);
   _viewAABB = savedAABB; _warpPad = savedPad;
+}
+
+// --- 2.5D buildings (tilted view) ----------------------------------------
+// Extruded OSM footprint massing, drawn AFTER the ground warp (post-warp screen
+// space) so walls stay vertical — same bake slot as drawTrees. Data comes from
+// courses/buildings/<id>.json (world-unit polys + fabricated heights); only the
+// two courses with a baked file (four-oaks, pebble) draw anything, everything
+// else is a clean no-op. Static per-course, so it rides the warp cache with a
+// one-shot readiness bit in baseWarpKey — never a per-shot rebuild.
+function precomputeBuildings(list) {
+  const out = [];
+  if (!Array.isArray(list)) return out;
+  const m = M_PER_UNIT;
+  for (const b of list) {
+    const poly = b && b.poly;
+    if (!poly || poly.length < 3) continue;
+    // centroid + signed area (world units), skip degenerate footprints
+    let cx = 0, cy = 0, area2 = 0;
+    for (let i = 0; i < poly.length - 1; i++) {
+      const cr = poly[i][0] * poly[i + 1][1] - poly[i + 1][0] * poly[i][1];
+      area2 += cr;
+      cx += (poly[i][0] + poly[i + 1][0]) * cr;
+      cy += (poly[i][1] + poly[i + 1][1]) * cr;
+    }
+    if (Math.abs(area2) < 1e-6) continue;
+    cx /= 3 * area2; cy /= 3 * area2;
+    const areaM2 = Math.abs(area2 / 2) * m * m;
+    // OSM carries no height tags — vary height deterministically (seeded on the
+    // centroid) so massing isn't identical boxes, and make big footprints
+    // (clubhouse, cart barn) read taller. Mirrors course3d.buildBuildingsForCourse.
+    const rnd = mulberry32((Math.round(cx * 16) * 73856093 ^ Math.round(cy * 16) * 19349663) >>> 0);
+    let hM = (b.h || 4.5) * (0.85 + 0.4 * rnd());
+    if (areaM2 > 700) hM *= 1.7;
+    else if (areaM2 > 300) hM *= 1.3;
+    const hU = Math.max(TUNE.bldgMinH, Math.min(TUNE.bldgMaxH, hM / m));
+    out.push({ poly, cx, cy, hU });
+  }
+  return out;
+}
+function loadBuildings(id) {
+  fetch("courses/buildings/" + id + ".json")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (!course || course.id !== id) return; // course switched mid-fetch
+      course._buildings = (data && data.buildings) ? precomputeBuildings(data.buildings) : null;
+      course._buildingsForId = id;
+    })
+    .catch(() => { if (course && course.id === id) { course._buildings = null; course._buildingsForId = id; } });
+}
+function drawBuildings() {
+  if (!view.kz || !HOLE || HOLE.isRange || greenView || cine) return;
+  const B = (course || HOLE)._buildings;
+  if (!B || !B.length) return;
+  const v = _viewAABB, kz = view.kz;
+  const sunx = Math.cos(TUNE.bldgSunAz), suny = Math.sin(TUNE.bldgSunAz);
+  const cssW = window.innerWidth, cssH = window.innerHeight;
+  // cull + project footprint base(wyg) and roof-top; painter-sort by base y
+  const vis = [];
+  for (const b of B) {
+    if (b.cx < v.minx || b.cx > v.maxx || b.cy < v.miny || b.cy > v.maxy) continue;
+    const lift = ws(b.hU) * kz;
+    let baseY = -1e9, maxsx = -1e9, minsx = 1e9;
+    const base = [], top = [];
+    for (const p of b.poly) {
+      const sx = wx(p[0], p[1]), sy = wyg(p[0], p[1]);
+      base.push([sx, sy]); top.push([sx, sy - lift]);
+      if (sy > baseY) baseY = sy;
+      if (sx > maxsx) maxsx = sx; if (sx < minsx) minsx = sx;
+    }
+    if (maxsx < -40 || minsx > cssW + 40 || baseY < -80) continue;
+    vis.push({ b, base, top, baseY, lift });
+  }
+  if (!vis.length) return;
+  vis.sort((a, z) => a.baseY - z.baseY); // far (upper) buildings first
+  ctx.save();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = TUNE.bldgEdge;
+  for (const { base, top } of vis) {
+    const n = base.length;
+    // ground-contact shadow (soft, offset toward the sun-cast direction)
+    ctx.globalAlpha = TUNE.bldgContactA;
+    ctx.fillStyle = "#0a1508";
+    ctx.beginPath();
+    ctx.moveTo(base[0][0] - sunx * 3, base[0][1] - suny * 3 + 2);
+    for (let i = 1; i < n; i++) ctx.lineTo(base[i][0] - sunx * 3, base[i][1] - suny * 3 + 2);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    // walls, per edge, back-to-front by edge midpoint depth (higher y = nearer)
+    const walls = [];
+    for (let i = 0; i < n - 1; i++) {
+      const a = base[i], c = base[i + 1];
+      const ex = c[0] - a[0], ey = c[1] - a[1];
+      // outward normal (screen). sun-facing if normal·sun > 0
+      const nx = ey, ny = -ex;
+      const lit = (nx * sunx + ny * suny) >= 0;
+      walls.push({ i, midY: (a[1] + c[1]) * 0.5, lit });
+    }
+    walls.sort((p, q) => p.midY - q.midY);
+    for (const w of walls) {
+      const i = w.i, a = base[i], c = base[i + 1], ta = top[i], tc = top[i + 1];
+      ctx.fillStyle = w.lit ? TUNE.bldgWallSun : TUNE.bldgWallSha;
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(c[0], c[1]);
+      ctx.lineTo(tc[0], tc[1]); ctx.lineTo(ta[0], ta[1]);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    // roof cap
+    ctx.fillStyle = TUNE.bldgRoof;
+    ctx.beginPath();
+    ctx.moveTo(top[0][0], top[0][1]);
+    for (let i = 1; i < n; i++) ctx.lineTo(top[i][0], top[i][1]);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 // --- Standing trees (tilted view) ----------------------------------------
@@ -5298,6 +5390,24 @@ function treeSprites() {
       rg.addColorStop(0, lite); rg.addColorStop(1, dark);
       g.fillStyle = rg;
       blobPath(g, cx, cy, r, 0.4, 9, rnd, 0.92);
+      g.fill();
+    }
+    // Directional read: a dark shadow-side wash (lower-right) + a bright sun-side
+    // highlight (upper-left, NW light) so the crown reads as a lit sphere/volume
+    // instead of a flat blob. Both are soft radial gradients fading to transparent.
+    const boost = TUNE.treeShadeBoost;
+    if (boost > 0) {
+      const sh = g.createRadialGradient(S * 0.62, S * 0.62, S * 0.05, S * 0.62, S * 0.62, S * 0.5);
+      sh.addColorStop(0, "rgba(6,20,10," + (0.55 * boost).toFixed(3) + ")");
+      sh.addColorStop(1, "rgba(6,20,10,0)");
+      g.fillStyle = sh;
+      blobPath(g, S * 0.5, S * 0.5, S * 0.4, 0.35, 9, mulberry32(seed ^ 0x5f3759df), 0.92);
+      g.fill();
+      const hl = g.createRadialGradient(S * 0.36, S * 0.34, S * 0.03, S * 0.36, S * 0.34, S * 0.34);
+      hl.addColorStop(0, "rgba(190,225,150," + (0.5 * boost).toFixed(3) + ")");
+      hl.addColorStop(1, "rgba(190,225,150,0)");
+      g.fillStyle = hl;
+      blobPath(g, S * 0.5, S * 0.5, S * 0.4, 0.35, 9, mulberry32(seed ^ 0x9e3779b9), 0.92);
       g.fill();
     }
     // small mottled puffs on top for dappled internal texture
@@ -5517,7 +5627,7 @@ function drawTrees() {
   ctx.save();
   for (const { t, sx, sy } of drawn) {
     const rr = ws(t.r), lift = ws(t.h) * kz;
-    ctx.globalAlpha = 0.32;
+    ctx.globalAlpha = TUNE.treeContactA;
     ctx.fillStyle = "#08170c";
     ctx.beginPath();
     ctx.ellipse(sx + rr * 0.35, sy + rr * 0.12, rr * 0.95, rr * 0.42, 0, 0, Math.PI * 2);
@@ -5629,7 +5739,7 @@ function buildCanopyLayer(m, img, a) {
       qg.imageSmoothingEnabled = true;
       qg.drawImage(c, 0, 0, q.width, q.height);
       qg.globalCompositeOperation = "source-atop";
-      qg.fillStyle = "rgba(10,26,12,0.88)";
+      qg.fillStyle = "rgba(10,26,12," + TUNE.canopyWallDark.toFixed(2) + ")";
       qg.fillRect(0, 0, q.width, q.height);
       const d = document.createElement("canvas");
       d.width = q.width; d.height = q.height;
@@ -6029,7 +6139,7 @@ function draw() {
   // heavy tilt layers (photo-canopy extrusion) still cost one blit parked.
   // Butter Brook never engages this — real Apple tilt lands in a later stage
   // (see the plan) instead of the fake canvas warp.
-  const tilt3d = !appleGround && !mboxGround && !render3D && !!(view.kz && !HOLE.isRange && !greenView && !cine);
+  const tilt3d = !appleGround && !gtilesGround && !render3D && !!(view.kz && !HOLE.isRange && !greenView && !cine);
   _warpPad = tilt3d ? estimateWarpPad(cssW, cssH) : 0;
   computeViewAABB(); // for off-screen polygon culling this frame
   const warp = tilt3d;
@@ -6057,17 +6167,11 @@ function draw() {
     _tGen++;
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     if (!HOLE.isRange) drawGreen(true, greensInPlay());
-  } else if (mboxGround) {
-    // Mapbox GL is this course's ground (Pebble) — same model as Apple/three.js:
-    // the map paints behind the transparent #game canvas, the common tail draws
-    // cup/ball/aim/contours over it via view.mboxProj. Green tint + topo contours
-    // (the putting read) route through the Mapbox projection onto the green.
-    _mGen++;
-    ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
-    if (!HOLE.isRange && window.Mbox3D && window.Mbox3D.isReady()) drawGreen(true, greensInPlay());
   } else if (gtilesGround) {
-    // Google photoreal tiles are Pebble's ground (opt-in) — identical model to
-    // the Mapbox branch, projected via view.gtilesProj.
+    // Google photoreal tiles are Pebble's ground — same model as Apple/three.js:
+    // the tiles paint behind the transparent #game canvas, the common tail draws
+    // cup/ball/aim/contours over it via view.gtilesProj. Green tint + topo
+    // contours (the putting read) route through that projection onto the green.
     _gGen++;
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     if (!HOLE.isRange && window.GTiles3D && window.GTiles3D.isReady()) drawGreen(true, greensInPlay());
@@ -6191,6 +6295,24 @@ function draw() {
   ctx.ellipse(hx, hy, hr, hr * view.tilt, 0, 0, Math.PI * 2);
   ctx.fillStyle = "#0a1f0f";
   ctx.fill();
+  // Tilted: recess the cup — an inner ellipse pushed up-screen leaves a crescent
+  // of near-side wall (lit) below and darkens the far rim, so the hole reads sunk
+  // instead of painted-on. Flat mode keeps the single flat ellipse.
+  if (view.kz) {
+    const d = TUNE.cupDepthPx * (hr / 3);
+    ctx.save();
+    ctx.beginPath(); // clip to the cup mouth
+    ctx.ellipse(hx, hy, hr, hr * view.tilt, 0, 0, Math.PI * 2); ctx.clip();
+    ctx.beginPath(); // near-side wall crescent, catching light
+    ctx.ellipse(hx, hy - d, hr, hr * view.tilt, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(60,80,55," + TUNE.cupWallShade.toFixed(2) + ")";
+    ctx.fill();
+    ctx.beginPath(); // the sunk floor itself
+    ctx.ellipse(hx, hy - d, hr * 0.86, hr * 0.86 * view.tilt, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#06160c";
+    ctx.fill();
+    ctx.restore();
+  }
   ctx.lineWidth = Math.max(hr * 0.18, 1);
   ctx.strokeStyle = "rgba(245,245,235,0.85)";
   ctx.stroke();
@@ -6208,11 +6330,14 @@ function draw() {
     // never balloons. Everything else scales off poleH so proportions hold at any size.
     const poleH = Math.max(FLAG_MIN_PX, Math.min(FLAG_MAX_PX, ws(FLAG_H_UNITS)));
     const topX = hx, topY = hy - poleH;
-    ctx.strokeStyle = "rgba(0,0,0,0.28)";   // short ground shadow of the stick
+    const k3 = view.kz ? TUNE.flagShadeK : 0; // 0 in flat mode → identical to before
+    // ground shadow of the stick — lengthened + laid flatter along the ground
+    // plane when tilted (a real stick's shadow rakes across the turf).
+    ctx.strokeStyle = "rgba(0,0,0,0.28)";
     ctx.lineWidth = Math.max(1, poleH * 0.11);
     ctx.beginPath();
     ctx.moveTo(hx, hy);
-    ctx.lineTo(hx + poleH * 0.9, hy + poleH * 0.14);
+    ctx.lineTo(hx + poleH * (0.9 + k3 * 1.4), hy + poleH * (0.14 + k3 * 0.12));
     ctx.stroke();
     ctx.strokeStyle = "#f4f4f0";             // the pole
     ctx.lineWidth = Math.max(1.5, poleH * 0.09);
@@ -6220,6 +6345,14 @@ function draw() {
     ctx.moveTo(hx, hy);
     ctx.lineTo(topX, topY);
     ctx.stroke();
+    if (k3) {                                // cylindrical shading: dark right edge
+      ctx.strokeStyle = "rgba(70,70,60," + (0.9 * k3 + 0.2).toFixed(2) + ")";
+      ctx.lineWidth = Math.max(0.75, poleH * 0.03);
+      ctx.beginPath();
+      ctx.moveTo(hx + poleH * 0.03, hy);
+      ctx.lineTo(topX + poleH * 0.03, topY);
+      ctx.stroke();
+    }
     const t = performance.now() / 180;       // waving red pennant flying right
     const flagL = poleH * 0.64, flagH = poleH * 0.41;
     const w1 = Math.sin(t) * poleH * 0.07, w2 = Math.sin(t + 1.2) * poleH * 0.09;
@@ -6228,7 +6361,13 @@ function draw() {
     ctx.quadraticCurveTo(topX + flagL * 0.5, topY - w1, topX + flagL, topY + flagH * 0.5 + w2);
     ctx.quadraticCurveTo(topX + flagL * 0.5, topY + flagH * 0.5 + w1, topX, topY + flagH);
     ctx.closePath();
-    ctx.fillStyle = "#e02a25";
+    if (k3) { // spanwise shading: lit at the pole (leading), shadowed at the fly
+      const fg = ctx.createLinearGradient(topX, topY, topX + flagL, topY);
+      fg.addColorStop(0, "#f0463f"); fg.addColorStop(1, "#b81c18");
+      ctx.fillStyle = fg;
+    } else {
+      ctx.fillStyle = "#e02a25";
+    }
     ctx.fill();
     ctx.strokeStyle = "rgba(120,15,12,0.6)";
     ctx.lineWidth = 1;
@@ -6244,8 +6383,8 @@ function draw() {
     // Screen pixels the ball floats above ground. Under the Apple pinhole the
     // height is projected for real (appleProjPt takes z) — flight arcs
     // foreshorten correctly instead of using the flat screen-lift.
-    const lift = view.mboxProj
-      ? gy - window.Mbox3D.project(b.x, b.y, b.z).y // b.z = height above the Mapbox terrain
+    const lift = view.gtilesProj
+      ? gy - window.GTiles3D.project(b.x, b.y, terrainZ(b.x, b.y) + b.z).y // ground DEM + height, on the ellipsoid
       : view.threeProj
       ? gy - window.Course3D.project(b.x, b.y, terrainZ(b.x, b.y) + b.z).y
       : view.appleProj
@@ -6263,8 +6402,8 @@ function draw() {
     let baseR;
     if (view.appleProj) {
       baseR = Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
-    } else if (view.mboxProj) {
-      baseR = Math.max(4, Math.min(18, view.mboxScale * APPLE_BALL_DRAW_UNITS));
+    } else if (view.gtilesProj) {
+      baseR = Math.max(4, Math.min(18, view.gtilesScale * APPLE_BALL_DRAW_UNITS));
     } else {
       baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
     }
@@ -7305,8 +7444,11 @@ async function loadCourse(id) {
   YARDS_PER_UNIT = course.yardsPerUnit || YARDS_PER_UNIT;
   course._greens = null; course._img = undefined; course._imgReady = false; // shared caches
   course._mask = undefined;
+  course.id = course.id || id;
+  course._buildings = undefined; course._buildingsForId = null; // 2.5D massing (async)
   holeIndex = 0;
   setHole(course.holes[holeIndex]);
+  loadBuildings(id);
   loadAppleCorrection(id);
 }
 
@@ -8018,27 +8160,6 @@ elCineBtn.addEventListener("click", () => {
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
 // Slightly-3D tilted view: per-device camera preference (like break arrows).
-// Mapbox ground style toggle (Pebble): flip Satellite <-> Vector to compare.
-const elMboxStyleBtn = document.getElementById("mbox-style-btn");
-let _mboxStyleBtnShown = false;
-function syncMboxStyleBtn() {
-  if (elMboxStyleBtn && window.Mbox3D) elMboxStyleBtn.textContent = window.Mbox3D.getStyleMode() === "vector" ? "VEC" : "SAT";
-}
-if (elMboxStyleBtn) elMboxStyleBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  if (!window.Mbox3D) return;
-  const next = window.Mbox3D.getStyleMode() === "vector" ? "satellite" : "vector";
-  window.Mbox3D.setStyleMode(next);
-  syncMboxStyleBtn();
-});
-function updateMboxStyleBtn() {
-  const show = mboxGround && mode === "course";
-  if (show !== _mboxStyleBtnShown) {
-    _mboxStyleBtnShown = show;
-    if (elMboxStyleBtn) { elMboxStyleBtn.classList.toggle("hidden", !show); if (show) syncMboxStyleBtn(); }
-  }
-}
-
 const elTiltBtn = document.getElementById("tilt-view-btn");
 elTiltBtn.classList.toggle("active", tiltView);
 elTiltBtn.addEventListener("click", (e) => {
@@ -8070,13 +8191,6 @@ elTiltRange.addEventListener("input", () => {
     if (window.Course3D) window.Course3D.setPitch(v);
     return;
   }
-  if (mboxGround) {
-    const deg = (Math.max(0, Math.min(100, elTiltRange.value)) / 100) * 65;
-    lsSet("golf.mboxPitch", elTiltRange.value);
-    if (window.Mbox3D) window.Mbox3D.setPitch(deg);
-    if (mode === "course") frameTarget();
-    return;
-  }
   if (gtilesGround) {
     const deg = (Math.max(0, Math.min(100, elTiltRange.value)) / 100) * 65;
     lsSet("golf.gtilesPitch", elTiltRange.value);
@@ -8096,9 +8210,8 @@ function updateTiltBtn() {
   const base = (mode === "course" || mode === "range") && !greenView && !cine;
   const apple = appleGroundActive();
   const three = render3D;
-  const mbox = mboxGround;
   const gt = gtilesGround;
-  const showBtn = base && !apple && !three && !mbox && !gt, showSlider = base && (apple || three || mbox || gt) && mode === "course";
+  const showBtn = base && !apple && !three && !gt, showSlider = base && (apple || three || gt) && mode === "course";
   if (showBtn !== _tiltBtnShown) { _tiltBtnShown = showBtn; elTiltBtn.classList.toggle("hidden", !showBtn); }
   if (showSlider !== _tiltSliderShown) {
     _tiltSliderShown = showSlider;
@@ -8108,12 +8221,12 @@ function updateTiltBtn() {
       const v = Number.isFinite(saved3) ? Math.max(0, Math.min(100, saved3)) : 0;
       elTiltRange.value = v;
       if (window.Course3D) window.Course3D.setPitch(v / 100);
-    } else if (showSlider && mbox) {
+    } else if (showSlider && gt) {
       // Default to a 3D lean (85 -> ~55°) so Pebble reads as flyover immediately.
-      const savedM = parseFloat(lsGet("golf.mboxPitch"));
-      const v = Number.isFinite(savedM) ? Math.max(0, Math.min(100, savedM)) : 85;
+      const savedG = parseFloat(lsGet("golf.gtilesPitch"));
+      const v = Number.isFinite(savedG) ? Math.max(0, Math.min(100, savedG)) : 85;
       elTiltRange.value = v;
-      if (window.Mbox3D) window.Mbox3D.setPitch((v / 100) * 65);
+      if (window.GTiles3D) window.GTiles3D.setPitch((v / 100) * 65);
     } else if (showSlider && !three) {
       const savedA = parseFloat(lsGet("golf.applePitch"));
       elTiltRange.value = Number.isFinite(savedA) ? Math.max(0, Math.min(100, savedA)) : 0;
@@ -8706,7 +8819,8 @@ function updateClubUI() {
       // chipReachLo..Hi of the pin), matching buildTrialShot's chip carry exactly.
       const b = state.ball;
       const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * previewFrac;
-      const land = Math.min(c.carry, playsLikeYards(b.x, b.y).plays * reach * chipSpinParams().landFrac);
+      const chipLieMul = lieEffectEnabled ? (TUNE.lieChip[surfaceAt(b.x, b.y)] ?? 1) : 1;  // match buildTrialShot's chip carry
+      const land = Math.min(c.carry, playsLikeYards(b.x, b.y).plays * reach * chipSpinParams().landFrac) * chipLieMul;
       yds = Math.round(land) + "y";
     } else {
       // Full shot: fold the Spin selector's carry cost AND the power slider's ceiling
@@ -11663,8 +11777,11 @@ async function fetchTourCourse(eventId) {
 // real payout-by-finish-slot table (already tie-averaged in ESPN's data).
 // Cached per event. Payouts empty until the real event is final.
 async function fetchTourResults(eventId) {
+  // Cache only POPULATED payouts, and only for TOUR_CACHE_MS — an empty result
+  // (event not yet finalized, or a transient outage) must not stick for the whole
+  // session or the prize never appears once the event finalizes.
   const c = _tourResultsCache[eventId];
-  if (c) return c;
+  if (c && c.data.payouts.length && Date.now() - c.at < TOUR_CACHE_MS) return c.data;
   const d = await fetchJSONRetry(TOUR_CORE_EVENT + encodeURIComponent(eventId));
   if (!d) return null;
   const comp = (d.competitions || [])[0] || {};
@@ -11673,7 +11790,7 @@ async function fetchTourResults(eventId) {
     .filter((v) => v > 0)
     .sort((a, b) => b - a);
   const res = { purse: +d.purse || 0, displayPurse: d.displayPurse || null, payouts };
-  _tourResultsCache[eventId] = res;
+  if (payouts.length) _tourResultsCache[eventId] = { at: Date.now(), data: res };
   return res;
 }
 
@@ -11798,6 +11915,19 @@ function matchTourCourse(name) {
   return bestScore >= 0.6 ? best : null;
 }
 
+// Resolve an event to a baked COURSES entry. Prefer the static tour_venues.json
+// map (the SAME source the schedule chip reads) so the board and the chip always
+// agree on playability; fall back to live venue-name matching for events not in
+// the map. Survives a failed venue fetch when the map already knows the course.
+function resolveTourCourse(eventId, venueName) {
+  const m = (_tourVenueMap || {})[eventId];
+  if (m && m.courseId) {
+    const c = COURSES.find((x) => x.id === m.courseId && !HIDDEN_COURSE_IDS.has(x.id));
+    if (c) return c;
+  }
+  return venueName ? matchTourCourse(venueName) : null;
+}
+
 function fmtEventDate(iso) {
   if (!iso) return "soon";
   try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
@@ -11871,8 +12001,10 @@ async function fetchTourLeaderboard(eventId, startISO) {
   }).filter((p) => p.total != null || p.rounds.length);
   players.sort((a, b) => (a.total == null ? 999 : a.total) - (b.total == null ? 999 : b.total));
 
-  const canceled = (((ev.status || {}).type) || {}).name === "STATUS_CANCELED"
-    || (state === "post" && !players.length);
+  // Only an explicit ESPN status marks an event canceled. An empty field on a
+  // "post" event is far more likely a transient feed outage than a real
+  // cancellation — treating it as canceled hid playable events during 502s.
+  const canceled = (((ev.status || {}).type) || {}).name === "STATUS_CANCELED";
   const data = { eventId: ev.id, name: ev.name || ev.shortName, state, round, roundLabel, courseName: null, players, canceled };
   _tourLbCache[key] = { at: Date.now(), data };
   return data;
@@ -12191,15 +12323,16 @@ async function openTourEvent(ev) {
   document.getElementById("tb-list").innerHTML = "";
   document.getElementById("tb-course").textContent = "";
 
-  const data = await fetchTourLeaderboard(ev.id, ev.start);
+  const [data] = await Promise.all([fetchTourLeaderboard(ev.id, ev.start), loadTourVenueMap()]);
   if (ov.classList.contains("hidden") || _tourOpenEvent !== ev) return;   // closed / switched while loading
   if (!data) { document.getElementById("tb-status").textContent = "Couldn't reach the tour feed — try again."; return; }
 
   // Resolve the venue → baked course (for "Tee off"). Canceled events don't play.
+  // Map-first (matches the schedule chip); venue name is a fallback / fetch-fail guard.
   const course = data.canceled ? null : await fetchTourCourse(ev.id);
   if (ov.classList.contains("hidden") || _tourOpenEvent !== ev) return;
   data.courseName = course ? course.name : null;
-  _tourCourseMatch = course ? matchTourCourse(course.name) : null;
+  _tourCourseMatch = data.canceled ? null : resolveTourCourse(ev.id, course ? course.name : null);
   _tourBoardData = data;
   ensureTourEvent(ev.id, data.name || ev.name);
 
@@ -15048,11 +15181,8 @@ function loop() {
   updateWindChip();
   updateGreenViewBtn();
   updateTiltBtn();
-  updateMboxStyleBtn();
   update3DMode();  // cheap — no-ops unless mode/course actually changed
   if (render3D && window.Course3D) window.Course3D.render();
-  updateMboxMode(); // cheap — no-ops unless mode/course actually changed
-  if (mboxGround && window.Mbox3D) window.Mbox3D.render(); // sync map camera + matrix BEFORE draw()
   updateGtilesMode(); // cheap — no-ops unless mode/course actually changed
   if (gtilesGround && window.GTiles3D) window.GTiles3D.render(); // sync camera + tiles BEFORE draw()
   // Apple ground sync (Butter Brook) happens inside draw() itself — see
@@ -15080,12 +15210,12 @@ window.GolfBridge = {
   terrainZ,
   surfaceAt,
   isRender3D: () => render3D,
-  // world (game units) -> [lng,lat] affine for the Mapbox ground (mbox3d.js).
-  // Same source as the Apple ground (course.geo.toLonLat + any imagery correction).
+  // world (game units) -> [lng,lat] affine for the geo grounds (gtiles3d.js /
+  // Apple). Same source as course.geo.toLonLat + any imagery correction.
   geoAffine: () => appleGeoAffine(),
-  // Ball + club-reach anchor points (world units) for Mapbox framing — mirrors
-  // frameClubReach's reach math so the Mapbox camera can put the ball near the
-  // screen bottom and the club's landing near the top (same as the flat game).
+  // Ball + club-reach anchor points (world units) for the 3D camera framing —
+  // mirrors frameClubReach's reach math so the geo-ground camera can put the ball
+  // near the screen bottom and the club's landing near the top (like the flat game).
   frameAnchors: () => {
     if (!HOLE || !state || !state.ball) return null;
     const b = state.ball, c = TUNE.clubs[selectedClub];

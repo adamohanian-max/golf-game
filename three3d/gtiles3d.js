@@ -1,12 +1,12 @@
 // Google Photorealistic 3D Tiles ground engine for the main game (Pebble Beach).
 //
-// A 4th ground backend beside mbox3d.js (Mapbox), course3d.js (Four Oaks three.js)
-// and the Apple MapKit flyover. Same compositing model: a full-screen 3D canvas
-// (#cgt) sits behind the transparent #game canvas; all gameplay (cup/ball/aim/
-// contours) keeps drawing on #game, glued to the photoreal ground by the
-// projection bridge. game.js routes wx()/wy()/ws()/screenToWorld() through
-// window.GTiles3D.project/unproject when view.gtilesProj is set — exactly like
-// view.mboxProj.
+// A ground backend beside course3d.js (Four Oaks three.js) and the Apple MapKit
+// flyover — it replaced the old Mapbox GL ground (deleted 2026-07-24). Same
+// compositing model: a full-screen 3D canvas (#cgt) sits behind the transparent
+// #game canvas; all gameplay (cup/ball/aim/contours) keeps drawing on #game,
+// glued to the photoreal ground by the projection bridge. game.js routes
+// wx()/wy()/ws()/screenToWorld() through window.GTiles3D.project/unproject when
+// view.gtilesProj is set (the same pattern the three.js/Apple grounds use).
 //
 // Streams Google's real-world photoreal mesh via 3d-tiles-renderer. Because the
 // root app vendors three r160 but the renderer needs three >=0.167, the renderer
@@ -41,9 +41,9 @@ let tiles = null;
 let reorient = null;
 let ready = false;
 let activeCourseId = null;
-let pitchDeg = 55;      // camera pitch (Mapbox sense: 0 = top-down, 90 = horizon)
+let pitchDeg = 55;      // camera pitch (0 = top-down, 90 = horizon)
 
-// ---- bridge helpers (identical to mbox3d.js) --------------------------------
+// ---- bridge helpers ---------------------------------------------------------
 function gb() { return window.GolfBridge; }
 function M() { const g = gb(); return (g && g.M_PER_UNIT) || M_FALLBACK; }
 function worldToLngLat(x, y) {
@@ -68,7 +68,7 @@ function sceneAt(lngDeg, latDeg, hM, out) {
   return out.copy(_cart).applyMatrix4(tiles.group.matrixWorld);
 }
 
-// ---- projection bridge (the Mbox3D.project analog) -------------------------
+// ---- projection bridge -----------------------------------------------------
 // World (game coords, zUnits = height above ground in WORLD units) → screen CSS
 // px through the live three camera. Ground points arrive with zUnits already
 // carrying the game DEM ground height (game.js passes terrainZ), like Course3D —
@@ -105,10 +105,10 @@ function unproject(sx, sy) {
 }
 
 // ---- camera: drive the three camera from the game camera each frame ---------
-// Ports mbox3d.setCamera: look-at O from frameAnchors (ball↔reach convergence),
-// distance from view.scale, bearing from cam.angle, pitch from the tilt slider —
-// but positions a free three PerspectiveCamera in the reoriented scene, using a
-// local ENU basis measured by finite-differencing sceneAt() at O.
+// Look-at O from frameAnchors (ball↔reach convergence), distance from view.scale,
+// bearing from cam.angle, pitch from the tilt slider — positions a free three
+// PerspectiveCamera in the reoriented scene, using a local ENU basis measured by
+// finite-differencing sceneAt() at O.
 let _ctrBias = 0.5, _zAdj = 0;
 const BALL_FRAC = 0.90;   // ball at 90% down
 const REACH_FRAC = 0.15;  // club landing at 15% down

@@ -242,32 +242,6 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
 #tilt-view-btn.hidden { display: none; }
 #tilt-view-btn.active { background: rgba(46, 125, 79, 0.4); border-color: rgba(99, 185, 139, 0.5); }
 
-/* Mapbox ground style toggle (Pebble): a small labeled pill, top-left under the
-   scorecard, clear of the bottom-left tilt slider + layers controls. */
-#mbox-style-btn {
-  position: fixed;
-  left: var(--s-3);
-  top: calc(env(safe-area-inset-top, 0px) + 104px);
-  min-width: 52px;
-  height: 30px;
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: 700 12px/1 var(--font-ui, system-ui, sans-serif);
-  letter-spacing: 0.04em;
-  border: var(--border-edge);
-  border-radius: var(--r-md);
-  background: var(--surface-hud);
-  -webkit-backdrop-filter: blur(var(--blur-xs));
-  backdrop-filter: blur(var(--blur-xs));
-  color: var(--text);
-  cursor: pointer;
-  z-index: 15;
-  box-shadow: var(--shadow-1);
-}
-#mbox-style-btn.hidden { display: none; }
-
 /* Apple-ground camera tilt slider — replaces #tilt-view-btn there. Same left
    anchor as the button; vertical range shares the #attr-slider treatment
    (top = 3D lean, bottom = 2D overhead). */

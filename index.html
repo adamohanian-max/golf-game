@@ -13,8 +13,8 @@
   <link rel="icon" type="image/png" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=59">
-  <link rel="stylesheet" href="css/base.css?v=69">
-  <link rel="stylesheet" href="css/hud.css?v=99">
+  <link rel="stylesheet" href="css/base.css?v=70">
+  <link rel="stylesheet" href="css/hud.css?v=100">
   <link rel="stylesheet" href="css/menu.css?v=84">
   <link rel="stylesheet" href="css/courses.css?v=8">
   <link rel="stylesheet" href="css/modals.css?v=82">
@@ -32,29 +32,19 @@
   </script>
   <!-- "gtiles" = 3d-tiles-renderer + its OWN bundled three@0.179 (the root three
        is r160, too old for the renderer). Powers the Google Photorealistic 3D
-       ground prototype (three3d/gtiles3d.js) for Pebble only. Rebuild via
-       `cd web && npm run build:gtiles`. -->
+       ground (three3d/gtiles3d.js) — Pebble's ground on web AND the iOS webview
+       (the native app loads the live site, so it's online, not CSP-blocked).
+       Rebuild the bundle via `cd web && npm run build:gtiles`. -->
   <script>
-    // Google Maps Platform key with the Map Tiles API enabled — powers the
-    // experimental Google photoreal ground for Pebble. Empty = self-disabled.
-    // WEB-ONLY (online + billed; Capacitor offline CSP blocks it). Set
-    // localStorage "golf.googleTilesToken" + "golf.pebbleGround"="gtiles" to try.
+    // Google Maps Platform key with the Map Tiles API enabled — powers the Google
+    // photoreal ground (Pebble). Online + billed per session. Empty = self-
+    // disabled (course falls back to the flat 2D baked aerial). Kept gated for now:
+    // set localStorage "golf.googleTilesToken" to enable. To ship publicly, inline
+    // a referrer-restricted key here (+ render the real Google logo, ToS).
     window.GOOGLE_TILES_TOKEN = "" ||
       (function () { try { return localStorage.getItem("golf.googleTilesToken") || ""; } catch (e) { return ""; } })();
   </script>
 
-  <!-- Mapbox GL JS 3D ground (Pebble Beach) — vendored like three (Capacitor CSP);
-       tiles still need network at runtime. Token is a public pk. scoped key, shipped
-       inline like the Supabase anon key; URL-restrict it in the Mapbox dashboard.
-       Paste a token to enable; empty self-disables so there are no errors on a fork. -->
-  <link rel="stylesheet" href="./vendor/mapbox-gl/mapbox-gl.css" />
-  <script defer src="./vendor/mapbox-gl/mapbox-gl.js"></script>
-  <script>
-    // Paste a token here to enable for everyone; or set localStorage "golf.mapboxToken"
-    // to test on a device without committing a credential. Empty = self-disabled.
-    window.MAPBOX_TOKEN = "" ||
-      (function () { try { return localStorage.getItem("golf.mapboxToken") || ""; } catch (e) { return ""; } })();
-  </script>
 
   <!-- Analytics: PostHog, cookieless (localStorage id, no cookies -> no consent
        banner needed). Only measures product usage for retention/funnels; no ads,
@@ -134,9 +124,6 @@
   <button id="hud-btn" class="hidden" aria-label="Controls"><span class="ic ic-menu"></span></button>
   <button id="green-view-btn" class="hidden" aria-label="Read green"><span class="ic ic-green3d"></span></button>
   <button id="tilt-view-btn" class="hidden" aria-label="3D view"><span class="ic ic-tilt"></span></button>
-  <!-- Mapbox ground style toggle (Pebble): flip Satellite <-> Vector for comparison.
-       Visible only on the Mapbox ground (see updateMboxStyleBtn in game.js). -->
-  <button id="mbox-style-btn" class="hidden" aria-label="Map style">SAT</button>
   <!-- Apple-ground camera tilt: vertical slider, top = 3D lean, bottom = 2D
        overhead. Replaces #tilt-view-btn on courses with the native MapKit
        ground (see updateTiltBtn / #tilt-range wiring in game.js). -->
@@ -842,8 +829,7 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script type="module" src="./three3d/mbox3d.js?v=17"></script>
-  <script type="module" src="./three3d/gtiles3d.js?v=1"></script>
-  <script defer src="game.js?v=324"></script>
+  <script type="module" src="./three3d/gtiles3d.js?v=2"></script>
+  <script defer src="game.js?v=327"></script>
 </body>
 </html>
