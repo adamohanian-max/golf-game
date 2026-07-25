@@ -11516,8 +11516,15 @@ async function fetchTourSchedule() {
   const liveById = {};
   for (const e of (sb.events || [])) {
     const type = ((e.status || {}).type) || {};
+    const comp = ((e.competitions || [])[0]) || {};
     liveById[e.id] = {
-      state: type.state, period: (e.status || {}).period,
+      state: type.state,
+      // ESPN carries the live round on the COMPETITION status; the event-level
+      // status often has only `type` and no `period` at all. Without this
+      // fallback a live event reports period undefined and canPlayRound() locks
+      // every round — the 3M Open (in progress on R3) was unplayable this way.
+      // Mirrors the same fallback chain fetchTourLeaderboard already uses.
+      period: (e.status || {}).period || (comp.status || {}).period,
       canceled: type.name === "STATUS_CANCELED",
       name: e.name || e.shortName,
     };
@@ -11549,6 +11556,21 @@ function canPlayRound(ev, N) {
   if (ev.state === "post") return true;
   if (ev.state === "in") return (ev.period || 0) >= N;
   return false;   // pre
+}
+
+// The event the round gate is evaluated against: the schedule entry, but with
+// the live round taken from whichever source actually has one. The board's
+// leaderboard (45s cache, resolves period off the competition status and floors
+// at 1) is fresher than the schedule (5min cache) and is the authority once an
+// event is open — so a schedule entry missing `period` can never lock a live
+// event out of round 1 again.
+function tourGateEvent(data) {
+  const ev = _tourOpenEvent;
+  return {
+    state: (ev && ev.state) || (data && data.state),
+    period: Math.max(+((ev && ev.period) || 0), +((data && data.round) || 0)),
+    canceled: !!((ev && ev.canceled) || (data && data.canceled)),
+  };
 }
 
 // Venue detail for an event (course name, location, par, per-hole data).
@@ -12224,7 +12246,7 @@ function renderTourBoard(data) {
     } else {
       tee.classList.remove("hidden");
       const rn = ((getTourEvent(data.eventId) || {}).rounds || []).length + 1;
-      const gev = _tourOpenEvent || { state: data.state, period: data.round, canceled: data.canceled };
+      const gev = tourGateEvent(data);
       const missedCut = rn >= 3 && !tourMadeCut();
       let label, dis = false;
       if (rn > 4) { label = "Event complete"; dis = true; }
@@ -12259,7 +12281,7 @@ function teeOffTourRound() {
   const rounds = ((getTourEvent(data.eventId) || {}).rounds) || [];
   if (rounds.length >= 4) return;
   if (rounds.length === 2 && !tourMadeCut()) return;   // missed the cut — no R3/R4
-  const gev = _tourOpenEvent || { state: data.state, period: data.round, canceled: data.canceled };
+  const gev = tourGateEvent(data);
   if (!canPlayRound(gev, rounds.length + 1)) return;   // real-life round gate
   hideTourBoard();
   selectedCourseId = _tourCourseMatch.id;
