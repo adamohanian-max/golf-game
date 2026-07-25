@@ -39,7 +39,8 @@ let scene = null;
 let camera = null;
 let tiles = null;
 let reorient = null;
-let ready = false;
+let ready = false;    // real rendered geometry (gates the game's overlays)
+let _placed = false;  // tileset bounds known (enough to aim the camera)
 let activeCourseId = null;
 let pitchDeg = 55;      // camera pitch (0 = top-down, 90 = horizon)
 // Offline / weak-signal fallback: Google tiles can't be cached or used offline
@@ -48,6 +49,7 @@ let pitchDeg = 55;      // camera pitch (0 = top-down, 90 = horizon)
 let _failed = false;
 let _errCount = 0;
 let _enterAt = 0;
+const _evt = { loadModel: 0, disposeModel: 0, loadTileSet: 0, loadEnd: 0, err: 0 };
 const FAIL_ERRS = 8;        // this many load-errors before ready → give up
 const FAIL_TIMEOUT_MS = 9000; // no geometry within this after enter → give up
 
@@ -121,6 +123,9 @@ function meshHeightAt(x, y) {
 // real terrain isn't linear). Cells refresh round-robin (~24/frame) so cost stays
 // tiny and the field fills in / self-heals as tiles stream. Terrain is static, so
 // a cell keeps its last good value; only null-until-loaded cells read 0.
+// Mesh-vs-DEM offset is the geoid separation plus terrain error — tens of
+// metres. Anything beyond this is a coarse-LOD artefact, not real ground.
+const MAX_ABS_OFFSET_M = 120;
 const GRID_SPACING = 14;   // world units between samples (~42 yд)
 let _grid = null;          // { x0,y0,dx,nx,ny, off:Float32Array, ok:Uint8Array }
 let _gridCursor = 0;
@@ -144,7 +149,18 @@ function refreshGridBatch(n) {
     const gx = i % gr.nx, gy = (i / gr.nx) | 0;
     const wx = gr.x0 + gx * gr.dx, wy = gr.y0 + gy * gr.dy;
     const mh = meshHeightAt(wx, wy);
-    if (mh != null) { gr.off[i] = mh - (tz ? tz(wx, wy) : 0) * m; gr.ok[i] = 1; }
+    if (mh != null) {
+      const off = mh - (tz ? tz(wx, wy) : 0) * m;
+      // SANITY BAND — do not let a bad sample latch. Early on, the only geometry
+      // loaded can be a continent-scale low-LOD tile whose surface is hundreds of
+      // metres off. Storing that offset drove the camera ~270m UNDERGROUND, so no
+      // tile was ever visible, the group emptied, every later raycast returned
+      // null, and the stale cell values could never be corrected: a permanent
+      // blank-ground deadlock (and the source of the intermittent white screen —
+      // it's a race on whether a coarse tile is sampled before a real one).
+      // The genuine offset here is the geoid separation, tens of metres.
+      if (Math.abs(off) <= MAX_ABS_OFFSET_M) { gr.off[i] = off; gr.ok[i] = 1; }
+    }
   }
   // Running mean of filled cells — the fallback for corners not yet sampled.
   let sum = 0, cnt = 0;
@@ -218,7 +234,7 @@ let _hold = null;    // {Ox,Oy,D} target captured at rest, reused during flight 
 let _camEase = null; // {Ox,Oy,D} EASED toward target each frame → glide between shots
 let _camEaseT = 0;
 function setCamera() {
-  if (!ready || !tiles || !camera) return;
+  if (!_placed || !tiles || !camera) return;
   const g = gb(), view = g.getView(), cam = g.getCamera(), m = M();
   const W = window.innerWidth, H = window.innerHeight;
   const dpr = window.devicePixelRatio || 1;
@@ -361,7 +377,12 @@ function buildTiles() {
   tiles.lruCache.minSize = 600;
   tiles.setCamera(camera);
   scene.add(tiles.group);
+  tiles.addEventListener("load-model", () => { _evt.loadModel++; });
+  tiles.addEventListener("dispose-model", () => { _evt.disposeModel++; });
+  tiles.addEventListener("load-tile-set", () => { _evt.loadTileSet++; });
+  tiles.addEventListener("tiles-load-end", () => { _evt.loadEnd++; });
   tiles.addEventListener("load-error", (e) => {
+    _evt.err++;
     try { console.warn("[gtiles3d]", (e && e.error && e.error.message) || e.url); } catch (err) {}
     // A burst of load-errors before any geometry = Google unreachable → fall back.
     if (!ready && ++_errCount >= FAIL_ERRS) _failed = true;
@@ -373,9 +394,9 @@ function enter(opts) {
   if (!window.GOOGLE_TILES_TOKEN) { try { console.warn("[gtiles3d] no GOOGLE_TILES_TOKEN"); } catch (e) {} return; }
   // Known-offline up front → don't even try; game.js keeps the 2D aerial.
   if (typeof navigator !== "undefined" && navigator.onLine === false) { _failed = true; return; }
-  _failed = false; _errCount = 0; _enterAt = performance.now();
+  _failed = false; _errCount = 0; _enterAt = performance.now(); _placed = false; ready = false;
   buildRenderer();
-  container.style.display = "block";
+  container.style.display = "block"; _hidden = false;
   document.documentElement.style.background = "transparent";
   document.body.style.background = "transparent";
   if (tiles) { return; } // resident across re-enters
@@ -383,12 +404,12 @@ function enter(opts) {
 }
 
 function leave() {
-  ready = false;
+  ready = false; _placed = false;
   // NOTE: do NOT reset _failed here. leave() fires when gtilesGroundActive() flips
   // false — which, on a failure, is BECAUSE _failed is true. Clearing it would
   // re-enable the gate and re-enter next frame (flip-flop). _failed is sticky for
   // the session; enter() clears it on a fresh course (a genuine retry).
-  if (container) container.style.display = "none";
+  if (container) { container.style.display = "none"; _hidden = true; }
   document.documentElement.style.background = "";
   document.body.style.background = "";
 }
@@ -399,17 +420,46 @@ function leave() {
 // which needs this frame's height offset ready.
 function render() {
   if (!tiles || !camera || !renderer) return;
+  // ORDER IS LOAD-BEARING: aim the camera BEFORE tiles.update().
+  // update() runs the LOD traversal, and this library only adds a tile's scene
+  // to tiles.group once traversal marks it visible — which is decided from the
+  // camera. Updating first meant traversal always ran against an unpositioned
+  // camera: 224 models parsed fine, none were ever marked visible, the group
+  // stayed empty and the course rendered as a blank white ground. (The working
+  // standalone viewer positions its camera first for exactly this reason.)
+  setCamera();
+  camera.updateMatrixWorld();
   tiles.setResolutionFromRenderer(camera, renderer);
   tiles.update();
   tiles.group.updateMatrixWorld(true);
-  // Ready once the root tileset has produced geometry near the anchor.
-  if (!ready) {
+  // TWO readiness stages, deliberately separate:
+  //
+  //  _placed = the tileset has a bounding volume (root.json parsed). Enough to
+  //     aim the camera — and we MUST aim it before anything can render, so this
+  //     is what gates setCamera(). (Gating that on real geometry deadlocks: no
+  //     camera → nothing in frustum → no geometry → never ready.)
+  //  ready  = the renderer actually DREW triangles last frame, i.e. there is
+  //     visible mesh. This is what the game gates its overlays on.
+  //
+  // The old code used _placed for both. Since the bounding volume exists the
+  // moment root.json parses, `ready` went true even when tiles downloaded 200 OK
+  // but never rendered — so the failure timeout never armed and the course sat
+  // on a blank white ground with no fallback. That was the white-screen bug.
+  if (!_placed) {
     const s = new THREE.Sphere();
-    ready = tiles.getBoundingSphere(s) && s.radius > 0;
-    // No geometry within the timeout (weak/no signal) → fall back to 2D aerial.
-    if (!ready && _enterAt && performance.now() - _enterAt > FAIL_TIMEOUT_MS) _failed = true;
+    _placed = tiles.getBoundingSphere(s) && s.radius > 0;
   }
-  if (ready) {
+  if (!ready) ready = renderer.info.render.triangles > 0;   // previous frame's draw
+  // No visible geometry within the timeout (weak/no signal, or tiles that load
+  // but never render) → give up so game.js falls back to the 2D aerial.
+  if (!ready && _enterAt && performance.now() - _enterAt > FAIL_TIMEOUT_MS) _failed = true;
+  // Height field runs off _placed, NOT ready — deliberately. setCamera()'s
+  // look-at height comes from offsetAt(), so gating the grid on rendered
+  // geometry deadlocks: no grid → the camera aims ~40m off the real mesh →
+  // nothing in frustum → no triangles → ready never flips → grid never fills.
+  // meshHeightAt() just returns null for columns whose tiles haven't streamed
+  // yet, so sampling early is harmless and self-heals as they arrive.
+  if (_placed) {
     // Reset the height field + flight-hold + eased camera on a hole change (per-
     // hole WORLD). Nulling _camEase makes the new hole SNAP into frame (no glide
     // across the whole course from the old hole).
@@ -417,8 +467,7 @@ function render() {
     if (H !== _lastHole) { _grid = null; _hold = null; _camEase = null; _lastHole = H; }
     refreshGridBatch(24);
   }
-  setCamera();
-  renderer.render(scene, camera);
+  renderer.render(scene, camera);   // camera was aimed at the top of this frame
 }
 let _lastHole = null;
 
@@ -430,6 +479,17 @@ function resize() {
 }
 
 function setPitch(deg) { pitchDeg = Math.max(0, Math.min(85, deg)); }
+// Hide the tiles canvas while a full-screen 2D overlay (cinematic landing, 3D
+// green inspect) is up. Those paint an 0.88 scrim on the TRANSPARENT #game
+// canvas, so without this the live photoreal ground ghosts through and keeps
+// moving behind the overlay. Only touches the DOM on a change.
+let _hidden = false;
+function setHidden(h) {
+  h = !!h;
+  if (h === _hidden || !container) return;
+  _hidden = h;
+  container.style.display = h ? "none" : "block";
+}
 function isReady() { return ready; }
 function failed() { return _failed; }  // Google unavailable → game.js uses 2D aerial
 
@@ -441,11 +501,27 @@ function getAttributions() {
 }
 
 function debug() {
-  return { ready, courseId: activeCourseId, pitch: pitchDeg,
-    hasToken: !!window.GOOGLE_TILES_TOKEN, tiles: !!tiles };
+  let meshes = 0, verts = 0;
+  if (tiles && tiles.group) tiles.group.traverse((o) => {
+    if (o.isMesh) { meshes++; verts += (o.geometry && o.geometry.attributes && o.geometry.attributes.position) ? o.geometry.attributes.position.count : 0; }
+  });
+  return { ready, placed: _placed, failed: _failed, courseId: activeCourseId, pitch: pitchDeg,
+    hasToken: !!window.GOOGLE_TILES_TOKEN, tiles: !!tiles,
+    tris: renderer ? renderer.info.render.triangles : -1,
+    drawCalls: renderer ? renderer.info.render.calls : -1,
+    evt: JSON.parse(JSON.stringify(_evt)),
+    visible: tiles && tiles.visibleTiles ? tiles.visibleTiles.size : -1,
+    active: tiles && tiles.activeTiles ? tiles.activeTiles.size : -1,
+    lru: tiles && tiles.lruCache ? (tiles.lruCache.itemList ? tiles.lruCache.itemList.length : -1) : -1,
+    cams: tiles && tiles.cameras ? tiles.cameras.length : -1,
+    hasRoot: !!(tiles && tiles.root),
+    errTarget: tiles ? tiles.errorTarget : -1,
+    camPos: camera ? camera.position.toArray().map(n=>Math.round(n)) : null,
+    rendSize: renderer ? [renderer.domElement.width, renderer.domElement.height] : null,
+    meshes, verts, groupChildren: tiles && tiles.group ? tiles.group.children.length : -1 };
 }
 
 window.GTiles3D = {
-  enter, leave, render, resize, setPitch, project, unproject, isReady, failed,
+  enter, leave, render, resize, setPitch, setHidden, project, unproject, isReady, failed,
   getAttributions, worldToLngLat, lngLatToWorld, debug,
 };

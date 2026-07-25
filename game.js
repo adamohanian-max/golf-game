@@ -748,6 +748,23 @@ function gtilesGroundActive() {
     window.GOOGLE_TILES_TOKEN && window.GTiles3D &&
     !(window.GTiles3D.failed && window.GTiles3D.failed()));  // offline/weak → 2D aerial
 }
+// True when this course's ground is rendered by the Google photoreal tiles, so
+// the baked 2D aerial would never be painted (see loadCourseAerial).
+function gtilesOwnsGround(id) {
+  return !!(GTILES_IDS.has(id) && window.GOOGLE_TILES_TOKEN && window.GTiles3D);
+}
+// Fetch + grade a global course's baked aerial. Idempotent; safe to call late.
+function loadCourseAerial(c) {
+  if (!c || c._imgReady || c._aerialLoading || !c._aerialFile || typeof Image === "undefined") return;
+  c._aerialLoading = true;
+  const img = new Image();
+  img.onload = () => {
+    const baked = processAerial(img);
+    c._img = baked; c._imgReady = true;
+    if (HOLE && HOLE.isGlobal) { HOLE._img = baked; HOLE._imgReady = true; }
+  };
+  img.src = "courses/" + c._aerialFile;
+}
 let gtilesGround = false;
 // Mirrors updateMboxMode for the Google photoreal ground.
 function updateGtilesMode() {
@@ -758,6 +775,10 @@ function updateGtilesMode() {
   if (window.GTiles3D) {
     if (gtilesGround) window.GTiles3D.enter({ courseId: course.id }); else window.GTiles3D.leave();
   }
+  // Dropping OUT of the photoreal ground on a gtiles course = the 3D failed
+  // (offline / weak signal). That falls back to the flat 2D aerial, which we
+  // skipped downloading at load — fetch it now.
+  if (!gtilesGround && course && GTILES_IDS.has(course.id)) loadCourseAerial(course);
 }
 let _appleGroundEntered = false;
 let _lastAppleSync = 0;
@@ -2523,6 +2544,22 @@ function swipeToShot(dxs, dys, dt, powerScale) {
     const p0 = appleUnproject(view.appleProj, s0.x, s0.y);
     const p1 = appleUnproject(view.appleProj, s0.x + dxs, s0.y + dys);
     ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+  } else if (view.gtilesProj) {
+    // Google photoreal 3D: same problem, same fix as the Apple ground — the flat
+    // affine inverse is wrong under the pitched tiles camera (screen-vertical is
+    // foreshortened), so the shot wouldn't follow the line the finger traced.
+    // Unproject a SHORT segment through the ball's screen position: the sample
+    // stays near the ball, where the mesh is loaded, and direction is all we
+    // need. GTiles3D.unproject raycasts the real mesh and can miss (tiles not
+    // streamed yet) — fall back to the flat formula rather than firing blind.
+    const b = state.ball;
+    const s0 = window.GTiles3D.project(b.x, b.y, terrainZ(b.x, b.y));
+    const L = Math.hypot(dxs, dys) || 1, k = 60 / L;   // ~60px probe, same heading
+    const p0 = window.GTiles3D.unproject(s0.x, s0.y);
+    const p1 = window.GTiles3D.unproject(s0.x + dxs * k, s0.y + dys * k);
+    ang = (p0 && p1)
+      ? Math.atan2(p1.y - p0.y, p1.x - p0.x)
+      : Math.atan2(dys / view.tilt, dxs) - view.angle;
   } else {
     ang = Math.atan2(dys / view.tilt, dxs) - view.angle; // undo tilt squash, then rotation
   }
@@ -2661,6 +2698,20 @@ function swingMove(e) {
       const w1 = appleUnproject(view.appleProj, cx, cy);
       camera.tFocus.x += w0.x - w1.x;
       camera.tFocus.y += w0.y - w1.y;
+      camTouch.prevCx = cx; camTouch.prevCy = cy;
+    } else if (view.gtilesProj) {
+      // Same as Apple: the flat affine bends pan speed/direction under the
+      // pitched tiles camera. Incremental world delta between the previous and
+      // current midpoint, raycast onto the real mesh. A missed raycast (tiles
+      // still streaming) just skips this event's pan — never jump the camera.
+      const pcx = camTouch.prevCx != null ? camTouch.prevCx : camTouch.cx;
+      const pcy = camTouch.prevCy != null ? camTouch.prevCy : camTouch.cy;
+      const w0 = window.GTiles3D.unproject(pcx, pcy);
+      const w1 = window.GTiles3D.unproject(cx, cy);
+      if (w0 && w1) {
+        camera.tFocus.x += w0.x - w1.x;
+        camera.tFocus.y += w0.y - w1.y;
+      }
       camTouch.prevCx = cx; camTouch.prevCy = cy;
     } else {
       const dcx = cx - camTouch.cx, dcy = cy - camTouch.cy;
@@ -3596,6 +3647,27 @@ function _gtPt(x, y) {
 function wx(x, y) { return view.gtilesProj ? _gtPt(x, y).x : view.threeProj ? _tPt(x, y).x : view.appleProj ? _apPt(x, y).x : view.a * x + view.b * y + view.c; }
 function wy(x, y) { return view.gtilesProj ? _gtPt(x, y).y : view.threeProj ? _tPt(x, y).y : view.appleProj ? _apPt(x, y).y : view.d * x + view.e * y + view.f; }
 function ws(v) { return v * (view.gtilesProj ? view.gtilesScale : view.threeProj ? view.threeScale : view.scale); }
+// Ball draw radius in screen px. Under a perspective ground the ball must size
+// off the ball-LOCAL scale (appleScale/gtilesScale) so it grows as the camera
+// closes in; ws() there uses the flat top-down view.scale, which never
+// foreshortens. The true 1.68" ball is sub-4px at every framing, so this is an
+// exaggerated golf-sim radius, clamped readable. Shared by the live ball, the
+// hole-drop animation and the opponent ghost — they used to each roll their own
+// and drifted (the drop popped 18px -> 4px the instant the ball started falling).
+function ballDrawRadius() {
+  if (view.appleProj) return Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
+  if (view.gtilesProj) return Math.max(4, Math.min(18, view.gtilesScale * APPLE_BALL_DRAW_UNITS));
+  return Math.max(ws(BALL_RADIUS_UNITS), 4);
+}
+// Screen-px lift for a ball at height `z` (world units) over ground (x,y). Under
+// a perspective ground the height must be projected for real so flight arcs
+// foreshorten; ws(z) is the flat-screen approximation.
+function ballLiftPx(x, y, z, groundScreenY) {
+  if (view.gtilesProj) return groundScreenY - window.GTiles3D.project(x, y, terrainZ(x, y) + z).y;
+  if (view.threeProj) return groundScreenY - window.Course3D.project(x, y, terrainZ(x, y) + z).y;
+  if (view.appleProj) return groundScreenY - appleProjPt(view.appleProj, x, y, z + _apGroundZ(view.appleProj, x, y)).y;
+  return ws(z);
+}
 // Inverse: screen px -> world coords (for the range finder).
 function screenToWorld(sx, sy) {
   if (view.gtilesProj) return window.GTiles3D.unproject(sx, sy) || { x: state.ball.x, y: state.ball.y };
@@ -4431,6 +4503,20 @@ function drawGreenRelief(g, intensity, showArrows) {
     va = (qx.x - q0.x) / h; vd = (qx.y - q0.y) / h;
     vb = (qy.x - q0.x) / h; ve = (qy.y - q0.y) / h;
     vc = q0.x - va * cx - vb * cy; vf = q0.y - vd * cx - ve * cy;
+  } else if (view.gtilesProj) {
+    // Same linearization under the Google photoreal camera — without it the
+    // hillshade raster blits through the flat top-down affine and lands nowhere
+    // near the green. project() already mesh-anchors the height internally, so
+    // the sample points just pass the game DEM height like every other call.
+    let cx = 0, cy = 0;
+    for (const p of g.poly) { cx += p.x; cy += p.y; }
+    cx /= g.poly.length; cy /= g.poly.length;
+    const zc = terrainZ(cx, cy);
+    const h = 0.5, q0 = window.GTiles3D.project(cx, cy, zc);
+    const qx = window.GTiles3D.project(cx + h, cy, zc), qy = window.GTiles3D.project(cx, cy + h, zc);
+    va = (qx.x - q0.x) / h; vd = (qx.y - q0.y) / h;
+    vb = (qy.x - q0.x) / h; ve = (qy.y - q0.y) / h;
+    vc = q0.x - va * cx - vb * cy; vf = q0.y - vd * cx - ve * cy;
   }
   const A = va * m[0] + vb * m[3], C = va * m[1] + vb * m[4], E = va * m[2] + vb * m[5] + vc;
   const B = vd * m[0] + ve * m[3], Dd = vd * m[1] + ve * m[4], F = vd * m[2] + ve * m[5] + vf;
@@ -4836,27 +4922,67 @@ function gvPointerEnd() {
   if (d && !d.moved && d.pinch == null && performance.now() - d.t0 < 450) closeGreenView(); // tap = close
 }
 
+// Draw a world-anchored raster (image + its pixel->world affine `t`) through the
+// CURRENT projection. Flat/2.5D composes one affine and blits once. Under a
+// perspective ground (Apple pinhole / Google tiles) no single affine can cover a
+// whole hole — a green is small enough to linearize (drawGreenRelief), a
+// hole-sized mask is not — so tile the image into a grid of patches and give
+// each its own local affine (the standard textured-quad-in-canvas2D trick).
+// Clip is traced in screen space BEFORE setTransform, so it survives it.
+function drawWorldRaster(img, t, patches) {
+  const dpr = window.devicePixelRatio || 1;
+  const toScreen = (u, v) => {
+    const wxw = t[0] * u + t[1] * v + t[2], wyw = t[3] * u + t[4] * v + t[5];
+    return { x: wx(wxw, wyw), y: wy(wxw, wyw) };
+  };
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  if (!(view.appleProj || view.gtilesProj)) {          // flat: one blit, as before
+    const A = view.a * t[0] + view.b * t[3], C = view.a * t[1] + view.b * t[4];
+    const E = view.a * t[2] + view.b * t[5] + view.c;
+    const B = view.d * t[0] + view.e * t[3], D = view.d * t[1] + view.e * t[4];
+    const F = view.d * t[2] + view.e * t[5] + view.f;
+    ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+    return;
+  }
+  const N = patches || 6, iw = img.width, ih = img.height;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const u0 = iw * i / N, u1 = iw * (i + 1) / N;
+    const v0 = ih * j / N, v1 = ih * (j + 1) / N;
+    const s00 = toScreen(u0, v0), s10 = toScreen(u1, v0);
+    const s01 = toScreen(u0, v1), s11 = toScreen(u1, v1);
+    if (![s00, s10, s01, s11].every((p) => isFinite(p.x) && isFinite(p.y))) continue;
+    const a = (s10.x - s00.x) / (u1 - u0), b = (s01.x - s00.x) / (v1 - v0);
+    const d = (s10.y - s00.y) / (u1 - u0), e = (s01.y - s00.y) / (v1 - v0);
+    if (!isFinite(a) || !isFinite(b) || !isFinite(d) || !isFinite(e)) continue;
+    const c = s00.x - a * u0 - b * v0, f = s00.y - d * u0 - e * v0;
+    ctx.save();
+    ctx.beginPath();                                    // clip to this patch's quad
+    ctx.moveTo(s00.x, s00.y); ctx.lineTo(s10.x, s10.y);
+    ctx.lineTo(s11.x, s11.y); ctx.lineTo(s01.x, s01.y);
+    ctx.closePath(); ctx.clip();
+    ctx.setTransform(dpr * a, dpr * d, dpr * b, dpr * e, dpr * c, dpr * f);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 // Stylized vector rendering (used when no aerial, e.g. offline / St Andrews).
 function drawOOBOverlay(s) {
   if (!showOOB) return;
   // Mask-driven: draw the baked OOB/woods red raster through the aerial transform.
   const m = HOLE && HOLE._mask;
   if (m && m.oob) {
-    const t = m.toWorld, dpr = window.devicePixelRatio || 1;
-    const A = view.a * t[0] + view.b * t[3], C = view.a * t[1] + view.b * t[4];
-    const E = view.a * t[2] + view.b * t[5] + view.c;
-    const B = view.d * t[0] + view.e * t[3], D = view.d * t[1] + view.e * t[4];
-    const F = view.d * t[2] + view.e * t[5] + view.f;
-    ctx.save();
-    ctx.setTransform(dpr * A, dpr * B, dpr * C, dpr * D, dpr * E, dpr * F);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(m.oob, 0, 0);
-    ctx.restore();
+    drawWorldRaster(m.oob, m.toWorld);
     return;
   }
+  s = s || (HOLE && HOLE.surfaces);   // geo grounds call this without the arg
   // Fallback (no mask): OSM woods polygons.
-  if (!s.woods || !s.woods.length) return;
+  if (!s || !s.woods || !s.woods.length) return;
   ctx.save();
   ctx.globalAlpha = 0.16;
   fillPolys(s.woods, "#cc1f1f");
@@ -6031,11 +6157,26 @@ function draw() {
   } else if (gtilesGround) {
     // Google photoreal tiles are Pebble's ground — same model as Apple/three.js:
     // the tiles paint behind the transparent #game canvas, the common tail draws
-    // cup/ball/aim/contours over it via view.gtilesProj. Green tint + topo
-    // contours (the putting read) route through that projection onto the green.
+    // cup/ball/aim/contours over it via view.gtilesProj.
+    //
+    // The full ground stack is skipped (the tiles ARE the ground), but — exactly
+    // like the Apple branch below — the green-reading aids are GAMEPLAY, not
+    // ground: the tint + topo contours (drawGreen) and the shaded relief are
+    // what let you read break. Without relief, arrows were also unreachable
+    // (they only draw from inside drawGreenRelief), so with break-arrows on the
+    // slope toggle rendered literally nothing. OB tint likewise only ever ran
+    // inside the skipped stack, leaving penalty ground unmarked on this course.
     _gGen++;
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
-    if (!HOLE.isRange && window.GTiles3D && window.GTiles3D.isReady()) drawGreen(true, greensInPlay());
+    if (!HOLE.isRange && window.GTiles3D && window.GTiles3D.isReady()) {
+      const gsIn = greensInPlay();
+      drawGreen(true, gsIn);
+      for (const g of gsIn) {
+        drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient,
+                        showSlope && breakArrows);
+      }
+      drawOOBOverlay();   // no-op unless the OB-areas toggle is on
+    }
   } else if (appleGround) {
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     syncAppleGround();
@@ -6127,7 +6268,10 @@ function draw() {
     // warp) so the kz gate alone never fades them: measured from a par-3
     // tee, full-brightness fixed-px dots sprawled visually past the tiny
     // far green as scattered grit.
-    const fFade = ((view.kz || appleGround)
+    // gtiles pitches its own camera (view.kz stays 0, appleGround is false), so
+    // without naming it here the ramp never applied and the dots blazed at full
+    // brightness from a 500-yd tee framing — the same scattered-grit failure.
+    const fFade = ((view.kz || appleGround || gtilesGround)
       ? Math.min(1, Math.max(0, (view.scale - TUNE.flowFadeLo) / (TUNE.flowFadeHi - TUNE.flowFadeLo)))
       : 1) * (appleGround ? _apDetailA : 1);
     if (fFade > 0) for (const g of greensInPlay()) {
@@ -6209,13 +6353,7 @@ function draw() {
     // Screen pixels the ball floats above ground. Under the Apple pinhole the
     // height is projected for real (appleProjPt takes z) — flight arcs
     // foreshorten correctly instead of using the flat screen-lift.
-    const lift = view.gtilesProj
-      ? gy - window.GTiles3D.project(b.x, b.y, terrainZ(b.x, b.y) + b.z).y // ground DEM + height, on the ellipsoid
-      : view.threeProj
-      ? gy - window.Course3D.project(b.x, b.y, terrainZ(b.x, b.y) + b.z).y
-      : view.appleProj
-      ? gy - appleProjPt(view.appleProj, b.x, b.y, b.z + _apGroundZ(view.appleProj, b.x, b.y)).y
-      : ws(b.z);
+    const lift = ballLiftPx(b.x, b.y, b.z, gy);
     // Keep the ball clearly visible at every zoom (floor in screen px); real
     // scale only takes over when zoomed in far enough to exceed the floor.
     // Apple 3D: size off the ball-local PERSPECTIVE scale (view.appleScale) so
@@ -6225,14 +6363,7 @@ function draw() {
     // floored, no visible scaling), so use an exaggerated draw radius —
     // golf-sim convention, same reason the three.js ball mesh is exaggerated —
     // clamped so a far ball stays a readable dot and a putt-zoom ball never balloons.
-    let baseR;
-    if (view.appleProj) {
-      baseR = Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
-    } else if (view.gtilesProj) {
-      baseR = Math.max(4, Math.min(18, view.gtilesScale * APPLE_BALL_DRAW_UNITS));
-    } else {
-      baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
-    }
+    const baseR = ballDrawRadius();
 
     // motion trail while airborne — dissolves from tail to ball
     if (b.z > 0.4) {
@@ -6316,7 +6447,7 @@ function draw() {
     // rim rattle if it arrived with pace; (2) the ball drops BELOW the lip — clipped to
     // the cup so the near rim occludes it as it falls and darkens into the hole. That
     // occlusion (not a shrink-to-nothing) is what reads as a real hole-out.
-    const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
+    const baseR = ballDrawRadius();   // same scale as the live ball — no size pop on the drop
     const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y);
     const hr = Math.max(ws(HOLE.holeRadius), 3);
     const p = Math.min(1, (performance.now() - holeDrop.t0) / HOLE_DROP_MS);
@@ -6372,6 +6503,32 @@ function draw() {
 
   // Wind is shown as a DOM chip in the top HUD card (updateWindChip), not a
   // canvas pill — so it can never overlap the pin near screen-top-center.
+
+  // Shot preview: predicted CARRY point for the swing you're about to make.
+  // (This was computed every frame by updateShotPreview but had no draw site at
+  // all, on any backend — the "Shot preview" toggle did nothing. Ground-glued
+  // via wx/wyg so it rides whichever projection is active.)
+  if (shotPreview && shotPreview.rest && !state.moving) {
+    const sp = shotPreview;
+    const sx = wx(sp.rest.x, sp.rest.y), sy = wyg(sp.rest.x, sp.rest.y);
+    const rr = Math.max(6, ws(1.2));
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = sp.holed ? "rgba(255,214,90,0.95)" : "rgba(255,255,255,0.85)";
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, rr, rr * view.tilt, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();                       // centre pip
+    ctx.arc(sx, sy, 2, 0, Math.PI * 2);
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fill();
+    drawLabel(sx, sy - rr - 10,
+      sp.holed ? "holed" : Math.round(sp.yards) + " yds carry",
+      sp.holed ? "#ffd65a" : "#fff");
+    ctx.restore();
+  }
 
   // range finder: dashed lines ball->marker and marker->pin with yard labels
   if (measurePoint) {
@@ -7124,15 +7281,12 @@ function setHole(rec) {
     HOLE._demRec = course.dem || null; // raw grid — hillshade bakes from it
     if (course._img === undefined) {
       course._img = null; course._imgReady = false;
-      if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
-        const img = new Image();
-        img.onload = () => {
-          const baked = processAerial(img);
-          course._img = baked; course._imgReady = true;
-          if (HOLE && HOLE.isGlobal) { HOLE._img = baked; HOLE._imgReady = true; }
-        };
-        img.src = "courses/" + src.aerial.file;
-      }
+      course._aerialFile = (src.aerial && src.aerial.file) || null;
+      // The Google photoreal ground never paints this aerial, so skip the
+      // download + processAerial decode/recolour on those courses. It's loaded
+      // lazily if the 3D ground fails and we fall back to the 2D map — see
+      // loadCourseAerial() / updateGtilesMode().
+      if (!gtilesOwnsGround(course.id)) loadCourseAerial(course);
     }
     HOLE._img = course._img; HOLE._imgReady = course._imgReady;
     // aerial surface mask (OOB / fairway / rough), shared across all holes
@@ -8613,7 +8767,11 @@ function updateClubUI() {
   // Apple-ground club-reach framing keys the zoom off the selected club — a
   // club change is a reframe event (only on an actual change; this function
   // runs on every power-slider tick too).
-  if (!onGreen && selectedClub !== _framedClub && appleGroundActive() &&
+  // Both geo grounds frame off club reach (GolfBridge.frameAnchors), so a club
+  // change has to re-solve the framing on gtiles too — otherwise switching
+  // driver<->wedge on Pebble never re-zoomed.
+  if (!onGreen && selectedClub !== _framedClub &&
+      (appleGroundActive() || gtilesGroundActive()) &&
       mode === "course" && !state.moving) {
     _framedClub = selectedClub;
     frameTarget();
@@ -13298,8 +13456,11 @@ function drawOppGhost() {
   const g = oppGhostPos();
   if (!g) return;
   const gx = wx(g.x, g.y), gy = wyg(g.x, g.y);
-  const lift = ws(g.z || 0);
-  const baseR = Math.max(ws(BALL_RADIUS_UNITS), 4);
+  // Project the height + size off the ball-local scale, same as the player's
+  // ball — otherwise the opponent's ball floats detached from its shadow and
+  // stays a fixed 4px dot under a perspective ground.
+  const lift = ballLiftPx(g.x, g.y, g.z || 0, gy);
+  const baseR = ballDrawRadius();
   // shadow on the ground
   ctx.beginPath();
   ctx.ellipse(gx, gy, baseR * 0.95, baseR * 0.55, 0, 0, Math.PI * 2);
@@ -15019,7 +15180,14 @@ function loop() {
   update3DMode();  // cheap — no-ops unless mode/course actually changed
   if (render3D && window.Course3D) window.Course3D.render();
   updateGtilesMode(); // cheap — no-ops unless mode/course actually changed
-  if (gtilesGround && window.GTiles3D) window.GTiles3D.render(); // sync camera + tiles BEFORE draw()
+  if (gtilesGround && window.GTiles3D) {
+    // The cinematic landing + 3D green inspect paint a full-screen 2D scene on
+    // the TRANSPARENT #game canvas; hide the tiles behind them (and stop
+    // rendering) or the live photoreal ground ghosts through and keeps moving.
+    const overlay = !!(greenView || cine);
+    window.GTiles3D.setHidden(overlay);
+    if (!overlay) window.GTiles3D.render();  // sync camera + tiles BEFORE draw()
+  }
   // Apple ground sync (Butter Brook) happens inside draw() itself — see
   // appleGroundActive()/syncAppleGround() above.
   draw();
