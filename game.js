@@ -1411,8 +1411,7 @@ let chipEnabled = true;    // greenside chip mode: near the pin, swipe power map
 let chipSpinBias = 0;      // chip SPIN (-1 low/run .. 0 stock .. +1 high/bite); resets to 0 each hole
 let flightSpinBias = 0;    // full-shot SPIN (-1 low knockdown .. 0 stock .. +1 high backspin); one-shot, resets after the swing
 let lieEffectEnabled = true; // rough/sand cost power + spin (off = every lie plays clean, easier)
-let shotPreviewEnabled = false; // live predicted-landing marker while swinging (HUD menu, tournament-synced)
-let powerPreviewEnabled = false; // admin toggle: persistent power slider + spin selector + idle shot preview
+let powerPreviewEnabled = false; // admin toggle: persistent power slider + spin selector
 let previewFrac = 1;       // power slider (0..1) — pre-swing "if I swing at X% it goes here" preview, AND a
                             // real MAX ceiling on the swipe/flick's power (launchShot clamps down to it, never up).
 let previewFracTouched = false; // true once the player has manually dragged the power slider for the CURRENT
@@ -2622,7 +2621,6 @@ function swingStart(e) {
   if (ghostMouse(e)) return;
   if (cine) { closeCine(); return; }              // cinematic landing: tap = skip
   if (greenView) { gvPointerStart(e); return; }   // inspect view owns the pointer
-  shotPreview = null; // fresh gesture — any stale preview marker must not survive into it
   aimDrag = null;     // ditto a stale aim pan (touchend can be missed)
   // Pin this gesture to whichever touch just landed (undefined for mouse —
   // pointerPos falls back to touches[0]/the event itself in that case).
@@ -2757,13 +2755,12 @@ function swingMove(e) {
       Math.hypot(p.x - swipe.x, p.y - swipe.y) < TUNE.aimHoldPx &&
       swipePath.every(q => Math.hypot(q.x - swipe.x, q.y - swipe.y) < TUNE.aimHoldPx)) {
     aimDrag = { lastX: p.x };
-    swipe = null; swipePath = null; shotPreview = null;
+    swipe = null; swipePath = null;
     haptic(3);
     if (earnMilestone("hint-aimdrag")) showToast("Slide to aim", 1800, "gold");
     return;
   }
   swipePath.push({ x: p.x, y: p.y, t: now });
-  maybeUpdateShotPreview();
 }
 
 // Fire the ball: `ang` direction, `frac` 0..1 swing fullness, `spin` (-1..1).
@@ -2938,7 +2935,6 @@ function launchShot(ang, frac, spin, onGreen) {
     frac = Math.min(frac, Math.max(previewFrac, 0.06));
   }
   measurePoint = null; // shot fired — clear the rangefinder marker
-  shotPreview = null;  // shot fired — clear the live preview marker
   previewFracTouched = false; // fresh shot next time — let the chip-assist auto-default re-engage
   if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
   const trial = buildTrialShot(ang, frac, spin, onGreen);
@@ -3009,7 +3005,6 @@ function swingEnd(e) {
   const fdist = Math.hypot(dxs, dys);
   if (fdist < 5) {
     // not a swing — treat as a tap: drop the rangefinder marker at the tap point
-    shotPreview = null;
     measurePoint = screenToWorldGround(end.x, end.y);
     markerDropT = performance.now();
     if (earnMilestone("hint-marker"))
@@ -3029,7 +3024,7 @@ canvas.addEventListener("touchend", swingEnd);
 // in-flight input state so the next tap starts clean
 canvas.addEventListener("touchcancel", () => {
   swipe = null; swipePath = null; camTouch = null; markerDrag = null; measureDragging = false;
-  activeTouchId = null; shotPreview = null; aimDrag = null;
+  activeTouchId = null; aimDrag = null;
   if (greenView) greenView.drag = null;
 });
 canvas.addEventListener("mousedown", swingStart);
@@ -3118,7 +3113,6 @@ function onWheel(e) {
   wheelGesture.sx += e.deltaX;
   wheelGesture.sy += e.deltaY;
   wheelGesture.path.push({ x: wheelGesture.sx, y: wheelGesture.sy, t: now });
-  maybeUpdateShotPreview();
 }
 
 function finishWheelSwing() {
@@ -3135,74 +3129,6 @@ function finishWheelSwing() {
 }
 
 canvas.addEventListener("wheel", onWheel, { passive: false });
-
-// =====================================================================
-//  Live shot preview — while the player is still dragging/swiping (before
-//  release), forward-simulate the swing-in-progress with simShotRest() and
-//  show a marker + yardage at the predicted CARRY point (first touchdown —
-//  no bounce/rollout; putts, which never fly, show the stop point). Opt-in
-//  (shotPreviewEnabled, HUD menu "Shot preview") — a pure feedback overlay,
-//  same physics as the real shot, no change to how power/spin/club work.
-// =====================================================================
-let shotPreview = null;   // { holed, lipped, rest:{x,y}, yards } | null
-let lastPreviewT = 0;
-const PREVIEW_INTERVAL_MS = 50; // ~20Hz — well under raw pointermove/wheel event rate
-
-// Throttled entry point, called from swingMove/onWheel after each new sample.
-function maybeUpdateShotPreview() {
-  if (!shotPreviewEnabled) { shotPreview = null; return; }
-  const now = performance.now();
-  if (now - lastPreviewT < PREVIEW_INTERVAL_MS) return;
-  lastPreviewT = now;
-  updateShotPreview();
-}
-
-function updateShotPreview() {
-  if (!canSwing() || measureMode) { shotPreview = null; return; }
-  let ang, frac, spin;
-  if (swipePath && swipePath.length >= 2) {
-    const p0 = swipePath[0], pl = swipePath[swipePath.length - 1];
-    if (Math.hypot(pl.x - p0.x, pl.y - p0.y) <= 12) { shotPreview = null; return; } // same gate as the direction tick
-    const v = swipeVelocity(swipePath, 80);
-    ({ ang, frac } = swipeToShot(v.dxs, v.dys, v.dt, TUNE.touchPowerSwipe));
-    spin = curveFromPath(swipePath);
-  } else if (wheelGesture && wheelGesture.path.length >= 3) {
-    const sign = (TUNE.wheelInvert ? 1 : -1) * TUNE.wheelSensitivity;
-    const v = swipeVelocity(wheelGesture.path, WHEEL_WINDOW_MS + WHEEL_TAIL_MS);
-    ({ ang, frac } = swipeToShot(sign * v.dxs, sign * v.dys, v.dt, TUNE.fullPowerSwipe));
-    spin = curveFromPath(wheelGesture.path);
-  } else if (powerPreviewEnabled && mode === "course" && !state.moving &&
-             surfaceAt(state.ball.x, state.ball.y) !== "green" && selectedClub !== "putter") {
-    // No gesture in progress — static pre-swing preview driven by the power/spin/height
-    // panel instead, so the prediction is visible any time the player is addressing the
-    // ball, not just for the split-second of an actual flick.
-    ang = -Math.PI / 2 - view.angle; // aim straight up the screen — matches whatever a real swipe fires at right now
-    // buildTrialShot discards frac<=0.05 as "too weak, no shot" (the real too-soft-a-flick
-    // floor in swingEnd/launchShot) — floor the PREVIEW's own frac just above that so a low
-    // power slider still shows a prediction instead of the marker vanishing; the real swing's
-    // threshold and previewFrac's own stored/displayed value are both untouched.
-    frac = Math.max(previewFrac, 0.06);
-    spin = 0; // the Spin selector shapes chipSpinBias/flightSpinBias, not side-curve
-  } else {
-    shotPreview = null;
-    return;
-  }
-  const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  const trial = buildTrialShot(ang, frac, spin, onGreen);
-  if (!trial) { shotPreview = null; return; }
-  // Hypothetical ball state fed into the side-effect-free simulator — never touches state.ball.
-  const b0 = { x: state.ball.x, y: state.ball.y, vx: trial.vx, vy: trial.vy,
-               z: trial.z, vz: trial.vz, spin: trial.spin };
-  const r = simShotRest(b0, trial.flight);
-  if (!r) { shotPreview = null; return; }
-  if (r.holed) { shotPreview = { holed: true, rest: { x: HOLE.holePos.x, y: HOLE.holePos.y }, yards: 0 }; return; }
-  // Marker = expected CARRY point (first touchdown), not rest — bounce/rollout
-  // deliberately excluded so the preview reads like a caddie's carry number.
-  // Putts never fly (carry null) so they keep the simulated stop point.
-  const pt = r.carry || { x: r.x, y: r.y };
-  shotPreview = { holed: false, lipped: r.lipped, rest: pt,
-                  yards: dist(state.ball.x, state.ball.y, pt.x, pt.y) * YARDS_PER_UNIT };
-}
 
 // =====================================================================
 //  Rendering
@@ -6525,32 +6451,6 @@ function draw() {
   // Wind is shown as a DOM chip in the top HUD card (updateWindChip), not a
   // canvas pill — so it can never overlap the pin near screen-top-center.
 
-  // Shot preview: predicted CARRY point for the swing you're about to make.
-  // (This was computed every frame by updateShotPreview but had no draw site at
-  // all, on any backend — the "Shot preview" toggle did nothing. Ground-glued
-  // via wx/wyg so it rides whichever projection is active.)
-  if (shotPreview && shotPreview.rest && !state.moving) {
-    const sp = shotPreview;
-    const sx = wx(sp.rest.x, sp.rest.y), sy = wyg(sp.rest.x, sp.rest.y);
-    const rr = Math.max(6, ws(1.2));
-    ctx.save();
-    ctx.setLineDash([5, 4]);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = sp.holed ? "rgba(255,214,90,0.95)" : "rgba(255,255,255,0.85)";
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, rr, rr * view.tilt, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath();                       // centre pip
-    ctx.arc(sx, sy, 2, 0, Math.PI * 2);
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.fill();
-    drawLabel(sx, sy - rr - 10,
-      sp.holed ? "holed" : Math.round(sp.yards) + " yds carry",
-      sp.holed ? "#ffd65a" : "#fff");
-    ctx.restore();
-  }
-
   // range finder: dashed lines ball->marker and marker->pin with yard labels
   if (measurePoint) {
     const b = state.ball;
@@ -8308,15 +8208,9 @@ function setLieEffect(on) {
   if (btn) btn.classList.toggle("active", on);
   updateStats(); // refresh the lie-effect HUD row immediately
 }
-function setShotPreview(on) {
-  shotPreviewEnabled = on;
-  if (!on) shotPreview = null; // drop any live marker the instant it's turned off
-  const btn = document.getElementById("hm-preview");
-  if (btn) btn.classList.toggle("active", on);
-}
 function setPowerPreview(on) {
   powerPreviewEnabled = on;
-  if (!on) { shotPreview = null; previewFracTouched = false; }
+  if (!on) previewFracTouched = false;
   syncPowerPreview();
 }
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
@@ -8327,8 +8221,6 @@ const elAutoAimBtn = document.getElementById("hm-autoaim");
 if (elAutoAimBtn) elAutoAimBtn.addEventListener("click", () => setAutoAim(!autoAimEnabled));
 const elChipBtn = document.getElementById("hm-chip");
 if (elChipBtn) elChipBtn.addEventListener("click", () => setChip(!chipEnabled));
-const elShotPreviewBtn = document.getElementById("hm-preview");
-if (elShotPreviewBtn) elShotPreviewBtn.addEventListener("click", () => setShotPreview(!shotPreviewEnabled));
 
 // =====================================================================
 //  Movable HUD (mobile) — let players drag corner panels out of the way.
@@ -8538,14 +8430,13 @@ const SETTING_DEFS = [
   { key: "slotted",     label: "Slotted mode",    icon: "ic-target", get: () => slottedMode,     set: (v) => setSlotted(v) },
   { key: "chip",        label: "Chip mode",       icon: "ic-chip",   get: () => chipEnabled,     set: (v) => setChip(v) },
   { key: "lieEffect",   label: "Lie effect",      icon: "ic-slope",  get: () => lieEffectEnabled, set: (v) => setLieEffect(v) },
-  { key: "shotPreview", label: "Shot preview",    icon: "ic-target", get: () => shotPreviewEnabled, set: (v) => setShotPreview(v) },
   { key: "powerPreview", label: "Power preview (beta)", icon: "ic-target", get: () => powerPreviewEnabled, set: (v) => setPowerPreview(v) },
 ];
 // Effective defaults: hardcoded fallback until the global row loads.
 // Immutable fallback for each setting — used when a saved/loaded settings row
 // predates a key (e.g. a global Supabase row baked before "chip" existed). A
 // MISSING key falls back to this default, NOT to false.
-const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true, lieEffect: true, shotPreview: false, powerPreview: false };
+const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true, lieEffect: true, powerPreview: false };
 let gameDefaults = Object.assign({}, SETTING_DEFAULTS);
 let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
 
@@ -8672,7 +8563,7 @@ let swingSens = Math.min(3, Math.max(0.5, +lsGet(SENS_KEY, 3) || 3));
 })();
 
 // Right-gutter shot-power panel — a power slider coupled with a Low/Stock/High spin
-// selector. Power (previewFrac) feeds the static branch of updateShotPreview() AND is a
+// selector. Power (previewFrac) is a
 // real MAX ceiling on the swipe/flick's power — launchShot clamps down to it (never
 // boosts a soft flick, only caps a hard one). Spin is a discrete pick, not a drag —
 // clicking a button sets chipSpinBias (chip range: -1 low/run .. 0 stock .. +1 high/bite)
@@ -8731,13 +8622,11 @@ function syncPowerPreview() {
     ? (chipSpinBias <= -0.5 ? "low" : chipSpinBias >= 0.5 ? "high" : "stock")
     : (flightSpinBias <= -0.5 ? "low" : flightSpinBias >= 0.5 ? "high" : "stock");
   for (const b of elAttrBtns) b.classList.toggle("active", b.dataset.spin === activeKey);
-  updateShotPreview();
 }
 if (elAttrSlider) {
   elAttrSlider.addEventListener("input", () => {
     setPowerFromSliderPct(parseInt(elAttrSlider.value, 10));
     if (elAttrVal) elAttrVal.textContent = elAttrSlider.value;
-    updateShotPreview();
     updateClubUI(); // live carry number tracks the slider while dragging, not just on release
   });
 }
