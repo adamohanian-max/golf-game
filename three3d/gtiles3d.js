@@ -113,9 +113,21 @@ function meshHeightAt(x, y) {
   const hits = _hRay.intersectObject(tiles.group, true);
   if (!hits.length) return null;
   _hInv.copy(tiles.group.matrixWorld).invert();
-  const ecef = hits[0].point.clone().applyMatrix4(_hInv);
-  WGS84_ELLIPSOID.getPositionToCartographic(ecef, _hCart);
-  return _hCart.height;
+  // Of all surfaces pierced (canopy blobs first, turf below), keep the hit whose
+  // height lands closest to the EXPECTED ground (DEM + the field's running
+  // offset). Top-hit alone parked the ball on tree canopy at treed lies (~2u
+  // slide); where photogrammetry fuses canopy to the ground with no under-
+  // surface, the canopy is the only hit and still wins — matching what's visible.
+  const g = gb();
+  const expected = (g && g.terrainZ ? g.terrainZ(x, y) : 0) * M() + _gridMean;
+  let best = null, bestErr = Infinity;
+  for (const h of hits) {
+    const ecef = h.point.clone().applyMatrix4(_hInv);
+    WGS84_ELLIPSOID.getPositionToCartographic(ecef, _hCart);
+    const err = Math.abs(_hCart.height - expected);
+    if (err < bestErr) { bestErr = err; best = _hCart.height; }
+  }
+  return best;
 }
 // Height-offset field (metres, = meshHeight − terrainZ*M) sampled on a grid over
 // the whole hole world, so overlays lock to the real mesh everywhere — not just
@@ -167,10 +179,104 @@ function refreshGridBatch(n) {
   for (let i = 0; i < total; i++) if (gr.ok[i]) { sum += gr.off[i]; cnt++; }
   if (cnt) _gridMean = sum / cnt;
 }
-// Bilinear height correction (metres) at world (x,y) from the grid; unfilled
-// corners fall back to the field's running mean so early frames aren't at 0.
+// ---- precision anchors over the coarse grid ---------------------------------
+// The 14u grid + bilinear leaves ~1-2m height error, which at a 55° camera slides
+// overlays a few YARDS along the ground — measured 0.6u at the pin / up to 0.5u
+// at green edges (the "green floating off the mesh"), ~1u at the tee ball (the
+// "ball moves when the camera moves" parallax). Two upgrades:
+//
+//  _ballOff / _pinOff — EXACT column raycasts refreshed every frame (2 rays,
+//    cheap). offsetAt uses the exact ball offset within BALL_EXACT_R of the ball
+//    (blended over the last unit so there's no step in the fairway tint).
+//  _greenOffs — ONE RIGID offset per green: sample the green's poly vertices +
+//    centroid over frames, and once ≥12 samples land take the MEDIAN (robust to
+//    canopy strikes from the trees ringing greens — meshHeightAt reads the top
+//    hit). The whole tint/contour/relief patch then sits as a single sheet ON
+//    the mesh instead of per-cell swimming. Until settled: coarse grid.
+const BALL_EXACT_R = 4;    // world units of exact-ball influence
+let _ballOff = null;       // { x, y, off } exact ball column (this frame)
+let _pinOff = null;        // { x, y, off } exact pin column
+let _greenOffs = new Map();// green object -> { samples: [], off: number|null, cursor }
+function _greenRec(g) {
+  let r = _greenOffs.get(g);
+  if (!r) { r = { samples: [], off: null, cursor: 0 }; _greenOffs.set(g, r); }
+  return r;
+}
+// A green is "in play" when the ball or pin sits inside its bbox (+margin) —
+// mirrors game.js greensInPlay without needing pointInPoly across the bridge.
+function _greenBBox(g) {
+  if (!g._bbox) {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const p of g.poly) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+    g._bbox = { x0, y0, x1, y1 };
+  }
+  return g._bbox;
+}
+function _inBBox(x, y, bb, m) { return x >= bb.x0 - m && x <= bb.x1 + m && y >= bb.y0 - m && y <= bb.y1 + m; }
+function refreshPrecisionAnchors() {
+  const g = gb(); if (!g) return;
+  const m = M(), tz = g.terrainZ;
+  const S = g.getState(), H = g.getHole();
+  const exact = (x, y) => {
+    const mh = meshHeightAt(x, y);
+    if (mh == null) return null;
+    const off = mh - (tz ? tz(x, y) : 0) * m;
+    return Math.abs(off) <= MAX_ABS_OFFSET_M ? { x, y, off } : null;
+  };
+  if (S && S.ball) _ballOff = exact(S.ball.x, S.ball.y) || _ballOff;
+  if (H && H.holePos) _pinOff = exact(H.holePos.x, H.holePos.y) || _pinOff;
+  // Per-green rigid offsets: a couple of samples per frame for in-play greens.
+  const greens = (H && H._greens) || [];
+  for (const gr of greens) {
+    const bb = _greenBBox(gr);
+    const inPlay = (S && S.ball && _inBBox(S.ball.x, S.ball.y, bb, 12)) ||
+                   (H.holePos && _inBBox(H.holePos.x, H.holePos.y, bb, 12));
+    if (!inPlay) continue;
+    const rec = _greenRec(gr);
+    // Rolling, strided sampling — NEVER settles permanently. Early samples land
+    // on coarse far-LOD (and sometimes canopy); locking their median in shifted
+    // the green ~10u. Stride 7 spreads samples around the poly instead of one
+    // contiguous (possibly all-canopy) arc; the window keeps only the freshest
+    // 40 so the median self-heals as the mesh refines under the camera.
+    for (let k = 0; k < 2; k++) {                        // 2 samples/frame/green
+      const n = gr.poly.length;
+      const idx = (rec.cursor * 7) % (n + 1);
+      const p = idx === n
+        ? { x: (bb.x0 + bb.x1) / 2, y: (bb.y0 + bb.y1) / 2 }   // centroid-ish
+        : gr.poly[idx];
+      rec.cursor++;
+      const e = exact(p.x, p.y);
+      if (e) { rec.samples.push(e.off); if (rec.samples.length > 40) rec.samples.shift(); }
+    }
+    if (rec.samples.length >= 12) {
+      const s = rec.samples.slice().sort((a, b) => a - b);
+      rec.off = s[Math.floor(s.length / 2)];             // median beats canopy strikes
+    }
+  }
+}
+// Bilinear height correction (metres) at world (x,y): exact ball column first,
+// then the containing settled green's rigid offset, then the coarse grid (with
+// unfilled corners falling back to the field's running mean).
 let _gridMean = 0;
 function offsetAt(x, y) {
+  if (_ballOff) {
+    const d = Math.hypot(x - _ballOff.x, y - _ballOff.y);
+    if (d < BALL_EXACT_R) {
+      const base = _offsetBase(x, y);
+      const t = d <= BALL_EXACT_R - 1 ? 1 : BALL_EXACT_R - d;  // blend the last unit
+      return _ballOff.off * t + base * (1 - t);
+    }
+  }
+  // Pin exact BEFORE the green offset: the per-frame pin raycast always tracks
+  // the currently-visible mesh (even mid-LOD-refine), so the flag never inherits
+  // a stale green median.
+  if (_pinOff && Math.hypot(x - _pinOff.x, y - _pinOff.y) < 3) return _pinOff.off;
+  for (const [gr, rec] of _greenOffs) {
+    if (rec.off != null && _inBBox(x, y, _greenBBox(gr), 2)) return rec.off;
+  }
+  return _offsetBase(x, y);
+}
+function _offsetBase(x, y) {
   const gr = _grid; if (!gr) return 0;
   const fx = (x - gr.x0) / gr.dx, fy = (y - gr.y0) / gr.dy;
   const ix = Math.min(gr.nx - 2, Math.max(0, Math.floor(fx)));
@@ -464,8 +570,12 @@ function render() {
     // hole WORLD). Nulling _camEase makes the new hole SNAP into frame (no glide
     // across the whole course from the old hole).
     const H = gb() && gb().getHole();
-    if (H !== _lastHole) { _grid = null; _hold = null; _camEase = null; _lastHole = H; }
+    if (H !== _lastHole) {
+      _grid = null; _hold = null; _camEase = null; _lastHole = H;
+      _ballOff = null; _pinOff = null; _greenOffs = new Map();
+    }
     refreshGridBatch(24);
+    refreshPrecisionAnchors();   // exact ball/pin columns + rigid per-green offsets
   }
   renderer.render(scene, camera);   // camera was aimed at the top of this frame
 }

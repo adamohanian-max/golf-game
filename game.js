@@ -1386,7 +1386,11 @@ let holeDrop = null;       // active ball-into-cup drop animation, or null
 const HOLE_DROP_MS = 520;  // drop animation length; result modal opens when it ends
 let measureMode = false;   // range-finder: drag to measure distance from ball & pin
 let showSlope = true;      // slope relief overlay — ON by default (toggle in HUD menu)
-let showOOB = true;        // red OOB overlay toggle
+let showOOB = true;        // red OOB overlay toggle (flat courses default on)
+// The photoreal ground shows houses/roads as obviously-not-course already; the
+// full red OB blanket washed ~60% of every Pebble frame. There it's opt-in:
+// drawn only after the user explicitly flips the OB toggle this session.
+let oobUserOn = false;
 let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt, drag } or null
 // Cinematic 3D landing (auto green view on a great approach — see TUNE.cine*).
 let cine = null;           // active cinematic — { g, mesh, t0, yaw0, tilt, restT } or null
@@ -4931,14 +4935,20 @@ function gvPointerEnd() {
 // Clip is traced in screen space BEFORE setTransform, so it survives it.
 function drawWorldRaster(img, t, patches) {
   const dpr = window.devicePixelRatio || 1;
+  // Perspective corner projection MUST come from the live engine projector (it
+  // reports inFront) — wx/wy return coordinates even for points behind the
+  // camera, which smeared near patches into giant seams across the frame.
+  const persp = view.gtilesProj ? (wxw, wyw) => window.GTiles3D.project(wxw, wyw, terrainZ(wxw, wyw))
+    : view.appleProj ? (wxw, wyw) => { const q = appleProjPt(view.appleProj, wxw, wyw, _apGroundZ(view.appleProj, wxw, wyw)); q.inFront = true; return q; }
+    : null;
   const toScreen = (u, v) => {
     const wxw = t[0] * u + t[1] * v + t[2], wyw = t[3] * u + t[4] * v + t[5];
-    return { x: wx(wxw, wyw), y: wy(wxw, wyw) };
+    return persp(wxw, wyw);
   };
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  if (!(view.appleProj || view.gtilesProj)) {          // flat: one blit, as before
+  if (!persp) {                                        // flat: one blit, as before
     const A = view.a * t[0] + view.b * t[3], C = view.a * t[1] + view.b * t[4];
     const E = view.a * t[2] + view.b * t[5] + view.c;
     const B = view.d * t[0] + view.e * t[3], D = view.d * t[1] + view.e * t[4];
@@ -4948,16 +4958,25 @@ function drawWorldRaster(img, t, patches) {
     ctx.restore();
     return;
   }
-  const N = patches || 6, iw = img.width, ih = img.height;
+  const N = patches || 8, iw = img.width, ih = img.height;
+  const W = window.innerWidth, H = window.innerHeight;
+  const maxArea = W * H * 4;   // degenerate-affine guard: a patch can't sanely exceed this
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const u0 = iw * i / N, u1 = iw * (i + 1) / N;
     const v0 = ih * j / N, v1 = ih * (j + 1) / N;
     const s00 = toScreen(u0, v0), s10 = toScreen(u1, v0);
     const s01 = toScreen(u0, v1), s11 = toScreen(u1, v1);
-    if (![s00, s10, s01, s11].every((p) => isFinite(p.x) && isFinite(p.y))) continue;
+    const cs = [s00, s10, s01, s11];
+    // Cull patches with any corner behind the camera (their planar affine is
+    // meaningless) or fully off-screen, and reject blown-up degenerate fits.
+    if (!cs.every((p) => p && p.inFront && isFinite(p.x) && isFinite(p.y))) continue;
+    if (cs.every((p) => p.x < 0) || cs.every((p) => p.x > W) ||
+        cs.every((p) => p.y < 0) || cs.every((p) => p.y > H)) continue;
     const a = (s10.x - s00.x) / (u1 - u0), b = (s01.x - s00.x) / (v1 - v0);
     const d = (s10.y - s00.y) / (u1 - u0), e = (s01.y - s00.y) / (v1 - v0);
     if (!isFinite(a) || !isFinite(b) || !isFinite(d) || !isFinite(e)) continue;
+    const area = Math.abs((s10.x - s00.x) * (s01.y - s00.y) - (s01.x - s00.x) * (s10.y - s00.y));
+    if (area > maxArea) continue;
     const c = s00.x - a * u0 - b * v0, f = s00.y - d * u0 - e * v0;
     ctx.save();
     ctx.beginPath();                                    // clip to this patch's quad
@@ -6175,7 +6194,9 @@ function draw() {
         drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient,
                         showSlope && breakArrows);
       }
-      drawOOBOverlay();   // no-op unless the OB-areas toggle is on
+      // OB tint: opt-in here (see oobUserOn) and capped so it reads as a tint,
+      // not a blanket, over the photoreal imagery.
+      if (oobUserOn) { ctx.save(); ctx.globalAlpha = 0.5; drawOOBOverlay(); ctx.restore(); }
     }
   } else if (appleGround) {
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
@@ -8228,6 +8249,7 @@ function setSlopeMode(on) {
 const elOOBBtn = document.getElementById("hm-oob");
 function setOOBMode(on) {
   showOOB = on;
+  oobUserOn = on;   // explicit user intent — the photoreal ground only draws OB when opted in
   elOOBBtn.classList.toggle("active", on);
 }
 function aimAtHole() {
