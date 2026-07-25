@@ -214,7 +214,9 @@ const _up = new THREE.Vector3();
 const _north = new THREE.Vector3();
 const _east = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
-let _hold = null;   // {Ox,Oy,D} captured at rest, reused during flight (no follow)
+let _hold = null;    // {Ox,Oy,D} target captured at rest, reused during flight (no follow)
+let _camEase = null; // {Ox,Oy,D} EASED toward target each frame → glide between shots
+let _camEaseT = 0;
 function setCamera() {
   if (!ready || !tiles || !camera) return;
   const g = gb(), view = g.getView(), cam = g.getCamera(), m = M();
@@ -224,37 +226,51 @@ function setCamera() {
   const geo = g.geoAffine();
   const toLL = (x, y) => [geo[0] * x + geo[1] * y + geo[2], geo[3] * x + geo[4] * y + geo[5]];
 
-  // Look-at O = ball nudged a FIXED fraction toward the shot's landing (reach),
-  // so the ball sits in the lower third and the landing/pin sits up-screen — the
-  // golf-cam framing. Distance D frames the ball→reach SHOT (not the flat whole-
-  // hole zoom, which was far too wide). Both deterministic.
-  //
-  // In flight the camera DOES NOT follow the ball: reuse the framing captured on
-  // the last at-rest frame so the ball flies through a static frame. Resumes live
-  // (view-eased) framing on rest; cleared on hole change (_lastHole in render).
+  // TARGET framing. Look-at O = ball nudged a fixed fraction toward the shot's
+  // landing (reach); D frames the ball→reach SHOT. The reach span is CAPPED
+  // (MAX_FRAME_UNITS) so long clubs (driver) frame like a mid-iron instead of
+  // zooming way out. In flight the target is FROZEN (_hold) so the camera holds
+  // while the ball flies through; cleared on hole change (_lastHole in render).
   const A = g.frameAnchors ? g.frameAnchors() : null;
-  const OY_BIAS = 0.45;      // look-at = ball + this·(reach−ball): ball ~0.83, landing ~0.29
-  const FRAME_K = 2.0;       // ball→reach span × this → camera distance (shot fills ~54% vert)
-  const MIN_SHOT_M = 55;     // floor so the green (reach≈ball) still frames sensibly
-  let Ox, Oy, D;
+  const OY_BIAS = 0.45;         // look-at = ball + this·(capped reach−ball)
+  const FRAME_K = 2.0;          // capped shot span × this → camera distance
+  const MIN_SHOT_M = 55;        // floor so the green (reach≈ball) still frames sensibly
+  const MAX_FRAME_UNITS = 60;   // ~180yд: cap the framed span so driver isn't too wide
+  let tOx, tOy, tD;
   if (A && A.moving && _hold) {
-    ({ Ox, Oy, D } = _hold);              // FROZEN framing while the ball is in flight
+    ({ Ox: tOx, Oy: tOy, D: tD } = _hold);   // FROZEN target while the ball is in flight
   } else {
     if (A) {
-      Ox = A.bx + OY_BIAS * (A.rx - A.bx);
-      Oy = A.by + OY_BIAS * (A.ry - A.by);
-      const shotM = Math.hypot(A.rx - A.bx, A.ry - A.by) * m;
-      D = Math.max(shotM, MIN_SHOT_M) * FRAME_K;
+      const rd = Math.hypot(A.rx - A.bx, A.ry - A.by);
+      const fx = rd > 1e-3 ? Math.min(rd, MAX_FRAME_UNITS) / rd : 0;  // cap the framed span
+      tOx = A.bx + OY_BIAS * fx * (A.rx - A.bx);
+      tOy = A.by + OY_BIAS * fx * (A.ry - A.by);
+      tD = Math.max(Math.min(rd, MAX_FRAME_UNITS) * m, MIN_SHOT_M) * FRAME_K;
     } else {
       const det = view.a * view.e - view.b * view.d || 1;
       const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
-      Ox = (view.e * sx0 - view.b * sy0) / det;
-      Oy = (-view.d * sx0 + view.a * sy0) / det;
-      D = (m * dpr / scale) * H * APPLE_CAM_K;   // flat-zoom fallback (no anchors)
+      tOx = (view.e * sx0 - view.b * sy0) / det;
+      tOy = (-view.d * sx0 + view.a * sy0) / det;
+      tD = (m * dpr / scale) * H * APPLE_CAM_K;   // flat-zoom fallback (no anchors)
     }
-    if (!A || !A.moving) _hold = { Ox, Oy, D };  // capture the at-rest framing
+    if (!A || !A.moving) _hold = { Ox: tOx, Oy: tOy, D: tD };  // capture at-rest target
   }
-  D = Math.max(20, Math.min(6000, D));
+  tD = Math.max(20, Math.min(6000, tD));
+
+  // Ease the framing toward the target so the camera GLIDES between shots (the
+  // flat camera eases too, but our O was raw-ball → snapped). Time-based factor,
+  // fps-independent, mirrors updateCamera. First frame / hole change snaps.
+  const now = performance.now();
+  const dt = _camEaseT ? Math.min(now - _camEaseT, 100) : 16.7;
+  _camEaseT = now;
+  const es = 1 - Math.pow(0.86, dt / 16.7);   // ~0.14/frame at 60fps
+  if (!_camEase) _camEase = { Ox: tOx, Oy: tOy, D: tD };
+  else {
+    _camEase.Ox += (tOx - _camEase.Ox) * es;
+    _camEase.Oy += (tOy - _camEase.Oy) * es;
+    _camEase.D  += (tD  - _camEase.D)  * es;
+  }
+  const Ox = _camEase.Ox, Oy = _camEase.Oy, D = _camEase.D;
 
   // O in scene + local ENU basis (finite differences of sceneAt around O).
   // Height MUST include offsetAt() — same mesh-anchoring project() uses — so the
@@ -269,8 +285,9 @@ function setCamera() {
   sceneAt(Olon + 1e-5, Olat, groundM, _east).sub(_O).normalize();     // +lon = east
 
   // Screen-up world dir (toward reach) → scene horizontal. geo affine gives
-  // x≈east, y≈south, so scene horiz = east·dx − north·dy.
-  const a = cam.tAngle != null ? cam.tAngle : cam.angle;
+  // x≈east, y≈south, so scene horiz = east·dx − north·dy. Use the EASED cam.angle
+  // (not the target cam.tAngle) so turning the aim rotates smoothly, not snaps.
+  const a = cam.angle != null ? cam.angle : cam.tAngle;
   const dirX = -Math.sin(a), dirY = -Math.cos(a);
   _tmp.copy(_east).multiplyScalar(dirX).addScaledVector(_north, -dirY).normalize(); // fwdHoriz
 
@@ -393,9 +410,11 @@ function render() {
     if (!ready && _enterAt && performance.now() - _enterAt > FAIL_TIMEOUT_MS) _failed = true;
   }
   if (ready) {
-    // Reset the height field + flight-hold on a hole change (per-hole WORLD).
+    // Reset the height field + flight-hold + eased camera on a hole change (per-
+    // hole WORLD). Nulling _camEase makes the new hole SNAP into frame (no glide
+    // across the whole course from the old hole).
     const H = gb() && gb().getHole();
-    if (H !== _lastHole) { _grid = null; _hold = null; _lastHole = H; }
+    if (H !== _lastHole) { _grid = null; _hold = null; _camEase = null; _lastHole = H; }
     refreshGridBatch(24);
   }
   setCamera();
