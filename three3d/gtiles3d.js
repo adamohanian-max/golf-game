@@ -290,6 +290,15 @@ function refreshPrecisionAnchors() {
 // unfilled corners falling back to the field's running mean).
 let _gridMean = 0;
 function offsetAt(x, y) {
+  // SETTLED GREEN FIRST — before the ball-exact anchor. When the ball is on the
+  // green, letting the ball anchor win carved a 4u bubble of different height
+  // around it, warping the sheet locally — contours/tint visibly reshaped as
+  // the ball moved across the green. One rigid offset for everything inside the
+  // green bbox (contours, tint, relief, cup, and the ball itself); the ball
+  // anchor only glues OFF-green lies (fairway/tee), where it's needed.
+  for (const [gr, rec] of _greenOffs) {
+    if (rec.off != null && _inBBox(x, y, _greenBBox(gr), 2)) return rec.off;
+  }
   if (_ballOff) {
     const d = Math.hypot(x - _ballOff.x, y - _ballOff.y);
     if (d < BALL_EXACT_R) {
@@ -298,13 +307,8 @@ function offsetAt(x, y) {
       return _ballOff.off * t + base * (1 - t);
     }
   }
-  // Pin exact BEFORE the green offset: the per-frame pin raycast always tracks
-  // the currently-visible mesh (even mid-LOD-refine), so the flag never inherits
-  // a stale green median.
+  // Pin exact = pre-settle fallback only (the rigid green wins once settled).
   if (_pinOff && Math.hypot(x - _pinOff.x, y - _pinOff.y) < 3) return _pinOff.off;
-  for (const [gr, rec] of _greenOffs) {
-    if (rec.off != null && _inBBox(x, y, _greenBBox(gr), 2)) return rec.off;
-  }
   return _offsetBase(x, y);
 }
 function _offsetBase(x, y) {
@@ -385,9 +389,13 @@ function setCamera() {
   // zooming way out. In flight the target is FROZEN (_hold) so the camera holds
   // while the ball flies through; cleared on hole change (_lastHole in render).
   const A = g.frameAnchors ? g.frameAnchors() : null;
-  const OY_BIAS = 0.45;         // look-at = ball + this·(capped reach−ball)
-  const FRAME_K = 2.0;          // capped shot span × this → camera distance
-  const MIN_SHOT_M = 55;        // floor so the green (reach≈ball) still frames sensibly
+  const FRAME_K = 1.55;         // capped shot span × this → camera distance
+  const MIN_SHOT_M = 30;        // floor so the green (reach≈ball) still frames sensibly
+  // Look-at bias (ball → capped reach). Span-dependent: on full shots the tight
+  // zoom already spreads the frame so 0.44 puts the ball at ~0.90; on the green
+  // the MIN_SHOT_M floor dominates and the same bias leaves the ball mid-screen —
+  // 0.62 measured ball ~0.90 there. Blend on how floor-dominated the framing is.
+  const OY_BIAS_FAR = 0.44, OY_BIAS_NEAR = 0.62;
   const MAX_FRAME_UNITS = 60;   // ~180yд: cap the framed span so driver isn't too wide
   let tOx, tOy, tD;
   if (A && A.moving && _hold) {
@@ -395,16 +403,17 @@ function setCamera() {
   } else {
     if (A) {
       const rd = Math.hypot(A.rx - A.bx, A.ry - A.by);
-      const fx = rd > 1e-3 ? Math.min(rd, MAX_FRAME_UNITS) / rd : 0;  // cap the framed span
-      tOx = A.bx + OY_BIAS * fx * (A.rx - A.bx);
-      tOy = A.by + OY_BIAS * fx * (A.ry - A.by);
+      const capped = Math.min(rd, MAX_FRAME_UNITS);
+      const fx = rd > 1e-3 ? capped / rd : 0;             // cap the framed span
+      const bias = capped * m < MIN_SHOT_M ? OY_BIAS_NEAR : OY_BIAS_FAR;  // floor-dominated → NEAR
+      tOx = A.bx + bias * fx * (A.rx - A.bx);
+      tOy = A.by + bias * fx * (A.ry - A.by);
       // FRAME_K was calibrated at the default 55° pitch. A top-down camera at
       // the same distance shows far LESS ground (no oblique slice), so full-2D
       // read badly over-zoomed. Scale the distance up as pitch flattens:
-      // ×1 at 55°, ×2.4 at 0° (measured so the 2D ball→landing span matches
-      // the ~0.54·H the 55° framing gives).
-      const pf = 2.4 - 1.4 * Math.min(1, pitchDeg / 55);
-      tD = Math.max(Math.min(rd, MAX_FRAME_UNITS) * m, MIN_SHOT_M) * FRAME_K * pf;
+      // ×1 at 55°, ×2.35 at 0° (measured against the 55° framing's span).
+      const pf = 2.35 - 1.35 * Math.min(1, pitchDeg / 55);
+      tD = Math.max(capped * m, MIN_SHOT_M) * FRAME_K * pf;
     } else {
       const det = view.a * view.e - view.b * view.d || 1;
       const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
