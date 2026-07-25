@@ -138,6 +138,12 @@ function meshHeightAt(x, y) {
 // Mesh-vs-DEM offset is the geoid separation plus terrain error — tens of
 // metres. Anything beyond this is a coarse-LOD artefact, not real ground.
 const MAX_ABS_OFFSET_M = 120;
+// Hysteresis on every stored height/offset: re-sampling a static mesh returns
+// cm-different values each pass, and anything that consumes those (green sheet,
+// ball/pin anchors, the camera's own look-at height) visibly pulsed on a static
+// camera. Corrections smaller than this are absorbed; real LOD fixes (metres)
+// still pass through.
+const OFF_DEADBAND_M = 0.6;
 const GRID_SPACING = 14;   // world units between samples (~42 yд)
 let _grid = null;          // { x0,y0,dx,nx,ny, off:Float32Array, ok:Uint8Array }
 let _gridCursor = 0;
@@ -171,13 +177,25 @@ function refreshGridBatch(n) {
       // blank-ground deadlock (and the source of the intermittent white screen —
       // it's a race on whether a coarse tile is sampled before a real one).
       // The genuine offset here is the geoid separation, tens of metres.
-      if (Math.abs(off) <= MAX_ABS_OFFSET_M) { gr.off[i] = off; gr.ok[i] = 1; }
+      // Dead-band refills: cells are resampled round-robin forever (so they
+      // self-heal as LOD refines), but each pass returns cm-different heights —
+      // and the camera's look-at height reads this field, so the churn made the
+      // WHOLE FRAME pulse (worst at top-down). Only overwrite on real change.
+      if (Math.abs(off) <= MAX_ABS_OFFSET_M &&
+          (!gr.ok[i] || Math.abs(off - gr.off[i]) > OFF_DEADBAND_M)) {
+        gr.off[i] = off; gr.ok[i] = 1;
+      }
     }
   }
   // Running mean of filled cells — the fallback for corners not yet sampled.
+  // Same dead-band: it feeds unfilled corners AND meshHeightAt's expected-height
+  // pick, so a drifting mean is another whole-frame pulse source.
   let sum = 0, cnt = 0;
   for (let i = 0; i < total; i++) if (gr.ok[i]) { sum += gr.off[i]; cnt++; }
-  if (cnt) _gridMean = sum / cnt;
+  if (cnt) {
+    const mean = sum / cnt;
+    if (Math.abs(mean - _gridMean) > OFF_DEADBAND_M) _gridMean = mean;
+  }
 }
 // ---- precision anchors over the coarse grid ---------------------------------
 // The 14u grid + bilinear leaves ~1-2m height error, which at a 55° camera slides
@@ -223,8 +241,16 @@ function refreshPrecisionAnchors() {
     const off = mh - (tz ? tz(x, y) : 0) * m;
     return Math.abs(off) <= MAX_ABS_OFFSET_M ? { x, y, off } : null;
   };
-  if (S && S.ball) _ballOff = exact(S.ball.x, S.ball.y) || _ballOff;
-  if (H && H.holePos) _pinOff = exact(H.holePos.x, H.holePos.y) || _pinOff;
+  // Same dead-band for the per-frame ball/pin raycasts: the mesh height under a
+  // FIXED column still varies a few cm frame-to-frame as neighbouring tiles
+  // stream (measured: pin pixel jittered 3.4px on a static camera). Replace the
+  // stored anchor only when the column moved or the height genuinely changed.
+  const keep = (prev, next) =>
+    next == null ? prev
+    : (prev && prev.x === next.x && prev.y === next.y &&
+       Math.abs(next.off - prev.off) <= OFF_DEADBAND_M) ? prev : next;
+  if (S && S.ball) _ballOff = keep(_ballOff, exact(S.ball.x, S.ball.y));
+  if (H && H.holePos) _pinOff = keep(_pinOff, exact(H.holePos.x, H.holePos.y));
   // Per-green rigid offsets: a couple of samples per frame for in-play greens.
   const greens = (H && H._greens) || [];
   for (const gr of greens) {
@@ -250,7 +276,12 @@ function refreshPrecisionAnchors() {
     }
     if (rec.samples.length >= 12) {
       const s = rec.samples.slice().sort((a, b) => a - b);
-      rec.off = s[Math.floor(s.length / 2)];             // median beats canopy strikes
+      const med = s[Math.floor(s.length / 2)];           // median beats canopy strikes
+      // DEAD-BAND: the rolling window re-medians every frame, and cm-level churn
+      // moved the whole green overlay a few px per frame — a visible PULSE on a
+      // static camera (measured 6px/frame). Only move the sheet for a REAL
+      // correction (LOD refinement, metres); absorb the noise.
+      if (rec.off == null || Math.abs(med - rec.off) > OFF_DEADBAND_M) rec.off = med;
     }
   }
 }
@@ -367,7 +398,13 @@ function setCamera() {
       const fx = rd > 1e-3 ? Math.min(rd, MAX_FRAME_UNITS) / rd : 0;  // cap the framed span
       tOx = A.bx + OY_BIAS * fx * (A.rx - A.bx);
       tOy = A.by + OY_BIAS * fx * (A.ry - A.by);
-      tD = Math.max(Math.min(rd, MAX_FRAME_UNITS) * m, MIN_SHOT_M) * FRAME_K;
+      // FRAME_K was calibrated at the default 55° pitch. A top-down camera at
+      // the same distance shows far LESS ground (no oblique slice), so full-2D
+      // read badly over-zoomed. Scale the distance up as pitch flattens:
+      // ×1 at 55°, ×2.4 at 0° (measured so the 2D ball→landing span matches
+      // the ~0.54·H the 55° framing gives).
+      const pf = 2.4 - 1.4 * Math.min(1, pitchDeg / 55);
+      tD = Math.max(Math.min(rd, MAX_FRAME_UNITS) * m, MIN_SHOT_M) * FRAME_K * pf;
     } else {
       const det = view.a * view.e - view.b * view.d || 1;
       const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
