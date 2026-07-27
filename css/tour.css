@@ -85,6 +85,8 @@
    back arrow leak onto the schedule pane. */
 #tour-board .tb-table-wrap.hidden,
 #tour-board .tb-actions.hidden,
+#tour-board .tb-rounds.hidden,
+#tour-board .tb-card.hidden,
 #tb-back.hidden { display: none; }
 
 .tb-table-wrap { flex: 1; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -226,6 +228,63 @@
 }
 .tr-purse { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
 .tr-actions { display: flex; gap: var(--s-2); margin-top: var(--s-3); }
+
+/* ---- My round list + hole-by-hole scorecard (panes 3 & 4) -----------
+   Round rows borrow the .tb-sched-row geometry; the card reuses the .re-sc
+   table SHAPE from modals.css but must restate colour, because that family is
+   tuned for the light --surface-panel and lands dark-on-dark on this pine
+   board (.re-cell-par is literally color: var(--text)). scoreClass() still
+   supplies the cell classes, so the birdie/bogey mapping stays in one place. */
+.tb-rounds, .tb-card { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.tb-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-3); width: 100%;
+  padding: 14px var(--s-3);
+  background: transparent; border: none;
+  border-bottom: 1px solid rgba(207,168,94,0.10);
+  text-align: left; cursor: pointer; color: var(--text);
+}
+.tb-row:active { background: var(--w-08); }
+.tb-row[disabled] { cursor: default; opacity: 0.75; }
+.tb-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tb-row-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.tb-row-sub { font-size: 11px; color: var(--text-faint); }
+.tb-row-meta { display: flex; align-items: baseline; gap: 10px; flex: none; font-variant-numeric: tabular-nums; }
+.tb-row-strokes { font-size: 17px; font-weight: 700; }
+.tb-row-topar { font-size: 13px; min-width: 30px; text-align: right; }
+.tb-rounds-tot {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 14px var(--s-3); margin-top: 4px;
+  border-top: 1px solid var(--tour-line);
+  font-family: var(--font-display); font-size: 15px; color: var(--brass-400);
+}
+
+.tb-card-head { padding: var(--s-3) var(--s-3) 0; }
+.tb-card-name { font-family: var(--font-display); font-size: 18px; color: var(--brass-400); }
+.tb-card-sub  { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.tb-card .seg { margin: var(--s-2) var(--s-3); }
+.tb-card-note { padding: 18px var(--s-3); text-align: center; color: var(--text-dim); font-size: 13px; }
+.tb-sc-wrap { padding: 0 var(--s-3) var(--s-3); overflow-x: auto; }
+.tb-sc {
+  width: 100%; border-collapse: collapse; margin-top: var(--s-2);
+  font-variant-numeric: tabular-nums; font-size: 12px;
+}
+.tb-sc th, .tb-sc td { text-align: center; padding: 5px 2px; color: var(--w-70); }
+.tb-sc thead th { font-size: 10px; letter-spacing: 0.5px; color: var(--brass-600); }
+.tb-sc .re-label {
+  text-align: left !important; padding-left: 2px !important;
+  font-size: 10px; letter-spacing: 0.5px; color: var(--brass-600);
+}
+.tb-sc .re-sep { font-weight: 800; border-left: 1px solid var(--tour-line); padding-left: 6px !important; color: var(--text); }
+/* Restate the score-cell palette for the dark board. These MUST be td-qualified:
+   the generic `.tb-sc td` colour rule above is (0,1,1) and would otherwise beat a
+   bare `.re-cell-*` class (0,1,0), which flattens the solid birdie/eagle chips to
+   the same dim cream as every other cell. */
+.tb-sc td.re-cell-eagle  { color: #1a1a1a; }
+.tb-sc td.re-cell-birdie { color: #fff; }
+.tb-sc td.re-cell-par    { color: var(--w-70); }
+.tb-sc td.re-cell-bogey  { color: #e8b06a; }
+.tb-sc td.re-cell-double { color: #e07a5f; font-weight: 700; }
 
 /* ---- Season schedule list (front pane) ------------------- */
 .tb-schedule {

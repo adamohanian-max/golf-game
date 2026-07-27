@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="css/courses.css?v=8">
   <link rel="stylesheet" href="css/modals.css?v=82">
   <link rel="stylesheet" href="css/tournament.css?v=60">
-  <link rel="stylesheet" href="css/tour.css?v=11">
+  <link rel="stylesheet" href="css/tour.css?v=13">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -499,7 +499,12 @@
   <div id="tour-board" class="hidden">
     <div class="tb-box">
       <div class="tb-header">
-        <button id="tb-back" class="tb-x hidden" aria-label="Back to schedule">‹</button>
+        <!-- data-back so the left-edge swipe steps back one pane instead of
+             closing the whole overlay. It ties with #tb-close on overlay
+             z-index and stable sort keeps DOM order, so this wins while it's
+             visible; on the schedule pane it's display:none (no client rects)
+             and the swipe falls through to #tb-close. See initEdgeSwipeBack. -->
+        <button id="tb-back" class="tb-x hidden" aria-label="Back" data-back>‹</button>
         <div class="tb-title">
           <div id="tb-event" class="tb-event">Tour Events</div>
           <div id="tb-status" class="tb-round"></div>
@@ -517,8 +522,13 @@
           <tbody id="tb-list"></tbody>
         </table>
       </div>
+      <!-- Pane 3: my round list. Pane 4: one player's hole-by-hole card
+           (mine or a tapped pro's). Both driven by _showTourPane/_tourNav. -->
+      <div id="tb-rounds" class="tb-rounds hidden"></div>
+      <div id="tb-card" class="tb-card hidden"></div>
       <div class="tb-actions">
         <button id="tb-expand" class="tb-btn-ghost hidden">Show full field</button>
+        <button id="tb-cards" class="tb-btn-ghost hidden">My scorecard</button>
         <button id="tb-tee" class="tb-btn-tee hidden">Tee off</button>
       </div>
       <p class="tb-credit">Live scoring via ESPN · not affiliated with the PGA Tour or Augusta National</p>
@@ -544,6 +554,7 @@
         <div id="tr-purse" class="tr-purse"></div>
       </div>
       <div class="tr-actions">
+        <button id="tr-card" class="tb-btn-ghost">Your scorecard</button>
         <button id="tr-board" class="tb-btn-ghost">See full board</button>
         <button id="tr-done" class="tb-btn-tee">Done</button>
       </div>
@@ -828,7 +839,7 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script type="module" src="./three3d/gtiles3d.js?v=32"></script>
-  <script defer src="game.js?v=336"></script>
+  <script type="module" src="./three3d/gtiles3d.js?v=34"></script>
+  <script defer src="game.js?v=339"></script>
 </body>
 </html>

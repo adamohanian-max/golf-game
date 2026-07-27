@@ -1358,6 +1358,10 @@ let _tourOpenEvent = null;        // schedule event whose board is currently ope
 let _tourActiveEventId = null;    // eventId of the round currently being played (tourPlayMode)
 let _tourResultsCache = {};       // { [eventId]: {at, data:{purse, displayPurse, payouts:[$ desc]}} }
 let _tourVenueMap = null;         // { [eventId]: {courseId, courseName, venue} } — baked, for schedule playability
+let _tourCardCache = {};          // { ["eventId:competitorId"]: {at, data:{roundN:{p,s,...}}} } pro hole-by-hole
+let _tourCardReq = 0;             // monotonic token — a slow card fetch must not paint over a newer one
+let _tourNav = [];                // pane history stack for the board overlay (see _showTourPane/tourBack)
+let _tourCardCtx = null;          // { title, sub, cards, active, statusNote, retry } currently-shown scorecard
 // Match state — live head-to-head game with friends (see "Multiplayer matches").
 let activeMatch = null;      // full matches row from Supabase (null when not in a match)
 let matchHoleCount = 18;     // holes this match plays (9 or 18), set at Begin
@@ -3578,24 +3582,32 @@ function ws(v) { return v * (view.gtilesProj ? view.gtilesScale : view.threeProj
 function ballDrawRadius() {
   if (view.appleProj) return Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
   if (view.gtilesProj) {
-    // TRUE perspective size: radius ∝ 1 / camera→ball distance. distanceTo()
-    // measures metres from the live 3D camera (its position already encodes
-    // where it's pointing — setCamera places it back along the view direction)
-    // to the ball's mesh-anchored position; at the fixed 30° FOV, on-screen size
-    // is exactly the 1/d law. The old gtilesScale route was a screen-space
-    // finite difference that saturated at its clamp, so the ball read nearly
-    // constant-size across framings instead of shrinking with distance.
+    // REALISTIC perspective ball: draw the true 42.7mm ball at its actual
+    // projected size for the camera distance, times a small golf-sim
+    // exaggeration, floored for visibility. Pure function of camera→ball
+    // distance (GTiles3D.distanceTo — the camera's pointing is encoded in its
+    // position), so a static camera + static ball = static size, and a ball
+    // flying AWAY from the held camera shrinks by the true 1/d law. Unlike the
+    // earlier K/d tuning this never reads as a blob: the putt framing gives a
+    // believable small ball (~6px), the tee framing a floored ~3px dot.
     const b = state.ball;
     const d = window.GTiles3D.distanceTo(b.x, b.y, terrainZ(b.x, b.y) + (b.z || 0));
-    if (d) return Math.max(3, Math.min(20, GTILES_BALL_PX_K / d));
+    if (d) {
+      const pxPerM = window.innerHeight / (2 * d * GTILES_TAN_HALF_FOV);
+      const r = Math.max(3, Math.min(9, BALL_REAL_RADIUS_M * pxPerM * GTILES_BALL_EXAG));
+      // Hysteresis: sub-half-pixel distance drift (camera ease tail, offset
+      // refresh) must not breathe the ball. Real changes (flight, reframe) pass.
+      if (_gtBallR == null || Math.abs(r - _gtBallR) > 0.5) _gtBallR = r;
+      return _gtBallR;
+    }
     return Math.max(4, Math.min(18, view.gtilesScale * APPLE_BALL_DRAW_UNITS));
   }
   return Math.max(ws(BALL_RADIUS_UNITS), 4);
 }
-// Screen px·metres: ball radius at distance d = K/d. 700 → ~18px on a putt
-// (38m camera), ~3.3px from the tee framing (210m) — measured; the whole play
-// range stays inside the 3..20 clamp so the 1/d law is never flattened.
-const GTILES_BALL_PX_K = 700;
+let _gtBallR = null;                     // hysteresis cache for the perspective radius
+const BALL_REAL_RADIUS_M = 0.02135;      // regulation 42.7mm ball
+const GTILES_TAN_HALF_FOV = Math.tan(15 * Math.PI / 180);  // the tiles camera's 30° vertical FOV
+const GTILES_BALL_EXAG = 6.5;            // golf-sim exaggeration — true scale is sub-pixel
 // Screen-px lift for a ball at height `z` (world units) over ground (x,y). Under
 // a perspective ground the height must be projected for real so flight arcs
 // foreshorten; ws(z) is the flat-screen approximation.
@@ -11672,6 +11684,46 @@ async function fetchTourResults(eventId) {
   return res;
 }
 
+// A pro's hole-by-hole card for every round they played. One request returns all
+// four rounds: items[] per round, each with its own linescores[] of 18 holes
+// carrying {value: strokes, par, period: HOLE NUMBER, scoreType}. Normalized to
+// the SAME {p,s} parallel-array shape as my locally-banked cards so one renderer
+// serves both. Two traps this handles, confirmed against a multi-course event:
+//   - par differs PER ROUND (courseId changes round to round at the AmEx etc.),
+//     so the par array is rebuilt from each round's own holes, never shared.
+//   - holes arrive OUT OF ORDER on split-tee waves (a round listing 10..18 then
+//     1..9), so cells are keyed by l.period, never by array index.
+// Missed cut / WD simply yields fewer items. A bad competitor id answers HTTP 200
+// with {count:0,items:[]}, so emptiness — not status — is the failure signal.
+async function fetchPlayerCard(eventId, competitorId) {
+  if (!eventId || !competitorId) return null;
+  const key = eventId + ":" + competitorId;
+  const live = _tourBoardData && _tourBoardData.state === "in";
+  const c = _tourCardCache[key];
+  // A finished event's card never changes — cache it for the session. A live one
+  // gets the same 45s freshness window the leaderboard uses.
+  if (c && (!live || Date.now() - c.at < 45000)) return c.data;
+  const url = TOUR_CORE_EVENT + encodeURIComponent(eventId) + "/competitions/" +
+    encodeURIComponent(eventId) + "/competitors/" + encodeURIComponent(competitorId) + "/linescores";
+  const d = await fetchJSONRetry(url);
+  if (!d || !(d.items || []).length) return null;   // includes the count:0 case
+  const cards = {};
+  for (const r of d.items) {
+    const n = r.period;
+    if (!n) continue;
+    const p = new Array(18).fill(null), s = new Array(18).fill(null);
+    for (const l of (r.linescores || [])) {
+      const i = (l.period | 0) - 1;
+      if (i < 0 || i > 17) continue;
+      p[i] = l.par != null ? l.par : null;
+      s[i] = l.value ? l.value : null;   // 0/null = not yet played
+    }
+    cards[n] = { p, s, strokes: r.value || null, toPar: _parseToPar(r.displayValue) };
+  }
+  _tourCardCache[key] = { at: Date.now(), data: cards };
+  return cards;
+}
+
 // My prize for finishing at `place` in a group of `tieCount` players sharing that
 // place: the group occupies slots place..place+tieCount-1; split the sum of those
 // real payout slots equally (standard golf). 0 past the paid positions / no data.
@@ -11876,6 +11928,12 @@ async function fetchTourLeaderboard(eventId, startISO) {
       total,
       rounds: ls.map((l) => ({ n: l.period, strokes: l.value, toPar: _parseToPar(l.displayValue) })),
       today, thru, pos: c.order,
+      // c.id (NOT athlete.id — null in this feed) is the key the core API's
+      // per-hole linescores endpoint is addressed by; carried so a tapped row
+      // can fetch that player's scorecard. statusNote is ESPN's own wording
+      // ("Missed Cut", "WD") — shown as-is rather than inferred from round count.
+      id: c.id,
+      statusNote: ((cs.type || {}).shortDetail) || cs.displayValue || null,
     };
   }).filter((p) => p.total != null || p.rounds.length);
   players.sort((a, b) => (a.total == null ? 999 : a.total) - (b.total == null ? 999 : b.total));
@@ -11944,6 +12002,37 @@ function recordTourPayout(eventId, amount, place) {
   if (place) map[eventId].place = place;
   if (!map[eventId].season) map[eventId].season = _tourEventSeason(eventId);
   lsSet("golf.tourEvents", map);
+}
+// --- My hole-by-hole tour scorecards -------------------------------------
+// Kept in their OWN localStorage key rather than as a field on golf.tourEvents:
+// getTourEvent() hand-builds its return value and setTourEvent() rebuilds the
+// stored object from scratch, so every field added there has to be threaded
+// through both or it silently vanishes. A separate key needs neither touched.
+// Shape: { [eventId]: { "1": {p:[...18], s:[...18]}, ... } } — PARALLEL ARRAYS
+// indexed by hole-1 (null = hole not played), which is ~6x smaller than an array
+// of {hole,par,strokes} objects. lsSet swallows quota errors silently, so size
+// matters. Desync with golf.tourEvents is benign and handled by both renderers:
+// a card with no round is ignored, a round with no card shows totals only.
+function getTourCards(eventId) {
+  const all = lsGet("golf.tourCards", null) || {};
+  return (eventId ? all[eventId] : all) || {};
+}
+function setTourCard(eventId, n, card) {
+  if (!eventId || !n || !card) return;
+  const all = lsGet("golf.tourCards", null) || {};
+  (all[eventId] = all[eventId] || {})[n] = card;
+  lsSet("golf.tourCards", all);
+}
+// round.holeStats -> {p,s} parallel arrays. Keyed by h.hole (NOT array order) so
+// a partial or oddly-ordered round still lands each score on the right hole.
+function _cardFromHoleStats(stats) {
+  const p = new Array(18).fill(null), s = new Array(18).fill(null);
+  for (const h of (stats || [])) {
+    const i = (h.hole | 0) - 1;
+    if (i < 0 || i > 17) continue;
+    p[i] = h.par; s[i] = h.strokes;
+  }
+  return { p, s };
 }
 // Lifetime PGA Tour earnings across every event the player has cashed in.
 function careerWinnings() {
@@ -12030,6 +12119,10 @@ function recordTourRound() {
   te.rounds = te.rounds || [];
   te.rounds.push(round.score || 0);
   setTourEvent(te);
+  // Bank the hole-by-hole card too. round.holeStats is still fully populated
+  // here (showRoundSummary calls us; the next startCourse() is what clears it),
+  // and this is the ONLY moment it can be captured — nothing can be backfilled.
+  setTourCard(te.eventId, te.rounds.length, _cardFromHoleStats(round.holeStats));
   return te.rounds.length;   // round number just completed (1..4)
 }
 
@@ -12089,18 +12182,53 @@ function setupTourRoundEnd(n) {
   }
 }
 
-// --- Full-screen overlay: schedule list (front) → one event's board ---
-// Toggle the two panes of #tour-board.
+// --- Full-screen overlay: schedule → board → my rounds → one scorecard ---
+// Four panes, declared as the set of nodes each one owns. Everything not listed
+// for the active pane is hidden. Note each selector ALSO needs an explicit
+// `.hidden{display:none}` rule in css/tour.css — their single-class display
+// rules out-order the base .hidden (that file documents the trap).
+const TOUR_PANES = {
+  schedule: ["#tb-schedule"],
+  board:    ["#tour-board .tb-table-wrap", "#tour-board .tb-actions"],
+  rounds:   ["#tb-rounds"],
+  card:     ["#tb-card"],
+};
 function _showTourPane(which) {
-  const isBoard = which === "board";
-  const sched = document.getElementById("tb-schedule");
-  const wrap = document.querySelector("#tour-board .tb-table-wrap");
-  const acts = document.querySelector("#tour-board .tb-actions");
+  for (const name in TOUR_PANES) {
+    const on = name === which;
+    for (const sel of TOUR_PANES[name]) {
+      const el = document.querySelector(sel);
+      if (el) el.classList.toggle("hidden", !on);
+    }
+  }
   const back = document.getElementById("tb-back");
-  if (sched) sched.classList.toggle("hidden", isBoard);
-  if (wrap) wrap.classList.toggle("hidden", !isBoard);
-  if (acts) acts.classList.toggle("hidden", !isBoard);
-  if (back) back.classList.toggle("hidden", !isBoard);
+  if (back) back.classList.toggle("hidden", which === "schedule");
+}
+// Pane history. A stack rather than a fixed parent map because the same pane has
+// different parents by route: a pro's card is opened straight off the board
+// (their R1–R4 tabs ARE the round list), while mine is opened from my round list.
+function _pushTourPane(name) {
+  const cur = _tourNav[_tourNav.length - 1];
+  if (cur !== name) _tourNav.push(name);
+  _showTourPane(name);
+}
+// Entry points reached FROM the board (my rounds, a tapped player) are siblings,
+// not children of whatever is showing — opening one while another card is up must
+// not stack them, or backing out walks through a card you never navigated into.
+// Truncate to the board, then push.
+function _tourRouteFromBoard(name) {
+  const i = _tourNav.lastIndexOf("board");
+  if (i >= 0) _tourNav.length = i + 1;
+  _pushTourPane(name);
+}
+function tourBack() {
+  _tourNav.pop();
+  const to = _tourNav[_tourNav.length - 1];
+  if (!to || to === "schedule") { _tourNav = []; tourBackToSchedule(); return; }
+  _showTourPane(to);
+  // The card/rounds panes overwrite the shared header, so the board has to
+  // repaint its own title/status on the way back.
+  if (to === "board" && _tourBoardData) renderTourBoard(_tourBoardData);
 }
 
 // Schedule = whole 2026 season. Tapping an event opens its board.
@@ -12112,6 +12240,7 @@ async function openTourEvents() {
   stopTourPoll();
   elMenu.classList.add("hidden");
   document.getElementById("play-menu") && document.getElementById("play-menu").classList.add("hidden");
+  _tourNav = ["schedule"];
   _showTourPane("schedule");
   document.getElementById("tb-event").textContent = "Tour Events";
   document.getElementById("tb-status").textContent = "Loading schedule…";
@@ -12200,6 +12329,7 @@ function renderTourSchedule(evs) {
 function tourBackToSchedule() {
   stopTourPoll();
   _tourOpenEvent = null;
+  _tourNav = ["schedule"];
   _showTourPane("schedule");
   if (_tourSchedule) renderTourSchedule(_tourSchedule);
   else openTourEvents();
@@ -12214,6 +12344,9 @@ async function openTourEvent(ev) {
   _tourOpenEvent = ev;
   elMenu.classList.add("hidden");
   document.getElementById("play-menu") && document.getElementById("play-menu").classList.add("hidden");
+  // Opened from the schedule normally, but also directly (scorebug, Winnings) —
+  // seed the stack so "back" always has somewhere to land.
+  _tourNav = _tourNav[0] === "schedule" ? ["schedule", "board"] : ["board"];
   _showTourPane("board");
   document.getElementById("tb-event").textContent = ev.name;
   document.getElementById("tb-status").textContent = "Loading scores…";
@@ -12260,12 +12393,194 @@ function _tourRowHTML(p, posLabel) {
   const nm = escapeHTML(p.name);
   const today = p.today == null ? "—" : '<span class="' + _parClass(p.today) + '">' + _parText(p.today) + "</span>";
   const total = '<span class="' + _parClass(p.total) + '">' + _parText(p.total) + "</span>";
-  return '<tr class="' + (p.isMe ? "tb-me" : "") + '">' +
+  // data-me / data-cid make the row a scorecard link (delegated on #tb-list).
+  const tap = p.isMe ? ' data-me="1"' : (p.id ? ' data-cid="' + escapeHTML(p.id) + '"' : "");
+  return '<tr class="' + (p.isMe ? "tb-me" : "") + '"' + tap + '>' +
     '<td class="tb-pos">' + posLabel + "</td>" +
     '<td class="tb-name">' + flag + '<span class="tb-nm">' + nm + "</span></td>" +
     '<td class="tb-today">' + today + "</td>" +
     '<td class="tb-thru">' + (p.thru == null ? "—" : p.thru) + "</td>" +
     '<td class="tb-total">' + total + "</td></tr>";
+}
+
+// =====================================================================
+//  Scorecards — my round list (pane 3) + one player's hole-by-hole (pane 4)
+//  Local cards (golf.tourCards) and fetched pro cards share one {p,s} shape,
+//  so every renderer below works for either.
+// =====================================================================
+
+// Sum a card's played holes. Unplayed holes are null and excluded from both
+// sides, so a partial round still totals honestly against the holes it covers.
+function _cardTotals(card, lo, hi) {
+  let par = 0, str = 0, played = 0;
+  for (let i = (lo || 1) - 1; i < (hi || 18); i++) {
+    const s = card.s[i];
+    if (s == null) continue;
+    played++; str += s; par += card.p[i] || 0;
+  }
+  return { par, str, played, toPar: str - par };
+}
+
+// One nine. Cells are addressed by HOLE NUMBER, never by array position — a
+// split-tee round arrives 10..18 then 1..9 — and PAR comes from this card's own
+// par array, because multi-course events play a different course each round.
+function _tourNineHTML(card, lo, hi, sepLabel, totals) {
+  const nums = [];
+  for (let n = lo; n <= hi; n++) nums.push(n);
+  const t = _cardTotals(card, lo, hi);
+  const hRow = '<tr><th class="re-label">HOLE</th>' + nums.map((n) => "<th>" + n + "</th>").join("") +
+    '<th class="re-sep">' + sepLabel + "</th>" + (totals ? '<th class="re-sep">TOT</th>' : "") + "</tr>";
+  const pRow = '<tr><td class="re-label">PAR</td>' +
+    nums.map((n) => "<td>" + (card.p[n - 1] != null ? card.p[n - 1] : "·") + "</td>").join("") +
+    '<td class="re-sep">' + (t.par || "·") + "</td>" +
+    (totals ? '<td class="re-sep">' + (totals.par || "·") + "</td>" : "") + "</tr>";
+  const sRow = '<tr><td class="re-label">SCORE</td>' + nums.map((n) => {
+    const s = card.s[n - 1], p = card.p[n - 1];
+    if (s == null) return "<td>·</td>";
+    return '<td class="' + scoreClass(s, p) + '">' + s + "</td>";
+  }).join("") +
+    '<td class="re-sep">' + (t.played ? t.str : "·") + "</td>" +
+    (totals ? '<td class="re-sep">' + (totals.played ? totals.str : "·") + "</td>" : "") + "</tr>";
+  return '<table class="tb-sc"><thead>' + hRow + "</thead><tbody>" + pRow + sRow + "</tbody></table>";
+}
+
+function buildTourCardHTML(card) {
+  if (!card) return '<div class="tb-card-note">No scorecard for this round.</div>';
+  const all = _cardTotals(card, 1, 18);
+  if (!all.played) return '<div class="tb-card-note">No holes played yet.</div>';
+  return '<div class="tb-sc-wrap">' +
+    _tourNineHTML(card, 1, 9, "OUT", null) +
+    _tourNineHTML(card, 10, 18, "IN", all) +
+    "</div>";
+}
+
+// The scorecard pane. ctx = {title, sub, cards:{n:{p,s}}, active, statusNote}.
+// Tabs render for all four rounds so the card reads like a real scorecard;
+// rounds the player never played are disabled rather than hidden.
+function renderTourCardPane(ctx) {
+  _tourCardCtx = ctx;
+  const el = document.getElementById("tb-card");
+  if (!el) return;
+  const cards = ctx.cards || {};
+  const tabs = [1, 2, 3, 4].map((n) => {
+    const has = !!cards[n];
+    return '<button class="seg-btn' + (n === ctx.active ? " active" : "") + '"' +
+      (has ? ' data-round="' + n + '"' : " disabled") + ">R" + n + "</button>";
+  }).join("");
+  const body = ctx.loading ? '<div class="tb-card-note">Loading holes…</div>'
+    : ctx.error ? '<div class="tb-card-note">' + escapeHTML(ctx.error) +
+        '<br><button id="tb-card-retry" class="tb-btn-ghost" style="margin-top:12px">Retry</button></div>'
+    : buildTourCardHTML(cards[ctx.active]);
+  el.innerHTML =
+    '<div class="tb-card-head"><div class="tb-card-name">' + escapeHTML(ctx.title || "") + "</div>" +
+      (ctx.sub ? '<div class="tb-card-sub">' + escapeHTML(ctx.sub) + "</div>" : "") + "</div>" +
+    '<div class="seg">' + tabs + "</div>" + body;
+  // Tabs + retry are rebuilt on every render, so wire them here (the board's
+  // static controls are wired once in wireTourEvents; these are not static).
+  el.querySelectorAll(".seg-btn[data-round]").forEach((b) => {
+    b.addEventListener("click", () => {
+      _tourCardCtx.active = +b.dataset.round;
+      renderTourCardPane(_tourCardCtx);
+    });
+  });
+  const retry = document.getElementById("tb-card-retry");
+  if (retry && ctx.retry) retry.addEventListener("click", ctx.retry);
+}
+
+// Pane 3: my rounds for this event, newest state last. A round banked before
+// hole-by-hole capture existed (or before this feature shipped) still lists its
+// to-par — it just can't open a card.
+function renderTourRoundList(eventId) {
+  const el = document.getElementById("tb-rounds");
+  if (!el) return;
+  const te = getTourEvent(eventId) || { rounds: [] };
+  const cards = getTourCards(eventId);
+  const banked = te.rounds || [];
+  const rows = [];
+  let totStr = 0, totPar = 0, anyStrokes = false;
+
+  for (let i = 0; i < banked.length; i++) {
+    const n = i + 1, card = cards[n];
+    const t = card ? _cardTotals(card, 1, 18) : null;
+    if (t && t.played) { totStr += t.str; totPar += t.par; anyStrokes = true; }
+    const toPar = banked[i];
+    rows.push('<button class="tb-row"' + (card ? ' data-round="' + n + '"' : " disabled") + ">" +
+      '<span class="tb-row-main"><span class="tb-row-name">Round ' + n + "</span>" +
+        '<span class="tb-row-sub">' + (card ? "View scorecard" : "Hole-by-hole not recorded") + "</span></span>" +
+      '<span class="tb-row-meta">' +
+        (t && t.played ? '<span class="tb-row-strokes">' + t.str + "</span>" : "") +
+        '<span class="tb-row-topar ' + _parClass(toPar) + '">' + _parText(toPar) + "</span>" +
+      "</span></button>");
+  }
+  // A round in progress right now isn't banked yet — surface it live from memory.
+  if (tourPlayMode && _tourActiveEventId === eventId && round.holesPlayed) {
+    rows.push('<button class="tb-row" data-round="live">' +
+      '<span class="tb-row-main"><span class="tb-row-name">Round ' + (banked.length + 1) + "</span>" +
+        '<span class="tb-row-sub">In progress · Thru ' + round.holesPlayed + "</span></span>" +
+      '<span class="tb-row-meta"><span class="tb-row-topar ' + _parClass(round.score) + '">' +
+        _parText(round.score) + "</span></span></button>");
+  }
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="tb-card-note">You haven\'t played a round in this event yet.</div>';
+    return;
+  }
+  const totToPar = banked.reduce((a, b) => a + b, 0);
+  el.innerHTML = rows.join("") +
+    '<div class="tb-rounds-tot"><span>Total</span><span>' +
+      (anyStrokes ? totStr + " · " : "") +
+      '<span class="' + _parClass(totToPar) + '">' + _parText(totToPar) + "</span></span></div>";
+
+  el.querySelectorAll(".tb-row[data-round]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const r = b.dataset.round;
+      if (r === "live") {
+        // Live round: build a card from the in-memory holeStats.
+        _pushTourPane("card");
+        renderTourCardPane({ title: getPlayerName() || "You", sub: "Round in progress",
+          cards: { [banked.length + 1]: _cardFromHoleStats(round.holeStats) },
+          active: banked.length + 1 });
+      } else {
+        _pushTourPane("card");
+        renderTourCardPane({ title: getPlayerName() || "You", sub: te.name || "",
+          cards: getTourCards(eventId), active: +r });
+      }
+    });
+  });
+}
+
+function openMyTourCard(eventId) {
+  if (!eventId) return;
+  document.getElementById("tb-event").textContent = "Your rounds";
+  document.getElementById("tb-status").textContent = (getTourEvent(eventId) || {}).name || "";
+  document.getElementById("tb-course").textContent = "";
+  _tourRouteFromBoard("rounds");
+  renderTourRoundList(eventId);
+}
+
+// A pro opens straight to the grid — their R1–R4 tabs already are the round list.
+async function openProTourCard(player) {
+  const ev = _tourOpenEvent;
+  if (!player || !player.id || !ev) return;
+  const req = ++_tourCardReq;
+  document.getElementById("tb-event").textContent = player.name;
+  document.getElementById("tb-status").textContent = ev.name || "";
+  document.getElementById("tb-course").textContent = "";
+  _tourRouteFromBoard("card");
+  const shell = { title: player.name, sub: player.statusNote || "", cards: {}, active: 1 };
+  renderTourCardPane(Object.assign({}, shell, { loading: true }));
+  const cards = await fetchPlayerCard(ev.id, player.id);
+  // Bail if the view moved on while we were waiting: a newer card was opened, the
+  // event switched, or the user navigated away from the card pane entirely.
+  if (req !== _tourCardReq || _tourOpenEvent !== ev) return;
+  if (_tourNav[_tourNav.length - 1] !== "card") return;
+  if (!cards || !Object.keys(cards).length) {
+    renderTourCardPane(Object.assign({}, shell, {
+      error: "Couldn't load this scorecard.", retry: () => openProTourCard(player) }));
+    return;
+  }
+  const first = Math.min.apply(null, Object.keys(cards).map(Number));
+  renderTourCardPane(Object.assign({}, shell, { cards, active: first }));
 }
 
 function renderTourBoard(data) {
@@ -12300,6 +12615,14 @@ function renderTourBoard(data) {
     exp.classList.toggle("hidden", merged.length <= LEAD);
     exp.textContent = _tourExpanded ? "Show leaders" : "Show full field (" + merged.length + ")";
   }
+  // "My scorecard" once there's anything of mine to show — a banked round or a
+  // round in progress right now.
+  const myCards = document.getElementById("tb-cards");
+  if (myCards) {
+    const mine = ((getTourEvent(data.eventId) || {}).rounds || []).length > 0 ||
+      (tourPlayMode && _tourActiveEventId === data.eventId);
+    myCards.classList.toggle("hidden", !mine);
+  }
   const tee = document.getElementById("tb-tee");
   if (tee) {
     // No baked venue (or canceled) → spectator only. Mid-round → can't start another.
@@ -12327,6 +12650,7 @@ function renderTourBoard(data) {
 function hideTourBoard() { document.getElementById("tour-board").classList.add("hidden"); }
 function closeTourEvents() {
   hideTourBoard();
+  _tourNav = [];   // next open starts a fresh pane history
   // Opened mid-round (e.g. tapped the scorebug to glance)? Resume the round
   // instead of routing through showMenu(), which would abandon it.
   if (tourPlayMode && mode === "tour") { mode = "course"; updateTourBug(); return; }
@@ -12499,16 +12823,40 @@ function updateMatchBug(rows) {
   const close = document.getElementById("tb-close");
   if (close) close.addEventListener("click", closeTourEvents);
   const back = document.getElementById("tb-back");
-  if (back) back.addEventListener("click", tourBackToSchedule);
+  if (back) back.addEventListener("click", tourBack);   // one pane, not straight to the schedule
   const exp = document.getElementById("tb-expand");
   if (exp) exp.addEventListener("click", () => { _tourExpanded = !_tourExpanded; if (_tourBoardData) renderTourBoard(_tourBoardData); });
   const tee = document.getElementById("tb-tee");
   if (tee) tee.addEventListener("click", teeOffTourRound);
+  const myCards = document.getElementById("tb-cards");
+  if (myCards) myCards.addEventListener("click", () => {
+    if (_tourOpenEvent) openMyTourCard(_tourOpenEvent.id);
+  });
+  // Delegated: rows are rebuilt on every board render (and every poll tick).
+  const list = document.getElementById("tb-list");
+  if (list) list.addEventListener("click", (e) => {
+    const tr = e.target.closest && e.target.closest("tr");
+    if (!tr) return;
+    if (tr.dataset.me) { if (_tourOpenEvent) openMyTourCard(_tourOpenEvent.id); return; }
+    const cid = tr.dataset.cid;
+    if (!cid || !_tourBoardData) return;
+    const p = (_tourBoardData.players || []).find((x) => String(x.id) === cid);
+    if (p) openProTourCard(p);
+  });
   const bug = document.getElementById("tour-bug");
   if (bug) bug.addEventListener("click", () => {
     if (inMatch()) { toggleMatchBoard(); return; }   // any match reuses the bug → open the match board
     if (dailyMode) { openDailyBoard(); return; }   // daily reuses the bug → open the daily board
     _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents();
+  });
+  const trCard = document.getElementById("tr-card");
+  if (trCard) trCard.addEventListener("click", async () => {
+    const ev = _tourOpenEvent;
+    hideTourResult();
+    if (!ev) { openTourEvents(); return; }
+    // Land on the board first so backing out of the card has somewhere to go.
+    await openTourEvent(ev);
+    openMyTourCard(ev.id);
   });
   const trBoard = document.getElementById("tr-board");
   if (trBoard) trBoard.addEventListener("click", () => { hideTourResult(); _tourOpenEvent ? openTourEvent(_tourOpenEvent) : openTourEvents(); });
