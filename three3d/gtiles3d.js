@@ -452,6 +452,15 @@ function setCamera() {
     _camEase.Ox += (tOx - _camEase.Ox) * es;
     _camEase.Oy += (tOy - _camEase.Oy) * es;
     _camEase.D  += (tD  - _camEase.D)  * es;
+    // SNAP the asymptotic tail (same trick as the flat camera's updateCamera):
+    // without it the ease approaches the target forever at mm/frame, the camera
+    // never goes exactly static, and everything derived from its position (ball
+    // radius via distanceTo, tile LOD churn) micro-pulses indefinitely.
+    const m2 = M();
+    if (Math.hypot(tOx - _camEase.Ox, tOy - _camEase.Oy) * m2 < 0.3 &&
+        Math.abs(tD - _camEase.D) < 0.3) {
+      _camEase.Ox = tOx; _camEase.Oy = tOy; _camEase.D = tD;
+    }
   }
   const Ox = _camEase.Ox, Oy = _camEase.Oy, D = _camEase.D;
 
@@ -538,7 +547,9 @@ function buildTiles() {
   tiles.registerPlugin(reorient);
   tiles.registerPlugin(new TileCompressionPlugin());
   tiles.registerPlugin(new UnloadTilesPlugin());
-  tiles.registerPlugin(new TilesFadePlugin());
+  // Longer cross-fade (default 250ms) — softens the LOD pop that's severe on
+  // coastal holes (Pebble h4) where big cliff/ocean tiles swap during the glide.
+  tiles.registerPlugin(new TilesFadePlugin({ fadeDuration: 500 }));
   tiles.errorTarget = 6;
   tiles.lruCache.maxSize = 800;
   tiles.lruCache.minSize = 600;
@@ -596,6 +607,13 @@ function render() {
   // standalone viewer positions its camera first for exactly this reason.)
   setCamera();
   camera.updateMatrixWorld();
+  // Motion-coarse LOD: while the camera is gliding, chasing fine refinements
+  // just churns tiles that are about to be replaced again — the main source of
+  // visible popping on long coastal glides (Pebble h4). Coarsen the target
+  // while moving; restore full detail once parked (one settle refine).
+  const camMoved = _lastCamPos ? camera.position.distanceTo(_lastCamPos) > 0.5 : false;
+  (_lastCamPos = _lastCamPos || new THREE.Vector3()).copy(camera.position);
+  tiles.errorTarget = camMoved ? 12 : 6;
   tiles.setResolutionFromRenderer(camera, renderer);
   tiles.update();
   tiles.group.updateMatrixWorld(true);
@@ -641,6 +659,7 @@ function render() {
   renderer.render(scene, camera);   // camera was aimed at the top of this frame
 }
 let _lastHole = null;
+let _lastCamPos = null;
 
 function resize() {
   if (!renderer) return;
