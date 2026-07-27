@@ -7115,12 +7115,7 @@ document.getElementById("re-home").addEventListener("click", () => {
   activeTournamentRound = null;
   stopTournamentTimer();
   leaveMatch();           // tear down match polls/state if we were in one
-  mode = "menu";
-  elMenu.classList.remove("hidden");
-  elHudBtn.classList.add("hidden");
-  elHmClubRow.classList.add("hidden");
-  closeHud();
-  elScorecard.style.display = "none";
+  showMenu();
 });
 
 document.getElementById("re-replay").addEventListener("click", () => {
@@ -8884,6 +8879,7 @@ function showMenu() {
   elStats.classList.add("hidden");
   elHudBtn.classList.add("hidden");
   elHmClubRow.classList.add("hidden");
+  elScorecard.style.display = "none";  // in-course Home left this up (masked only by #menu z-index)
   closeHud();
   setMeasureMode(false);
   setSlopeMode(true);   // slope relief on by default
@@ -11271,12 +11267,7 @@ async function showCutModal() {
 
 function closeTournamentCutToMenu() {
   document.getElementById("tournament-cut").classList.add("hidden");
-  mode = "menu";
-  elMenu.classList.remove("hidden");
-  elHudBtn.classList.add("hidden");
-  elHmClubRow.classList.add("hidden");
-  closeHud();
-  elScorecard.style.display = "none";
+  showMenu();
 }
 
 // --- Tournament final results modal ---
@@ -11352,12 +11343,7 @@ async function showStandings(afterRound) {
 
 function closeStandingsToMenu() {
   document.getElementById("tournament-standings").classList.add("hidden");
-  mode = "menu";
-  elMenu.classList.remove("hidden");
-  elHudBtn.classList.add("hidden");
-  elHmClubRow.classList.add("hidden");
-  closeHud();
-  elScorecard.style.display = "none";
+  showMenu();
 }
 
 // --- Lobby ---
@@ -12552,12 +12538,7 @@ function updateMatchBug(rows) {
   const tfClose = document.getElementById("tf-close");
   if (tfClose) tfClose.addEventListener("click", () => {
     document.getElementById("tournament-final").classList.add("hidden");
-    mode = "menu";
-    elMenu.classList.remove("hidden");
-    elHudBtn.classList.add("hidden");
-    elHmClubRow.classList.add("hidden");
-    closeHud();
-    elScorecard.style.display = "none";
+    showMenu();
   });
 
   const tsCont = document.getElementById("ts-continue");
@@ -14756,12 +14737,7 @@ function renderProgress() {
   const mrHome = document.getElementById("mr-home");
   if (mrHome) mrHome.addEventListener("click", () => {
     leaveMatch();
-    mode = "menu";
-    elMenu.classList.remove("hidden");
-    elHudBtn.classList.add("hidden");
-    elHmClubRow.classList.add("hidden");
-    closeHud();
-    elScorecard.style.display = "none";
+    showMenu();
   });
   // Ladder: read _bot BEFORE leaveMatch (it nulls activeMatch). Human rematch
   // (renderMatchResults tags the button data-human="1") takes the other path.
