@@ -3577,9 +3577,25 @@ function ws(v) { return v * (view.gtilesProj ? view.gtilesScale : view.threeProj
 // and drifted (the drop popped 18px -> 4px the instant the ball started falling).
 function ballDrawRadius() {
   if (view.appleProj) return Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
-  if (view.gtilesProj) return Math.max(4, Math.min(18, view.gtilesScale * APPLE_BALL_DRAW_UNITS));
+  if (view.gtilesProj) {
+    // TRUE perspective size: radius ∝ 1 / camera→ball distance. distanceTo()
+    // measures metres from the live 3D camera (its position already encodes
+    // where it's pointing — setCamera places it back along the view direction)
+    // to the ball's mesh-anchored position; at the fixed 30° FOV, on-screen size
+    // is exactly the 1/d law. The old gtilesScale route was a screen-space
+    // finite difference that saturated at its clamp, so the ball read nearly
+    // constant-size across framings instead of shrinking with distance.
+    const b = state.ball;
+    const d = window.GTiles3D.distanceTo(b.x, b.y, terrainZ(b.x, b.y) + (b.z || 0));
+    if (d) return Math.max(3, Math.min(20, GTILES_BALL_PX_K / d));
+    return Math.max(4, Math.min(18, view.gtilesScale * APPLE_BALL_DRAW_UNITS));
+  }
   return Math.max(ws(BALL_RADIUS_UNITS), 4);
 }
+// Screen px·metres: ball radius at distance d = K/d. 700 → ~18px on a putt
+// (38m camera), ~3.3px from the tee framing (210m) — measured; the whole play
+// range stays inside the 3..20 clamp so the 1/d law is never flattened.
+const GTILES_BALL_PX_K = 700;
 // Screen-px lift for a ball at height `z` (world units) over ground (x,y). Under
 // a perspective ground the height must be projected for real so flight arcs
 // foreshorten; ws(z) is the flat-screen approximation.

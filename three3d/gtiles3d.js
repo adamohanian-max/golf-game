@@ -340,6 +340,21 @@ function project(x, y, zUnits, out) {
   return out;
 }
 
+// Metres from the live camera to world point (x, y, zUnits above ground).
+// Same world→scene path as project() (geo affine → ellipsoid → mesh-anchored
+// height → reoriented scene), so it's consistent with what's rendered. The
+// camera's pointing angle is already folded into its POSITION — setCamera
+// places it back along the view direction — and at the fixed 30° FOV the
+// on-screen size of a ground object is purely ∝ 1/this distance. That's what
+// drives the perspective ball radius (game.js ballDrawRadius).
+const _dp = new THREE.Vector3();
+function distanceTo(x, y, zUnits) {
+  if (!_placed || !tiles || !camera) return null;
+  const ll = worldToLngLat(x, y);
+  sceneAt(ll[0], ll[1], (zUnits || 0) * M() + offsetAt(x, y), _dp);
+  return camera.position.distanceTo(_dp);
+}
+
 // Screen CSS px → world: raycast the loaded mesh, invert to lng/lat → world.
 const _ray = new THREE.Raycaster();
 const _ndc = new THREE.Vector2();
@@ -678,6 +693,6 @@ function debug() {
 }
 
 window.GTiles3D = {
-  enter, leave, render, resize, setPitch, setHidden, project, unproject, isReady, failed,
+  enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, isReady, failed,
   getAttributions, worldToLngLat, lngLatToWorld, debug,
 };
