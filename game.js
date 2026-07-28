@@ -6153,9 +6153,23 @@ function draw() {
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     if (!HOLE.isRange && window.GTiles3D && window.GTiles3D.isReady()) {
       const gsIn = greensInPlay();
-      drawGreen(true, gsIn);
+      // Per-green fade-in (~350ms): greensInPlay() changes mid-flight (the
+      // ball's green joins the pin's), and tint + contours + relief snapped to
+      // full alpha in ONE frame — part of the landing pop. Timestamp each
+      // green's entry and ramp; a green that leaves play re-fades on return.
+      // (Apple branch eases the same way via _apDetailA.)
+      const nowG = performance.now();
+      if (HOLE._greens) for (const g of HOLE._greens)
+        if (g._gtA != null && !gsIn.includes(g)) g._gtA = null;
       for (const g of gsIn) {
-        drawGreenRelief(g, showSlope ? TUNE.reliefFull : TUNE.reliefAmbient,
+        if (g._gtA == null) g._gtA = nowG;
+        const a = Math.min(1, (nowG - g._gtA) / 350);
+        ctx.save(); ctx.globalAlpha *= a;
+        drawGreen(true, [g]);
+        ctx.restore();
+        // drawGreenRelief sets its own globalAlpha — bake the fade into the
+        // intensity instead (same trick as the Apple branch's detail fade).
+        drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * a,
                         showSlope && breakArrows);
       }
       // OB tint: opt-in here (see oobUserOn) and capped so it reads as a tint,

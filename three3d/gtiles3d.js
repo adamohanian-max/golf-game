@@ -248,7 +248,7 @@ let _pinOff = null;        // { x, y, off } exact pin column
 let _greenOffs = new Map();// green object -> { samples: [], off: number|null, cursor }
 function _greenRec(g) {
   let r = _greenOffs.get(g);
-  if (!r) { r = { samples: [], off: null, cursor: 0 }; _greenOffs.set(g, r); }
+  if (!r) { r = { samples: [], off: null, disp: null, cursor: 0 }; _greenOffs.set(g, r); }
   return r;
 }
 // A green is "in play" when the ball or pin sits inside its bbox (+margin) —
@@ -264,6 +264,9 @@ function _greenBBox(g) {
 function _inBBox(x, y, bb, m) { return x >= bb.x0 - m && x <= bb.x1 + m && y >= bb.y0 - m && y <= bb.y1 + m; }
 function refreshPrecisionAnchors() {
   const g = gb(); if (!g) return;
+  const nowA = performance.now();
+  const dtA = _anchT ? Math.min(nowA - _anchT, 100) : 16.7;
+  _anchT = nowA;
   const m = M(), tz = g.terrainZ;
   const S = g.getState(), H = g.getHole();
   const exact = (x, y) => {
@@ -340,10 +343,29 @@ function refreshPrecisionAnchors() {
       // moved the whole green overlay a few px per frame — a visible PULSE on a
       // static camera (measured 6px/frame). Only move the sheet for a REAL
       // correction (LOD refinement, metres); absorb the noise.
-      if (rec.off == null || Math.abs(med - rec.off) > OFF_DEADBAND_M) rec.off = med;
+      if (rec.off == null || Math.abs(med - rec.off) > OFF_DEADBAND_M) {
+        // First settle: the sheet was drawn with the grid's base offset until
+        // now — ease the APPLIED value from there instead of stepping (the
+        // null→median step moved green + camera in ONE frame ≈ the landing pop).
+        if (rec.off == null && rec.disp == null) {
+          const bb2 = _greenBBox(gr);
+          rec.disp = _offsetBase((bb2.x0 + bb2.x1) / 2, (bb2.y0 + bb2.y1) / 2);
+        }
+        rec.off = med;
+      }
+    }
+    // Ease displayed offset → target (~300ms). Also smooths LATER dead-band
+    // corrections (LOD refinement mid-play), not just first settle.
+    if (rec.off != null) {
+      if (rec.disp == null) rec.disp = rec.off;
+      else if (rec.disp !== rec.off) {
+        rec.disp += (rec.off - rec.disp) * (1 - Math.exp(-dtA / 90));
+        if (Math.abs(rec.off - rec.disp) < 0.02) rec.disp = rec.off;
+      }
     }
   }
 }
+let _anchT = 0;
 // Bilinear height correction (metres) at world (x,y): exact ball column first,
 // then the containing settled green's rigid offset, then the coarse grid (with
 // unfilled corners falling back to the field's running mean).
@@ -356,7 +378,17 @@ function offsetAt(x, y) {
   // green bbox (contours, tint, relief, cup, and the ball itself); the ball
   // anchor only glues OFF-green lies (fairway/tee), where it's needed.
   for (const [gr, rec] of _greenOffs) {
-    if (rec.off != null && _inBBox(x, y, _greenBBox(gr), 2)) return rec.off;
+    if (rec.disp == null) continue;
+    const bb = _greenBBox(gr);
+    if (!_inBBox(x, y, bb, 2)) continue;
+    // FEATHER the bbox edge: the hard rectangle stepped the sheet — and the
+    // camera look-at height, which also queries offsetAt() — the exact frame a
+    // point crossed it (measured 30–65px whole-frame jump at landing). Blend
+    // rigid-green ↔ grid base over the outer 3u so crossings are continuous.
+    const inD = Math.min(x - (bb.x0 - 2), (bb.x1 + 2) - x, y - (bb.y0 - 2), (bb.y1 + 2) - y);
+    if (inD >= 3) return rec.disp;
+    const t = inD / 3;
+    return rec.disp * t + _offsetBase(x, y) * (1 - t);
   }
   if (_ballOff) {
     const d = Math.hypot(x - _ballOff.x, y - _ballOff.y);
@@ -711,9 +743,23 @@ function render() {
   // just churns tiles that are about to be replaced again — the main source of
   // visible popping on long coastal glides (Pebble h4). Coarsen the target
   // while moving; restore full detail once parked (one settle refine).
-  const camMoved = _lastCamPos ? camera.position.distanceTo(_lastCamPos) > 0.5 : false;
+  // _justResumed: first frame after setHidden(false) — the camera legitimately
+  // jumped while render() was stopped (cine cut to the next framing); reading
+  // that as "motion" coarsened to 12 then refined back = a pop right as the
+  // player's eye returns to the course. Adopt the new position silently.
+  const camMoved = !_justResumed && _lastCamPos
+    ? camera.position.distanceTo(_lastCamPos) > 0.5 : false;
+  _justResumed = false;
   (_lastCamPos = _lastCamPos || new THREE.Vector3()).copy(camera.position);
-  tiles.errorTarget = camMoved ? 12 : 6;
+  // errorTarget RAMP, not a binary flip: the old 6↔12 switch made every tile
+  // needing refinement swap in the SAME frame — the "refine wave a beat after
+  // rest" pop. Coarsen instantly on motion; walk back 12→6 over ~0.8s parked so
+  // refinements trickle in (each one individually faded by TilesFadePlugin).
+  const nowR = performance.now();
+  const dtR = _errTAt ? Math.min(nowR - _errTAt, 100) : 16.7;
+  _errTAt = nowR;
+  _errT = camMoved ? 12 : Math.max(6, _errT - 6 * dtR / 800);
+  tiles.errorTarget = _errT;
   tiles.setResolutionFromRenderer(camera, renderer);
   tiles.update();
   tiles.group.updateMatrixWorld(true);
@@ -760,6 +806,8 @@ function render() {
 }
 let _lastHole = null;
 let _lastCamPos = null;
+let _errT = 6, _errTAt = 0;   // ramped errorTarget (motion-coarse LOD)
+let _justResumed = false;     // set by setHidden(false); one-frame motion amnesty
 
 function resize() {
   if (!renderer) return;
@@ -779,6 +827,13 @@ function setHidden(h) {
   if (h === _hidden || !container) return;
   _hidden = h;
   container.style.display = h ? "none" : "block";
+  if (!h) {
+    // Resuming after cine/green-view: render() stopped while hidden, so the
+    // eased camera + last-position are stale. Null _camEase → next setCamera
+    // SNAPS to the new framing (a cut, not a cross-course glide), and
+    // _justResumed keeps that snap from tripping the motion-coarse LOD.
+    _camEase = null; _camEaseT = 0; _justResumed = true;
+  }
 }
 function isReady() { return ready; }
 function failed() { return _failed; }  // Google unavailable → game.js uses 2D aerial
