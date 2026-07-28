@@ -611,7 +611,11 @@ function setCamera() {
       (g.terrainZ ? g.terrainZ(S.ball.x, S.ball.y) : 0) + (S.ball.z || 0));
     const yf = bp.y / H;
     const off = !bp.inFront || yf < 0.05 || yf > 0.95 || bp.x < -40 || bp.x > W + 40;
-    if (off && S.moving) _guardK = Math.min(_guardK * 1.06, 2.5);
+    // fully LOST (not merely at the band edge) — happens at rest too, e.g. the
+    // first seconds on a coastal hole while the height field heals under the
+    // camera and the look-at sits metres off (measured h6 address yf 1.18)
+    const lost = !bp.inFront || yf < 0.02 || yf > 0.98 || bp.x < -60 || bp.x > W + 60;
+    if ((off && S.moving) || lost) _guardK = Math.min(_guardK * 1.06, 2.5);
     else if (!S.moving) {
       _guardK += (1 - _guardK) * es;
       if (Math.abs(_guardK - 1) < 0.01) _guardK = 1;   // snap — no perpetual micro-pulse
