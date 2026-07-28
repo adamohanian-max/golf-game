@@ -6574,6 +6574,12 @@ function draw() {
   }  // end !cupHeld (cup + JS flagstick wait for the native tint)
   }
 
+  // Match play: whoever's turn it is draws on top. Otherwise the opponent's gold
+  // ball covers mine wherever we coincide — most obviously on the tee, where both
+  // balls sit on the exact same spot until someone hits.
+  const oppUnder = liveMatch() && myTurn();
+  if (oppUnder) drawOppGhost();
+
   // ball + shadow — shadow sits on the ground at (x,y), ball is lifted by height z
   if (!state.inHole) {
     const b = state.ball;
@@ -6727,8 +6733,9 @@ function draw() {
     }
   }
 
-  // live match: the opponent's ball (arc tween while their shot flies, else at rest)
-  if (liveMatch()) drawOppGhost();
+  // live match: the opponent's ball (arc tween while their shot flies, else at rest).
+  // Skipped when it already drew under my ball above — see oppUnder.
+  if (liveMatch() && !oppUnder) drawOppGhost();
 
   // celebration / impact particles (above the play surface + ball)
   updateParticles();
