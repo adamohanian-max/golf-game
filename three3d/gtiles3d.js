@@ -114,12 +114,21 @@ function meshHeightAt(x, y) {
   if (!hits.length) return null;
   _hInv.copy(tiles.group.matrixWorld).invert();
   // Of all surfaces pierced (canopy blobs first, turf below), keep the hit whose
-  // height lands closest to the EXPECTED ground (DEM + the field's running
-  // offset). Top-hit alone parked the ball on tree canopy at treed lies (~2u
-  // slide); where photogrammetry fuses canopy to the ground with no under-
-  // surface, the canopy is the only hit and still wins — matching what's visible.
+  // height lands closest to the EXPECTED ground (DEM + a LOCAL offset). Top-hit
+  // alone parked the ball on tree canopy at treed lies; where photogrammetry
+  // fuses canopy to ground, the canopy is the only hit and still wins.
+  //
+  // Expected offset = LOCAL cell, CLAMPED to ±15m of the global mean. Local
+  // alone is self-poisoning at the coast: Google's mesh includes the SEABED
+  // (~50m below the water line at Pebble), so cells over water latch seabed
+  // offsets (−90m vs land −35m), and an unclamped local reference then makes
+  // every neighbouring sample pick the seabed hit to match — the poison
+  // spreads. The true local variation of (mesh − DEM) is small (geoid + DEM
+  // error, ±10m); anything further from the global mean is contamination.
   const g = gb();
-  const expected = (g && g.terrainZ ? g.terrainZ(x, y) : 0) * M() + _gridMean;
+  const lo = _localOff(x, y);
+  const loc = Math.max(_gridMean - 15, Math.min(_gridMean + 15, lo));
+  const expected = (g && g.terrainZ ? g.terrainZ(x, y) : 0) * M() + loc;
   let best = null, bestErr = Infinity;
   for (const h of hits) {
     const ecef = h.point.clone().applyMatrix4(_hInv);
@@ -147,6 +156,24 @@ const OFF_DEADBAND_M = 0.6;
 const GRID_SPACING = 14;   // world units between samples (~42 yд)
 let _grid = null;          // { x0,y0,dx,nx,ny, off:Float32Array, ok:Uint8Array }
 let _gridCursor = 0;
+// Nearest FILLED grid cell's offset (spiral out to radius 3 cells), falling back
+// to the global mean. Feeds meshHeightAt's expected height — must be LOCAL so a
+// coastal hole's ocean cells can't drag the expectation off a cliff top.
+function _localOff(x, y) {
+  const gr = _grid;
+  if (!gr) return _gridMean;
+  const cx = Math.round((x - gr.x0) / gr.dx), cy = Math.round((y - gr.y0) / gr.dy);
+  for (let r = 0; r <= 3; r++) {
+    for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+      if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;   // ring only
+      const gx = cx + i, gy = cy + j;
+      if (gx < 0 || gy < 0 || gx >= gr.nx || gy >= gr.ny) continue;
+      const idx = gy * gr.nx + gx;
+      if (gr.ok[idx]) return gr.off[idx];
+    }
+  }
+  return _gridMean;
+}
 function ensureGrid() {
   const g = gb(); if (!g) return null;
   const W = g.getWorld();
@@ -187,14 +214,17 @@ function refreshGridBatch(n) {
       }
     }
   }
-  // Running mean of filled cells — the fallback for corners not yet sampled.
-  // Same dead-band: it feeds unfilled corners AND meshHeightAt's expected-height
-  // pick, so a drifting mean is another whole-frame pulse source.
-  let sum = 0, cnt = 0;
-  for (let i = 0; i < total; i++) if (gr.ok[i]) { sum += gr.off[i]; cnt++; }
-  if (cnt) {
-    const mean = sum / cnt;
-    if (Math.abs(mean - _gridMean) > OFF_DEADBAND_M) _gridMean = mean;
+  // Running MEDIAN of filled cells — the fallback for unfilled corners and the
+  // trust reference for meshHeightAt's expected-height clamp. Median, not mean:
+  // on coastal holes a minority of cells latch SEABED offsets (~55m below the
+  // land offsets) and a mean drifts toward them; the land majority owns the
+  // median. Dead-banded like every stored value (drift = whole-frame pulse).
+  const filled = [];
+  for (let i = 0; i < total; i++) if (gr.ok[i]) filled.push(gr.off[i]);
+  if (filled.length) {
+    filled.sort((a, b) => a - b);
+    const med = filled[Math.floor(filled.length / 2)];
+    if (Math.abs(med - _gridMean) > OFF_DEADBAND_M) _gridMean = med;
   }
 }
 // ---- precision anchors over the coarse grid ---------------------------------
@@ -213,6 +243,7 @@ function refreshGridBatch(n) {
 //    the mesh instead of per-cell swimming. Until settled: coarse grid.
 const BALL_EXACT_R = 4;    // world units of exact-ball influence
 let _ballOff = null;       // { x, y, off } exact ball column (this frame)
+let _ballRejN = 0;         // consecutive temporal-guard rejections (self-heal cap)
 let _pinOff = null;        // { x, y, off } exact pin column
 let _greenOffs = new Map();// green object -> { samples: [], off: number|null, cursor }
 function _greenRec(g) {
@@ -249,7 +280,22 @@ function refreshPrecisionAnchors() {
     next == null ? prev
     : (prev && prev.x === next.x && prev.y === next.y &&
        Math.abs(next.off - prev.off) <= OFF_DEADBAND_M) ? prev : next;
-  if (S && S.ball) _ballOff = keep(_ballOff, exact(S.ball.x, S.ball.y));
+  if (S && S.ball) {
+    let nb = exact(S.ball.x, S.ball.y);
+    // Temporal coherence at cliff edges: a rolling/settled ball's column height
+    // cannot step by a cliff face between frames. If the ball barely moved but
+    // the new offset jumps > 8m (edge raycast caught the water plane / cliff
+    // bottom), reject the sample — this is what put the ball out over the ocean.
+    // BUT a persistent disagreement means the stored anchor is the wrong one
+    // (e.g. it was taken against the coarse motion-LOD mesh): after ~30
+    // consecutive rejections, accept the new value so the anchor can self-heal.
+    if (nb && _ballOff &&
+        Math.hypot(S.ball.x - _ballOff.x, S.ball.y - _ballOff.y) < 5 &&
+        Math.abs(nb.off - _ballOff.off) > 8) {
+      if (++_ballRejN < 30) nb = null; else _ballRejN = 0;
+    } else _ballRejN = 0;
+    _ballOff = keep(_ballOff, nb);
+  }
   if (H && H.holePos) _pinOff = keep(_pinOff, exact(H.holePos.x, H.holePos.y));
   // Per-green rigid offsets: a couple of samples per frame for in-play greens.
   const greens = (H && H._greens) || [];
@@ -264,15 +310,28 @@ function refreshPrecisionAnchors() {
     // the green ~10u. Stride 7 spreads samples around the poly instead of one
     // contiguous (possibly all-canopy) arc; the window keeps only the freshest
     // 40 so the median self-heals as the mesh refines under the camera.
+    // Reference height for sample rejection: greens can OVERHANG water (Pebble
+    // h7 hangs over the Pacific) — boundary-vertex raycasts strike the ocean
+    // 40m+ below and can capture the MEDIAN, sliding the whole overlay down the
+    // cliff. The pin is always cut into the green's turf, so when this is the
+    // pin's green its exact column is ground truth; otherwise the local grid.
+    const ccx = (bb.x0 + bb.x1) / 2, ccy = (bb.y0 + bb.y1) / 2;
+    const ref = (H.holePos && _inBBox(H.holePos.x, H.holePos.y, bb, 0) && _pinOff)
+      ? _pinOff.off : _localOff(ccx, ccy);
     for (let k = 0; k < 2; k++) {                        // 2 samples/frame/green
       const n = gr.poly.length;
       const idx = (rec.cursor * 7) % (n + 1);
-      const p = idx === n
-        ? { x: (bb.x0 + bb.x1) / 2, y: (bb.y0 + bb.y1) / 2 }   // centroid-ish
-        : gr.poly[idx];
+      let p = idx === n ? { x: ccx, y: ccy } : gr.poly[idx];
+      // Inset boundary verts 15% toward the centroid — edge columns at an
+      // overhanging green sit past the turf, over the cliff face.
+      if (idx !== n) p = { x: ccx + (p.x - ccx) * 0.85, y: ccy + (p.y - ccy) * 0.85 };
       rec.cursor++;
       const e = exact(p.x, p.y);
-      if (e) { rec.samples.push(e.off); if (rec.samples.length > 40) rec.samples.shift(); }
+      // Reject water/cliff-face strikes outright (> 6m from the reference).
+      if (e && Math.abs(e.off - ref) <= 6) {
+        rec.samples.push(e.off);
+        if (rec.samples.length > 40) rec.samples.shift();
+      }
     }
     if (rec.samples.length >= 12) {
       const s = rec.samples.slice().sort((a, b) => a - b);
@@ -371,6 +430,30 @@ function pxPerMeterAt(x, y, zUnits) {
 // near-flat. The flat game used view.tilt for this, but gtiles pins tilt to 1,
 // so ground circles were drawing as perfect circles under a 55° camera.
 function groundSquash() { return Math.cos(pitchDeg * DEG); }
+
+// Terrain occlusion test: is the mesh between the camera and this world point?
+// The gameplay canvas has no depth buffer against the WebGL tiles, so a ball
+// behind a cliff lip otherwise paints full-strength over the ocean beyond it.
+// One ray per query — game.js asks about the ball and the pin, ≤2/frame.
+const _oRay = new THREE.Raycaster();
+const _oP = new THREE.Vector3();
+const _oDir = new THREE.Vector3();
+function occludedAt(x, y, zUnits) {
+  if (!_placed || !tiles || !camera) return false;
+  // Only trust the FULL-DETAIL mesh: while the camera glides, motion-coarse LOD
+  // (errorTarget 12) swaps in low-poly blobs whose surfaces sit metres off — an
+  // occlusion ray against those flickers false "behind terrain" verdicts.
+  if (tiles.errorTarget > 6) return false;
+  const ll = worldToLngLat(x, y);
+  sceneAt(ll[0], ll[1], (zUnits || 0) * M() + offsetAt(x, y), _oP);
+  _oDir.copy(_oP).sub(camera.position);
+  const d = _oDir.length();
+  if (d < 1e-3) return false;
+  _oDir.multiplyScalar(1 / d);
+  _oRay.set(camera.position, _oDir);
+  _oRay.far = Math.max(0, d - 3);   // ignore hits within 3m of the point (its own ground)
+  return _oRay.intersectObject(tiles.group, true).length > 0;
+}
 
 // Screen CSS px → world: raycast the loaded mesh, invert to lng/lat → world.
 const _ray = new THREE.Raycaster();
@@ -707,6 +790,22 @@ function getAttributions() {
   try { return tiles.getAttributions(); } catch (e) { return []; }
 }
 
+function anchorDiag() {
+  const g = gb(), H = g && g.getHole();
+  const pin = H && H.holePos;
+  const recs = [];
+  for (const [gr, rec] of _greenOffs) recs.push({ n: rec.samples.length, off: rec.off == null ? null : +rec.off.toFixed(1) });
+  return {
+    ballOff: _ballOff ? +_ballOff.off.toFixed(1) : null,
+    pinOff: _pinOff ? +_pinOff.off.toFixed(1) : null,
+    pinMesh: pin ? (() => { const mh = meshHeightAt(pin.x, pin.y); return mh == null ? null : +mh.toFixed(1); })() : null,
+    pinDem: pin ? +((g.terrainZ(pin.x, pin.y)) * M()).toFixed(1) : null,
+    pinLocalOff: pin ? +_localOff(pin.x, pin.y).toFixed(1) : null,
+    gridMean: +_gridMean.toFixed(1),
+    greens: recs,
+    offAtPin: pin ? +offsetAt(pin.x, pin.y).toFixed(1) : null,
+  };
+}
 function debug() {
   let meshes = 0, verts = 0;
   if (tiles && tiles.group) tiles.group.traverse((o) => {
@@ -729,6 +828,6 @@ function debug() {
 }
 
 window.GTiles3D = {
-  enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, pxPerMeterAt, groundSquash, isReady, failed,
-  getAttributions, worldToLngLat, lngLatToWorld, debug,
+  enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, pxPerMeterAt, groundSquash, occludedAt, isReady, failed,
+  getAttributions, worldToLngLat, lngLatToWorld, debug, anchorDiag,
 };

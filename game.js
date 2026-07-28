@@ -6313,6 +6313,12 @@ function draw() {
       ? (gtMarkPx(HOLE.holePos.x, HOLE.holePos.y, terrainZ(HOLE.holePos.x, HOLE.holePos.y),
                   GT_SIZE.flagM, GT_SIZE.flagExag, GT_SIZE.flagMin, GT_SIZE.flagMax) || FLAG_MIN_PX)
       : Math.max(FLAG_MIN_PX, Math.min(FLAG_MAX_PX, ws(FLAG_H_UNITS)));
+    // Pin behind a ridge/cliff from this camera → dim the whole flag (see the
+    // ball's occlusion note — no depth buffer between the canvases).
+    const pinOccl = view.gtilesProj &&
+      window.GTiles3D.occludedAt(HOLE.holePos.x, HOLE.holePos.y,
+                                 terrainZ(HOLE.holePos.x, HOLE.holePos.y) + 0.8);
+    if (pinOccl) { ctx.save(); ctx.globalAlpha = 0.35; }
     const topX = hx, topY = hy - poleH;
     ctx.strokeStyle = "rgba(0,0,0,0.28)";   // short ground shadow of the stick
     ctx.lineWidth = Math.max(1, poleH * 0.11);
@@ -6339,6 +6345,7 @@ function draw() {
     ctx.strokeStyle = "rgba(120,15,12,0.6)";
     ctx.lineWidth = 1;
     ctx.stroke();
+    if (pinOccl) ctx.restore();
   }
   }  // end !cupHeld (cup + JS flagstick wait for the native tint)
   }
@@ -6413,10 +6420,19 @@ function draw() {
         pAlpha = (pp - 0.5) * 2;
       }
     }
+    // Terrain occlusion (photoreal ground only): the 2D canvas has no depth
+    // buffer against the mesh, so a ball behind a cliff lip / ridge would paint
+    // full-strength over the ocean or hill behind it — reading as "floating".
+    // Dim it hard and drop the shadow instead: reads honestly as "behind the
+    // terrain". One camera-ray per frame.
+    const ballOccl = view.gtilesProj && !state.moving &&
+      window.GTiles3D.occludedAt(b.x, b.y, terrainZ(b.x, b.y) + (b.z || 0));
+    if (ballOccl) pAlpha *= 0.35;
     ctx.globalAlpha = pAlpha;
 
     // shadow shrinks slightly AND fades as the ball climbs (depth cue). Size never
     // grows, so the ball never reads as bigger.
+    if (!ballOccl) {
     const shR = baseR * Math.max(0.45, 1 - b.z * 0.012);
     const shA = TUNE.ballShadowAlpha * Math.max(0.35, 1 - b.z * TUNE.ballShadowFade);
     ctx.beginPath();
@@ -6424,6 +6440,7 @@ function draw() {
     ctx.ellipse(pbx, pby, shR, shR * shSquash, 0, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(0, 0, 0, ${shA})`;
     ctx.fill();
+    }
 
     // ball grows slightly with height; top-left highlight for a 3D feel
     const r = baseR * (1 + b.z * 0.012);
