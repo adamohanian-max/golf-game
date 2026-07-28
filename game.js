@@ -261,17 +261,6 @@ const TUNE = {
   hopDrFrac: { fairway: 0.30, tee: 0.30, rough: 0.12 }, // green/bunker: no hop (hold calibration)
   hopMinDr: 3,           // under ~9yd of rollout the ball just releases (short irons land steep, no hop)
   hopVzMax: 0.12,        // hop launch cap — a skip, never a re-flight
-  // Bunker EDGE definition (photo modes): thin feathered lip stroke traced
-  // from the real OSM bunker polys — re-crisps the mushy photo sand/grass
-  // boundary. Edge-only: an area FILL (tried first) tinted Google's white
-  // sand butter-yellow and its blur bled onto the grass — the playtest's
-  // "yellow film over parts of the screen".
-  bunkerEdge: "rgba(88,72,42,0.28)",
-  bunkerEdgePx: 2,
-  bunkerFeatherPx: 1,    // stroke blur — soft lip, not a vector line
-  bunkerZoomLo: 1.5,     // px-per-metre where the edge starts fading in
-  bunkerZoomHi: 3.0,     // …full strength (≈ approach/putt framings)
-  bunkerNearU: 40,       // gtiles: only bunkers within this of ball/pin draw
   // Out of bounds (woods + aerial-mask OOB): +1 penalty, replay from last safe
   // spot. Toggle off for a forgiving round (ball stays playable where it lands).
   obPenalty: true,
@@ -4264,6 +4253,37 @@ function buildGreenTopo(polys, dem, opts) {
   return out;
 }
 
+// Contour polylines, safe under a PERSPECTIVE ground. A vertex behind the
+// camera projects to a mirrored/garbage screen point, and the lineTo to it
+// drew a hard black line clear across the frame (playtest: "black lines that
+// go over the screen") — the green's far edge goes behind the camera at putt
+// framings. Break the path at any behind-camera vertex, and drop any segment
+// that would span an implausible fraction of the screen (a real contour step
+// is a few px). Caller owns beginPath/stroke/style.
+function strokeContours(contours) {
+  if (!contours) return;
+  const persp = view.gtilesProj || view.threeProj || view.appleProj;
+  const maxSeg = Math.max(vpW(), vpH());   // a contour step can never be this long
+  for (const c of contours) {
+    const p = c.pts;
+    let px = null, py = null, started = false;
+    for (let i = 0; i < p.length; i++) {
+      const ok = !persp || !view.gtilesProj ||
+        window.GTiles3D.project(p[i].x, p[i].y, terrainZRender(p[i].x, p[i].y)).inFront !== false;
+      if (!ok) { started = false; px = py = null; continue; }
+      const sx = wx(p[i].x, p[i].y), sy = wy(p[i].x, p[i].y);
+      if (!isFinite(sx) || !isFinite(sy)) { started = false; px = py = null; continue; }
+      if (started && Math.hypot(sx - px, sy - py) > maxSeg) started = false;
+      if (started) ctx.lineTo(sx, sy); else { ctx.moveTo(sx, sy); started = true; }
+      px = sx; py = sy;
+    }
+    // closePath only when the whole ring survived (an open ring must stay open)
+    if (c.closed && started && p.length > 2) {
+      const s0x = wx(p[0].x, p[0].y), s0y = wy(p[0].x, p[0].y);
+      if (isFinite(s0x) && Math.hypot(s0x - px, s0y - py) <= maxSeg) ctx.lineTo(s0x, s0y);
+    }
+  }
+}
 function strokePolyline(poly) {
   if (!poly || poly.length < 2) return;
   ctx.beginPath();
@@ -4468,13 +4488,7 @@ function drawGreen(photo, only) {
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       ctx.beginPath();
-      for (const c of g.contours) {
-        const p = c.pts;
-        ctx.moveTo(wx(p[0].x, p[0].y), wy(p[0].x, p[0].y));
-        for (let i = 1; i < p.length; i++) ctx.lineTo(wx(p[i].x, p[i].y), wy(p[i].x, p[i].y));
-        if (c.closed) ctx.closePath();
-      }
-      ctx.stroke();
+      strokeContours(g.contours);
     });
   }
 }
@@ -4494,12 +4508,7 @@ function drawAppleGreenDashes(gs) {
     if (!polyVisible(g.poly)) continue;
     withClip(g.poly, () => {
       ctx.beginPath();
-      for (const c of g.contours) {
-        const p = c.pts;
-        ctx.moveTo(wx(p[0].x, p[0].y), wy(p[0].x, p[0].y));
-        for (let i = 1; i < p.length; i++) ctx.lineTo(wx(p[i].x, p[i].y), wy(p[i].x, p[i].y));
-        if (c.closed) ctx.closePath();
-      }
+      strokeContours(g.contours);
       ctx.stroke();
     });
   }
@@ -6137,50 +6146,6 @@ function drawDEMShade() {
 // Chaikin-smoothed bunker copies + centroids, cached per surfaces object.
 // NEVER mutates the shared course data (greens are rounded in place — bunkers
 // must stay raw for surfaceAt's lie detection).
-function bunkerMeta() {
-  const s = HOLE.surfaces;
-  if (!s || !s.bunker || !s.bunker.length) return null;
-  if (s._bunkerMeta && s._bunkerMeta.src === s.bunker) return s._bunkerMeta;
-  const items = s.bunker.filter((p) => p.length >= 3).map((p) => {
-    let cx = 0, cy = 0;
-    for (const q of p) { cx += q.x; cy += q.y; }
-    return { poly: chaikinClosed(p), cx: cx / p.length, cy: cy / p.length };
-  });
-  return (s._bunkerMeta = { src: s.bunker, items });
-}
-// Subtle sand overlay: the photo's bunker-vs-grass edge goes mushy under zoom
-// (aerial resolution / Google mesh LOD). Trace the REAL OSM bunker outlines
-// with a low-alpha sand fill + blur feather — crisp but organic, sand persists
-// to the grass line, and the photo stays dominant. Zoom-gated (full effect
-// only near putt/approach framings) and, on gtiles, distance-gated to the
-// action so 116 blurred fills never run at once.
-function drawBunkersPhoto(nearPts) {
-  const meta = bunkerMeta();
-  if (!meta) return;
-  const canBlur = "filter" in ctx;   // same guard as fillPolysUnion (Safari<18)
-  ctx.save();
-  for (const it of meta.items) {
-    if (nearPts && !nearPts.some((p) => Math.hypot(p.x - it.cx, p.y - it.cy) < TUNE.bunkerNearU)) continue;
-    if (!polyVisible(it.poly)) continue;
-    const ppm = view.gtilesProj
-      ? (window.GTiles3D.pxPerMeterAt(it.cx, it.cy, terrainZRender(it.cx, it.cy)) || 0)
-      : view.scale / M_PER_UNIT;
-    const a = Math.max(0, Math.min(1, (ppm - TUNE.bunkerZoomLo) / (TUNE.bunkerZoomHi - TUNE.bunkerZoomLo)));
-    if (a < 0.05) continue;
-    // EDGE stroke only — zero area coverage, so it can never cast/film over
-    // the photo's own sand or the surrounding grass.
-    ctx.globalAlpha = a;
-    if (canBlur) ctx.filter = `blur(${TUNE.bunkerFeatherPx}px)`;
-    ctx.strokeStyle = TUNE.bunkerEdge;
-    ctx.lineWidth = TUNE.bunkerEdgePx;
-    ctx.lineJoin = "round";
-    tracePoly(it.poly);
-    ctx.stroke();
-    if (canBlur) ctx.filter = "none";
-  }
-  ctx.restore();
-}
-
 // Photoreal rendering: real aerial base + translucent play-surface overlays.
 function drawPhotoSurfaces() {
   const s = HOLE.surfaces;
@@ -6188,7 +6153,6 @@ function drawPhotoSurfaces() {
   drawDetailGrain(); // zoom-ramped turf grain over the stretched photo
   drawDEMShade();    // tilted only: DEM light/shadow so slopes read on the photo
   drawFairwayWash();                               // gentle feathered fairway tint, baked once per hole
-  drawBunkersPhoto(null);   // feathered sand fill from the OSM polys (was a bare 1px outline)
   ctx.globalAlpha = 0.4;                           // water tint
   fillPolys(s.water, "#1f86d8");
   ctx.globalAlpha = 1;
@@ -6418,9 +6382,6 @@ function draw() {
         drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * a,
                         showSlope && breakArrows);
       }
-      // Subtle bunker overlay near the action: Google's own sand goes mushy at
-      // putt/approach zoom — the real OSM outlines re-crisp the sand/grass edge.
-      drawBunkersPhoto([{ x: state.ball.x, y: state.ball.y }, HOLE.holePos]);
       // OB tint: opt-in here (see oobUserOn) and capped so it reads as a tint,
       // not a blanket, over the photoreal imagery.
       if (oobUserOn) { ctx.save(); ctx.globalAlpha = 0.5; drawOOBOverlay(); ctx.restore(); }

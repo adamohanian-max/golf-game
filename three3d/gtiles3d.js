@@ -558,6 +558,12 @@ let _camParked = false;  // eased camera exactly at target, ball at rest
 let _gSettling = false;  // severe-error settle-glide latch (boot heal)
 let _fro = null;         // park-edge field snapshot (rendered while parked)
 let _holeLoadT = 0;      // hole-change timestamp (early-settle window)
+let _introPending = false; // set by enter(): arm the opening pull-back intro
+let _introSeed = false;    // consume on the first frame with a real target framing
+let _introUntil = 0;       // slow-glide window end (intro active while now < this)
+let _aimUx = 0, _aimUy = -1; // last solved aim unit vector (intro pull-back dir)
+const INTRO_ZOOM = 2.0;    // opening framing distance × the tee framing
+const INTRO_MS = 3000;     // cinematic glide duration
 let _camEaseT = 0;
 function setCamera() {
   if (!_placed || !tiles || !camera) return;
@@ -604,6 +610,7 @@ function setCamera() {
       tOx = A.bx + ux * (Rm - sR) / m;     // look-at = reach point − sR along aim
       tOy = A.by + uy * (Rm - sR) / m;
       tD = D;
+      _aimUx = ux; _aimUy = uy;            // for the opening pull-back seed
     } else {
       const det = view.a * view.e - view.b * view.d || 1;
       const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
@@ -621,7 +628,21 @@ function setCamera() {
   const now = performance.now();
   const dt = _camEaseT ? Math.min(now - _camEaseT, 100) : 16.7;
   _camEaseT = now;
-  const es = 1 - Math.pow(0.86, dt / 16.7);   // ~0.14/frame at 60fps
+  // Slow cinematic rate during the opening pull-back, normal glide otherwise.
+  const es = 1 - Math.pow(now < _introUntil ? 0.965 : 0.86, dt / 16.7);
+  if (_introSeed) {
+    // OPENING PULL-BACK: start ~2× the tee framing's distance, pulled back
+    // along the aim line, and glide in (slow ease below). Deliberately modest
+    // — a whole-course overview was tried and Google served space-level
+    // bathymetry for ~10s AND starved the tee's fine tiles (measured); at 2×
+    // the mesh is already photoreal, so this reads cinematic and lands sharp.
+    // Bonus: the offset field heals DURING the glide, where corrections are
+    // invisible, so the camera parks on a converged, pixel-static frame.
+    _introSeed = false;
+    const back = (tD * INTRO_ZOOM - tD) / m;   // world units to pull back
+    _camEase = { Ox: tOx - _aimUx * back, Oy: tOy - _aimUy * back, D: tD * INTRO_ZOOM };
+    _introUntil = now + INTRO_MS;
+  }
   if (!_camEase) _camEase = { Ox: tOx, Oy: tOy, D: tD };
   else {
     _camEase.Ox += (tOx - _camEase.Ox) * es;
@@ -656,7 +677,9 @@ function setCamera() {
     // rest-lost must PERSIST a few frames before widening (a single boundary
     // graze would otherwise alternate widen/ease every frame — a shimmer),
     // and the moving band vs rest band differ so the two can't fight.
-    _guardLostN = lost ? _guardLostN + 1 : 0;
+    // (suspended during the opening flyover — the ball is legitimately far
+    // off-frame while the whole course is in view)
+    _guardLostN = (lost && performance.now() > _introUntil) ? _guardLostN + 1 : 0;
     if ((off && S.moving) || _guardLostN >= 5) _guardK = Math.min(_guardK * 1.04, 2.5);
     else if (!S.moving && !lost) {
       _guardK += (1 - _guardK) * es;
@@ -822,6 +845,7 @@ function enter(opts) {
   // Known-offline up front → don't even try; game.js keeps the 2D aerial.
   if (typeof navigator !== "undefined" && navigator.onLine === false) { _failed = true; return; }
   _failed = false; _errCount = 0; _enterAt = performance.now(); _placed = false; ready = false;
+  _introPending = true;   // round entry → opening whole-course flyover to the tee
   buildRenderer();
   container.style.display = "block"; _hidden = false;
   // Dark backdrop, NOT transparent: with html+body cleared the UA default
@@ -919,6 +943,8 @@ function render() {
       _grid = null; _hold = null; _camEase = null; _groundMEase = null; _lastHole = H; _guardK = 1;
       _holeLoadT = performance.now();
       _ballOff = null; _pinOff = null; _greenOffs = new Map();
+      _introSeed = _introPending;   // seed on the first frame that HAS a target
+      _introPending = false;
     }
     refreshGridBatch(24);
     refreshPrecisionAnchors();   // exact ball/pin columns + rigid per-green offsets
