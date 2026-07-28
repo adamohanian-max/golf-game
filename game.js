@@ -59,17 +59,20 @@ const TUNE = {
   // profile because the arc lands at a precomputed landD (see buildFlight); set
   // arcDecel:0 + arcFloat:0 for constant speed.
   arcDecel: 0.10,        // aero drag: launch faster than landing (1+d early .. 1-d late)
-  arcFloat: 0.25,        // apex hang depth; also the descent/landing speed (float holds past apex)
-  arcFloatPow: 2.4,      // how tightly the hang concentrates at the very top (higher = tighter)
-  arcApex: 1.2,          // global apex-height multiplier (1 = club maxH; >1 = ball flies higher, carry unchanged)
+  arcFloat: 0.35,        // apex hang depth; also the descent/landing speed (float holds past apex)
+  arcFloatPow: 1.7,      // how tightly the hang concentrates at the very top (higher = tighter)
+  arcApex: 1.3,          // global apex-height multiplier (1 = club maxH; >1 = ball flies higher, carry unchanged)
   arcLowSuppress: 1.0,   // how much the Low/knockdown button ignores the apex boost + float (1 = fully flat & penetrating)
   arcLowRoll: 1.6,       // Low/knockdown rollout multiplier (1 = normal; >1 = runs out more after landing)
   arcDescentPow: 2.3,    // 2 = old parabola; 2.3 drops a touch more steeply (carry-neutral)
   ballTrailMax: 18,      // max points in the airborne motion trail (was a fixed 10)
   ballShadowAlpha: 0.28, // ground-shadow opacity at deck level
   ballShadowFade: 0.012, // shadow alpha falloff per world-unit of height (fade only, no grow)
-  spinFactor: 0.01,     // how hard a curved swipe bends flight (draw/fade)
-  windEffect: 0.0002,   // world-units/frame² per mph — how hard wind pushes the ball
+  spinFactor: 0.0085,   // how hard a curved swipe bends flight (draw/fade) — rescaled ÷1.175
+  windEffect: 0.00017,  // world-units/frame² per mph — how hard wind pushes the ball — rescaled ÷1.175
+  // (both are PER-FRAME accumulators: the 2026-07 float retune added ~17.5%
+  // more airborne frames — measured driver 64→75 — so these scale down by the
+  // same ratio to keep shot shape / wind drift unchanged in world terms)
   playsLikePerFoot: 1.0, // caddie "plays like": yards added per foot of climb to the pin (uphill plays longer)
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
@@ -251,6 +254,13 @@ const TUNE = {
   softBounceVz: 0.12,    // below this impact speed a GREEN bounce is a soft skid, not a grab
   softBounceGreen: { e: 0.12, h: 0.85 }, // that soft skid: barely lifts, keeps its pace
   cupHopVz: 0.04,        // rammed lip-over hop height cap (a hop, not a launch)
+  // First-touchdown hops on firm turf: spend this share of the rollout budget
+  // (Dr) as REAL ballistic hops before the roll — the release used to convert
+  // instantly to a flat roll, which read fake on hard fairways. Totals stay
+  // exact: the settle branch re-paces the residual from actual hop distance.
+  hopDrFrac: { fairway: 0.30, tee: 0.30, rough: 0.12 }, // green/bunker: no hop (hold calibration)
+  hopMinDr: 3,           // under ~9yd of rollout the ball just releases (short irons land steep, no hop)
+  hopVzMax: 0.12,        // hop launch cap — a skip, never a re-flight
   // Out of bounds (woods + aerial-mask OOB): +1 penalty, replay from last safe
   // spot. Toggle off for a forgiving round (ball stays playable where it lands).
   obPenalty: true,
@@ -1774,19 +1784,27 @@ function arcFlightStep(b) {
       b.vx = b.vy = b.vz = 0; state.airborne = false;
       return;
     }
+    const hop = landingHop(fl, b.spin, surf);
+    if (hop && hop.vz > 0.008) {
+      // Firm-turf landing: real skips instead of an instant flat roll. The
+      // settle branch (ballisticFlightStep) re-paces the residual from the
+      // actual hop distance, so the calibrated total never moves.
+      shot._hopBudget = { x0: b.x, y0: b.y, Dr: hop.Dr };
+      b.vx = dx * hop.vh; b.vy = dy * hop.vh; b.vz = hop.vz; b.spin = 0;
+      return;   // state.airborne stays true → ballisticFlightStep takes over
+    }
     const v = landingRelease(fl, b.spin, surf);
     b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0; state.airborne = false;
   }
 }
 
-// Landing release: how fast the ball leaves its first touchdown, signed along the
-// travel direction (< 0 = spins back). Pure — shared by arcFlightStep AND the
-// launch-time prediction (simShotRest), so the cinematic trigger can never drift
-// from the real physics. Keep it side-effect free.
-function landingRelease(fl, spin, surf) {
+// Rollout budget Dr (world units, signed; < 0 = spins back) for a first
+// touchdown. Pure — the single source both landingRelease AND landingHop draw
+// from, so the hop phase and the release can never disagree about the total.
+function landingBudget(fl, spin, surf) {
   // Backspin check: a spinning ball grabs on landing. Low spin (driver) releases
   // and runs; high spin on receptive turf (wedge -> green) checks, and can roll
-  // BACKWARD. Rough is a flyer (little grip) so it releases. `Dr` = rollout (units).
+  // BACKWARD. Rough is a flyer (little grip) so it releases.
   const grip = TUNE.spinGrip[surf] ?? 0.3;
   // Sidespin (spin = swipe curve) reduces effective backspin: draw runs, fade checks.
   // At max sidespin, 40% of backspin converts to sidespin → less check.
@@ -1803,8 +1821,15 @@ function landingRelease(fl, spin, surf) {
   const check = Math.min(1.1,
     (spinW * fl.spinN + TUNE.checkLandW * steep) * backspinRetained * grip);
   const rollK = fl.noLandCheck ? TUNE.rolloutK : TUNE.rolloutKFull; // chips skid & release more
-  let Dr = fl.vh * rollK * (1 - check * TUNE.spinCheckK) * (fl.rolloutMul ?? 1); // <0 = spins back; rolloutMul>1 = low-shot runner
-  Dr = Math.max(Dr, -TUNE.spinBackMax); // a spun-back wedge sucks back a few yards, not off the green
+  const Dr = fl.vh * rollK * (1 - check * TUNE.spinCheckK) * (fl.rolloutMul ?? 1);
+  return Math.max(Dr, -TUNE.spinBackMax); // a spun-back wedge sucks back a few yards, not off the green
+}
+// Landing release: how fast the ball leaves its first touchdown, signed along the
+// travel direction (< 0 = spins back). Pure — shared by arcFlightStep AND the
+// launch-time prediction (simShotRest), so the cinematic trigger can never drift
+// from the real physics. Keep it side-effect free.
+function landingRelease(fl, spin, surf) {
+  const Dr = landingBudget(fl, spin, surf);
   if (surf === "green") return Math.sign(Dr) * Math.sqrt(2 * TUNE.greenDecel * Math.abs(Dr));
   const fr = TUNE.friction[surf] ?? 0.9;
   // Cap at fl.vh * bounce[surf].h: the ball can't leave the landing point faster
@@ -1813,6 +1838,30 @@ function landingRelease(fl, spin, surf) {
   // shoots the ball off when it rolls off the edge onto low-friction fairway.
   const bo = TUNE.bounce[surf] ?? TUNE.bounce.fairway;
   return Math.min(Dr * (1 - fr), fl.vh * bo.h * (fl.rolloutMul ?? 1)); // cap lifts for low runners (shallow landing releases hotter)
+}
+// First-touchdown hop plan on firm turf, or null. Spend hopDrFrac of Dr as a
+// real ballistic hop (1-2 visible skips through ballisticFlightStep); the vz is
+// derived from the DESIRED HOP DISTANCE (vz = Dhop·g/(2·vh) — never from the
+// arc's land-angle impact speed, which is ~25× too hot for the compressed arc
+// timebase). Pure — shared by arcFlightStep and simShotRest.
+function landingHop(fl, spin, surf) {
+  const frac = TUNE.hopDrFrac[surf];
+  if (!frac || fl.noLandCheck) return null;    // chips keep their tuned skid-release
+  const Dr = landingBudget(fl, spin, surf);
+  if (Dr < TUNE.hopMinDr) return null;         // dying (or spinning-back) shots just release
+  const bo = TUNE.bounce[surf] || TUNE.bounce.fairway;
+  const vh = fl.vh * bo.h;                     // arrival pace × surface retention (bo.h used ONCE)
+  const vz = Math.min(TUNE.hopVzMax, frac * Dr * TUNE.gravity / (2 * vh));
+  return { vh, vz, Dr };
+}
+// Residual roll pace once the hop phase settles: whatever ground the hops
+// actually covered comes out of the same Dr budget, so hop + roll = exactly the
+// calibrated total. Pure — shared by the live settle branch and simShotRest.
+function hopSettleSpeed(hb, x, y, surf) {
+  const residual = Math.max(0, hb.Dr - dist(hb.x0, hb.y0, x, y));
+  if (surf === "green") return Math.sqrt(2 * TUNE.greenDecel * residual);
+  const fr = TUNE.friction[surf] ?? 0.9;
+  return residual * (1 - fr);
 }
 
 // Per-impact bounce coefficients. Pure — shared by the live ballistic step AND
@@ -1867,10 +1916,22 @@ function ballisticFlightStep(b) {
       spawnBurst(b.x, b.y, surf === "water" ? "splash" : "dust");
       b.vx = b.vy = b.vz = 0;
       state.airborne = false;
+    } else if (shot._hopBudget &&
+               dist(shot._hopBudget.x0, shot._hopBudget.y0, b.x, b.y) >= shot._hopBudget.Dr) {
+      // hop chain has consumed the whole rollout budget — stop dead (the frame
+      // quantization at hop speed otherwise overruns the calibrated total)
+      b.vx = b.vy = b.vz = 0; b.spin = 0;
+      shot._hopBudget = null;
+      state.airborne = false;
     } else if (down > TUNE.bounceStopVz) {
       const bo = bounceParams(surf, down);
       haptic(Math.max(2, Math.round(down * 35)));  // intensity scales with impact speed
-      if (!shot._landed) { playLand(surf, down); spawnBurst(b.x, b.y, "dust"); shot._landed = true; }
+      // Every hop gets its thud (was first-landing-only) — `down` shrinks per
+      // bounce so the sound decays naturally; capped so a skittering ball
+      // doesn't machine-gun.
+      shot._landN = (shot._landN || 0) + 1;
+      if (!shot._landed) { spawnBurst(b.x, b.y, "dust"); shot._landed = true; }
+      if (shot._landN <= 3) playLand(surf, down);
       b.vz = down * bo.e;   // bounce back up
       b.vx *= bo.h;         // scrub/grab forward speed
       b.vy *= bo.h;
@@ -1879,6 +1940,15 @@ function ballisticFlightStep(b) {
       // too low to bounce — settle and start rolling
       b.vz = 0;
       b.spin = 0;
+      if (shot._hopBudget) {
+        // end of the landing-hop phase: re-pace so hop + roll = exactly Dr
+        const sp2 = Math.hypot(b.vx, b.vy);
+        if (sp2 > 1e-6) {
+          const v = Math.min(hopSettleSpeed(shot._hopBudget, b.x, b.y, surf), sp2);
+          b.vx *= v / sp2; b.vy *= v / sp2;
+        }
+        shot._hopBudget = null;
+      }
       state.airborne = false;
     }
   }
@@ -2112,6 +2182,7 @@ function simShotRest(ball0, flight0) {
   let fl = Object.assign({}, flight0);
   let airborne = !!flight0, lipped = false; // matches update()'s real dispatch: putts start grounded (flight0=null)
   let carry = null; // first touchdown of the arc — null for putts (never airborne)
+  let hopBudget = null; // mirrors shot._hopBudget (landing-hop residual re-pace)
   for (let i = 0; i < TUNE.cineSimSteps; i++) {
     if (airborne && fl) {
       // --- arc phase (mirrors arcFlightStep) ---
@@ -2140,9 +2211,16 @@ function simShotRest(ball0, flight0) {
         const sp = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp, dy = b.vy / sp;
         if (surf === "water" || surf === "woods" || surf === "ob") return null; // dead — no trigger
         carry = { x: b.x, y: b.y };
-        const v = landingRelease(fl, b.spin, surf);
-        b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0;
-        fl = null; airborne = false;
+        const hop = landingHop(fl, b.spin, surf);   // shared helper (parity)
+        if (hop && hop.vz > 0.008) {
+          hopBudget = { x0: b.x, y0: b.y, Dr: hop.Dr };
+          b.vx = dx * hop.vh; b.vy = dy * hop.vh; b.vz = hop.vz; b.spin = 0;
+          fl = null;                                 // airborne stays true → ballistic mirror
+        } else {
+          const v = landingRelease(fl, b.spin, surf);
+          b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0;
+          fl = null; airborne = false;
+        }
       }
     } else if (airborne) {
       // --- ballistic bounces (mirrors ballisticFlightStep) ---
@@ -2167,13 +2245,25 @@ function simShotRest(ball0, flight0) {
         const surf = surfaceAt(b.x, b.y);
         const down = -impactVz;
         if (surf === "water" || surf === "woods" || surf === "ob") return null;
-        if (down > TUNE.bounceStopVz) {
+        if (hopBudget && dist(hopBudget.x0, hopBudget.y0, b.x, b.y) >= hopBudget.Dr) {
+          b.vx = b.vy = b.vz = 0; b.spin = 0;    // budget exhausted — mirrors live
+          hopBudget = null; airborne = false;
+        } else if (down > TUNE.bounceStopVz) {
           const bo = bounceParams(surf, down);   // shared with live step (parity)
           b.vz = down * bo.e;
           b.vx *= bo.h; b.vy *= bo.h;
           b.spin *= 0.5;
         } else {
-          b.vz = 0; b.spin = 0; airborne = false;
+          b.vz = 0; b.spin = 0;
+          if (hopBudget) {                       // mirrors the live settle re-pace
+            const sp2 = Math.hypot(b.vx, b.vy);
+            if (sp2 > 1e-6) {
+              const v = Math.min(hopSettleSpeed(hopBudget, b.x, b.y, surf), sp2);
+              b.vx *= v / sp2; b.vy *= v / sp2;
+            }
+            hopBudget = null;
+          }
+          airborne = false;
         }
       }
     } else {
