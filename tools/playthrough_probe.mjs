@@ -68,7 +68,7 @@ for (let hn = h0; hn <= (h1 || h0); hn++) {
         const S = GB.getState(), H = GB.getHole();
         const T = H.teePos || S.ball;
         return {
-          ballPx: +window.gtMarkPx(S.ball.x, S.ball.y, 0, 0.02135, 3.5, 2, 8).toFixed(1),
+          ballPx: +window.gtMarkPx(S.ball.x, S.ball.y, 0, 0.02135, 6.1, 3.5, 14).toFixed(1),  // mirror GT_SIZE
           cupPx:  +window.gtMarkPx(H.holePos.x, H.holePos.y, 0, 0.054, 3, 2.5, 12).toFixed(1),
           flagPx: +window.gtMarkPx(H.holePos.x, H.holePos.y, 0, 2.13, 1.5, 10, 40).toFixed(1),
           teePx:  +window.gtMarkPx(T.x, T.y, 0, 0.10, 3, 2.5, 7).toFixed(1),

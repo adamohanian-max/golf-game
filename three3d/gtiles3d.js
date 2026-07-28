@@ -655,6 +655,9 @@ function buildRenderer() {
   renderer = new THREE.WebGLRenderer({ canvas: container, antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0);
   scene = new THREE.Scene();
+  // Opaque scene background: an unstreamed-tile gap must read as dark ground
+  // tone (tokens --green-900), never the page behind the canvas.
+  scene.background = new THREE.Color(0x0e1f16);
   camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 1, 40000);
   scene.add(new THREE.AmbientLight(0xffffff, 1.0));
   const sun = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -707,8 +710,11 @@ function enter(opts) {
   _failed = false; _errCount = 0; _enterAt = performance.now(); _placed = false; ready = false;
   buildRenderer();
   container.style.display = "block"; _hidden = false;
-  document.documentElement.style.background = "transparent";
-  document.body.style.background = "transparent";
+  // Dark backdrop, NOT transparent: with html+body cleared the UA default
+  // (pure white) painted through every Google mesh gap — the "white ground at
+  // the h7 tee". #0e1f16 = tokens --green-900, same tone base.css already uses.
+  document.documentElement.style.background = "#0e1f16";
+  document.body.style.background = "#0e1f16";
   if (tiles) { return; } // resident across re-enters
   buildTiles();
 }

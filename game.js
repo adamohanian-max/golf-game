@@ -1092,7 +1092,7 @@ function syncAppleGround() {
   _lastAppleSync = now;
   // One camera model, one source: the same numbers the overlay projection
   // uses this frame (flat mode builds them fresh here — appleProj is null).
-  const cam = view.appleProj || buildAppleProj(window.innerWidth, window.innerHeight);
+  const cam = view.appleProj || buildAppleProj(vpW(), vpH());
   // Pick 4 well-spread ground probes (fixed screen quad, unprojected to
   // world -> lat/lon). Their lat/lons are exact by construction — the Swift
   // side answers with where MapKit REALLY renders them (invisible annotation
@@ -1104,7 +1104,7 @@ function syncAppleGround() {
   const probes = [];
   {
     const g = appleGeoAffine();
-    const cssW = window.innerWidth, cssH = window.innerHeight;
+    const cssW = vpW(), cssH = vpH();
     // Unproject through the RAW replica — cam carries the previous fit's
     // calA, and probing through it moves the probe points every time the
     // fit moves: the fit then samples different local error, moves again,
@@ -1296,7 +1296,7 @@ function syncAppleFlag() {
   let eyeDistM;
   const proj = view.appleProj;
   if (proj) {
-    const hx = window.innerWidth / 2, hy = window.innerHeight / 2;
+    const hx = vpW() / 2, hy = vpH() / 2;
     const c = appleUnproject(proj, hx, hy);              // look-at ground point (world units)
     const u = appleUnproject(proj, hx, hy - 80);         // a point up-screen → view forward dir
     let fx = u.x - c.x, fy = u.y - c.y;
@@ -1307,7 +1307,7 @@ function syncAppleFlag() {
     const gapM = Math.hypot(HOLE.holePos.x - ex, HOLE.holePos.y - ey) * M_PER_UNIT;
     eyeDistM = Math.hypot(gapM, proj.reqDistM * Math.cos(p));
   } else {
-    eyeDistM = ((_appleMapH || window.innerHeight) / camera.scale) * M_PER_UNIT * APPLE_CAM_K;
+    eyeDistM = ((_appleMapH || vpH()) / camera.scale) * M_PER_UNIT * APPLE_CAM_K;
   }
   const fs = Math.max(0.35, Math.min(1.6, 420 / eyeDistM));
   const fsBucket = Math.round(fs * 20) / 20;
@@ -3134,6 +3134,20 @@ canvas.addEventListener("wheel", onWheel, { passive: false });
 //  Rendering
 // =====================================================================
 let ctx = canvas.getContext("2d"); // rebound to an offscreen during the tilted ground capture
+// Canonical viewport size (css px). Measured from the canvas element's own laid-out
+// box (CSS-sized to 100dvh/100vw) rather than window.innerWidth/innerHeight so that
+// framing, the canvas backing store, and every draw/capture read ONE identical
+// number — nothing can tear against the CSS box. Also fixes the native-vs-web split:
+// a full-screen WKWebView and mobile Safari both lay #game out the same way, so the
+// framing no longer inherits the browser toolbar's height quirk. Refreshed in resize().
+let _vp = { w: window.innerWidth, h: window.innerHeight };
+function measureVp() {
+  const r = canvas.getBoundingClientRect();
+  _vp.w = Math.round(r.width)  || window.innerWidth;
+  _vp.h = Math.round(r.height) || window.innerHeight;
+}
+function vpW() { return _vp.w; }
+function vpH() { return _vp.h; }
 // World->screen as a full affine so the camera can ROTATE (each hole plays "up"
 // even on the connected global map). screen.x = a*x + b*y + c, screen.y = d*x + e*y + f.
 const view = { a: 1, b: 0, c: 0, d: 0, e: 1, f: 0, scale: 1, angle: 0, tilt: 1 };
@@ -3151,6 +3165,14 @@ const HUD_RESERVE = {
   mobile:  { top: 78, bot: 124, side: 10 }, // px: top bar + wind pill / stat strip / gutters
   desktop: { top: 56, bot: 64 },
 };
+// Ceiling on how tall (relative to width) the framed play area may get in 2D mode.
+// The fit is greedy min(availW/w, availH/h): a taller viewport buys more zoom. A
+// full-screen native WKWebView is taller than mobile Safari (no browser toolbar),
+// so the SAME hole zoomed in more on the phone app. Clamping availH to availW·this
+// makes the surplus height become centered MARGIN instead of zoom, so every device
+// frames the same amount of hole. 2D-only (gated off for the Google-tiles / Apple
+// 3D grounds). Single tuning knob — 390×844 Safari sits ~1.62, just under it.
+const PLAY_ASPECT_MAX = 1.7;
 let holeFitW = 100, holeFitH = 100; // full-hole framing dims -> refScale
 
 // Camera = a world focus point + a zoom scale + an angle. Rotation pivots around
@@ -3185,8 +3207,12 @@ function frameScaleForAngle(angle, ox, oy) {
   // The tilt squash shrinks screen height by tTilt, so the vertical fit gains
   // that headroom back — the leaned hole still fills the play area.
   const rsv = hudReserve();
-  const availW = Math.max(120, window.innerWidth - rsv.left - rsv.right);
-  const availH = Math.max(120, window.innerHeight - rsv.top - rsv.bot);
+  const availW = Math.max(120, vpW() - rsv.left - rsv.right);
+  let   availH = Math.max(120, vpH() - rsv.top - rsv.bot);
+  // 2D-only: cap the play-area aspect so a tall viewport becomes margin, not zoom
+  // (keeps native phone framing == mobile-web). The 3D grounds keep their own math.
+  if (!gtilesGroundActive() && !appleGroundActive())
+    availH = Math.min(availH, availW * PLAY_ASPECT_MAX);
   return { w, h, scale: Math.min(availW / w, availH / (h * camera.tTilt)) };
 }
 // Target framing (focus = ball↔pin midpoint; scale = fit ball↔pin + pad at the
@@ -3226,11 +3252,19 @@ function frameTarget(fx, fy) {
 // anchors stay pinned while the camera is still leaning/flattening (the
 // camera moves WITH its reorientation, never before it).
 function frameClubReach(pNowDeg) {
-  const cssH = window.innerHeight;
+  const cssH = vpH();
   const mapH = _appleMapH || cssH;
   const rsv = hudReserve();
-  const availH = Math.max(120, cssH - rsv.top - rsv.bot);
-  const playCy = (rsv.top + (cssH - rsv.bot)) / 2;
+  const availHraw = Math.max(120, cssH - rsv.top - rsv.bot);
+  // 2D-only: cap the play-area aspect (as in frameScaleForAngle) so a tall viewport
+  // becomes margin, not zoom — the ball/reach anchors frame a centered capped band,
+  // surplus height splits top/bottom. Apple/gtiles keep the exact raw geometry so
+  // their pinhole/tiles calibration is untouched.
+  const flat2D = !gtilesGroundActive() && !appleGroundActive();
+  const availWc = Math.max(120, vpW() - rsv.left - rsv.right);
+  const availH = flat2D ? Math.min(availHraw, availWc * PLAY_ASPECT_MAX) : availHraw;
+  const topPad = rsv.top + (flat2D ? (availHraw - availH) / 2 : 0);
+  const playCy = topPad + availH / 2;
   const b = state.ball;
   const c = TUNE.clubs[selectedClub];
   // Frame the club's full reach — UNLESS the pin is closer than that, in which
@@ -3245,8 +3279,8 @@ function frameClubReach(pNowDeg) {
   const a = camera.tAngle;
   const dirX = -Math.sin(a), dirY = -Math.cos(a);   // world direction that points up-screen
   const f = (mapH / 2) / Math.tan(15 * Math.PI / 180);
-  const uR = cssH / 2 - (rsv.top + 0.15 * availH);  // reach anchor, px above raw center
-  const uB = cssH / 2 - (rsv.top + 0.85 * availH);  // ball anchor (negative = below)
+  const uR = cssH / 2 - (topPad + 0.15 * availH);   // reach anchor, px above raw center
+  const uB = cssH / 2 - (topPad + 0.85 * availH);   // ball anchor (negative = below)
   // Pitch is constant across zoom now (no putt-zoom flatten ramp), so the
   // framing distance solves in one pass at the fixed pitch.
   const pDeg = pNowDeg != null ? pNowDeg : appleUserPitch;
@@ -3308,7 +3342,7 @@ function computeViewMatrix(angle, tilt, scale, focusX, focusY, cssW, cssH) {
   return m;
 }
 function applyView() {
-  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const cssW = vpW(), cssH = vpH();
   Object.assign(view, computeViewMatrix(
     camera.angle, camera.tilt, camera.scale * (1 + camPunch),
     camera.focus.x, camera.focus.y, cssW, cssH));
@@ -3400,7 +3434,7 @@ function updateCamera() {
     camera.tilt = camera.tTilt = 1;
     // Cap zoom so the camera never requests under flyover's minimum distance
     // (past the clamp the map drifts off the overlay — see APPLE_MIN_DIST_M).
-    const sMax = (_appleMapH || window.innerHeight) * M_PER_UNIT * APPLE_CAM_K / APPLE_MIN_DIST_M;
+    const sMax = (_appleMapH || vpH()) * M_PER_UNIT * APPLE_CAM_K / APPLE_MIN_DIST_M;
     if (camera.scale > sMax) camera.scale = sMax;
     if (camera.tScale > sMax) camera.tScale = sMax;
     // Pitch = the user's two-finger tilt, scaled by the zoom ramp: full lean
@@ -3447,11 +3481,11 @@ function updateCamera() {
 // Visible world rect (axis-aligned; used by the vector renderer at angle≈0).
 // Matches applyView's play-area centering so stripe ranges cover the full screen.
 function visibleRect() {
-  const s = camera.scale, sy = s * camera.tilt, cssW = window.innerWidth;
-  const cssH = window.innerHeight + 2 * _capPad; // capture pad: cover the warp bands too
+  const s = camera.scale, sy = s * camera.tilt, cssW = vpW();
+  const cssH = vpH() + 2 * _capPad; // capture pad: cover the warp bands too
   const rsv = hudReserve();
   const cx = (rsv.left + (cssW - rsv.right)) / 2;
-  const cy = (rsv.top + (window.innerHeight - rsv.bot)) / 2 + _capPad;
+  const cy = (rsv.top + (vpH() - rsv.bot)) / 2 + _capPad;
   return { x: camera.focus.x - cx / s, w: cssW / s,
            y: camera.focus.y - cy / sy, h: cssH / sy };
 }
@@ -3511,9 +3545,10 @@ function hudReserve() {
 }
 
 function resize() {
+  measureVp();
   const dpr = window.devicePixelRatio || 1;
-  const cssW = window.innerWidth;
-  const cssH = window.innerHeight;
+  const cssW = vpW();
+  const cssH = vpH();
   canvas.width = cssW * dpr;
   canvas.height = cssH * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -3531,6 +3566,15 @@ function resize() {
   if (window.GTiles3D && window.GTiles3D.resize) window.GTiles3D.resize();
 }
 window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", resize);
+// visualViewport fires when the mobile browser toolbar slides in/out — re-measure
+// so the framing tracks the real visible box instead of a stale innerHeight.
+if (window.visualViewport) {
+  let _vpRaf = 0;
+  const onVp = () => { if (_vpRaf) return; _vpRaf = requestAnimationFrame(() => { _vpRaf = 0; resize(); }); };
+  visualViewport.addEventListener("resize", onVp);
+  visualViewport.addEventListener("scroll", onVp);
+}
 
 // Apple-ground 3D (view.appleProj set): every overlay vertex routes through
 // the MapKit pinhole replica instead of the affine — see buildAppleProj.
@@ -3594,7 +3638,7 @@ function gtMarkPx(x, y, zUnits, meters, exag, minPx, maxPx) {
 }
 // Real-world sizes + exaggerations (true scale is sub-pixel at play framings).
 const GT_SIZE = {
-  ballM: 0.02135, ballExag: 3.5, ballMin: 2, ballMax: 8,        // regulation 42.7mm ball
+  ballM: 0.02135, ballExag: 6.1, ballMin: 3.5, ballMax: 14,     // regulation 42.7mm ball (+75% per playtest)
   cupM: 0.054,   cupExag: 3.0,  cupMin: 2.5, cupMax: 12,        // regulation 108mm cup
   flagM: 2.13,   flagExag: 1.5, flagMin: 10, flagMax: 40,       // 7ft flagstick
   teeM: 0.10,    teeExag: 3.0,  teeMin: 2.5, teeMax: 7,         // tee-marker sphere
@@ -3734,7 +3778,7 @@ function drawLabel(x, y, text, color) {
 // global connected course, which holds the WHOLE course's geometry.
 let _viewAABB = null;
 function computeViewAABB() {
-  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const cssW = vpW(), cssH = vpH();
   // Tilted: extend vertically so polys feeding the warp pad bands (and trees
   // taller than the viewport edge) aren't culled away.
   const py = _warpPad + (view.kz ? ws(TUNE.treeHMax) * view.kz : 0);
@@ -3891,7 +3935,7 @@ function polyBBox(poly) {
 // Mowing stripes: alternating bands across the currently visible world rect.
 // axis "y" => horizontal bands; axis "x" => vertical bands.
 function stripes(c1, c2, bandW, axis) {
-  const r = visibleRect(), cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad;
+  const r = visibleRect(), cssW = vpW(), cssH = vpH() + 2 * _capPad;
   if (axis === "x") {
     for (let x = Math.floor(r.x / bandW) * bandW; x < r.x + r.w; x += bandW) {
       ctx.fillStyle = (Math.floor(x / bandW) & 1) ? c1 : c2;
@@ -4132,7 +4176,7 @@ function drawAerial() {
   // screen; sampling all of it every frame is the main render cost. Invert the
   // pixel→css affine [[A,C],[B,D]] to map the 4 screen corners back to image
   // pixels, take their bounding box, clamp to the image, and crop to that.
-  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad;
+  const cssW = vpW(), cssH = vpH() + 2 * _capPad;
   const det = A * D - C * B;
   if (Math.abs(det) > 1e-9) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -4212,7 +4256,7 @@ function drawDetailGrain() {
   const det = A * D - C * B;
   if (Math.abs(det) < 1e-12) return;
   // visible screen corners -> tile-space AABB (pattern repeats, no clamp needed)
-  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad;
+  const cssW = vpW(), cssH = vpH() + 2 * _capPad;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [scx, scy] of [[0, 0], [cssW, 0], [0, cssH], [cssW, cssH]]) {
     const dx = scx - E, dy = scy - F;
@@ -4235,11 +4279,14 @@ function drawGreen(photo, only) {
   // `only`: restrict to these green records (Apple ground draws just the
   // greens in play — neighbor holes' OSM polys never register perfectly with
   // Apple's imagery, and skipping them saves the projection work).
-  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
+  const cssW = vpW(), cssH = vpH() + 2 * _capPad, s = HOLE.surfaces;
   const baseA = ctx.globalAlpha;  // respect a caller's fade (Apple-ground detail ease-in)
-  if (!view.threeProj) { // three.js 3D: the WebGL green patch already reads as the green — skip the collar ring
-    ctx.strokeStyle = photo ? "rgba(190,235,195,0.25)" : "rgba(90,165,99,0.35)";
-    ctx.lineWidth = ws(photo ? 1.2 : 1.5);
+  // Collar ring: VECTOR mode only. In photo modes the real turf already draws
+  // the green's edge — and the stroke is world-scaled (ws), so on the gtiles
+  // putt framing it blew up to a ~100px pale halo bleeding outside the green.
+  if (!view.threeProj && !photo) {
+    ctx.strokeStyle = "rgba(90,165,99,0.35)";
+    ctx.lineWidth = ws(1.5);
     ctx.lineJoin = "round";
     const outlines = only ? only.map((g) => g.poly) : (s.green || []);
     for (const poly of outlines) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
@@ -4611,7 +4658,7 @@ let _gvSX = null, _gvSY = null;   // per-frame projected corner scratch
 // inspect view (drawGreenView) and the landing cinematic (drawCine). Returns the
 // projector + view numbers so callers can draw their own markers in the same space.
 function paintGreen3D(g, m, yaw, tilt, kMul, opts) {
-  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const cssW = vpW(), cssH = vpH();
   const rsv = hudReserve();
   ctx.fillStyle = "rgba(8,18,10,0.88)";                 // scrim over the live course
   ctx.fillRect(0, 0, cssW, cssH);
@@ -4917,7 +4964,7 @@ function drawWorldRaster(img, t, patches) {
     return;
   }
   const N = patches || 8, iw = img.width, ih = img.height;
-  const W = window.innerWidth, H = window.innerHeight;
+  const W = vpW(), H = vpH();
   const maxArea = W * H * 4;   // degenerate-affine guard: a patch can't sanely exceed this
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const u0 = iw * i / N, u1 = iw * (i + 1) / N;
@@ -4971,7 +5018,7 @@ function drawOOBOverlay(s) {
 }
 
 function drawVectorSurfaces() {
-  const cssW = window.innerWidth, cssH = window.innerHeight + 2 * _capPad, s = HOLE.surfaces;
+  const cssW = vpW(), cssH = vpH() + 2 * _capPad, s = HOLE.surfaces;
   const bg = ctx.createLinearGradient(0, 0, 0, cssH);
   bg.addColorStop(0, "#236425");
   bg.addColorStop(1, "#2c7e2f");
@@ -5562,7 +5609,7 @@ function drawTrees() {
   }
   const trees = holder._trees;
   if (!trees.length) return;
-  const v = _viewAABB, cssW = window.innerWidth, cssH = window.innerHeight;
+  const v = _viewAABB, cssW = vpW(), cssH = vpH();
   const arr = [];
   for (const t of trees) {
     if (t.x < v.minx || t.x > v.maxx || t.y < v.miny || t.y > v.maxy) continue;
@@ -5754,7 +5801,7 @@ function drawCanopy() {
   if (Math.abs(det) < 1e-9) return;
   // visible source rect: screen corners (viewport + capture pad + lift head-
   // room below, since every layer shifts content UP) back through the inverse
-  const cssW = window.innerWidth, cssHFull = window.innerHeight + 2 * _capPad;
+  const cssW = vpW(), cssHFull = vpH() + 2 * _capPad;
   const cssH = cssHFull + topLift;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [scx, scy] of [[0, 0], [cssW, 0], [0, cssH], [cssW, cssH]]) {
@@ -6095,7 +6142,7 @@ function draw() {
   // loop, before this) and the 2D layer below still runs — it paints the
   // gameplay (cup, ball, aim, contours) ON TOP, projected through the three.js
   // camera (view.threeProj), same as Apple ground keeps the 2D layer over MapKit.
-  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const cssW = vpW(), cssH = vpH();
   // Butter Brook: Apple MapKit is this course's ground layer, always (not a
   // render3D-style full-frame mode) — see appleGroundActive()/syncAppleGround()
   // above. Everything below (flag, ball, contours, HUD icons) still runs
@@ -6644,8 +6691,8 @@ function drawAttribution() {
   // move the credit to the bottom-right so they don't overlap.
   const bugUp = tourPlayMode && mode === "course";
   ctx.textAlign = bugUp ? "right" : "left";
-  const x = bugUp ? window.innerWidth - pad : pad;
-  let y = window.innerHeight - pad;
+  const x = bugUp ? vpW() - pad : pad;
+  let y = vpH() - pad;
   for (let i = lines.length - 1; i >= 0; i--) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(0,0,0,0.45)";
@@ -15444,7 +15491,7 @@ function maybePrebakeBucket() {
   schedule(() => { _prebakePending = false; prebakeOneBucket(); });
 }
 function prebakeOneBucket() {
-  const cssW = window.innerWidth, cssH = window.innerHeight;
+  const cssW = vpW(), cssH = vpH();
   const tilt3d = !!(view.kz && !HOLE.isRange && !greenView && !cine);
   // Re-check: parked state may have changed since this was scheduled.
   if (!tilt3d || aimKey !== 0 || cameraAiming || camTouch || camera.tilt !== camera.tTilt) return;
