@@ -3770,8 +3770,13 @@ function gtMarkPx(x, y, zUnits, meters, exag, minPx, maxPx) {
 }
 // Real-world sizes + exaggerations (true scale is sub-pixel at play framings).
 const GT_SIZE = {
-  ballM: 0.02135, ballExag: 6.1, ballMin: 3.5, ballMax: 14,     // regulation 42.7mm ball (+75% per playtest)
-  cupM: 0.054,   cupExag: 3.0,  cupMin: 2.5, cupMax: 12,        // regulation 108mm cup
+  // Ball + cup at TRUE physical scale vs the real green (playtest direction:
+  // "accurate to the size of the green") — exag 1.0, so at putt framings the
+  // 42.7mm ball and 108mm cup are exactly proportional to the turf they sit
+  // on (cup ≈ 2.5× ball, both a fraction of the green). Floors only bind at
+  // long framings where a real ball IS sub-pixel.
+  ballM: 0.02135, ballExag: 1.0, ballMin: 1.3, ballMax: 5,      // regulation 42.7mm ball
+  cupM: 0.054,   cupExag: 1.0,  cupMin: 2.0, cupMax: 9,         // regulation 108mm cup
   flagM: 2.13,   flagExag: 1.5, flagMin: 10, flagMax: 40,       // 7ft flagstick
   teeM: 0.10,    teeExag: 3.0,  teeMin: 2.5, teeMax: 7,         // tee-marker sphere
 };
