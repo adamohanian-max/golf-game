@@ -339,12 +339,18 @@ function refreshPrecisionAnchors() {
     if (rec.samples.length >= 12) {
       const s = rec.samples.slice().sort((a, b) => a - b);
       const med = s[Math.floor(s.length / 2)];           // median beats canopy strikes
-      // First settle: the sheet was drawn with the grid's base offset until
-      // now — start the eased value from there instead of stepping (the
-      // null→median step moved green + camera in ONE frame ≈ the landing pop).
+      // First settle: EARLY (within the hole's first seconds) adopt the median
+      // directly — it lands inside the overlay's fade-in, invisible. LATE
+      // (slow tile streaming; overlay already fully faded in) an instant adopt
+      // stepped the sheet ~45px — start from the rendered base and latch the
+      // fast settle-swoosh instead (~1s, then locked).
       if (rec.off == null && rec.disp == null) {
-        const bb2 = _greenBBox(gr);
-        rec.disp = _offsetBase((bb2.x0 + bb2.x1) / 2, (bb2.y0 + bb2.y1) / 2);
+        if (performance.now() - _holeLoadT < 6000) rec.disp = med;
+        else {
+          const bb2 = _greenBBox(gr);
+          rec.disp = _offsetBase((bb2.x0 + bb2.x1) / 2, (bb2.y0 + bb2.y1) / 2);
+          rec._settling = true;
+        }
       }
       rec.off = med;   // live target — the rolling window already smooths it
     }
@@ -357,15 +363,30 @@ function refreshPrecisionAnchors() {
     // pixel-static (the original anti-pulse requirement).
     if (rec.off != null) {
       if (rec.disp == null) rec.disp = rec.off;
-      else if (Math.abs(rec.off - rec.disp) > 0.25) {
-        // SLEW-RATE-CAPPED glide (0.8 m/s): during the early heal the rolling
-        // median itself wobbles metres as the window fills, and a pure
-        // exponential ease at low fps stepped the sheet 2-3m in one frame.
-        // The cap turns any correction into a bounded gentle drift
-        // (~25px/s at tee framings) no matter what the median does.
-        let step = (rec.off - rec.disp) * (1 - Math.exp(-dtA / 450));
-        const cap = 0.8 * dtA / 1000;
-        rec.disp += Math.max(-cap, Math.min(cap, step));
+      else {
+        const err = rec.off - rec.disp;
+        // PARKED CAMERA = FROZEN SHEET (playtest: "no drifting after the
+        // camera moves over the ball"). Corrections flow only while the
+        // camera itself moves (a glide masks them completely) — except a
+        // SEVERE misplacement (>3m, the boot heal) which latches one
+        // settle-glide and then locks for good at 0.5m.
+        if (Math.abs(err) > 3) rec._settling = true;
+        const track = !_camParked || rec._settling;
+        const floor = _camParked ? 0.5 : 0.25;
+        if (rec._settling && Math.abs(err) <= 0.5) rec._settling = false;
+        if (track && Math.abs(err) > floor) {
+          if (rec._settling) {
+            // severe settle: UNCAPPED 400ms-tc ease — one fast swoosh that
+            // finishes in ~1s no matter how big the correction (a rate cap
+            // turned a 50m boot error into a 13s crawl)
+            rec.disp += err * (1 - Math.exp(-dtA / 400));
+          } else {
+            // riding camera motion: slew-capped gentle correction (0.8 m/s)
+            const step = err * (1 - Math.exp(-dtA / 450));
+            const cap = 0.8 * dtA / 1000;
+            rec.disp += Math.max(-cap, Math.min(cap, step));
+          }
+        }
       }
     }
   }
@@ -395,16 +416,18 @@ function offsetAt(x, y) {
     const t = inD / 3;
     return rec.disp * t + _offsetBase(x, y) * (1 - t);
   }
-  if (_ballOff) {
-    const d = Math.hypot(x - _ballOff.x, y - _ballOff.y);
+  const bo = _fro ? _fro.ball : _ballOff;   // parked → park-edge snapshot
+  if (bo) {
+    const d = Math.hypot(x - bo.x, y - bo.y);
     if (d < BALL_EXACT_R) {
       const base = _offsetBase(x, y);
       const t = d <= BALL_EXACT_R - 1 ? 1 : BALL_EXACT_R - d;  // blend the last unit
-      return _ballOff.off * t + base * (1 - t);
+      return bo.off * t + base * (1 - t);
     }
   }
   // Pin exact = pre-settle fallback only (the rigid green wins once settled).
-  if (_pinOff && Math.hypot(x - _pinOff.x, y - _pinOff.y) < 3) return _pinOff.off;
+  const po = _fro ? _fro.pin : _pinOff;
+  if (po && Math.hypot(x - po.x, y - po.y) < 3) return po.off;
   return _offsetBase(x, y);
 }
 function _offsetBase(x, y) {
@@ -413,7 +436,11 @@ function _offsetBase(x, y) {
   const ix = Math.min(gr.nx - 2, Math.max(0, Math.floor(fx)));
   const iy = Math.min(gr.ny - 2, Math.max(0, Math.floor(fy)));
   const tx = Math.min(1, Math.max(0, fx - ix)), ty = Math.min(1, Math.max(0, fy - iy));
-  const at = (cx, cy) => { const i = cy * gr.nx + cx; return gr.ok[i] ? gr.off[i] : _gridMean; };
+  // While parked, sample the park-edge snapshot — live cell refills keep
+  // healing underneath but must not move rendered pixels.
+  const ok = _fro ? _fro.ok : gr.ok, off = _fro ? _fro.off : gr.off;
+  const mean = _fro ? _fro.mean : _gridMean;
+  const at = (cx, cy) => { const i = cy * gr.nx + cx; return ok[i] ? off[i] : mean; };
   const a = at(ix, iy), b = at(ix + 1, iy), c = at(ix, iy + 1), d = at(ix + 1, iy + 1);
   return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
 }
@@ -527,6 +554,10 @@ let _hold = null;    // {Ox,Oy,D} target captured at rest, reused during flight 
 let _camEase = null; // {Ox,Oy,D} EASED toward target each frame → glide between shots
 let _groundMEase = null; // slew-capped look-at ground height (anti frame-bounce)
 let _lastOxy = null;     // last look-at (for the motion-scaled height cap)
+let _camParked = false;  // eased camera exactly at target, ball at rest
+let _gSettling = false;  // severe-error settle-glide latch (boot heal)
+let _fro = null;         // park-edge field snapshot (rendered while parked)
+let _holeLoadT = 0;      // hole-change timestamp (early-settle window)
 let _camEaseT = 0;
 function setCamera() {
   if (!_placed || !tiles || !camera) return;
@@ -645,16 +676,44 @@ function setCamera() {
   // pixel at once — the "hole is bouncing" reports (h4, h13) during the early
   // heal. Slew-cap it (0.8 m/s, snap inside 5cm) so corrections read as a
   // gentle drift; the target still converges to the exact same value.
+  // Camera parked = eased state exactly at target (the snap makes strict
+  // equality reachable) and no ball in flight. Consumed by the height ease
+  // below AND by refreshPrecisionAnchors' green-sheet freeze (runs after
+  // setCamera each frame).
+  _camParked = !!(_camEase && _camEase.Ox === tOx && _camEase.Oy === tOy &&
+                  _camEase.D === tD && !(A && A.moving));
+  // Park-edge SNAPSHOT of the offset field. The stores keep healing underneath
+  // (frozen stores poisoned the sampler's reference height and stalled the
+  // heal entirely) — but everything RENDERED reads the snapshot, so a parked
+  // frame is pixel-static: no cell refill, anchor step, or feather blend can
+  // drift the flag/cup/ball while the player lines up. Discarded on any
+  // camera motion — the accumulated heal lands during the glide, invisibly.
+  if (_camParked) {
+    if (!_fro && _grid) _fro = {
+      off: _grid.off.slice(), ok: _grid.ok.slice(), mean: _gridMean,
+      ball: _ballOff ? Object.assign({}, _ballOff) : null,
+      pin: _pinOff ? Object.assign({}, _pinOff) : null,
+    };
+  } else _fro = null;
   const gTarget = ((g.terrainZRender || g.terrainZ || (() => 0))(Ox, Oy)) * m + offsetAt(Ox, Oy);
   if (_groundMEase == null) _groundMEase = gTarget;
   else {
     const gd = gTarget - _groundMEase;
-    // cap widens with the look-at's own horizontal motion (60% grade allowance)
-    // so a glide onto an elevated green keeps its height in step — only a
-    // STATIC camera gets the tight anti-bounce cap.
-    const dOh = _lastOxy ? Math.hypot(Ox - _lastOxy.x, Oy - _lastOxy.y) * m : 0;
-    const gCap = 0.8 * dt / 1000 + dOh * 0.6;
-    _groundMEase += Math.abs(gd) < 0.05 ? gd : Math.max(-gCap, Math.min(gCap, gd));
+    // PARKED = FROZEN (no visible drift once the camera sits over the ball);
+    // corrections ride camera motion instead. A severe boot-heal error (>3m)
+    // latches one slew-capped settle-glide, then locks at 0.1m.
+    if (Math.abs(gd) > 3) _gSettling = true;
+    if (_gSettling && Math.abs(gd) <= 0.1) _gSettling = false;
+    if (_gSettling) {
+      // severe settle: fast uncapped ease (~1s at any error size), then lock
+      _groundMEase += Math.abs(gd) < 0.1 ? gd : gd * (1 - Math.exp(-dt / 400));
+    } else if (!_camParked) {
+      // cap widens with the look-at's own horizontal motion (60% grade
+      // allowance) so a glide onto an elevated green keeps height in step.
+      const dOh = _lastOxy ? Math.hypot(Ox - _lastOxy.x, Oy - _lastOxy.y) * m : 0;
+      const gCap = 0.8 * dt / 1000 + dOh * 0.6;
+      _groundMEase += Math.abs(gd) < 0.05 ? gd : Math.max(-gCap, Math.min(gCap, gd));
+    }
   }
   _lastOxy = { x: Ox, y: Oy };
   const groundM = _groundMEase;
@@ -858,6 +917,7 @@ function render() {
     const H = gb() && gb().getHole();
     if (H !== _lastHole) {
       _grid = null; _hold = null; _camEase = null; _groundMEase = null; _lastHole = H; _guardK = 1;
+      _holeLoadT = performance.now();
       _ballOff = null; _pinOff = null; _greenOffs = new Map();
     }
     refreshGridBatch(24);
