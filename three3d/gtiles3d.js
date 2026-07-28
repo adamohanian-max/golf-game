@@ -339,28 +339,33 @@ function refreshPrecisionAnchors() {
     if (rec.samples.length >= 12) {
       const s = rec.samples.slice().sort((a, b) => a - b);
       const med = s[Math.floor(s.length / 2)];           // median beats canopy strikes
-      // DEAD-BAND: the rolling window re-medians every frame, and cm-level churn
-      // moved the whole green overlay a few px per frame — a visible PULSE on a
-      // static camera (measured 6px/frame). Only move the sheet for a REAL
-      // correction (LOD refinement, metres); absorb the noise.
-      if (rec.off == null || Math.abs(med - rec.off) > OFF_DEADBAND_M) {
-        // First settle: the sheet was drawn with the grid's base offset until
-        // now — ease the APPLIED value from there instead of stepping (the
-        // null→median step moved green + camera in ONE frame ≈ the landing pop).
-        if (rec.off == null && rec.disp == null) {
-          const bb2 = _greenBBox(gr);
-          rec.disp = _offsetBase((bb2.x0 + bb2.x1) / 2, (bb2.y0 + bb2.y1) / 2);
-        }
-        rec.off = med;
+      // First settle: the sheet was drawn with the grid's base offset until
+      // now — start the eased value from there instead of stepping (the
+      // null→median step moved green + camera in ONE frame ≈ the landing pop).
+      if (rec.off == null && rec.disp == null) {
+        const bb2 = _greenBBox(gr);
+        rec.disp = _offsetBase((bb2.x0 + bb2.x1) / 2, (bb2.y0 + bb2.y1) / 2);
       }
+      rec.off = med;   // live target — the rolling window already smooths it
     }
-    // Ease displayed offset → target (~300ms). Also smooths LATER dead-band
-    // corrections (LOD refinement mid-play), not just first settle.
+    // CONTINUOUS ease toward the live median, frozen only inside a small noise
+    // floor. The previous scheme dead-banded the TARGET (0.6m quanta) and eased
+    // each step over 300ms — on coastal holes the early heal walks the median
+    // several metres in alternating steps, so the whole frame visibly slid
+    // down-up-up-up: the reported "hole 4 is bouncing". One slow continuous
+    // glide replaces the step train; the 0.25m freeze keeps the parked frame
+    // pixel-static (the original anti-pulse requirement).
     if (rec.off != null) {
       if (rec.disp == null) rec.disp = rec.off;
-      else if (rec.disp !== rec.off) {
-        rec.disp += (rec.off - rec.disp) * (1 - Math.exp(-dtA / 90));
-        if (Math.abs(rec.off - rec.disp) < 0.02) rec.disp = rec.off;
+      else if (Math.abs(rec.off - rec.disp) > 0.25) {
+        // SLEW-RATE-CAPPED glide (0.8 m/s): during the early heal the rolling
+        // median itself wobbles metres as the window fills, and a pure
+        // exponential ease at low fps stepped the sheet 2-3m in one frame.
+        // The cap turns any correction into a bounded gentle drift
+        // (~25px/s at tee framings) no matter what the median does.
+        let step = (rec.off - rec.disp) * (1 - Math.exp(-dtA / 450));
+        const cap = 0.8 * dtA / 1000;
+        rec.disp += Math.max(-cap, Math.min(cap, step));
       }
     }
   }
@@ -520,6 +525,8 @@ const _east = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 let _hold = null;    // {Ox,Oy,D} target captured at rest, reused during flight (no follow)
 let _camEase = null; // {Ox,Oy,D} EASED toward target each frame → glide between shots
+let _groundMEase = null; // slew-capped look-at ground height (anti frame-bounce)
+let _lastOxy = null;     // last look-at (for the motion-scaled height cap)
 let _camEaseT = 0;
 function setCamera() {
   if (!_placed || !tiles || !camera) return;
@@ -615,8 +622,12 @@ function setCamera() {
     // first seconds on a coastal hole while the height field heals under the
     // camera and the look-at sits metres off (measured h6 address yf 1.18)
     const lost = !bp.inFront || yf < 0.02 || yf > 0.98 || bp.x < -60 || bp.x > W + 60;
-    if ((off && S.moving) || lost) _guardK = Math.min(_guardK * 1.06, 2.5);
-    else if (!S.moving) {
+    // rest-lost must PERSIST a few frames before widening (a single boundary
+    // graze would otherwise alternate widen/ease every frame — a shimmer),
+    // and the moving band vs rest band differ so the two can't fight.
+    _guardLostN = lost ? _guardLostN + 1 : 0;
+    if ((off && S.moving) || _guardLostN >= 5) _guardK = Math.min(_guardK * 1.04, 2.5);
+    else if (!S.moving && !lost) {
       _guardK += (1 - _guardK) * es;
       if (Math.abs(_guardK - 1) < 0.01) _guardK = 1;   // snap — no perpetual micro-pulse
     }
@@ -629,7 +640,24 @@ function setCamera() {
   // it and the close putting camera aims tens of metres off and throws the ball
   // off-screen.
   const [Olon, Olat] = toLL(Ox, Oy);
-  const groundM = ((g.terrainZRender || g.terrainZ || (() => 0))(Ox, Oy)) * m + offsetAt(Ox, Oy);
+  // Look-at ground height is the WHOLE-FRAME mover: any offset store stepping
+  // under it (grid cell refill, pin anchor, green median) used to shift every
+  // pixel at once — the "hole is bouncing" reports (h4, h13) during the early
+  // heal. Slew-cap it (0.8 m/s, snap inside 5cm) so corrections read as a
+  // gentle drift; the target still converges to the exact same value.
+  const gTarget = ((g.terrainZRender || g.terrainZ || (() => 0))(Ox, Oy)) * m + offsetAt(Ox, Oy);
+  if (_groundMEase == null) _groundMEase = gTarget;
+  else {
+    const gd = gTarget - _groundMEase;
+    // cap widens with the look-at's own horizontal motion (60% grade allowance)
+    // so a glide onto an elevated green keeps its height in step — only a
+    // STATIC camera gets the tight anti-bounce cap.
+    const dOh = _lastOxy ? Math.hypot(Ox - _lastOxy.x, Oy - _lastOxy.y) * m : 0;
+    const gCap = 0.8 * dt / 1000 + dOh * 0.6;
+    _groundMEase += Math.abs(gd) < 0.05 ? gd : Math.max(-gCap, Math.min(gCap, gd));
+  }
+  _lastOxy = { x: Ox, y: Oy };
+  const groundM = _groundMEase;
   sceneAt(Olon, Olat, groundM, _O);
   sceneAt(Olon, Olat, groundM + 1, _up).sub(_O).normalize();          // ellipsoid up
   sceneAt(Olon, Olat + 1e-5, groundM, _north).sub(_O).normalize();    // +lat = north
@@ -829,7 +857,7 @@ function render() {
     // across the whole course from the old hole).
     const H = gb() && gb().getHole();
     if (H !== _lastHole) {
-      _grid = null; _hold = null; _camEase = null; _lastHole = H; _guardK = 1;
+      _grid = null; _hold = null; _camEase = null; _groundMEase = null; _lastHole = H; _guardK = 1;
       _ballOff = null; _pinOff = null; _greenOffs = new Map();
     }
     refreshGridBatch(24);
@@ -842,6 +870,7 @@ let _lastCamPos = null;
 let _errT = 6, _errTAt = 0;   // ramped errorTarget (motion-coarse LOD)
 let _justResumed = false;     // set by setHidden(false); one-frame motion amnesty
 let _guardK = 1;              // off-screen-ball framing widener (≥1, eased back at rest)
+let _guardLostN = 0;          // consecutive rest-lost frames (anti-flicker latch)
 
 function resize() {
   if (!renderer) return;
@@ -866,7 +895,7 @@ function setHidden(h) {
     // eased camera + last-position are stale. Null _camEase → next setCamera
     // SNAPS to the new framing (a cut, not a cross-course glide), and
     // _justResumed keeps that snap from tripping the motion-coarse LOD.
-    _camEase = null; _camEaseT = 0; _justResumed = true;
+    _camEase = null; _camEaseT = 0; _groundMEase = null; _justResumed = true;
   }
 }
 function isReady() { return ready; }
@@ -901,6 +930,7 @@ function debug() {
     if (o.isMesh) { meshes++; verts += (o.geometry && o.geometry.attributes && o.geometry.attributes.position) ? o.geometry.attributes.position.count : 0; }
   });
   return { ready, placed: _placed, failed: _failed, courseId: activeCourseId, pitch: pitchDeg,
+    guardK: +_guardK.toFixed(3), easeD: _camEase ? +_camEase.D.toFixed(1) : null,
     hasToken: !!window.GOOGLE_TILES_TOKEN, tiles: !!tiles,
     tris: renderer ? renderer.info.render.triangles : -1,
     drawCalls: renderer ? renderer.info.render.calls : -1,
