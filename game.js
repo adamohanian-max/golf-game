@@ -261,12 +261,15 @@ const TUNE = {
   hopDrFrac: { fairway: 0.30, tee: 0.30, rough: 0.12 }, // green/bunker: no hop (hold calibration)
   hopMinDr: 3,           // under ~9yd of rollout the ball just releases (short irons land steep, no hop)
   hopVzMax: 0.12,        // hop launch cap — a skip, never a re-flight
-  // Subtle bunker overlay (photo modes): sand tint traced from the real OSM
-  // bunker polys, blur-feathered — re-crisps the mushy photo sand/grass edge.
-  bunkerFill: "#e6d9b3",
-  bunkerAlpha: 0.35,
-  bunkerFeatherPx: 2.5,
-  bunkerZoomLo: 1.5,     // px-per-metre where the overlay starts fading in
+  // Bunker EDGE definition (photo modes): thin feathered lip stroke traced
+  // from the real OSM bunker polys — re-crisps the mushy photo sand/grass
+  // boundary. Edge-only: an area FILL (tried first) tinted Google's white
+  // sand butter-yellow and its blur bled onto the grass — the playtest's
+  // "yellow film over parts of the screen".
+  bunkerEdge: "rgba(88,72,42,0.28)",
+  bunkerEdgePx: 2,
+  bunkerFeatherPx: 1,    // stroke blur — soft lip, not a vector line
+  bunkerZoomLo: 1.5,     // px-per-metre where the edge starts fading in
   bunkerZoomHi: 3.0,     // …full strength (≈ approach/putt framings)
   bunkerNearU: 40,       // gtiles: only bunkers within this of ball/pin draw
   // Out of bounds (woods + aerial-mask OOB): +1 penalty, replay from last safe
@@ -3775,7 +3778,7 @@ const GT_SIZE = {
   // 42.7mm ball and 108mm cup are exactly proportional to the turf they sit
   // on (cup ≈ 2.5× ball, both a fraction of the green). Floors only bind at
   // long framings where a real ball IS sub-pixel.
-  ballM: 0.02135, ballExag: 1.0, ballMin: 1.3, ballMax: 5,      // regulation 42.7mm ball
+  ballM: 0.02135, ballExag: 2.0, ballMin: 2.0, ballMax: 10,     // regulation 42.7mm ball ×2 (playtest: 1.0 too small)
   cupM: 0.054,   cupExag: 1.0,  cupMin: 2.0, cupMax: 9,         // regulation 108mm cup
   flagM: 2.13,   flagExag: 1.5, flagMin: 10, flagMax: 40,       // 7ft flagstick
   teeM: 0.10,    teeExag: 3.0,  teeMin: 2.5, teeMax: 7,         // tee-marker sphere
@@ -6164,11 +6167,15 @@ function drawBunkersPhoto(nearPts) {
       : view.scale / M_PER_UNIT;
     const a = Math.max(0, Math.min(1, (ppm - TUNE.bunkerZoomLo) / (TUNE.bunkerZoomHi - TUNE.bunkerZoomLo)));
     if (a < 0.05) continue;
-    ctx.globalAlpha = TUNE.bunkerAlpha * a;
+    // EDGE stroke only — zero area coverage, so it can never cast/film over
+    // the photo's own sand or the surrounding grass.
+    ctx.globalAlpha = a;
     if (canBlur) ctx.filter = `blur(${TUNE.bunkerFeatherPx}px)`;
-    ctx.fillStyle = TUNE.bunkerFill;
+    ctx.strokeStyle = TUNE.bunkerEdge;
+    ctx.lineWidth = TUNE.bunkerEdgePx;
+    ctx.lineJoin = "round";
     tracePoly(it.poly);
-    ctx.fill();
+    ctx.stroke();
     if (canBlur) ctx.filter = "none";
   }
   ctx.restore();
