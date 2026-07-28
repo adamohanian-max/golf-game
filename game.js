@@ -261,6 +261,14 @@ const TUNE = {
   hopDrFrac: { fairway: 0.30, tee: 0.30, rough: 0.12 }, // green/bunker: no hop (hold calibration)
   hopMinDr: 3,           // under ~9yd of rollout the ball just releases (short irons land steep, no hop)
   hopVzMax: 0.12,        // hop launch cap — a skip, never a re-flight
+  // Subtle bunker overlay (photo modes): sand tint traced from the real OSM
+  // bunker polys, blur-feathered — re-crisps the mushy photo sand/grass edge.
+  bunkerFill: "#e6d9b3",
+  bunkerAlpha: 0.35,
+  bunkerFeatherPx: 2.5,
+  bunkerZoomLo: 1.5,     // px-per-metre where the overlay starts fading in
+  bunkerZoomHi: 3.0,     // …full strength (≈ approach/putt framings)
+  bunkerNearU: 40,       // gtiles: only bunkers within this of ball/pin draw
   // Out of bounds (woods + aerial-mask OOB): +1 penalty, replay from last safe
   // spot. Toggle off for a forgiving round (ball stays playable where it lands).
   obPenalty: true,
@@ -6111,6 +6119,49 @@ function drawDEMShade() {
   ctx.globalAlpha = 1;
 }
 
+// Chaikin-smoothed bunker copies + centroids, cached per surfaces object.
+// NEVER mutates the shared course data (greens are rounded in place — bunkers
+// must stay raw for surfaceAt's lie detection).
+function bunkerMeta() {
+  const s = HOLE.surfaces;
+  if (!s || !s.bunker || !s.bunker.length) return null;
+  if (s._bunkerMeta && s._bunkerMeta.src === s.bunker) return s._bunkerMeta;
+  const items = s.bunker.filter((p) => p.length >= 3).map((p) => {
+    let cx = 0, cy = 0;
+    for (const q of p) { cx += q.x; cy += q.y; }
+    return { poly: chaikinClosed(p), cx: cx / p.length, cy: cy / p.length };
+  });
+  return (s._bunkerMeta = { src: s.bunker, items });
+}
+// Subtle sand overlay: the photo's bunker-vs-grass edge goes mushy under zoom
+// (aerial resolution / Google mesh LOD). Trace the REAL OSM bunker outlines
+// with a low-alpha sand fill + blur feather — crisp but organic, sand persists
+// to the grass line, and the photo stays dominant. Zoom-gated (full effect
+// only near putt/approach framings) and, on gtiles, distance-gated to the
+// action so 116 blurred fills never run at once.
+function drawBunkersPhoto(nearPts) {
+  const meta = bunkerMeta();
+  if (!meta) return;
+  const canBlur = "filter" in ctx;   // same guard as fillPolysUnion (Safari<18)
+  ctx.save();
+  for (const it of meta.items) {
+    if (nearPts && !nearPts.some((p) => Math.hypot(p.x - it.cx, p.y - it.cy) < TUNE.bunkerNearU)) continue;
+    if (!polyVisible(it.poly)) continue;
+    const ppm = view.gtilesProj
+      ? (window.GTiles3D.pxPerMeterAt(it.cx, it.cy, terrainZRender(it.cx, it.cy)) || 0)
+      : view.scale / M_PER_UNIT;
+    const a = Math.max(0, Math.min(1, (ppm - TUNE.bunkerZoomLo) / (TUNE.bunkerZoomHi - TUNE.bunkerZoomLo)));
+    if (a < 0.05) continue;
+    ctx.globalAlpha = TUNE.bunkerAlpha * a;
+    if (canBlur) ctx.filter = `blur(${TUNE.bunkerFeatherPx}px)`;
+    ctx.fillStyle = TUNE.bunkerFill;
+    tracePoly(it.poly);
+    ctx.fill();
+    if (canBlur) ctx.filter = "none";
+  }
+  ctx.restore();
+}
+
 // Photoreal rendering: real aerial base + translucent play-surface overlays.
 function drawPhotoSurfaces() {
   const s = HOLE.surfaces;
@@ -6118,9 +6169,7 @@ function drawPhotoSurfaces() {
   drawDetailGrain(); // zoom-ramped turf grain over the stretched photo
   drawDEMShade();    // tilted only: DEM light/shadow so slopes read on the photo
   drawFairwayWash();                               // gentle feathered fairway tint, baked once per hole
-  ctx.strokeStyle = "rgba(60,48,18,0.45)";          // bunkers: outline (sand visible)
-  ctx.lineWidth = 1.2;
-  for (const poly of s.bunker || []) { if (!polyVisible(poly)) continue; tracePoly(poly); ctx.stroke(); }
+  drawBunkersPhoto(null);   // feathered sand fill from the OSM polys (was a bare 1px outline)
   ctx.globalAlpha = 0.4;                           // water tint
   fillPolys(s.water, "#1f86d8");
   ctx.globalAlpha = 1;
@@ -6350,6 +6399,9 @@ function draw() {
         drawGreenRelief(g, (showSlope ? TUNE.reliefFull : TUNE.reliefAmbient) * a,
                         showSlope && breakArrows);
       }
+      // Subtle bunker overlay near the action: Google's own sand goes mushy at
+      // putt/approach zoom — the real OSM outlines re-crisp the sand/grass edge.
+      drawBunkersPhoto([{ x: state.ball.x, y: state.ball.y }, HOLE.holePos]);
       // OB tint: opt-in here (see oobUserOn) and capped so it reads as a tint,
       // not a blanket, over the photoreal imagery.
       if (oobUserOn) { ctx.save(); ctx.globalAlpha = 0.5; drawOOBOverlay(); ctx.restore(); }
