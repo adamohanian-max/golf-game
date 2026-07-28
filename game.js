@@ -248,6 +248,9 @@ const TUNE = {
     ob:      { e: 0.0,  h: 0.1  },  // out of bounds — dead stop
   },
   bounceStopVz: 0.06,    // downward speed below which the ball stops bouncing
+  softBounceVz: 0.12,    // below this impact speed a GREEN bounce is a soft skid, not a grab
+  softBounceGreen: { e: 0.12, h: 0.85 }, // that soft skid: barely lifts, keeps its pace
+  cupHopVz: 0.04,        // rammed lip-over hop height cap (a hop, not a launch)
   // Out of bounds (woods + aerial-mask OOB): +1 penalty, replay from last safe
   // spot. Toggle off for a forgiving round (ball stays playable where it lands).
   obPenalty: true,
@@ -1812,6 +1815,16 @@ function landingRelease(fl, spin, surf) {
   return Math.min(Dr * (1 - fr), fl.vh * bo.h * (fl.rolloutMul ?? 1)); // cap lifts for low runners (shallow landing releases hotter)
 }
 
+// Per-impact bounce coefficients. Pure — shared by the live ballistic step AND
+// simShotRest (cine-parity invariant). A LOW-energy green impact (rammed-putt
+// lip hop, dying chip) is a skid, not a grab: the full green table (h 0.35) was
+// tuned for approach shots and scrubbed 65% of a lipped putt's speed in one
+// frame, killing it dead at the cup.
+function bounceParams(surf, down) {
+  if (surf === "green" && down < TUNE.softBounceVz) return TUNE.softBounceGreen;
+  return TUNE.bounce[surf] || TUNE.bounce.fairway;
+}
+
 // --- Ballistic bounces after the first landing: projectile arc + land/settle ---
 function ballisticFlightStep(b) {
   b.x += b.vx;
@@ -1855,7 +1868,7 @@ function ballisticFlightStep(b) {
       b.vx = b.vy = b.vz = 0;
       state.airborne = false;
     } else if (down > TUNE.bounceStopVz) {
-      const bo = TUNE.bounce[surf] || TUNE.bounce.fairway;
+      const bo = bounceParams(surf, down);
       haptic(Math.max(2, Math.round(down * 35)));  // intensity scales with impact speed
       if (!shot._landed) { playLand(surf, down); spawnBurst(b.x, b.y, "dust"); shot._landed = true; }
       b.vz = down * bo.e;   // bounce back up
@@ -2072,8 +2085,12 @@ function resolveCup(b, speed, airborne, rand) {
     return { lip: true, grounded: true };
   }
   // rammed too hard — skips the cup and keeps rolling, with a small hop.
+  // Cap kept LOW (see cupHopVz): the old 0.07 launch landed at ~0.106 after the
+  // discrete integrator added a frame of gravity — ABOVE bounceStopVz, so every
+  // rammed putt double-hopped and bounce.green scrubbed 65% of its speed (the
+  // "bounce bug": a putt that should race past the cup died on the spot).
   const excess = spd - TUNE.captureSpeed;
-  b.vz = Math.min(0.07, excess * 1.5);
+  b.vz = Math.min(TUNE.cupHopVz, excess * 1.5);
   return { lip: true, hop: b.vz > 0.004 };
 }
 
@@ -2151,7 +2168,7 @@ function simShotRest(ball0, flight0) {
         const down = -impactVz;
         if (surf === "water" || surf === "woods" || surf === "ob") return null;
         if (down > TUNE.bounceStopVz) {
-          const bo = TUNE.bounce[surf] || TUNE.bounce.fairway;
+          const bo = bounceParams(surf, down);   // shared with live step (parity)
           b.vz = down * bo.e;
           b.vx *= bo.h; b.vy *= bo.h;
           b.spin *= 0.5;
@@ -2557,7 +2574,7 @@ function swipeToShot(dxs, dys, dt, powerScale) {
     // need. GTiles3D.unproject raycasts the real mesh and can miss (tiles not
     // streamed yet) — fall back to the flat formula rather than firing blind.
     const b = state.ball;
-    const s0 = window.GTiles3D.project(b.x, b.y, terrainZ(b.x, b.y));
+    const s0 = window.GTiles3D.project(b.x, b.y, terrainZRender(b.x, b.y));
     const L = Math.hypot(dxs, dys) || 1, k = 60 / L;   // ~60px probe, same heading
     const p0 = window.GTiles3D.unproject(s0.x, s0.y);
     const p1 = window.GTiles3D.unproject(s0.x + dxs * k, s0.y + dys * k);
@@ -3390,7 +3407,7 @@ function applyView() {
   view.gtilesProj = (gtilesGround && window.GTiles3D && window.GTiles3D.isReady()) ? true : null;
   if (view.gtilesProj) {
     view.kz = 0; view.tilt = 1;
-    const b = state.ball, tz = terrainZ(b.x, b.y);
+    const b = state.ball, tz = terrainZRender(b.x, b.y);
     const q0 = window.GTiles3D.project(b.x, b.y, tz), q1 = window.GTiles3D.project(b.x + 1, b.y, tz);
     view.gtilesScale = Math.hypot(q1.x - q0.x, q1.y - q0.y) || view.scale;
   }
@@ -3619,7 +3636,7 @@ function _tPt(x, y) {
 let _gLast = null, _gGen = 0;
 function _gtPt(x, y) {
   if (_gLast && _gLast.wx === x && _gLast.wy === y && _gLast.gen === _gGen) return _gLast;
-  const q = window.GTiles3D.project(x, y, terrainZ(x, y));
+  const q = window.GTiles3D.project(x, y, terrainZRender(x, y));
   _gLast = { wx: x, wy: y, gen: _gGen, x: q.x, y: q.y };
   return _gLast;
 }
@@ -3660,7 +3677,7 @@ function ballDrawRadius() {
     // flies away from the held camera; on the green it reads as a slightly
     // exaggerated real ball against the real green, never a blob.
     const b = state.ball;
-    const r = gtMarkPx(b.x, b.y, terrainZ(b.x, b.y) + (b.z || 0),
+    const r = gtMarkPx(b.x, b.y, terrainZRender(b.x, b.y) + (b.z || 0),
                        GT_SIZE.ballM, GT_SIZE.ballExag, GT_SIZE.ballMin, GT_SIZE.ballMax);
     if (r != null) {
       // Hysteresis: sub-quarter-pixel drift (camera ease tail, offset refresh)
@@ -3679,7 +3696,7 @@ let _gtBallR = null;                     // hysteresis cache for the perspective
 // a perspective ground the height must be projected for real so flight arcs
 // foreshorten; ws(z) is the flat-screen approximation.
 function ballLiftPx(x, y, z, groundScreenY) {
-  if (view.gtilesProj) return groundScreenY - window.GTiles3D.project(x, y, terrainZ(x, y) + z).y;
+  if (view.gtilesProj) return groundScreenY - window.GTiles3D.project(x, y, terrainZRender(x, y) + z).y;
   if (view.threeProj) return groundScreenY - window.Course3D.project(x, y, terrainZ(x, y) + z).y;
   if (view.appleProj) return groundScreenY - appleProjPt(view.appleProj, x, y, z + _apGroundZ(view.appleProj, x, y)).y;
   return ws(z);
@@ -3702,6 +3719,20 @@ function terrainZ(x, y) {
   let z = HOLE._dem ? HOLE._dem.elevAt(x, y) / M_PER_UNIT : 0;
   z += broadTerrainZ(x, y);   // low-freq cosmetic swells (0 = off)
   z += greenUndZ(x, y);       // per-green roll, bbox short-circuit
+  return z;
+}
+// RENDER height under the photoreal Google ground. The drawn green sheet there
+// is RIGID (gtiles3d per-green offset), but terrainZ folds in the synthetic
+// per-green undulation (±0.5u ≈ 5ft) — so a putt rolling across two lobes rose
+// and fell against a visually flat photo green and read as BOUNCING. Everything
+// ground-anchored (ball, cup, flag, tint, contours via _gtPt) uses this instead
+// under gtilesProj, so all elements stay mutually consistent. Physics — the
+// break field greenSlopeAt/g.grad — never reads this. Identity off-gtiles.
+function terrainZRender(x, y) {
+  if (!view.gtilesProj) return terrainZ(x, y);
+  if (!HOLE) return 0;
+  let z = HOLE._dem ? HOLE._dem.elevAt(x, y) / M_PER_UNIT : 0;
+  z += broadTerrainZ(x, y);
   return z;
 }
 // Green undulation as real vertical elevation (world units). The green field
@@ -6388,7 +6419,7 @@ function draw() {
     // ball's occlusion note — no depth buffer between the canvases).
     const pinOccl = view.gtilesProj &&
       window.GTiles3D.occludedAt(HOLE.holePos.x, HOLE.holePos.y,
-                                 terrainZ(HOLE.holePos.x, HOLE.holePos.y) + 0.8);
+                                 terrainZRender(HOLE.holePos.x, HOLE.holePos.y) + 0.8);
     if (pinOccl) { ctx.save(); ctx.globalAlpha = 0.35; }
     const topX = hx, topY = hy - poleH;
     ctx.strokeStyle = "rgba(0,0,0,0.28)";   // short ground shadow of the stick
@@ -6497,7 +6528,7 @@ function draw() {
     // Dim it hard and drop the shadow instead: reads honestly as "behind the
     // terrain". One camera-ray per frame.
     const ballOccl = view.gtilesProj && !state.moving &&
-      window.GTiles3D.occludedAt(b.x, b.y, terrainZ(b.x, b.y) + (b.z || 0));
+      window.GTiles3D.occludedAt(b.x, b.y, terrainZRender(b.x, b.y) + (b.z || 0));
     if (ballOccl) pAlpha *= 0.35;
     ctx.globalAlpha = pAlpha;
 
@@ -15580,6 +15611,7 @@ window.GolfBridge = {
   hudReserve: () => hudReserve(),   // gtiles camera frames the play area between the HUD bands
   BALL_RADIUS_UNITS,
   terrainZ,
+  terrainZRender,   // gtiles draw height (no synthetic green undulation) — camera look-at uses it
   surfaceAt,
   isRender3D: () => render3D,
   // world (game units) -> [lng,lat] affine for the geo grounds (gtiles3d.js /

@@ -625,7 +625,7 @@ function setCamera() {
   // it and the close putting camera aims tens of metres off and throws the ball
   // off-screen.
   const [Olon, Olat] = toLL(Ox, Oy);
-  const groundM = (g.terrainZ ? g.terrainZ(Ox, Oy) : 0) * m + offsetAt(Ox, Oy);
+  const groundM = ((g.terrainZRender || g.terrainZ || (() => 0))(Ox, Oy)) * m + offsetAt(Ox, Oy);
   sceneAt(Olon, Olat, groundM, _O);
   sceneAt(Olon, Olat, groundM + 1, _up).sub(_O).normalize();          // ellipsoid up
   sceneAt(Olon, Olat + 1e-5, groundM, _north).sub(_O).normalize();    // +lat = north

@@ -60,7 +60,7 @@ for (let hn = h0; hn <= (h1 || h0); hn++) {
     const G = window.GTiles3D, GB = window.GolfBridge;
     window.__probe = {
       gap(x, y) {                                  // project→unproject round trip, units
-        const p = G.project(x, y, GB.terrainZ(x, y));
+        const p = G.project(x, y, (GB.terrainZRender || GB.terrainZ)(x, y));
         const w = G.unproject(p.x, p.y);
         return w ? +Math.hypot(w.x - x, w.y - y).toFixed(2) : null;
       },
@@ -76,15 +76,15 @@ for (let hn = h0; hn <= (h1 || h0); hn++) {
       },
       state() {
         const S = GB.getState(), H = GB.getHole();
-        const bp = G.project(S.ball.x, S.ball.y, GB.terrainZ(S.ball.x, S.ball.y));
+        const bp = G.project(S.ball.x, S.ball.y, (GB.terrainZRender || GB.terrainZ)(S.ball.x, S.ball.y));
         return {
           toPinYds: +(Math.hypot(S.ball.x - H.holePos.x, S.ball.y - H.holePos.y) * GB.getYardsPerUnit()).toFixed(0),
           surface: GB.surfaceAt(S.ball.x, S.ball.y),
           ballFrac: bp ? +(bp.y / innerHeight).toFixed(2) : null,
           ballGap: this.gap(S.ball.x, S.ball.y),
           pinGap: this.gap(H.holePos.x, H.holePos.y),
-          ballOccl: G.occludedAt(S.ball.x, S.ball.y, GB.terrainZ(S.ball.x, S.ball.y)),
-          pinOccl: G.occludedAt(H.holePos.x, H.holePos.y, GB.terrainZ(H.holePos.x, H.holePos.y)),
+          ballOccl: G.occludedAt(S.ball.x, S.ball.y, (GB.terrainZRender || GB.terrainZ)(S.ball.x, S.ball.y)),
+          pinOccl: G.occludedAt(H.holePos.x, H.holePos.y, (GB.terrainZRender || GB.terrainZ)(H.holePos.x, H.holePos.y)),
           holed: !document.getElementById('result').classList.contains('hidden'),
         };
       },
@@ -94,7 +94,7 @@ for (let hn = h0; hn <= (h1 || h0); hn++) {
         for (let i = 0; i < n; i++) {
           await new Promise(r => requestAnimationFrame(r));
           if (document.getElementById('cgt')?.style.display === 'none') continue;
-          const p = G.project(H.holePos.x, H.holePos.y, GB.terrainZ(H.holePos.x, H.holePos.y));
+          const p = G.project(H.holePos.x, H.holePos.y, (GB.terrainZRender || GB.terrainZ)(H.holePos.x, H.holePos.y));
           const t = performance.now();
           if (last && t - t0 < 80) mx = Math.max(mx, Math.hypot(p.x - last.x, p.y - last.y));
           last = p; t0 = t;
@@ -108,7 +108,7 @@ for (let hn = h0; hn <= (h1 || h0); hn++) {
         const tick = () => {
           if (!window.__pops.on) return;
           if (document.getElementById('cgt')?.style.display !== 'none') {
-            const p = G.project(H.holePos.x, H.holePos.y, GB.terrainZ(H.holePos.x, H.holePos.y));
+            const p = G.project(H.holePos.x, H.holePos.y, (GB.terrainZRender || GB.terrainZ)(H.holePos.x, H.holePos.y));
             const t = performance.now();
             if (last && t - t0 < 80) {
               const d = Math.hypot(p.x - last.x, p.y - last.y);
