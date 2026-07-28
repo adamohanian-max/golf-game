@@ -3579,25 +3579,41 @@ function ws(v) { return v * (view.gtilesProj ? view.gtilesScale : view.threeProj
 // exaggerated golf-sim radius, clamped readable. Shared by the live ball, the
 // hole-drop animation and the opponent ghost — they used to each roll their own
 // and drifted (the drop popped 18px -> 4px the instant the ball started falling).
+// ---- THE gtiles sizing law --------------------------------------------------
+// One rule for every WORLD OBJECT drawn on the photoreal ground: its real-world
+// size × the LOCAL perspective scale at ITS OWN position (GTiles3D.pxPerMeterAt)
+// × a small golf-sim exaggeration, clamped for readability. ws() must NOT be
+// used for world objects under gtiles — it samples one scale at the ball and
+// applies it everywhere, which made the cup's size depend on where the BALL
+// stood and tee dots balloon on short holes. INSTRUMENT marks (rangefinder,
+// labels, flow dots, aim tick) stay fixed-px by design: they're UI, not objects.
+function gtMarkPx(x, y, zUnits, meters, exag, minPx, maxPx) {
+  const ppm = window.GTiles3D.pxPerMeterAt(x, y, zUnits);
+  if (!ppm) return null;
+  return Math.max(minPx, Math.min(maxPx, meters * ppm * exag));
+}
+// Real-world sizes + exaggerations (true scale is sub-pixel at play framings).
+const GT_SIZE = {
+  ballM: 0.02135, ballExag: 3.5, ballMin: 2, ballMax: 8,        // regulation 42.7mm ball
+  cupM: 0.054,   cupExag: 3.0,  cupMin: 2.5, cupMax: 12,        // regulation 108mm cup
+  flagM: 2.13,   flagExag: 1.5, flagMin: 10, flagMax: 40,       // 7ft flagstick
+  teeM: 0.10,    teeExag: 3.0,  teeMin: 2.5, teeMax: 7,         // tee-marker sphere
+};
 function ballDrawRadius() {
   if (view.appleProj) return Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
   if (view.gtilesProj) {
-    // REALISTIC perspective ball: draw the true 42.7mm ball at its actual
-    // projected size for the camera distance, times a small golf-sim
-    // exaggeration, floored for visibility. Pure function of camera→ball
-    // distance (GTiles3D.distanceTo — the camera's pointing is encoded in its
-    // position), so a static camera + static ball = static size, and a ball
-    // flying AWAY from the held camera shrinks by the true 1/d law. Unlike the
-    // earlier K/d tuning this never reads as a blob: the putt framing gives a
-    // believable small ball (~6px), the tee framing a floored ~3px dot.
+    // Real ball at its local perspective size: shrinks by the true 1/d law as it
+    // flies away from the held camera; on the green it reads as a slightly
+    // exaggerated real ball against the real green, never a blob.
     const b = state.ball;
-    const d = window.GTiles3D.distanceTo(b.x, b.y, terrainZ(b.x, b.y) + (b.z || 0));
-    if (d) {
-      const pxPerM = window.innerHeight / (2 * d * GTILES_TAN_HALF_FOV);
-      const r = Math.max(3, Math.min(9, BALL_REAL_RADIUS_M * pxPerM * GTILES_BALL_EXAG));
-      // Hysteresis: sub-half-pixel distance drift (camera ease tail, offset
-      // refresh) must not breathe the ball. Real changes (flight, reframe) pass.
-      if (_gtBallR == null || Math.abs(r - _gtBallR) > 0.5) _gtBallR = r;
+    const r = gtMarkPx(b.x, b.y, terrainZ(b.x, b.y) + (b.z || 0),
+                       GT_SIZE.ballM, GT_SIZE.ballExag, GT_SIZE.ballMin, GT_SIZE.ballMax);
+    if (r != null) {
+      // Hysteresis: sub-quarter-pixel drift (camera ease tail, offset refresh)
+      // must not breathe the ball; real changes pass. Band kept SMALL — at
+      // realistic sizes the whole tee→green range is only ~2px, so a 0.5 band
+      // ate legitimate changes.
+      if (_gtBallR == null || Math.abs(r - _gtBallR) > 0.25) _gtBallR = r;
       return _gtBallR;
     }
     return Math.max(4, Math.min(18, view.gtilesScale * APPLE_BALL_DRAW_UNITS));
@@ -3605,9 +3621,6 @@ function ballDrawRadius() {
   return Math.max(ws(BALL_RADIUS_UNITS), 4);
 }
 let _gtBallR = null;                     // hysteresis cache for the perspective radius
-const BALL_REAL_RADIUS_M = 0.02135;      // regulation 42.7mm ball
-const GTILES_TAN_HALF_FOV = Math.tan(15 * Math.PI / 180);  // the tiles camera's 30° vertical FOV
-const GTILES_BALL_EXAG = 6.5;            // golf-sim exaggeration — true scale is sub-pixel
 // Screen-px lift for a ball at height `z` (world units) over ground (x,y). Under
 // a perspective ground the height must be projected for real so flight arcs
 // foreshorten; ws(z) is the flat-screen approximation.
@@ -6019,7 +6032,13 @@ function drawTeeMarkers() {
   const ang = Math.atan2(p.y - t.y, p.x - t.x);    // play direction
   const px = -Math.sin(ang), py = Math.cos(ang);   // unit perpendicular (world)
   const off = 1.8;                                  // world units to each side
-  const r = Math.max(ws(0.4), 5);                   // marker radius (screen px floor)
+  // gtiles: real ~10cm tee-marker spheres at the TEE's local perspective scale —
+  // the old ws(0.4u = 1.2yd!) at ball-local scale made short holes grow giant
+  // dots (close camera = big ball-local scale). Legacy path elsewhere.
+  const r = view.gtilesProj
+    ? (gtMarkPx(t.x, t.y, terrainZ(t.x, t.y),
+                GT_SIZE.teeM, GT_SIZE.teeExag, GT_SIZE.teeMin, GT_SIZE.teeMax) || 3)
+    : Math.max(ws(0.4), 5);
   for (const sgn of [-1, 1]) {
     const mx = wx(t.x + px * off * sgn, t.y + py * off * sgn);
     const my = wyg(t.x + px * off * sgn, t.y + py * off * sgn);
@@ -6261,9 +6280,18 @@ function draw() {
   // frame, so there's never a bare cup mid-approach or a flag+cup double.
   const cupHeld = appleGroundActive() && nativeGreenOverlay && !greenArrived();
   if (!cupHeld) {
-  const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y), hr = Math.max(ws(HOLE.holeRadius), 3);
+  const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y);
+  // Cup sized at the CUP's own perspective scale (real 108mm cup × exag) — the
+  // old ws() path sized it at the BALL's scale, so the hole visibly changed size
+  // depending on where you putted from. Ellipse squashed by the real camera
+  // pitch (view.tilt is pinned to 1 under gtiles, so it can't do the job).
+  const hr = view.gtilesProj
+    ? (gtMarkPx(HOLE.holePos.x, HOLE.holePos.y, terrainZ(HOLE.holePos.x, HOLE.holePos.y),
+                GT_SIZE.cupM, GT_SIZE.cupExag, GT_SIZE.cupMin, GT_SIZE.cupMax) || 3)
+    : Math.max(ws(HOLE.holeRadius), 3);
+  const cupSquash = view.gtilesProj ? window.GTiles3D.groundSquash() : view.tilt;
   ctx.beginPath();
-  ctx.ellipse(hx, hy, hr, hr * view.tilt, 0, 0, Math.PI * 2);
+  ctx.ellipse(hx, hy, hr, hr * cupSquash, 0, 0, Math.PI * 2);
   ctx.fillStyle = "#0a1f0f";
   ctx.fill();
   ctx.lineWidth = Math.max(hr * 0.18, 1);
@@ -6277,11 +6305,14 @@ function draw() {
   const _b = state.ball;
   const ballOnGreen = surfaceAt(_b.x, _b.y) === "green";
   if (!ballOnGreen && !render3D && !(appleGroundActive() && nativeGreenOverlay)) {
-    // Real-scale flagstick: pole height tracks perspective — the camera fits ball↔pin, so
-    // ws() shrinks the pin with distance (a 500-yd flag is smaller than a 200-yd one).
-    // Floored so a far pin stays a visible tick; hard-capped so an up-close / zoomed-in pin
-    // never balloons. Everything else scales off poleH so proportions hold at any size.
-    const poleH = Math.max(FLAG_MIN_PX, Math.min(FLAG_MAX_PX, ws(FLAG_H_UNITS)));
+    // Real-scale flagstick: pole height tracks perspective. Under gtiles: a real
+    // 7ft pole at the PIN's local scale (the old path modeled a 36ft pole at the
+    // BALL's scale and saturated its 44px cap at most framings — a cartoon flag).
+    // Elsewhere: the legacy ws() path.
+    const poleH = view.gtilesProj
+      ? (gtMarkPx(HOLE.holePos.x, HOLE.holePos.y, terrainZ(HOLE.holePos.x, HOLE.holePos.y),
+                  GT_SIZE.flagM, GT_SIZE.flagExag, GT_SIZE.flagMin, GT_SIZE.flagMax) || FLAG_MIN_PX)
+      : Math.max(FLAG_MIN_PX, Math.min(FLAG_MAX_PX, ws(FLAG_H_UNITS)));
     const topX = hx, topY = hy - poleH;
     ctx.strokeStyle = "rgba(0,0,0,0.28)";   // short ground shadow of the stick
     ctx.lineWidth = Math.max(1, poleH * 0.11);
@@ -6376,7 +6407,7 @@ function draw() {
       if (pp >= 1) penaltyAnim = null;
       else if (pp < 0.5) {
         pbx = wx(penaltyAnim.fx, penaltyAnim.fy);
-        pby = wy(penaltyAnim.fx, penaltyAnim.fy);
+        pby = wyg(penaltyAnim.fx, penaltyAnim.fy);   // ground-anchored like every other mark
         pAlpha = 1 - pp * 2;
       } else {
         pAlpha = (pp - 0.5) * 2;
@@ -6389,7 +6420,8 @@ function draw() {
     const shR = baseR * Math.max(0.45, 1 - b.z * 0.012);
     const shA = TUNE.ballShadowAlpha * Math.max(0.35, 1 - b.z * TUNE.ballShadowFade);
     ctx.beginPath();
-    ctx.ellipse(pbx, pby, shR, shR * 0.6, 0, 0, Math.PI * 2);
+    const shSquash = view.gtilesProj ? Math.max(0.35, window.GTiles3D.groundSquash()) : 0.6;
+    ctx.ellipse(pbx, pby, shR, shR * shSquash, 0, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(0, 0, 0, ${shA})`;
     ctx.fill();
 
@@ -6415,7 +6447,11 @@ function draw() {
     // occlusion (not a shrink-to-nothing) is what reads as a real hole-out.
     const baseR = ballDrawRadius();   // same scale as the live ball — no size pop on the drop
     const hx = wx(HOLE.holePos.x, HOLE.holePos.y), hy = wyg(HOLE.holePos.x, HOLE.holePos.y);
-    const hr = Math.max(ws(HOLE.holeRadius), 3);
+    // Cup radius must MATCH the live cup draw above (same law) or the drop pops.
+    const hr = view.gtilesProj
+      ? (gtMarkPx(HOLE.holePos.x, HOLE.holePos.y, terrainZ(HOLE.holePos.x, HOLE.holePos.y),
+                  GT_SIZE.cupM, GT_SIZE.cupExag, GT_SIZE.cupMin, GT_SIZE.cupMax) || 3)
+      : Math.max(ws(HOLE.holeRadius), 3);
     const p = Math.min(1, (performance.now() - holeDrop.t0) / HOLE_DROP_MS);
     const easeOut = (x) => 1 - Math.pow(1 - x, 3), easeIn = (x) => x * x * x;
     // roll-in: entry point -> just past centre toward the FAR lip (catches it)
@@ -6428,7 +6464,7 @@ function draw() {
     let wyp = holeDrop.y + (overY - holeDrop.y) * a;
     const wob = (1 - p) * (1 - p) * Math.min(0.5, sp * 2.2) * Math.sin(p * 50); // rattle
     wxp += (-diry) * wob; wyp += (dirx) * wob;
-    const bx = wx(wxp, wyp), by = wy(wxp, wyp);
+    const bx = wx(wxp, wyp), by = wyg(wxp, wyp);  // ground-anchored (was plain wy)
     const s = easeIn(Math.max(0, (p - 0.34) / 0.66));            // 0..1 sink
     if (s <= 0) {
       // still rolling on the surface — full white ball
@@ -6440,8 +6476,9 @@ function draw() {
       const mix = (c0, c1) => Math.round(c0 + (c1 - c0) * s);
       const fall = s * hr * 1.6;                                  // drop below the lip
       const r = baseR * (1 - 0.25 * s);
+      const dropSquash = view.gtilesProj ? window.GTiles3D.groundSquash() : view.tilt;
       ctx.save();
-      ctx.beginPath(); ctx.ellipse(hx, hy, hr * 1.02, hr * 1.02 * view.tilt, 0, 0, Math.PI * 2); ctx.clip();
+      ctx.beginPath(); ctx.ellipse(hx, hy, hr * 1.02, hr * 1.02 * dropSquash, 0, 0, Math.PI * 2); ctx.clip();
       ctx.beginPath(); ctx.arc(bx, by + fall, r, 0, Math.PI * 2);
       ctx.fillStyle = `rgb(${mix(244, 14)},${mix(244, 30)},${mix(237, 18)})`;
       ctx.fill();
@@ -6506,7 +6543,7 @@ function draw() {
     if (fmb) {
       // dots where the ball->center ray crosses the green edge
       for (const pt of [fmb.front, fmb.back]) {
-        ctx.beginPath(); ctx.arc(wx(pt.x, pt.y), wy(pt.x, pt.y), 3, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(wx(pt.x, pt.y), wyg(pt.x, pt.y), 3, 0, Math.PI * 2);
         ctx.fillStyle = "#ffd65a"; ctx.fill();
       }
       drawLabel(mx, my - 70, "Back "  + Math.round(fmb.back.d  * YARDS_PER_UNIT), "#fff");
@@ -13710,7 +13747,8 @@ function drawOppGhost() {
   const baseR = ballDrawRadius();
   // shadow on the ground
   ctx.beginPath();
-  ctx.ellipse(gx, gy, baseR * 0.95, baseR * 0.55, 0, 0, Math.PI * 2);
+  const gSquash = view.gtilesProj ? Math.max(0.35, window.GTiles3D.groundSquash()) : 0.55;
+  ctx.ellipse(gx, gy, baseR * 0.95, baseR * gSquash, 0, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(0,0,0,0.25)";
   ctx.fill();
   const bx = gx, by = gy - lift;

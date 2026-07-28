@@ -355,6 +355,23 @@ function distanceTo(x, y, zUnits) {
   return camera.position.distanceTo(_dp);
 }
 
+// Screen pixels per metre of ground AT a specific world point — the local
+// perspective scale. This is the one sizing law for every world-anchored mark
+// (ball, cup, flag, tee markers): real size × local scale × small exaggeration.
+// The game's ws() samples ONE scale at the ball and applies it everywhere; under
+// a perspective camera that made the cup's size depend on where the BALL was.
+function pxPerMeterAt(x, y, zUnits) {
+  const d = distanceTo(x, y, zUnits);
+  if (!d) return null;
+  return window.innerHeight / (2 * d * Math.tan(15 * DEG));  // 30° vertical FOV
+}
+
+// Vertical squash for circles lying ON the ground (cup, shadows) under the
+// pitched camera: pitch 0 = top-down = true circle (1), pitch 85 ≈ horizon =
+// near-flat. The flat game used view.tilt for this, but gtiles pins tilt to 1,
+// so ground circles were drawing as perfect circles under a 55° camera.
+function groundSquash() { return Math.cos(pitchDeg * DEG); }
+
 // Screen CSS px → world: raycast the loaded mesh, invert to lng/lat → world.
 const _ray = new THREE.Raycaster();
 const _ndc = new THREE.Vector2();
@@ -712,6 +729,6 @@ function debug() {
 }
 
 window.GTiles3D = {
-  enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, isReady, failed,
+  enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, pxPerMeterAt, groundSquash, isReady, failed,
   getAttributions, worldToLngLat, lngLatToWorld, debug,
 };
