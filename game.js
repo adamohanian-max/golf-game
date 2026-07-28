@@ -1433,7 +1433,14 @@ let chipEnabled = true;    // greenside chip mode: near the pin, swipe power map
 let chipSpinBias = 0;      // chip SPIN (-1 low/run .. 0 stock .. +1 high/bite); resets to 0 each hole
 let flightSpinBias = 0;    // full-shot SPIN (-1 low knockdown .. 0 stock .. +1 high backspin); one-shot, resets after the swing
 let lieEffectEnabled = true; // rough/sand cost power + spin (off = every lie plays clean, easier)
-let powerPreviewEnabled = false; // admin toggle: persistent power slider + spin selector
+// Power slider + spin selector. PER-DEVICE preference, default ON. It used to
+// be admin-global with a false default, re-applied by every round start (plus
+// an async Supabase defaults race) — which is why the slider "sometimes didn't
+// show up". A tournament snapshot that EXPLICITLY sets it can still force it
+// for that round (fair-play), see applySettings.
+let powerPreviewEnabled = (() => {
+  try { return localStorage.getItem("golf.powerPreview") !== "0"; } catch (e) { return true; }
+})();
 let previewFrac = 1;       // power slider (0..1) — pre-swing "if I swing at X% it goes here" preview, AND a
                             // real MAX ceiling on the swipe/flick's power (launchShot clamps down to it, never up).
 let previewFracTouched = false; // true once the player has manually dragged the power slider for the CURRENT
@@ -8261,7 +8268,7 @@ function updateStats() {
   const sig = mode + "|" + (state.moving ? 1 : 0) + "|" + (state.inHole ? 1 : 0) + "|" +
     Math.round(b0.x * 100) + "|" + Math.round(b0.y * 100) + "|" +
     (HOLE ? HOLE.num : -1) + "|" + selectedClub + "|" + flightSpinBias + "|" + chipSpinBias + "|" +
-    (lieEffectEnabled ? 1 : 0) + "|" + (chipEnabled ? 1 : 0) + "|" +
+    (lieEffectEnabled ? 1 : 0) + "|" + (chipEnabled ? 1 : 0) + "|" + (powerPreviewEnabled ? 1 : 0) + "|" +
     shot.mph + "|" + shot.carry + "|" + shot.total + "|" +
     Math.round(view.angle * 1000); // camera aim — so the idle shot preview stays live while re-aiming (arrow keys/drag)
   if (sig === _statsSig) return;
@@ -8520,11 +8527,21 @@ function setLieEffect(on) {
   if (btn) btn.classList.toggle("active", on);
   updateStats(); // refresh the lie-effect HUD row immediately
 }
-function setPowerPreview(on) {
+function setPowerPreview(on, persist) {
   powerPreviewEnabled = on;
+  // persist only on a DELIBERATE player toggle — a tournament snapshot forcing
+  // it off for one round must not overwrite the device preference
+  if (persist) { try { localStorage.setItem("golf.powerPreview", on ? "1" : "0"); } catch (e) {} }
+  const btn = document.getElementById("hm-powerprev");
+  if (btn) btn.classList.toggle("active", on);
   if (!on) previewFracTouched = false;
   syncPowerPreview();
 }
+const elPPBtn = document.getElementById("hm-powerprev");
+if (elPPBtn) elPPBtn.addEventListener("click", () => setPowerPreview(!powerPreviewEnabled, true));
+// Sync the button + slider to the device pref at boot — DEFERRED: calling at
+// parse time hits the elShotPower TDZ (declared further down this file).
+requestAnimationFrame(() => setPowerPreview(powerPreviewEnabled));
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
 document.getElementById("hm-wind").addEventListener("click", () => setWind(!windEnabled));
 const elSlottedBtn = document.getElementById("hm-slotted");
@@ -8752,9 +8769,18 @@ const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: tr
 let gameDefaults = Object.assign({}, SETTING_DEFAULTS);
 let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
 
-function applySettings(s) {
+function applySettings(s, srcRaw) {
+  // powerPreview is a per-device preference now, NOT a round condition — the
+  // normalized snapshot always carries a boolean for it (normalizeSettings
+  // fills the default), which is exactly what used to clobber the slider off
+  // at every round start. Only obey it when the RAW source (a match or
+  // tournament snapshot) explicitly set it.
+  const forcePP = srcRaw && typeof srcRaw.powerPreview === "boolean";
   if (!s) return;
-  for (const d of SETTING_DEFS) if (typeof s[d.key] === "boolean") d.set(s[d.key]);
+  for (const d of SETTING_DEFS) {
+    if (d.key === "powerPreview" && !forcePP) continue;
+    if (typeof s[d.key] === "boolean") d.set(s[d.key]);
+  }
 }
 function normalizeSettings(s) {
   const out = {};
@@ -9316,7 +9342,10 @@ function startCourse() {
     : (activeTournamentRound !== null && activeTournament && activeTournament.settings)
       ? normalizeSettings(activeTournament.settings)
       : normalizeSettings(gameDefaults);
-  applySettings(activeSettings);
+  // raw snapshot passed too: powerPreview only applies when a match/tournament
+  // EXPLICITLY pinned it (otherwise it's the player's device preference)
+  applySettings(activeSettings, matchLive() ? activeMatch.settings
+    : (activeTournamentRound !== null && activeTournament) ? activeTournament.settings : null);
   elMenu.classList.add("hidden");
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
