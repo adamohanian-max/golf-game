@@ -530,37 +530,42 @@ function setCamera() {
   const geo = g.geoAffine();
   const toLL = (x, y) => [geo[0] * x + geo[1] * y + geo[2], geo[3] * x + geo[4] * y + geo[5]];
 
-  // TARGET framing. Look-at O = ball nudged a fixed fraction toward the shot's
-  // landing (reach); D frames the ball→reach SHOT. The reach span is CAPPED
-  // (MAX_FRAME_UNITS) so long clubs (driver) frame like a mid-iron instead of
-  // zooming way out. In flight the target is FROZEN (_hold) so the camera holds
-  // while the ball flies through; cleared on hole change (_lastHole in render).
+  // TARGET framing — exact two-anchor pinhole solve, same math as the flat
+  // camera's frameClubReach (game.js): the ball pins at BALL_F of the USABLE
+  // play area (viewport minus the HUD bands) and the shot's reach line at
+  // REACH_F, solved at the LIVE pitch. Exact at every pitch by construction —
+  // this replaces the FRAME_K/pf/bias empirical trio, which undershot the
+  // forward span at low pitch (2D drives clipped the last ~50yd off the top
+  // while the ball idled at 0.73) and overran the look-at on long putts (the
+  // 40-62ft band pushed the ball past the bottom edge, snapping back at 62ft).
+  // In flight the target is FROZEN (_hold); cleared on hole change (render).
   const A = g.frameAnchors ? g.frameAnchors() : null;
-  const FRAME_K = 1.55;         // capped shot span × this → camera distance
-  const MIN_SHOT_M = 30;        // floor so the green (reach≈ball) still frames sensibly
-  // Look-at bias (ball → capped reach). Span-dependent: on full shots the tight
-  // zoom already spreads the frame so 0.44 puts the ball at ~0.90; on the green
-  // the MIN_SHOT_M floor dominates and the same bias leaves the ball mid-screen —
-  // 0.62 measured ball ~0.90 there. Blend on how floor-dominated the framing is.
-  const OY_BIAS_FAR = 0.44, OY_BIAS_NEAR = 0.62;
-  const MAX_FRAME_UNITS = 60;   // ~180yд: cap the framed span so driver isn't too wide
+  const SPAN_MAX_U = 100;  // frame ≤ ~300yd of shot line — a full driver fits
+  const SPAN_MIN_M = 14;   // tap-in floor: tight putt framing, ball + cup clear
+  const REACH_F = 0.15, BALL_F = 0.85;  // anchor fractions of the play area
   let tOx, tOy, tD;
   if (A && A.moving && _hold) {
     ({ Ox: tOx, Oy: tOy, D: tD } = _hold);   // FROZEN target while the ball is in flight
   } else {
     if (A) {
+      const rsv = g.hudReserve ? g.hudReserve() : { top: 0, bot: 0 };
+      const availH = Math.max(120, H - rsv.top - rsv.bot);
+      const uR = H / 2 - (rsv.top + REACH_F * availH);  // px above raw center
+      const uB = H / 2 - (rsv.top + BALL_F * availH);   // negative = below center
+      const f = (H / 2) / Math.tan(15 * DEG);           // fov 30° vertical
+      const p = Math.max(0, Math.min(85, pitchDeg)) * DEG;
+      const cp = Math.cos(p), sp = Math.sin(p);
       const rd = Math.hypot(A.rx - A.bx, A.ry - A.by);
-      const capped = Math.min(rd, MAX_FRAME_UNITS);
-      const fx = rd > 1e-3 ? capped / rd : 0;             // cap the framed span
-      const bias = capped * m < MIN_SHOT_M ? OY_BIAS_NEAR : OY_BIAS_FAR;  // floor-dominated → NEAR
-      tOx = A.bx + bias * fx * (A.rx - A.bx);
-      tOy = A.by + bias * fx * (A.ry - A.by);
-      // FRAME_K was calibrated at the default 55° pitch. A top-down camera at
-      // the same distance shows far LESS ground (no oblique slice), so full-2D
-      // read badly over-zoomed. Scale the distance up as pitch flattens:
-      // ×1 at 55°, ×2.35 at 0° (measured against the 55° framing's span).
-      const pf = 2.35 - 1.35 * Math.min(1, pitchDeg / 55);
-      tD = Math.max(capped * m, MIN_SHOT_M) * FRAME_K * pf;
+      const ux = rd > 1e-6 ? (A.rx - A.bx) / rd : 0;
+      const uy = rd > 1e-6 ? (A.ry - A.by) / rd : 0;
+      const Rm = Math.max(Math.min(rd, SPAN_MAX_U) * m, SPAN_MIN_M);
+      const AA = (u) => f * cp - u * sp;
+      let D = Rm / (uR / AA(uR) - uB / AA(uB));
+      if (!isFinite(D) || D <= 0) D = Rm * 3;           // degenerate-pitch guard
+      const sR = uR * D / AA(uR);          // reach anchor, metres ahead of look-at
+      tOx = A.bx + ux * (Rm - sR) / m;     // look-at = reach point − sR along aim
+      tOy = A.by + uy * (Rm - sR) / m;
+      tD = D;
     } else {
       const det = view.a * view.e - view.b * view.d || 1;
       const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
@@ -594,7 +599,25 @@ function setCamera() {
       _camEase.Ox = tOx; _camEase.Oy = tOy; _camEase.D = tD;
     }
   }
-  const Ox = _camEase.Ox, Oy = _camEase.Oy, D = _camEase.D;
+  // OFF-SCREEN SAFEGUARD (hard invariant, both pitch modes): if the LIVE
+  // ball's projection leaves the vertical band, widen the framing —
+  // multiplicative, widen-only while the ball moves, eased back + snapped at
+  // rest. Catches whatever the predicted framing missed (apex overshoot, wind,
+  // cart-path deflections, unusual aspect ratios). Uses last frame's camera —
+  // one frame of lag, converges in a few frames.
+  const S = g.getState && g.getState();
+  if (S && S.ball && ready) {
+    const bp = project(S.ball.x, S.ball.y,
+      (g.terrainZ ? g.terrainZ(S.ball.x, S.ball.y) : 0) + (S.ball.z || 0));
+    const yf = bp.y / H;
+    const off = !bp.inFront || yf < 0.05 || yf > 0.95 || bp.x < -40 || bp.x > W + 40;
+    if (off && S.moving) _guardK = Math.min(_guardK * 1.06, 2.5);
+    else if (!S.moving) {
+      _guardK += (1 - _guardK) * es;
+      if (Math.abs(_guardK - 1) < 0.01) _guardK = 1;   // snap — no perpetual micro-pulse
+    }
+  }
+  const Ox = _camEase.Ox, Oy = _camEase.Oy, D = _camEase.D * _guardK;
 
   // O in scene + local ENU basis (finite differences of sceneAt around O).
   // Height MUST include offsetAt() — same mesh-anchoring project() uses — so the
@@ -802,7 +825,7 @@ function render() {
     // across the whole course from the old hole).
     const H = gb() && gb().getHole();
     if (H !== _lastHole) {
-      _grid = null; _hold = null; _camEase = null; _lastHole = H;
+      _grid = null; _hold = null; _camEase = null; _lastHole = H; _guardK = 1;
       _ballOff = null; _pinOff = null; _greenOffs = new Map();
     }
     refreshGridBatch(24);
@@ -814,6 +837,7 @@ let _lastHole = null;
 let _lastCamPos = null;
 let _errT = 6, _errTAt = 0;   // ramped errorTarget (motion-coarse LOD)
 let _justResumed = false;     // set by setHidden(false); one-frame motion amnesty
+let _guardK = 1;              // off-screen-ball framing widener (≥1, eased back at rest)
 
 function resize() {
   if (!renderer) return;

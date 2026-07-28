@@ -288,6 +288,7 @@ const TUNE = {
                     // Apple-ground club-reach camera framing (frameClubReach)
   reachPinMarginYds: 12, // forward context kept beyond the pin when the reach span is clamped to it
   reachMinYds: 20,       // reach-span floor — never over-zoom a tiny chip (the D floor usually bites first)
+  puttFrameMarginYds: 4, // on-green frame = ball→cup + this (tight putt camera, cup always in view)
   flatMinDistM: 90,      // close-shot camera-distance floor on non-Apple courses (Apple keeps APPLE_MIN_DIST_M)
   rolloutK: 7.0,    // CHIP release distance scale (× landing speed) — low skidding balls release more
   rolloutKFull: 4.0,// FULL-shot release scale: calibrated so totals match tour (driver ~305,
@@ -3151,9 +3152,9 @@ function vpH() { return _vp.h; }
 // World->screen as a full affine so the camera can ROTATE (each hole plays "up"
 // even on the connected global map). screen.x = a*x + b*y + c, screen.y = d*x + e*y + f.
 const view = { a: 1, b: 0, c: 0, d: 0, e: 1, f: 0, scale: 1, angle: 0, tilt: 1 };
-const VIEW_PAD_MIN = 3;     // world-unit margin when ball is right by the cup
+const VIEW_PAD_MIN = 2;     // world-unit margin when ball is right by the cup
 const VIEW_PAD_FRAC = 0.25; // extra margin as a fraction of the ball->cup span
-const VIEW_MIN = 7;         // smallest framed dimension (caps how far we zoom in)
+const VIEW_MIN = 4.5;       // smallest framed dimension (caps how far we zoom in) — ~13.5yd putt closeup
 // HUD bands kept clear of the framed hole (css px, added on top of safe-area
 // insets). The camera fits the ball↔pin into the area BETWEEN these bands and
 // centers it there, so the pin/ball don't sit under the scorecard/stats/club UI.
@@ -3475,6 +3476,15 @@ function updateCamera() {
     frameClubReach(applePitch);
   }
   if (camPunch > 0.0005) camPunch *= 0.82; else camPunch = 0;  // ease the punch back
+  // Off-screen ball safeguard (flat/vector courses; 3D grounds have their own
+  // in gtiles3d setCamera): if the DRAWN ball — including flight lift — leaves
+  // the vertical band while moving, widen the zoom a step per frame. Widen-only;
+  // the normal at-rest framing re-fits when the shot settles. Uses last frame's
+  // view affine (one-frame lag, converges over a few frames).
+  if (state.moving && !view.gtilesProj && !view.threeProj && !view.appleProj && !HOLE.isRange) {
+    const yf = (wy(state.ball.x, state.ball.y) - ws(state.ball.z || 0)) / Math.max(1, vpH());
+    if (yf < 0.05 || yf > 0.95) { camera.scale *= 0.97; camera.tScale *= 0.97; }
+  }
   applyView();
 }
 
@@ -15567,6 +15577,7 @@ window.GolfBridge = {
   getView: () => view,
   M_PER_UNIT,
   getYardsPerUnit: () => YARDS_PER_UNIT,
+  hudReserve: () => hudReserve(),   // gtiles camera frames the play area between the HUD bands
   BALL_RADIUS_UNITS,
   terrainZ,
   surfaceAt,
@@ -15582,7 +15593,11 @@ window.GolfBridge = {
     const b = state.ball, c = TUNE.clubs[selectedClub];
     const clubReachYds = (c ? c.carry : 120) * TUNE.reachTotalK;
     const pinDistYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
-    const reachYds = Math.min(clubReachYds, Math.max(TUNE.reachMinYds, pinDistYds + TUNE.reachPinMarginYds));
+    // On the green the frame is the PUTT: ball → cup + a small margin, no
+    // club-reach floor — the 3D camera zooms right into the putt line.
+    const reachYds = surfaceAt(b.x, b.y) === "green"
+      ? pinDistYds + TUNE.puttFrameMarginYds
+      : Math.min(clubReachYds, Math.max(TUNE.reachMinYds, pinDistYds + TUNE.reachPinMarginYds));
     const Ru = reachYds / YARDS_PER_UNIT;
     const a = camera.tAngle, dirX = -Math.sin(a), dirY = -Math.cos(a); // up-screen dir
     return { bx: b.x, by: b.y, rx: b.x + dirX * Ru, ry: b.y + dirY * Ru, moving: !!state.moving };
