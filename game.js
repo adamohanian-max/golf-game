@@ -57,6 +57,22 @@ const TUNE = {
   // descriptor's landing bookkeeping. Flip false to fly the legacy arc.
   aeroPhysics: true,
   aeroSpinTilt: 26,      // ° of spin-axis tilt at full swipe curve (draw/fade)
+  // Turf impact + rolling, per surface. `e` = normal restitution (scaled down
+  // with impact speed inside the impulse model), `mu` = contact friction that
+  // converts backspin into check, `roll` = rolling deceleration in m/s².
+  // Calibrated so club TOTALS stay on the historical table.
+  turf: {
+    fairway: { e: 0.36, mu: 0.46, roll: 7.40 },
+    tee:     { e: 0.36, mu: 0.46, roll: 7.40 },
+    green:   { e: 0.30, mu: 0.50, roll: 0 },     // roll comes from the stimp
+    rough:   { e: 0.24, mu: 0.64, roll: 11.0 },
+    bunker:  { e: 0.10, mu: 0.85, roll: 7.00 },
+    water:   { e: 0.00, mu: 1.00, roll: 9.00 },
+    woods:   { e: 0.12, mu: 0.80, roll: 6.00 },
+    ob:      { e: 0.12, mu: 0.80, roll: 6.00 },
+  },
+  aeroSettleVz: 0.55,    // m/s downward below which a bounce becomes a roll
+  aeroStopMs: 0.06,      // m/s below which a rolling ball is at rest
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.044,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
@@ -1816,6 +1832,30 @@ function aeroLandingFl(fl) {
   return fl;
 }
 
+// Ground contact for a real flight: apply the turf impulse and decide whether
+// the ball bounces again or starts rolling. Shared by the live step and the
+// predictor. Returns "roll" | "air" | "dead".
+function aeroGroundContact(b, fl, surf) {
+  const Bal = window.Ballistics, A = fl.aero.st;
+  if (surf === "water" || surf === "woods" || surf === "ob") return "dead";
+  Bal.bounce(A, TUNE.turf[surf] || TUNE.turf.fairway);
+  fl.aero.hops = (fl.aero.hops || 0) + 1;
+  if (A.v.z < TUNE.aeroSettleVz || fl.aero.hops > 8) {
+    A.v.z = 0; A.p.z = 0;
+    return "roll";
+  }
+  A.p.z = 1e-4;                       // just off the deck so the next tick flies
+  return "air";
+}
+// Hand the aero velocity back to the game's per-frame roll state.
+function aeroToRoll(b, fl) {
+  const A = fl.aero.st;
+  b.z = 0; b.vz = 0;
+  b.vx = A.v.x * AERO_DT / M_PER_UNIT;
+  b.vy = A.v.y * AERO_DT / M_PER_UNIT;
+  b.spin = 0;
+}
+
 function arcFlightStep(b) {
   const fl = state.flight;
   if (fl.aero) {
@@ -1823,8 +1863,28 @@ function arcFlightStep(b) {
     clampToWorld(b);
     if (!landed) return;
     b.z = 0;
-    finishArcLanding(b, aeroLandingFl(fl));
-    return;
+    const surf = surfaceAt(b.x, b.y);
+    if (!shot.carried) {                       // first touchdown = carry
+      shot.carry = dist(shot.startX, shot.startY, b.x, b.y) * YARDS_PER_UNIT;
+      shot.carried = true;
+    }
+    const A = fl.aero.st;
+    const down = Math.abs(A.v.z);              // real impact speed (m/s)
+    shot._landN = (shot._landN || 0) + 1;
+    if (shot._landN <= 3) playLand(surf === "ob" ? "woods" : surf, down / 12);
+    if (!shot._landed) { spawnBurst(b.x, b.y, surf === "water" ? "splash" : "dust"); shot._landed = true; }
+    haptic(Math.max(2, Math.round(down * 3)));
+    const verdict = aeroGroundContact(b, fl, surf);
+    if (verdict === "dead") {
+      state.flight = null; b.vx = b.vy = b.vz = 0; state.airborne = false;
+      return;
+    }
+    if (verdict === "roll") {
+      aeroToRoll(b, fl);
+      state.flight = null; state.airborne = false;
+      return;
+    }
+    return;                                     // bouncing on — stay airborne
   }
   const k = arcSpeedK(fl, fl.d);
   let inc = fl.vh * k;
@@ -2068,7 +2128,61 @@ function ballisticFlightStep(b) {
 // below) plus the capped, gated downhill break. SINGLE source of truth shared by
 // the live rollStep, the launch-time prediction (simShotRest), and the pace
 // inversion (invertPuttPaceCurved) so all three can never drift apart.
+// --- physical rolling (aero mode) ------------------------------------------
+// Velocities live in world-units-per-frame; deceleration is real m/s². These
+// convert between the two so the roll obeys measured turf numbers instead of
+// per-frame decay multipliers that made a 30 ft putt die in under two seconds.
+// (u/frame) → m/s. A function, not a const: M_PER_UNIT is declared further
+// down the file, so evaluating this at parse time hits its TDZ.
+const msPerUF = () => M_PER_UNIT / AERO_DT;
+function rollDecelMs(surf) {
+  if (surf === "green") {
+    return window.Ballistics.greenDecel(
+      (HOLE && HOLE.greenSpeed) || DEFAULT_STIMP);
+  }
+  return (TUNE.turf[surf] || TUNE.turf.fairway).roll;
+}
+// One frame of real rolling: constant turf deceleration plus the true slope
+// term for a rolling sphere, a = (5/7)·g·∇h. Returns false once the ball is at
+// rest. `grad` is the dimensionless downhill gradient at the ball.
+function rollStepSI(b, surf, grad) {
+  const Bal = window.Ballistics;
+  const K = msPerUF();
+  let vx = b.vx * K, vy = b.vy * K;
+  let sp = Math.hypot(vx, vy);
+  if (grad) {                                    // gravity along the surface
+    const k = Bal.SLOPE_ROLL_K * Bal.G * AERO_DT;
+    vx -= k * grad.x; vy -= k * grad.y;
+    sp = Math.hypot(vx, vy);
+  }
+  const dv = rollDecelMs(surf) * AERO_DT;
+  if (sp <= dv + TUNE.aeroStopMs) {
+    // Static-friction check: on a slope a slow ball only stops if the hill
+    // can't keep it moving — otherwise it keeps trickling, exactly like a real
+    // putt dying above the hole and then wandering back down.
+    const gm = grad ? Math.hypot(grad.x, grad.y) : 0;
+    if (gm * Bal.SLOPE_ROLL_K * Bal.G < rollDecelMs(surf)) { b.vx = b.vy = 0; return false; }
+  }
+  const k2 = sp > 1e-9 ? Math.max(0, sp - dv) / sp : 0;
+  vx *= k2; vy *= k2;
+  b.vx = vx / K; b.vy = vy / K;
+  return true;
+}
+
+// Rest threshold. The legacy 0.005 u/frame is 0.82 m/s — fine on the old
+// compressed clock, but under real physics a ball moving 0.8 m/s is still very
+// much rolling (it would travel another metre). Use a physical threshold when
+// the aero model is driving.
+function restSpeedThreshold() {
+  return (TUNE.aeroPhysics && window.Ballistics)
+    ? TUNE.aeroStopMs / msPerUF() : TUNE.stopThreshold;
+}
 function stepGreenRoll(b) {
+  if (TUNE.aeroPhysics && window.Ballistics) {
+    const g = greenSlopeAt(b.x, b.y);
+    rollStepSI(b, "green", g ? { x: g.x, y: g.y } : null);
+    return;
+  }
   const sp = Math.hypot(b.vx, b.vy);
   if (sp > TUNE.greenCoastSpeed) {
     b.vx *= TUNE.friction.green;
@@ -2114,6 +2228,11 @@ function rollStep(b) {
     // stepGreenRoll). Fast off the putter face (coast), crisp constant-decel
     // finish (tail), downhill break along the same field that draws the contours.
     stepGreenRoll(b);
+  } else if (TUNE.aeroPhysics && window.Ballistics) {
+    // Real turf rolling: constant deceleration per surface + the true rolling
+    // slope term. Replaces the per-frame decay multipliers, which were tuned
+    // on the old compressed clock.
+    rollStepSI(b, surf, HOLE._dem ? HOLE._dem.gradAt(b.x, b.y) : null);
   } else {
     const sp = Math.hypot(b.vx, b.vy);
     const f = TUNE.friction[surf];
@@ -2184,7 +2303,7 @@ function rollStep(b) {
   }
 
   // stopped
-  if (speed < TUNE.stopThreshold) {
+  if (speed < restSpeedThreshold()) {
     b.vx = b.vy = 0;
     state.moving = false;
     shot.total = dist(shot.startX, shot.startY, b.x, b.y) * YARDS_PER_UNIT;
@@ -2289,6 +2408,14 @@ function simShotRest(ball0, flight0) {
   const b = { x: ball0.x, y: ball0.y, vx: ball0.vx, vy: ball0.vy,
               z: ball0.z, vz: ball0.vz, spin: ball0.spin };
   let fl = Object.assign({}, flight0);
+  // DEEP-copy the aero state. Object.assign is shallow, so the prediction would
+  // otherwise step the LIVE ball's launch state to the end of its flight before
+  // the real shot had moved — the ball then resumed from wherever the sim left
+  // it (measured: driver "carry" 312 yd for a 296 yd shot). Every caller of
+  // simShotRest passes the live descriptor, so this has to be safe here.
+  if (fl.aero) fl.aero = Object.assign({}, fl.aero, {
+    st: { p: { ...fl.aero.st.p }, v: { ...fl.aero.st.v }, spin: { ...fl.aero.st.spin } },
+  });
   let airborne = !!flight0, lipped = false; // matches update()'s real dispatch: putts start grounded (flight0=null)
   let carry = null; // first touchdown of the arc — null for putts (never airborne)
   let hopBudget = null; // mirrors shot._hopBudget (landing-hop residual re-pace)
@@ -2303,20 +2430,11 @@ function simShotRest(ball0, flight0) {
         if (landed) {
           b.z = 0;
           const surf = surfaceAt(b.x, b.y);
-          if (surf === "water" || surf === "woods" || surf === "ob") return null;
-          carry = { x: b.x, y: b.y };
-          aeroLandingFl(fl);
-          const sp0 = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp0, dy = b.vy / sp0;
-          const hop = landingHop(fl, b.spin, surf);
-          if (hop && hop.vz > 0.008) {
-            hopBudget = { x0: b.x, y0: b.y, Dr: hop.Dr };
-            b.vx = dx * hop.vh; b.vy = dy * hop.vh; b.vz = hop.vz; b.spin = 0;
-            fl = null;                       // airborne stays true → ballistic mirror
-          } else {
-            const v = landingRelease(fl, b.spin, surf);
-            b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0;
-            fl = null; airborne = false;
-          }
+          if (!carry) carry = { x: b.x, y: b.y };
+          // SAME turf-impulse contact the live shot uses
+          const verdict = aeroGroundContact(b, fl, surf);
+          if (verdict === "dead") return null;
+          if (verdict === "roll") { aeroToRoll(b, fl); fl = null; airborne = false; }
         }
         continue;
       }
@@ -2407,6 +2525,8 @@ function simShotRest(ball0, flight0) {
       const surf = surfaceAt(b.x, b.y);
       if (surf === "green") {
         stepGreenRoll(b);                          // shared with live rollStep
+      } else if (TUNE.aeroPhysics && window.Ballistics) {
+        rollStepSI(b, surf, HOLE._dem ? HOLE._dem.gradAt(b.x, b.y) : null);
       } else {
         const sp = Math.hypot(b.vx, b.vy);
         const f = TUNE.friction[surf];
@@ -2435,7 +2555,7 @@ function simShotRest(ball0, flight0) {
           if (cup.hop) airborne = true;        // rammed lip-over keeps flying (grounded lip already re-paced)
         }
       }
-      if (speed < TUNE.stopThreshold)
+      if (speed < restSpeedThreshold())
         return { x: b.x, y: b.y, surf: surfaceAt(b.x, b.y), lipped, carry };
     }
   }

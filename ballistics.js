@@ -185,9 +185,62 @@
     };
   }
 
+  // --- oblique impact with spin -------------------------------------------
+  // A real golf ball landing is not a scripted "spend N yards of rollout": the
+  // turf applies a normal impulse (restitution) AND a tangential friction
+  // impulse that fights the CONTACT-POINT slip. With backspin the contact point
+  // is racing forward, so friction acts backward — that single term is what
+  // makes a wedge check and a spun ball hop back, with no special-casing.
+  //   Jn = −(1+e)·m·v_n              (normal, upward)
+  //   Jt = −min(μ·Jn, m·|u_t|)·û_t   (Coulomb-capped, opposes contact slip)
+  //   ω' = ω + ((−r·n) × Jt)/I,  I = (2/5)m r²
+  // `e` falls with impact speed (turf absorbs more from a harder strike), which
+  // is why a steeply-dropping wedge sits and a shallow drive skips on.
+  function bounce(s, surf) {
+    const p = surf || { e: 0.4, mu: 0.45 };
+    const m = BALL.m, r = BALL.r, I = 0.4 * m * r * r;
+    const vn = s.v.z;                                  // ground normal = +z
+    if (vn >= 0) return s;
+    const speed = Math.abs(vn);
+    const e = Math.max(0.05, (p.e || 0.4) * (1 - Math.min(0.55, speed / 45)));
+    const mu = p.mu == null ? 0.45 : p.mu;
+    const Jn = -(1 + e) * m * vn;                      // > 0, upward
+    // contact-point velocity: v_t − r·(ω × n)
+    const wxn = { x: s.spin.y * 1 - s.spin.z * 0, y: s.spin.z * 0 - s.spin.x * 1, z: 0 };
+    const ux = s.v.x - r * wxn.x, uy = s.v.y - r * wxn.y;
+    const um = Math.hypot(ux, uy);
+    let jx = 0, jy = 0;
+    if (um > 1e-6) {
+      const jt = Math.min(mu * Jn, m * um);            // Coulomb cap / stick
+      jx = -jt * (ux / um); jy = -jt * (uy / um);
+    }
+    s.v.x += jx / m; s.v.y += jy / m; s.v.z = -vn * e;
+    // torque from the tangential impulse at the contact point (−r·n)
+    s.spin.x += (-r * jy) / I * -1;
+    s.spin.y += (-r * jx) / I;
+    // turf scrubs spin hard on contact
+    s.spin.x *= 0.55; s.spin.y *= 0.55; s.spin.z *= 0.55;
+    return s;
+  }
+
+  // Rolling deceleration (m/s²) once the ball is on the ground. Green speed
+  // comes straight from the stimpmeter definition — the device releases a ball
+  // at 1.83 m/s and the stimp reading IS how far it rolls, so a = v²/(2d).
+  // A 13.5 green gives 0.41 m/s²; the old engine ran 5.4, which is why putts
+  // died in under two seconds.
+  function greenDecel(stimpFt) {
+    const d = Math.max(3, stimpFt || 11) * 0.3048;
+    return (1.83 * 1.83) / (2 * d);
+  }
+  // A rolling (not sliding) ball on a slope accelerates at (5/7)·g·sinθ — the
+  // 5/7 is the rolling-inertia factor for a solid sphere. Replaces the old
+  // arbitrary slope constant and its ad-hoc cap.
+  const SLOPE_ROLL_K = 5 / 7;
+
   return {
     BALL, RHO_SEA, G, COEF,
     liftCoef, dragCoef, accel, step, launchState, flyToLanding,
+    bounce, greenDecel, SLOPE_ROLL_K,
     MPH_PER_MS: 2.23694, M_PER_YD: 0.9144,
   };
 });
