@@ -215,12 +215,73 @@
       jx = -jt * (ux / um); jy = -jt * (uy / um);
     }
     s.v.x += jx / m; s.v.y += jy / m; s.v.z = -vn * e;
+    // Soft-turf absorption ("the pitch mark"). Coulomb friction assumes a rigid
+    // plane, but a receptive green deforms: the ball digs a crater and the far
+    // wall of it kills horizontal momentum well beyond what μ·Jn allows. Scaled
+    // by impact speed, this is what separates a green that grabs a wedge from a
+    // baked fairway that lets a drive skip on.
+    const dig = (p.dig || 0) * Math.min(1, speed / 25);
+    // The crater takes translation: the ball buries and hits the far wall of
+    // its own pitch mark. That is a horizontal reaction through the centre, so
+    // it does NOT remove angular momentum.
+    if (dig > 0) { s.v.x *= 1 - dig; s.v.y *= 1 - dig; }
+    // ...but soft turf cannot then leave the ball spinning far faster than it
+    // is travelling: the contact patch would simply grip. Without this clamp a
+    // ball that landed at 1.9 m/s carrying 671 rad/s of topspin ACCELERATED to
+    // 3.1 m/s over the next two hops, driving itself along like a wheel. Cap
+    // surface speed at the translation speed, sign preserved, so a checking
+    // wedge keeps its backspin while the drag-car artefact disappears.
+    const vt = Math.hypot(s.v.x, s.v.y);
+    const wMax = vt / r;
+    const wm = Math.hypot(s.spin.x, s.spin.y);
+    if (wm > wMax && wm > 1e-6) {
+      const k = wMax / wm;
+      s.spin.x *= k; s.spin.y *= k;
+    }
     // torque from the tangential impulse at the contact point (−r·n)
     s.spin.x += (-r * jy) / I * -1;
     s.spin.y += (-r * jx) / I;
-    // turf scrubs spin hard on contact
-    s.spin.x *= 0.55; s.spin.y *= 0.55; s.spin.z *= 0.55;
+    // Mild spin loss to the impact itself. Deliberately NOT aggressive: the
+    // tangential impulse above already changes spin physically, and an extra
+    // blanket scrub here wiped out the retained backspin that checks a wedge.
+    s.spin.x *= 0.90; s.spin.y *= 0.90; s.spin.z *= 0.90;
     return s;
+  }
+
+  // --- skid → roll ---------------------------------------------------------
+  // THE reason greens hold. A ball that has just landed is SLIDING, not
+  // rolling: its contact point is slipping, so the turf applies full kinetic
+  // friction (μ·g, metres per second squared) — an order of magnitude more
+  // deceleration than the rolling resistance that governs a putt. Friction
+  // simultaneously spins the ball up until the rolling condition v = ω·r is
+  // met, and only then does it settle into the low-resistance roll.
+  //
+  // With backspin the slip is enormous (the contact point races forward at
+  // v + ωr), so the grip lasts and the ball checks. If the backspin is strong
+  // enough, v reaches zero while ω is still negative and the ball rolls BACK —
+  // spin-back falls out of the same equations, with nothing special-cased.
+  //
+  // `sv` is speed along the travel direction (signed, so it can reverse), `w`
+  // is angular velocity (positive = rolling forward). Returns the new pair.
+  function skidRoll(sv, w, surf, dt) {
+    const p = surf || { mu: 0.45, roll: 3 };
+    const mu = p.mu == null ? 0.45 : p.mu;
+    const r = BALL.r;
+    const u = sv - w * r;                      // contact-point slip
+    if (Math.abs(u) > 0.02) {
+      const sgn = Math.sign(u);
+      const a = mu * G;                        // kinetic friction
+      sv -= sgn * a * dt;
+      w += sgn * (2.5 * a / r) * dt;           // torque spins it toward rolling
+      // don't overshoot the rolling condition inside one step
+      if (Math.sign(sv - w * r) !== sgn) w = sv / r;
+    } else {
+      const a = p.roll || 0;                   // true rolling resistance
+      const dv = a * dt;
+      sv = Math.abs(sv) <= dv ? 0 : sv - Math.sign(sv) * dv;
+      w = sv / r;
+    }
+    return { sv, w };
   }
 
   // Rolling deceleration (m/s²) once the ball is on the ground. Green speed
@@ -240,7 +301,7 @@
   return {
     BALL, RHO_SEA, G, COEF,
     liftCoef, dragCoef, accel, step, launchState, flyToLanding,
-    bounce, greenDecel, SLOPE_ROLL_K,
+    bounce, skidRoll, greenDecel, SLOPE_ROLL_K,
     MPH_PER_MS: 2.23694, M_PER_YD: 0.9144,
   };
 });

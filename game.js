@@ -57,26 +57,33 @@ const TUNE = {
   // descriptor's landing bookkeeping. Flip false to fly the legacy arc.
   aeroPhysics: true,
   aeroSpinTilt: 26,      // ° of spin-axis tilt at full swipe curve (draw/fade)
+  // Wall-clock pace multiplier. Real time (1.0) is physically honest but slow to
+  // play: a driver hangs ~7 s, then bounces, then a 30 ft putt rolls 6 s. 2.5x
+  // keeps every trajectory, distance and break EXACTLY as calibrated (the sim is
+  // time-invariant) while a shot resolves in a playable ~3 s.
+  timeScale: 2.5,
   // Turf impact + rolling, per surface. `e` = normal restitution (scaled down
   // with impact speed inside the impulse model), `mu` = contact friction that
   // converts backspin into check, `roll` = rolling deceleration in m/s².
   // Calibrated so club TOTALS stay on the historical table.
   turf: {
-    fairway: { e: 0.36, mu: 0.46, roll: 7.40 },
-    tee:     { e: 0.36, mu: 0.46, roll: 7.40 },
-    green:   { e: 0.30, mu: 0.50, roll: 0 },     // roll comes from the stimp
-    rough:   { e: 0.24, mu: 0.64, roll: 11.0 },
-    bunker:  { e: 0.10, mu: 0.85, roll: 7.00 },
-    water:   { e: 0.00, mu: 1.00, roll: 9.00 },
-    woods:   { e: 0.12, mu: 0.80, roll: 6.00 },
-    ob:      { e: 0.12, mu: 0.80, roll: 6.00 },
+    // e = normal restitution, mu = contact friction (drives the skid), roll =
+    // true rolling resistance in m/s2, dig = share of horizontal speed the
+    // pitch mark absorbs. Green values are FITTED to real release distances
+    // (5i 10 yd, 7i 6, PW 2, LW checks dead); the rest hold the club totals.
+    fairway: { e: 0.10, mu: 0.40, roll: 5.60, dig: 0.30 },
+    tee:     { e: 0.10, mu: 0.40, roll: 5.60, dig: 0.30 },
+    green:   { e: 0.08, mu: 0.80, roll: 0, dig: 0.72 },   // roll comes from stimp
+    rough:   { e: 0.10, mu: 0.55, roll: 9.00, dig: 0.50 },
+    bunker:  { e: 0.10, mu: 0.85, roll: 7.00, dig: 0.85 },
+    water:   { e: 0.00, mu: 1.00, roll: 9.00, dig: 0.95 },
+    woods:   { e: 0.12, mu: 0.80, roll: 6.00, dig: 0.80 },
+    ob:      { e: 0.12, mu: 0.80, roll: 6.00, dig: 0.80 },
   },
   // The synthetic green field's gradient is an ABSTRACT shape, not a real
   // grade — raw magnitudes run 0.20 median / 0.44 max, i.e. 20-44%, which as a
   // literal slope would out-accelerate green friction and roll forever. Map it
-  // onto real green grades: typical ~2%, severe ~5% (a 5% green is at the edge
-  // of holdable, which is exactly where the old model's cap sat — it clamped
-  // break at 82% of the green's own deceleration).
+  // onto real green grades: typical ~0.8%, severe ~2.4%.
   greenGradScale: 0.038,
   greenGradMax: 0.024,
   demGradMax: 0.35,      // cap on real terrain slope used for off-green roll
@@ -410,8 +417,14 @@ let YARDS_PER_UNIT = 3.0;
 // init-time work (recalcPower -> the physical green-pace closed form) reads it
 // long before the terrain section is reached.
 const M_PER_UNIT = 2.7432;
-const AERO_DT = 1 / 60;                      // one physics tick, seconds
-const msPerUF = () => M_PER_UNIT / AERO_DT;  // (world units/frame) -> m/s
+// Simulated seconds advanced per 60 Hz tick. TUNE.timeScale > 1 runs the whole
+// sim faster in WALL time without touching a single distance: the equations of
+// motion are time-invariant, so a trajectory sampled at a coarser dt traces the
+// exact same path through space — carry, rollout, break and putt distance are
+// all unchanged, they just happen sooner. The RK4 substep size stays fixed (see
+// aeroFlightStep), so accuracy is unchanged too.
+const simDt = () => TUNE.timeScale / 60;
+const msPerUF = () => M_PER_UNIT / simDt();  // (world units/tick) -> m/s
 // Cup capture radius (world units) and default green speed — OSM carries no
 // stimp rating, so we default it; per-course green speeds come later.
 // Hole: real is 4.25" (~0.02 units) but that's brutal for feel-based putting, so
@@ -1838,16 +1851,19 @@ function attachAero(fl, ang, C, club, spinRpm, sideSpin, x0, y0) {
 function aeroFlightStep(b, fl, w) {
   const Bal = window.Ballistics;
   const A = fl.aero.st;
-  Bal.step(A, AERO_DT / 2, { wind: w });   // 2 RK4 substeps: a single 1/60 step
-  Bal.step(A, AERO_DT / 2, { wind: w });   // measurably shortens carry at 75 m/s
+  // Substep at a FIXED ~1/120 s regardless of timeScale: a single coarse step
+  // measurably shortens carry at 75 m/s, so speeding the game up must buy more
+  // substeps, not bigger ones.
+  const total = simDt();
+  const n = Math.max(2, Math.ceil(total * 120));
+  for (let i = 0; i < n; i++) Bal.step(A, total / n, { wind: w });
   b.x = fl.aero.x0 + A.p.x / M_PER_UNIT;
   b.y = fl.aero.y0 + A.p.y / M_PER_UNIT;
   b.z = A.p.z / M_PER_UNIT;
   // legacy per-frame velocity stays in sync — clampToWorld, the cup's swept
   // segment (px = b.x − b.vx) and the ball trail all read it
-  b.vx = A.v.x * AERO_DT / M_PER_UNIT;
-  b.vy = A.v.y * AERO_DT / M_PER_UNIT;
-  b.vz = A.v.z * AERO_DT / M_PER_UNIT;
+  const dtu = simDt() / M_PER_UNIT;
+  b.vx = A.v.x * dtu; b.vy = A.v.y * dtu; b.vz = A.v.z * dtu;
   fl.d = Math.hypot(A.p.x, A.p.y) / M_PER_UNIT;   // arc distance — drives the cine cut
   return b.z <= 0;
 }
@@ -1881,9 +1897,15 @@ function aeroGroundContact(b, fl, surf) {
 function aeroToRoll(b, fl) {
   const A = fl.aero.st;
   b.z = 0; b.vz = 0;
-  b.vx = A.v.x * AERO_DT / M_PER_UNIT;
-  b.vy = A.v.y * AERO_DT / M_PER_UNIT;
+  const dtu = simDt() / M_PER_UNIT;
+  b.vx = A.v.x * dtu; b.vy = A.v.y * dtu;
   b.spin = 0;
+  // Hand the ball's ANGULAR velocity to the roll phase — this is what makes a
+  // green hold. Positive = rolling forward; a ball still spinning backwards
+  // slips hard against the turf and gets dragged to a stop (or back).
+  const vm = Math.hypot(A.v.x, A.v.y) || 1;
+  const dx = A.v.x / vm, dy = A.v.y / vm;
+  b.spinW = A.spin.y * dx - A.spin.x * dy;
 }
 
 function arcFlightStep(b) {
@@ -2175,26 +2197,35 @@ function rollDecelMs(surf) {
 // term for a rolling sphere, a = (5/7)·g·∇h. Returns false once the ball is at
 // rest. `grad` is the dimensionless downhill gradient at the ball.
 function rollStepSI(b, surf, grad) {
-  const Bal = window.Ballistics;
-  const K = msPerUF();
+  const Bal = window.Ballistics, K = msPerUF(), dt = simDt();
   let vx = b.vx * K, vy = b.vy * K;
   let sp = Math.hypot(vx, vy);
-  if (grad) {                                    // gravity along the surface
-    const k = Bal.SLOPE_ROLL_K * Bal.G * AERO_DT;
+  // Travel direction is remembered so a ball that spins BACK to a stop and
+  // reverses keeps a sane heading through the zero crossing.
+  if (sp > 1e-6) { b._rdx = vx / sp; b._rdy = vy / sp; }
+  const dx = b._rdx || 1, dy = b._rdy || 0;
+  let sv = vx * dx + vy * dy;                 // signed speed along that heading
+  if (grad) {                                  // gravity along the surface
+    const k = Bal.SLOPE_ROLL_K * Bal.G * dt;
     vx -= k * grad.x; vy -= k * grad.y;
-    sp = Math.hypot(vx, vy);
+    sv = vx * dx + vy * dy;
   }
-  const dv = rollDecelMs(surf) * AERO_DT;
-  if (sp <= dv + TUNE.aeroStopMs) {
-    // Static-friction check: on a slope a slow ball only stops if the hill
-    // can't keep it moving — otherwise it keeps trickling, exactly like a real
-    // putt dying above the hole and then wandering back down.
+  // Skid-then-roll: kinetic friction while the contact point slips (an order of
+  // magnitude stronger than rolling resistance), then true rolling. This is the
+  // whole reason an approach shot holds a green and a putt does not.
+  const t = TUNE.turf[surf] || TUNE.turf.fairway;
+  const prof = surf === "green" ? { mu: t.mu, roll: rollDecelMs("green") } : t;
+  const r = Bal.skidRoll(sv, b.spinW || 0, prof, dt);
+  sv = r.sv; b.spinW = r.w;
+  if (Math.abs(sv) <= TUNE.aeroStopMs) {
+    // On a slope a slow ball only stops if the hill can't keep it going —
+    // otherwise it trickles, like a putt dying above the hole.
     const gm = grad ? Math.hypot(grad.x, grad.y) : 0;
-    if (gm * Bal.SLOPE_ROLL_K * Bal.G < rollDecelMs(surf)) { b.vx = b.vy = 0; return false; }
+    if (gm * Bal.SLOPE_ROLL_K * Bal.G < (prof.roll || 0) + 1e-9) {
+      b.vx = b.vy = 0; b.spinW = 0; return false;
+    }
   }
-  const k2 = sp > 1e-9 ? Math.max(0, sp - dv) / sp : 0;
-  vx *= k2; vy *= k2;
-  b.vx = vx / K; b.vy = vy / K;
+  b.vx = sv * dx / K; b.vy = sv * dy / K;
   return true;
 }
 
