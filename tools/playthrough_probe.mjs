@@ -151,7 +151,7 @@ for (let hn = h0; hn <= (h1 || h0); hn++) {
     await pg.waitForFunction(() =>
       !window.GolfBridge.getState().moving &&
       document.getElementById('cgt')?.style.display !== 'none',
-      { timeout: 45000, polling: 250 }).catch(() => {});
+      { timeout: 70000, polling: 250 }).catch(() => {});
     await pg.waitForTimeout(2500);              // glide + refine ramp + fades
     const post = await pg.evaluate(() => window.__probe.state());
     shots.push({ n: s, from: `${pre.surface}@${pre.toPinYds}y`, to: `${post.surface}@${post.toPinYds}y`,

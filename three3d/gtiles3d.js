@@ -680,7 +680,10 @@ function setCamera() {
     // (suspended during the opening flyover — the ball is legitimately far
     // off-frame while the whole course is in view)
     _guardLostN = (lost && performance.now() > _introUntil) ? _guardLostN + 1 : 0;
-    if ((off && S.moving) || _guardLostN >= 5) _guardK = Math.min(_guardK * 1.04, 2.5);
+    // Time-based, not per-frame: with real 5-7 s flights a fixed per-frame
+    // factor compounds hundreds of times and runs the zoom away.
+    const gk = Math.pow(1.04, Math.min(dt, 100) / 16.7);
+    if ((off && S.moving) || _guardLostN >= 5) _guardK = Math.min(_guardK * gk, 2.5);
     else if (!S.moving && !lost) {
       _guardK += (1 - _guardK) * es;
       if (Math.abs(_guardK - 1) < 0.01) _guardK = 1;   // snap — no perpetual micro-pulse

@@ -148,13 +148,13 @@ var POSTLUDE = `
         // full swing toward the pin
         resetState();
         launchShot(Math.atan2(HOLE.holePos.y - HOLE.teePos.y, HOLE.holePos.x - HOLE.teePos.x), 1, 0, false);
-        settle(900);
+        settle(3000);
         // putt: place the ball just off the cup on the green and roll it in
         state.ball.x = HOLE.holePos.x + 0.7; state.ball.y = HOLE.holePos.y + 0.7;
         state.ball.vx = state.ball.vy = state.ball.z = state.ball.vz = state.ball.spin = 0;
         state.moving = false; state.airborne = false;
         launchShot(Math.atan2(HOLE.holePos.y - state.ball.y, HOLE.holePos.x - state.ball.x), 0.15, 0, true);
-        settle(900);
+        settle(3000);
       } catch (e) { errors.push("hole " + rec.num + ": " + ((e && e.stack) || e)); }
     }
   } catch (e) { errors.push("setup: " + ((e && e.stack) || e)); }

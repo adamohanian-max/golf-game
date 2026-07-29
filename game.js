@@ -98,7 +98,9 @@ const TUNE = {
   arcLowSuppress: 1.0,   // how much the Low/knockdown button ignores the apex boost + float (1 = fully flat & penetrating)
   arcLowRoll: 1.6,       // Low/knockdown rollout multiplier (1 = normal; >1 = runs out more after landing)
   arcDescentPow: 2.3,    // 2 = old parabola; 2.3 drops a touch more steeply (carry-neutral)
-  ballTrailMax: 18,      // max points in the airborne motion trail (was a fixed 10)
+  ballTrailMax: 90,      // trail points. Sized in RENDER frames, so its world
+                         // length scales with ball speed — at real flight speeds
+                         // 18 frames covered ~1/6 of the old streak.
   ballShadowAlpha: 0.28, // ground-shadow opacity at deck level
   ballShadowFade: 0.012, // shadow alpha falloff per world-unit of height (fade only, no grow)
   spinFactor: 0.0085,   // how hard a curved swipe bends flight (draw/fade) — rescaled ÷1.175
@@ -256,13 +258,18 @@ const TUNE = {
   cineFtPerYd: 0.05,     // trigger distance (ft from the cup) per yard of shot length
   cineMinFt: 4,          // floor of that trigger distance (short chips)
   cineMaxFt: 11,         // ceiling (long approaches)
-  cineCutFrac: 0.35,     // cut to 3D this far down the descent (0 = apex, 1 = touchdown)
+  cineCutFrac: 0.62,     // cut to 3D this far down the descent (0 = apex, 1 = touchdown).
+                         // Later than before: the old arc fell in ~0.4 s, a real one
+                         // takes ~3 s, so cutting at 0.35 left a long dead hover.
   cineHoldMs: 900,       // linger on the settled ball before returning to the course
   cineZoomIn: 1.18,      // slow push-in over the landing (multiplies the fit-to-screen zoom)
-  cineZoomMs: 2600,      // duration of the push-in ease
+  cineZoomMs: 4200,      // duration of the push-in ease (real descents are seconds
+                         // long — a 2.6 s ease finished before the ball landed)
   cineYawDrift: 0.04,    // gentle orbit (rad/s) while the cinematic plays
   cineBallZ: 1.0,        // flight-height scale in the 3D view (1 = true world scale)
-  cineSimSteps: 4000,    // forward-sim frame cap (~66s of ball time — never binds in practice)
+  cineSimSteps: 9000,    // forward-sim frame cap (~150 s of ball time). Real flights
+                         // are 5-7 s and real putts roll for many seconds, so the old
+                         // 4000 no longer had comfortable headroom.
   // --- Safe default tee aim (setHole) ---
   teeAimMaxDeg: 55,      // scan half-width around the tee->pin bearing
   teeAimStepDeg: 2.5,    // candidate angle step (~45 angles across the fan)
@@ -481,7 +488,7 @@ function invertPuttPaceCurved(x, y, ang, D) {
   const rollLen = (v0) => {
     const b = { x, y, vx: dirx * v0, vy: diry * v0 };
     let len = 0;
-    for (let i = 0; i < 4000; i++) {
+    for (let i = 0; i < 9000; i++) {
       const px = b.x, py = b.y;
       b.x += b.vx; b.y += b.vy;                   // position first (matches rollStep order)
       len += Math.hypot(b.x - px, b.y - py);
@@ -3253,7 +3260,7 @@ function buildTrialShot(ang, frac, spin, onGreen) {
       const lieMul = (onGreen || !lieEffectEnabled) ? 1 : (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1);  // bump from rough/sand loses pace
       power = maxPow * TUNE.puttSensitivity * ramp * lieMul;
     }
-    const mph = Math.round(power * YARDS_PER_UNIT * 60 * (3600 / 1760)); // units/frame -> mph
+    const mph = Math.round(power * msPerUF() * window.Ballistics.MPH_PER_MS); // u/frame -> m/s -> mph
     return { usePutter: true, onGreen, f, mph,
              vx: Math.cos(ang) * power, vy: Math.sin(ang) * power, z: 0, vz: 0, spin: 0, flight: null };
   }
@@ -3898,7 +3905,12 @@ function updateCamera() {
   // view affine (one-frame lag, converges over a few frames).
   if (state.moving && !view.gtilesProj && !view.threeProj && !view.appleProj && !HOLE.isRange) {
     const yf = (wy(state.ball.x, state.ball.y) - ws(state.ball.z || 0)) / Math.max(1, vpH());
-    if (yf < 0.05 || yf > 0.95) { camera.scale *= 0.97; camera.tScale *= 0.97; }
+    if (yf < 0.05 || yf > 0.95) {
+      // time-based, not per-frame: flights are now seconds long, so a fixed
+      // per-frame factor compounded into a runaway zoom-out (0.97^500)
+      const k = Math.pow(0.97, Math.min(dt, 100) / 16.7);
+      camera.scale *= k; camera.tScale *= k;
+    }
   }
   applyView();
 }
