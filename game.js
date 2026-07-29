@@ -21,12 +21,25 @@ const TUNE = {
   // capped at club carry). Tight band -> a chip is never very short or very far from the hole.
   chipReachLo: 0.8,      // softest chip still flies 80% of the way to the pin
   chipReachHi: 1.2,      // hardest chip flies 120% (never blows way past)
-  chipLandFrac: 0.75,    // chip CARRIES this much of the band target; the rest is roll-out
-  chipSpin: 0.1,         // chip backspin multiplier (< full -> ball releases and rolls out)
+  chipLandFrac: 0.75,    // nominal carry share of the target (see chipSpinParams —
+                         // under real physics this is a TRAJECTORY hint, not the
+                         // solved quantity: the total is solved against simShotRest)
+  // Chip backspin multiplier. Was 0.1, which is INVERTED under real physics: the
+  // old scripted release treated low spin as "big rollout budget", but a real
+  // ball is STOPPED by spin (backspin makes the contact point slip, which is
+  // what engages the skid). At 0.1 a chip arrived with ~1150 rpm, never skidded,
+  // and settled straight into 0.41 m/s2 green rolling — a putt that happened to
+  // fly. Real greenside wedges spin 5000-9000 rpm even on a soft shot.
+  chipSpin: 0.62,
   // Chip spin slider (bias -1..+1, 0 = neutral = the two values above). More spin ->
   // land deeper + check; less spin -> land short + run. Total still finishes near the pin.
   chipLandSpread: 0.22,  // bias shifts landFrac: 0.53 (full run) .. 0.75 (neutral) .. 0.97 (land at pin)
-  chipSpinRange: 9,      // exponential backspin scale: chipSpin*9^bias -> 0.011 (run) .. 0.1 .. 0.9 (bites/backs up)
+  chipSpinRange: 1.7,    // exponential backspin scale: chipSpin*1.7^bias -> 0.36 (run) .. 0.62 .. 1.05 (bites)
+  // The slider also picks the TRAJECTORY, which is how a real player chooses
+  // between these two shots: a runner is played back in the stance (delofted,
+  // low, shallow landing) and a checker is played forward/open (high, steep).
+  // Degrees added to the club's launch angle at bias +1 (and subtracted at -1).
+  chipLaunchSpread: 9,
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
   // Putt control band: most putts are short, but max power reaches YARDS.maxPutt (50yd).
   // Two-segment power curve — the first puttControlFrac of input covers 0..puttControlYds
@@ -1835,15 +1848,18 @@ function aeroWindVec() {
   return { x: -Math.sin(wind.dir) * ms, y: Math.cos(wind.dir) * ms, z: 0 };
 }
 // Attach a real launch state to a flight descriptor that must carry `C`.
-function attachAero(fl, ang, C, club, spinRpm, sideSpin, x0, y0) {
+function attachAero(fl, ang, C, club, spinRpm, sideSpin, x0, y0, launchDelta) {
   const Bal = window.Ballistics;
   if (!Bal || !TUNE.aeroPhysics || !club || !club.launch || !(C > 0)) return fl;
   const spin = Math.max(200, spinRpm || 2500);
-  const mph = aeroSpeedForCarry(C, club.launch, spin);
+  // launchDelta lets a shot type pick its own trajectory off the same club —
+  // a chip runner is delofted, a chip checker is played open (see chipSpinParams).
+  const launchDeg = Math.max(4, Math.min(60, club.launch + (launchDelta || 0)));
+  const mph = aeroSpeedForCarry(C, launchDeg, spin);
   fl.aero = {
-    st: Bal.launchState(mph, club.launch, spin,
+    st: Bal.launchState(mph, launchDeg, spin,
       { x: Math.cos(ang), y: Math.sin(ang) }, (sideSpin || 0) * TUNE.aeroSpinTilt),
-    x0, y0, mph, vhLegacy: fl.vh,   // vhLegacy: the pace the rollout was calibrated on
+    x0, y0, mph, launchDeg, spin, vhLegacy: fl.vh,
   };
   return fl;
 }
@@ -3249,7 +3265,11 @@ function chipActiveNow() {
 function chipSpinParams() {
   const landFrac = Math.max(0.5, Math.min(0.98, TUNE.chipLandFrac + chipSpinBias * TUNE.chipLandSpread));
   const spinScale = TUNE.chipSpin * Math.pow(TUNE.chipSpinRange, chipSpinBias);
-  return { landFrac, spinScale };
+  // Launch delta: the slider picks the shot's SHAPE (low runner vs high
+  // checker) and the physics turns that into roll-out, instead of the old
+  // model where the slider directly dialled a rollout budget.
+  const launchDelta = chipSpinBias * TUNE.chipLaunchSpread;
+  return { landFrac, spinScale, launchDelta };
 }
 
 // Pure: given a swing vector, compute what the shot WOULD do — club/putter
@@ -3258,7 +3278,37 @@ function chipSpinParams() {
 // by launchShot (real, committed shot — applies the result to state) and by
 // the live pre-release preview (hypothetical, fed into simShotRest and
 // discarded). Returns null if the swing wouldn't produce a shot at all.
-function buildTrialShot(ang, frac, spin, onGreen) {
+// Solve the chip's power so the ball COMES TO REST at `targetYds`.
+// Mirrors the putter's invertPuttPaceCurved: binary-search the launch against
+// the real stepper (simShotRest runs the identical physics the live shot will),
+// so the answer self-corrects for lie, turf, green speed and slope instead of
+// trusting a tuned constant. Runs once per swing, off the render path.
+function solveChipEf(ang, frac, spin, onGreen, targetYds, club) {
+  const b = state.ball;
+  const carryEf = Math.min(1, (targetYds * chipSpinParams().landFrac) / club.carry);
+  if (!TUNE.aeroPhysics || !window.Ballistics) return carryEf;   // legacy arc
+  const restYds = (ef) => {
+    const t = buildTrialShot(ang, frac, spin, onGreen, ef);
+    if (!t || !t.flight) return null;
+    const r = simShotRest({ x: b.x, y: b.y, vx: t.vx, vy: t.vy, z: t.z, vz: t.vz, spin: t.spin },
+                          t.flight);
+    if (!r) return null;                       // water / OB / never settled
+    if (r.holed) return targetYds;             // in the cup — perfect by definition
+    return dist(b.x, b.y, r.x, r.y) * YARDS_PER_UNIT;
+  };
+  let lo = 0.02, hi = Math.min(1, Math.max(carryEf * 2.2, 0.25));
+  const dHi = restYds(hi);
+  if (dHi == null) return carryEf;             // unusable prediction — keep the old estimate
+  if (dHi < targetYds) return hi;              // can't reach even at the top of the band
+  for (let k = 0; k < 14; k++) {
+    const mid = (lo + hi) / 2;
+    const d = restYds(mid);
+    if (d == null) return carryEf;
+    if (d < targetYds) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   if (frac <= 0.05) return null;
   if (slottedMode && !HOLE.isRange && !onGreen) return null; // slotted mode has its own fixed-target launch — no meaningful preview
   const b = state.ball; // read position only
@@ -3315,9 +3365,21 @@ function buildTrialShot(ang, frac, spin, onGreen) {
     // lands the CARRY short of that so the ball releases and rolls out the rest (the spin
     // drop below makes it run), with the total still finishing in the band. Reach uses
     // plays-like distance so an uphill chip flies/rolls longer (downhill shorter).
-    const toPin = playsLikeYards(b.x, b.y).plays;
+    // TRUE horizontal distance, not the plays-like (elevation-adjusted) one.
+    // Plays-like belongs on a CARRY target — it pays for the extra flight an
+    // uphill shot needs. This now sizes the RESTING distance, and the physics
+    // already handles the hill: the roll runs through the DEM gradient. Feeding
+    // plays-like in made an uphill chip aim 24% long (h4: a 40 yd chip targeted
+    // 49.8 and finished exactly there — the solver was right, the target wasn't).
+    const toPin = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
     const reach = TUNE.chipReachLo + (TUNE.chipReachHi - TUNE.chipReachLo) * f;
-    ef = Math.min(1, (toPin * reach * chipSpinParams().landFrac) / c.carry);
+    // A chip aims at where the ball STOPS. Carry-targeting (what this used to
+    // do) only worked when the rollout was a scripted budget; the roll is now
+    // emergent — spin, lie, turf, green speed and slope all feed it — so the
+    // only honest way to finish beside the pin is to invert the real model.
+    // chipEfOverride is the search probe; the search itself is solveChipEf.
+    ef = chipEfOverride != null ? chipEfOverride
+       : solveChipEf(ang, frac, spin, onGreen, toPin * reach, c);
   } else {
     // Min power floor for every full-swing club: an imprecise weak read can't dribble
     // it — always flies ≥ clubMinFrac of its rated carry (or the club's own minFrac
@@ -3353,7 +3415,14 @@ function buildTrialShot(ang, frac, spin, onGreen) {
   // (scale up as f drops below 0.6, short shots check hard). Greenside CHIPS do the
   // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
   const chipBoost = f < 0.6 ? 1 + (1 - f / 0.6) * 0.5 : 1;
-  const lieSpinMul = lieEffectEnabled ? (TUNE.lieSpin[lieSurf] ?? 1) : 1;  // rough flyer / sand kill backspin
+  // Rough flyer / sand kill backspin. CHIPS take a gentler hit (geometric mean
+  // toward 1): the flyer effect is a full-swing phenomenon — grass trapped at
+  // impact on a long shot — whereas a greenside wedge still nips the ball and
+  // holds real spin. At the full penalty a low-spin chip out of rough arrived
+  // with too little backspin to skid, reached the green already ROLLING, and
+  // then had only 0.41 m/s2 of green friction to stop it: 37 yd of run-out.
+  const lieSpinRaw = lieEffectEnabled ? (TUNE.lieSpin[lieSurf] ?? 1) : 1;
+  const lieSpinMul = chipActive ? Math.sqrt(lieSpinRaw) : lieSpinRaw;
   const spinScale = chipActive ? chipSpinParams().spinScale : chipBoost;
   const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (1 + (spinK - 1) * t));
   // Flyer descent: rough/sand shots also come in shallower (less lift), so the
@@ -3378,7 +3447,7 @@ function buildTrialShot(ang, frac, spin, onGreen) {
   // of every historical calibration.
   attachAero(flr.flight, ang, flr.flight.landD, c,
              c.spin * (c.spinN > 0 ? effectiveSpinN / c.spinN : 1),
-             spinVal, b.x, b.y);
+             spinVal, b.x, b.y, chipActive ? chipSpinParams().launchDelta : 0);
   return { usePutter: false, onGreen, f, hiT, mph,
            vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
 }

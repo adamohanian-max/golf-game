@@ -225,18 +225,26 @@
     // its own pitch mark. That is a horizontal reaction through the centre, so
     // it does NOT remove angular momentum.
     if (dig > 0) { s.v.x *= 1 - dig; s.v.y *= 1 - dig; }
-    // ...but soft turf cannot then leave the ball spinning far faster than it
-    // is travelling: the contact patch would simply grip. Without this clamp a
-    // ball that landed at 1.9 m/s carrying 671 rad/s of topspin ACCELERATED to
-    // 3.1 m/s over the next two hops, driving itself along like a wheel. Cap
-    // surface speed at the translation speed, sign preserved, so a checking
-    // wedge keeps its backspin while the drag-car artefact disappears.
+    // ...but soft turf cannot leave the ball spinning FORWARD faster than it is
+    // travelling: that would be a wheel driving itself along, and without the
+    // cap a ball landing at 1.9 m/s with 671 rad/s of topspin accelerated to
+    // 3.1 m/s over two hops.
+    //
+    // DIRECTIONAL, and that matters: only the forward-rolling component is
+    // capped. A ball may legitimately spin BACKWARD far faster than it travels
+    // — that is exactly a checking wedge, and it is the mechanism that stops a
+    // chip. Clamping the magnitude (as this first did) threw away two thirds of
+    // a greenside wedge's backspin and chips ran out like putts.
     const vt = Math.hypot(s.v.x, s.v.y);
-    const wMax = vt / r;
-    const wm = Math.hypot(s.spin.x, s.spin.y);
-    if (wm > wMax && wm > 1e-6) {
-      const k = wMax / wm;
-      s.spin.x *= k; s.spin.y *= k;
+    if (vt > 1e-6) {
+      const dx = s.v.x / vt, dy = s.v.y / vt;
+      const fx = -dy, fy = dx;                     // ẑ × d̂: the forward-roll axis
+      const fwd = s.spin.x * fx + s.spin.y * fy;   // signed forward-roll rate
+      const wMax = vt / r;
+      if (fwd > wMax) {                            // topspin only
+        const excess = fwd - wMax;
+        s.spin.x -= excess * fx; s.spin.y -= excess * fy;
+      }
     }
     // torque from the tangential impulse at the contact point (−r·n)
     s.spin.x += (-r * jy) / I * -1;
