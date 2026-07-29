@@ -279,10 +279,23 @@
     if (Math.abs(u) > 0.02) {
       const sgn = Math.sign(u);
       const a = mu * G;                        // kinetic friction
-      sv -= sgn * a * dt;
-      w += sgn * (2.5 * a / r) * dt;           // torque spins it toward rolling
-      // don't overshoot the rolling condition inside one step
-      if (Math.sign(sv - w * r) !== sgn) w = sv / r;
+      // SUB-STEP TO THE ROLLING TRANSITION. Slip closes at 3.5·a (a acting on
+      // translation, 2.5a on spin), so when rolling would begin inside this
+      // tick, integrate only up to that instant and switch. Stepping the whole
+      // tick blindly overshoots: at a 3.75x time scale one tick is 62 ms and
+      // moves speed ~0.5 m/s, so a slow ball flip-flopped across zero forever
+      // and NEVER came to rest — which then blocked every later swing on
+      // state.moving. This is the integration error the speed-up exposed.
+      const tRoll = Math.abs(u) / (3.5 * a);
+      const h = Math.min(dt, tRoll);
+      sv -= sgn * a * h;
+      w += sgn * (2.5 * a / r) * h;
+      if (h < dt) {                            // rolling began mid-tick
+        w = sv / r;                            // exact rolling condition
+        const ar = p.roll || 0, dv = ar * (dt - h);   // spend the remainder rolling
+        sv = Math.abs(sv) <= dv ? 0 : sv - Math.sign(sv) * dv;
+        w = sv / r;
+      }
     } else {
       const a = p.roll || 0;                   // true rolling resistance
       const dv = a * dt;

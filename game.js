@@ -617,7 +617,7 @@ function autoClub() {
 // acceptable, and the mask is cached after the first visit to a course.)
 function safeTeeAim() {
   const alpha = Math.atan2(HOLE.holePos.y - HOLE.teePos.y, HOLE.holePos.x - HOLE.teePos.x);
-  if (HOLE.isRange || slottedMode || selectedClub === "putter") return alpha;
+  if (HOLE.isRange || selectedClub === "putter") return alpha;
 
   const b = state.ball;
   const SAFE = { fairway: 1, green: 1, tee: 1 };
@@ -1518,7 +1518,6 @@ let breakArrows = lsGet("golf.breakArrows", false);
 // dormant lean/warp render branches still compile; false ⇒ view.kz stays 0 ⇒
 // flat rendering, bit-identical to the kz=0 fast path.
 let tiltView = false;
-let slottedMode = false;   // cheat: ball steers to hole automatically
 let autoAimEnabled = true; // re-aim camera at the pin after each shot (off = manual aim, harder)
 let chipEnabled = true;    // greenside chip mode: near the pin, swipe power maps to pin distance
 let chipSpinBias = 0;      // chip SPIN (-1 low/run .. 0 stock .. +1 high/bite); resets to 0 each hole
@@ -2014,15 +2013,6 @@ function finishArcLanding(b, fl) {
       shot.carry = dist(shot.startX, shot.startY, b.x, b.y) * YARDS_PER_UNIT;
       shot.carried = true;
     }
-    // slotted club lands exactly at the hole — sink it
-    if (slottedMode && !HOLE.isRange) {
-      state.flight = null; state.airborne = false;
-      b.x = HOLE.holePos.x; b.y = HOLE.holePos.y;
-      b.vx = 0; b.vy = 0; b.vz = 0;
-      state.moving = false; state.inHole = true;
-      beginHoleDrop(HOLE.holePos.x, HOLE.holePos.y, 0, -0.03);
-      return;
-    }
     const surf = surfaceAt(b.x, b.y);
     const sp = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp, dy = b.vy / sp; // travel dir
     // Touchdown thud (the arc path never bounces, so without this a normal shot
@@ -2384,13 +2374,6 @@ function rollStep(b) {
     }
   }
 
-  // slotted mode: steer rolling ball toward the hole
-  if (slottedMode && !HOLE.isRange) {
-    const thx = HOLE.holePos.x - b.x, thy = HOLE.holePos.y - b.y;
-    const td = Math.hypot(thx, thy) || 0.01;
-    b.vx = (thx / td) * TUNE.captureSpeed * 0.7;
-    b.vy = (thy / td) * TUNE.captureSpeed * 0.7;
-  }
 
   const speed = Math.hypot(b.vx, b.vy);
 
@@ -2697,7 +2680,7 @@ function maybeArmCine() {
   if (!state.airborne || !state.flight) return;   // putts/bump-and-runs never cut
   const g = (HOLE._greens || []).find((gr) => pointInPoly(HOLE.holePos.x, HOLE.holePos.y, gr.poly));
   if (!g) return;                                  // vector-fallback hole without a pin green
-  const r = slottedMode ? { holed: true } : simShotRest(state.ball, state.flight);
+  const r = simShotRest(state.ball, state.flight);
   if (!r) return;
   let great = !!(r.holed || r.lipped);
   if (!great && r.surf === "green") {
@@ -3252,26 +3235,6 @@ function swingMove(e) {
 }
 
 // Fire the ball: `ang` direction, `frac` 0..1 swing fullness, `spin` (-1..1).
-function slottedLaunch() {
-  const b = state.ball;
-  shot.startX = b.x; shot.startY = b.y;
-  shot.carry = null; shot.total = null; shot.carried = false;
-  state.flight = null;
-  const ang = Math.atan2(HOLE.holePos.y - b.y, HOLE.holePos.x - b.x);
-  const C = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y);
-  const H = Math.max(C * 0.12, 0.3); // low clean arc toward hole
-  setupFlight(b, ang, C, H, Math.PI / 4, 0);
-  b.spin = 0;
-  state.airborne = true;
-  state.moving = true;
-  haptic(9);
-  state.strokesOffGreen++;
-  state.strokes += 1;
-  updateScorecard();
-  if (matchLive()) pushMatchShot({ cur_at_rest: false });  // opponent sees "hitting…"
-  hideHint();
-  maybeArmCine();  // predict the finish; a great one cues the 3D landing cut
-}
 
 // Greenside chip gate: chip mode on, off the green, within range of the pin. Shared
 // by launchShot (physics), updateClubUI (carry readout) and the spin slider show/hide
@@ -3333,7 +3296,6 @@ function solveChipEf(ang, frac, spin, onGreen, targetYds, club) {
 }
 function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   if (frac <= 0.05) return null;
-  if (slottedMode && !HOLE.isRange && !onGreen) return null; // slotted mode has its own fixed-target launch — no meaningful preview
   const b = state.ball; // read position only
   const f = Math.min(frac, 1);
   // Putter mode: on the green (normal putt) OR player manually selected putter off-green
@@ -3490,7 +3452,6 @@ function launchShot(ang, frac, spin, onGreen) {
   }
   measurePoint = null; // shot fired — clear the rangefinder marker
   previewFracTouched = false; // fresh shot next time — let the chip-assist auto-default re-engage
-  if (slottedMode && !HOLE.isRange && !onGreen) { slottedLaunch(); return; }
   const trial = buildTrialShot(ang, frac, spin, onGreen);
   if (!trial) return;
   const b = state.ball;
@@ -8947,11 +8908,6 @@ function setWind(on) {
   document.getElementById("hm-wind").classList.toggle("active", on);
   if (!on) wind.speed = 0; // kill current wind immediately when toggled off
 }
-function setSlotted(on) {
-  slottedMode = on;
-  const btn = document.getElementById("hm-slotted"); // admin-only; not in the player menu
-  if (btn) btn.classList.toggle("active", on);
-}
 function setAutoAim(on) {
   autoAimEnabled = on;
   const btn = document.getElementById("hm-autoaim");
@@ -8985,8 +8941,6 @@ if (elPPBtn) elPPBtn.addEventListener("click", () => setPowerPreview(!powerPrevi
 requestAnimationFrame(() => setPowerPreview(powerPreviewEnabled));
 document.getElementById("hm-autoclb").addEventListener("click", () => setAutoClub(!autoClubEnabled));
 document.getElementById("hm-wind").addEventListener("click", () => setWind(!windEnabled));
-const elSlottedBtn = document.getElementById("hm-slotted");
-if (elSlottedBtn) elSlottedBtn.addEventListener("click", () => setSlotted(!slottedMode));
 const elAutoAimBtn = document.getElementById("hm-autoaim");
 if (elAutoAimBtn) elAutoAimBtn.addEventListener("click", () => setAutoAim(!autoAimEnabled));
 const elChipBtn = document.getElementById("hm-chip");
@@ -9197,7 +9151,6 @@ const SETTING_DEFS = [
   { key: "slope",       label: "Slope lines",     icon: "ic-slope",  get: () => showSlope,       set: (v) => setSlopeMode(v) },
   { key: "oob",         label: "OB areas",        icon: "ic-ob",     get: () => showOOB,         set: (v) => setOOBMode(v) },
   { key: "rangefinder", label: "Range finder",    icon: "ic-ruler",  get: () => measureMode,     set: (v) => setMeasureMode(v) },
-  { key: "slotted",     label: "Slotted mode",    icon: "ic-target", get: () => slottedMode,     set: (v) => setSlotted(v) },
   { key: "chip",        label: "Chip mode",       icon: "ic-chip",   get: () => chipEnabled,     set: (v) => setChip(v) },
   { key: "lieEffect",   label: "Lie effect",      icon: "ic-slope",  get: () => lieEffectEnabled, set: (v) => setLieEffect(v) },
   { key: "powerPreview", label: "Power preview (beta)", icon: "ic-target", get: () => powerPreviewEnabled, set: (v) => setPowerPreview(v) },
@@ -9206,7 +9159,7 @@ const SETTING_DEFS = [
 // Immutable fallback for each setting — used when a saved/loaded settings row
 // predates a key (e.g. a global Supabase row baked before "chip" existed). A
 // MISSING key falls back to this default, NOT to false.
-const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, slotted: false, chip: true, lieEffect: true, powerPreview: false };
+const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, chip: true, lieEffect: true, powerPreview: false };
 let gameDefaults = Object.assign({}, SETTING_DEFAULTS);
 let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
 
