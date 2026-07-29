@@ -7275,7 +7275,12 @@ function updateScorecard() {
   if (elHoleLabel) elHoleLabel.textContent = "Hole " + (HOLE.num || 1);
   elPar.textContent = HOLE.par;
   elYards.textContent = HOLE.yards;
-  elStrokes.textContent = state.strokes;
+  // Match play: the strokes line carries the only other number that matters —
+  // what the opponent has taken on THIS hole ("3 · Chip 2").
+  const oh = oppHoleStrokes(HOLE.num);
+  elStrokes.textContent = oh
+    ? state.strokes + " · " + shortName(oppName()) + " " + oh.n
+    : state.strokes;
   // 1v1 match play: the number that matters is holes up/down, not gross score.
   const me = matchPlay() ? meSnapshot() : null;
   if (me && lastOpp) {
@@ -7461,7 +7466,9 @@ function showResult() {
       !(course && holeIndex >= roundHoleCount() - 1)) {
     // Match play: say what the hole meant ("Hole lost · 2 down") when the
     // opponent's score is already in; otherwise the running score.
-    const mo = matchHoleOutcomeText(holeNum);
+    // Match play never falls back to the gross total — if the opponent hasn't
+    // finished the hole yet, show where the MATCH stands instead.
+    const mo = matchHoleOutcomeText(holeNum) || matchStatusText();
     showToast((conceded ? "Picked up" : title) + " · " + (mo || formatToPar(round.score)), mo ? 2200 : 1600);
     setTimeout(advanceFromResult, mo ? 1500 : 1100);
     return;
@@ -7471,7 +7478,11 @@ function showResult() {
   titleEl.textContent = title;
   titleEl.className = "rt-l" + level + (hb.isBest ? " rt-best" : "");
 
-  let detail = `${state.strokes} stroke${state.strokes === 1 ? "" : "s"} · ${formatToPar(d)} this hole · ${formatToPar(round.score)} total`;
+  // Strokes + this hole's to-par describe the HOLE, so they stay in match play;
+  // only the running gross total is swapped for where the match stands.
+  const mTail = matchHoleOutcomeText(holeNum) || matchStatusText();
+  let detail = `${state.strokes} stroke${state.strokes === 1 ? "" : "s"} · ${formatToPar(d)} this hole · ` +
+    (mTail || `${formatToPar(round.score)} total`);
   if (hb.isBest && hb.prev != null) detail += `\nNew best on this hole! (was ${hb.prev})`;
   else if (hb.isBest && hb.prev == null && !HOLE.isRange) detail += `\nFirst time on this hole — best set`;
   else if (hb.prev != null) detail += `\nYour best: ${hb.prev}` + (state.strokes > hb.prev ? ` — ${state.strokes - hb.prev} to beat` : "");
@@ -7683,10 +7694,14 @@ function showRoundSummary(midRound = false) {
   const n = course ? course.holes.length : 18;
   const played = round.holeStats.length;
   document.getElementById("re-header-title").textContent = midRound ? "Scorecard" : "Round Complete";
+  // Match play: the header carries the match, not the gross total.
+  const mStat = matchStatusText();
   document.getElementById("re-subtitle").textContent = midRound
     // `played` counts COMPLETED holes — the player is standing on the next one.
-    ? `${course ? course.name : "Golf"} · Hole ${Math.min(played + 1, n)} of ${n} · ${formatToPar(round.score)}`
-    : `${course ? course.name : "Golf"} · ${totStrk} (${formatToPar(round.score)})`;
+    ? `${course ? course.name : "Golf"} · Hole ${Math.min(played + 1, n)} of ${n} · ${mStat || formatToPar(round.score)}`
+    : mStat
+      ? `${course ? course.name : "Golf"} · ${mStat}`
+      : `${course ? course.name : "Golf"} · ${totStrk} (${formatToPar(round.score)})`;
   document.getElementById("re-replay").textContent = midRound ? "Resume" : "Play Again";
   // A match is a single locked round — replaying it would corrupt the shared
   // standings, so hide the replay button at the end of a match.
@@ -7726,7 +7741,10 @@ function showRoundSummary(midRound = false) {
     if (!dailyMode) {
       const cb = recordCourseBest(round.score, totStrk);
       const sub = document.getElementById("re-subtitle");
-      if (cb.isBest && cb.prev) {
+      // Match play: still RECORD the round, but never append to-par chatter to a
+      // subtitle that reads "Won 3&2".
+      if (matchPlay()) { /* no to-par tail in a match */ }
+      else if (cb.isBest && cb.prev) {
         sub.textContent += ` · New best! (was ${formatToPar(cb.prev.toPar)})`;
         spawnBurst(HOLE.holePos.x, HOLE.holePos.y, "confetti");
         setTimeout(() => showToast("New course record!", 2400, "gold"), 300);
@@ -13357,7 +13375,10 @@ function stopTourPoll() { if (_tourPoll) { clearInterval(_tourPoll); _tourPoll =
 // --- Persistent bottom-left scorebug (TV lower-third) ---
 function _bugRowHTML(rank, p) {
   const nm = escapeHTML(p.name);
-  const total = '<span class="' + _parClass(p.total) + '">' + _parText(p.total) + "</span>";
+  // totalText = non-numeric total (match play's "2 UP" / "AS"); otherwise to-par.
+  const total = p.totalText != null
+    ? '<span class="' + (p.totalClass || "") + '">' + escapeHTML(p.totalText) + "</span>"
+    : '<span class="' + _parClass(p.total) + '">' + _parText(p.total) + "</span>";
   return '<div class="tbug-row ' + (p.isMe ? "tbug-me" : "") + '">' +
     '<span class="tbug-pos">' + rank + "</span>" +
     '<span class="tbug-name">' + nm + "</span>" +
@@ -13456,6 +13477,23 @@ function matchBugField(rows) {
   field.sort((a, b) => a.total - b.total);
   return { field, positions: tourPositionsByTotal(field) };
 }
+// The scorebug's two rows for a MATCH-play match: holes up/down + holes played,
+// not gross to-par. Null outside match play (or before the opponent is known),
+// which drops updateMatchBug back to the stroke-play field.
+function matchPlayBugRows() {
+  if (!matchPlay() || !lastOpp) return null;
+  const me = meSnapshot();
+  if (!me) return null;
+  const mp = computeMatchPlay(me, lastOpp, matchHoleCount);
+  const mirror = mp.diff > 0 ? mp.diff + " DN" : mp.diff < 0 ? -mp.diff + " UP" : "AS";
+  // Being up is the good side, so borrow the under-par color for it.
+  const mine = { name: getPlayerName() || "You", isMe: true, thru: mp.thru,
+                 totalText: mp.status, totalClass: toParClass(-mp.diff) };
+  const theirs = { name: oppName(), isMe: false, thru: mp.thru,
+                   totalText: mirror, totalClass: toParClass(mp.diff) };
+  if (mp.diff === 0) return [["T1", mine], ["T1", theirs]];
+  return mp.diff > 0 ? [["1", mine], ["2", theirs]] : [["1", theirs], ["2", mine]];
+}
 function updateMatchBug(rows) {
   const bug = document.getElementById("tour-bug");
   if (!bug) return;
@@ -13463,11 +13501,16 @@ function updateMatchBug(rows) {
   const show = inMatch() && mode === "course" && !dailyMode && !tourPlayMode;
   bug.classList.toggle("hidden", !show);
   if (!show) return;
-  const { field, positions } = matchBugField(rows);
-  const meIdx = field.findIndex((p) => p.isMe);
-  const out = [];
-  for (let i = 0; i < Math.min(3, field.length); i++) out.push([tourPos(positions[i]), field[i]]);
-  if (meIdx >= 3) out.push([tourPos(positions[meIdx]), field[meIdx]]);
+  // Match play: gross to-par is meaningless — rank the two players by holes
+  // up/down instead, leader on top (both "T1" when all square).
+  const out = matchPlayBugRows() || (() => {
+    const { field, positions } = matchBugField(rows);
+    const meIdx = field.findIndex((p) => p.isMe);
+    const o = [];
+    for (let i = 0; i < Math.min(3, field.length); i++) o.push([tourPos(positions[i]), field[i]]);
+    if (meIdx >= 3) o.push([tourPos(positions[meIdx]), field[meIdx]]);
+    return o;
+  })();
   const holes = (typeof matchHoleCount === "number" && matchHoleCount) ? matchHoleCount : roundHoleCount();
   const fmt = activeMatch && activeMatch.format === "match" ? "Match Play" : "Stroke Play";
   bug.querySelector(".tbug-head").textContent = fmt + " · " + holes + " holes";
@@ -14194,6 +14237,48 @@ function matchHoleOutcomeText(h) {
   return (s > 0 ? "Hole won" : s < 0 ? "Hole lost" : "Hole halved") + " · " + status;
 }
 
+// Match play: current status ("2 UP" / "3 DN" / "AS"), or null outside a match.
+// The one-liner the whole HUD leans on instead of a gross to-par total.
+function matchStatusText() {
+  if (!matchPlay() || !lastOpp) return null;
+  const me = meSnapshot();
+  if (!me) return null;
+  const mp = computeMatchPlay(me, lastOpp, matchHoleCount);
+  return mp.result || mp.status;
+}
+
+// Match play: the opponent's stroke count on the hole I'm standing on — their
+// live count while they play it, their final once they've holed out. Null when
+// they're on another hole, or there's no opponent to compare against.
+function oppHoleStrokes(h) {
+  if (!matchPlay() || !lastOpp || h == null) return null;
+  const done = (lastOpp.hole_scores || {})[h];
+  if (done != null) return { n: done | 0, done: true };
+  if (lastOpp.cur_hole !== h || lastOpp.cur_strokes == null) return null;
+  return { n: lastOpp.cur_strokes | 0, done: false };
+}
+
+// The scorecard is refreshed on discrete events (swing, ball at rest, hole
+// change), but the opponent's stroke count moves on THEIR schedule — the bot
+// sim advances every frame, human rows land on the poll. Diffed like
+// updateLiveTurnUI so a per-frame call only touches the DOM when a number
+// actually changed.
+let _lastMatchHudKey = "";
+function tickMatchHud() {
+  if (!matchPlay() || mode !== "course") { _lastMatchHudKey = ""; return; }
+  const oh = oppHoleStrokes(HOLE && HOLE.num);
+  // hole_scores count also catches the opponent FINISHING a hole, so the
+  // up/down status updates without waiting for the standings poll.
+  const key = state.strokes + "|" + (oh ? oh.n + (oh.done ? "d" : "") : "-") +
+              "|" + (lastOpp ? Object.keys(lastOpp.hole_scores || {}).length : 0);
+  if (key === _lastMatchHudKey) return;
+  _lastMatchHudKey = key;
+  updateScorecard();
+  // The scorebug's first render happens before the opponent row is populated,
+  // so it would otherwise sit on placeholder names until a hole completes.
+  updateMatchBug();
+}
+
 // Match play: once the hole can't be won or halved — the opponent is already in
 // with a score my best possible finish (holing the very next stroke) can't
 // match — pick up and move on rather than grinding out a dead hole.
@@ -14275,6 +14360,12 @@ function oppResponsive() {
 
 function sameName(a, b) { return (a || "").toLowerCase() === (b || "").toLowerCase(); }
 function oppName() { return (lastOpp && lastOpp.player_name) || "opponent"; }
+// First word only, capped — "Chip Duffington" would blow out the mobile
+// scorecard's right-hand cluster, where the opponent's hole score sits.
+function shortName(n) {
+  const w = String(n || "").trim().split(/\s+/)[0] || "Opp";
+  return w.length > 10 ? w.slice(0, 10) : w;
+}
 
 // My live shot state from the LOCAL game (no poll lag → input locks instantly
 // after I swing, without waiting for my own row to round-trip).
@@ -16077,6 +16168,7 @@ function loop() {
   cpuDriverTick();    // drive the live CPU opponent's shots (no-op unless in one)
   liveCameraTick();   // follow the opponent's ball while it's their turn
   updateLiveTurnUI(); // keep the whose-turn banner in sync (cheap; cached)
+  tickMatchHud();     // match play: opponent's strokes on this hole (cheap; cached)
   updateCamera();
   updateStats();
   updateWindChip();
