@@ -562,7 +562,11 @@ let _introPending = false; // set by enter(): arm the opening pull-back intro
 let _introSeed = false;    // consume on the first frame with a real target framing
 let _introUntil = 0;       // slow-glide window end (intro active while now < this)
 let _aimUx = 0, _aimUy = -1; // last solved aim unit vector (intro pull-back dir)
-const INTRO_ZOOM = 2.0;    // opening framing distance × the tee framing
+// Opening framing distance × the tee framing. Kept modest on purpose: the
+// pull-back is the FIRST thing streamed, and every extra unit of distance
+// squares the mesh footprint Google has to deliver before the course looks
+// real. 2.0 made the opening seconds a satellite blur.
+const INTRO_ZOOM = 1.4;
 const INTRO_MS = 3000;     // cinematic glide duration
 let _camEaseT = 0;
 function setCamera() {
@@ -584,7 +588,14 @@ function setCamera() {
   // 40-62ft band pushed the ball past the bottom edge, snapping back at 62ft).
   // In flight the target is FROZEN (_hold); cleared on hole change (render).
   const A = g.frameAnchors ? g.frameAnchors() : null;
-  const SPAN_MAX_U = 100;  // frame ≤ ~300yd of shot line — a full driver fits
+  // Frame at most this much of the shot line. Sized by what Google can STREAM,
+  // not by what would be nice to see: at 100u the tee camera sits ~413 m up and
+  // the photoreal mesh for that footprint took 35 s to arrive — the player
+  // stares at dark satellite fill for the whole opening. 70u parks it ~300 m
+  // up, which streams in a few seconds. A drive that outruns the frame is
+  // handled by the widen-guard below, and losing the ball briefly at the top of
+  // a big drive is what real golf broadcasts look like anyway.
+  const SPAN_MAX_U = 70;
   const SPAN_MIN_M = 14;   // tap-in floor: tight putt framing, ball + cup clear
   const REACH_F = 0.15, BALL_F = 0.85;  // anchor fractions of the play area
   let tOx, tOy, tD;
