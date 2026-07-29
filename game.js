@@ -58,10 +58,11 @@ const TUNE = {
   aeroPhysics: true,
   aeroSpinTilt: 26,      // ° of spin-axis tilt at full swipe curve (draw/fade)
   // Wall-clock pace multiplier. Real time (1.0) is physically honest but slow to
-  // play: a driver hangs ~7 s, then bounces, then a 30 ft putt rolls 6 s. 2.5x
-  // keeps every trajectory, distance and break EXACTLY as calibrated (the sim is
-  // time-invariant) while a shot resolves in a playable ~3 s.
-  timeScale: 2.5,
+  // play: a driver hangs ~7 s, then bounces, then a 30 ft putt rolls 6 s. This
+  // keeps every trajectory, distance and break EXACTLY as calibrated (the sim
+  // is time-invariant — a coarser dt traces the same path through space, it
+  // just gets there sooner) while a shot resolves in about a second.
+  timeScale: 3.75,
   // Turf impact + rolling, per surface. `e` = normal restitution (scaled down
   // with impact speed inside the impulse model), `mu` = contact friction that
   // converts backspin into check, `roll` = rolling deceleration in m/s².
