@@ -71,6 +71,15 @@ const TUNE = {
     woods:   { e: 0.12, mu: 0.80, roll: 6.00 },
     ob:      { e: 0.12, mu: 0.80, roll: 6.00 },
   },
+  // The synthetic green field's gradient is an ABSTRACT shape, not a real
+  // grade — raw magnitudes run 0.20 median / 0.44 max, i.e. 20-44%, which as a
+  // literal slope would out-accelerate green friction and roll forever. Map it
+  // onto real green grades: typical ~2%, severe ~5% (a 5% green is at the edge
+  // of holdable, which is exactly where the old model's cap sat — it clamped
+  // break at 82% of the green's own deceleration).
+  greenGradScale: 0.038,
+  greenGradMax: 0.024,
+  demGradMax: 0.35,      // cap on real terrain slope used for off-green roll
   aeroSettleVz: 0.55,    // m/s downward below which a bounce becomes a roll
   aeroStopMs: 0.06,      // m/s below which a rolling ball is at rest
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
@@ -390,6 +399,12 @@ const WORLD = { w: 100, h: 180 };
 // Fixed world scale: yards per world unit, CONSTANT across holes so a given
 // swing means the same distance everywhere. Overridden by course.yardsPerUnit.
 let YARDS_PER_UNIT = 3.0;
+// Metres per world unit. Lives up here with the other scale constants because
+// init-time work (recalcPower -> the physical green-pace closed form) reads it
+// long before the terrain section is reached.
+const M_PER_UNIT = 2.7432;
+const AERO_DT = 1 / 60;                      // one physics tick, seconds
+const msPerUF = () => M_PER_UNIT / AERO_DT;  // (world units/frame) -> m/s
 // Cup capture radius (world units) and default green speed — OSM carries no
 // stimp rating, so we default it; per-course green speeds come later.
 // Hole: real is 4.25" (~0.02 units) but that's brutal for feel-based putting, so
@@ -424,7 +439,16 @@ let MAX_CARRY_UNITS = 0;
 // the two-phase model: quadratic (tail, v=sqrt(2*decel*d)) up to greenCoastSpeed,
 // then linear (coast, v=vt+(d-dTailMax)*(1-friction)) beyond it. Shared by
 // recalcPower and the on-green power calc so both agree on the same physics.
+// Launch speed (world units/frame) that rolls distance D on a FLAT green.
+// Under the aero model this is the exact closed form of the physical roll —
+// constant stimp deceleration — so it seeds the pace inversion's bracket
+// accurately instead of from the retired two-phase constants.
+function greenRollSpeedSI(D) {
+  const a = window.Ballistics.greenDecel((HOLE && HOLE.greenSpeed) || DEFAULT_STIMP);
+  return Math.sqrt(2 * a * Math.max(0, D) * M_PER_UNIT) / msPerUF();
+}
 function greenBaseSpeed(D) {
+  if (TUNE.aeroPhysics && window.Ballistics) return greenRollSpeedSI(D);
   const vt = TUNE.greenCoastSpeed;
   const dTailMax = (vt * vt) / (2 * TUNE.greenDecel);
   if (D <= dTailMax) return Math.sqrt(2 * TUNE.greenDecel * D);
@@ -462,7 +486,7 @@ function invertPuttPaceCurved(x, y, ang, D) {
       b.x += b.vx; b.y += b.vy;                   // position first (matches rollStep order)
       len += Math.hypot(b.x - px, b.y - py);
       stepGreenRoll(b);                            // per-step break scan — matches live rollStep
-      if (Math.hypot(b.vx, b.vy) < TUNE.stopThreshold) break;
+      if (Math.hypot(b.vx, b.vy) < restSpeedThreshold()) break;
     }
     return len;
   };
@@ -1802,7 +1826,6 @@ function attachAero(fl, ang, C, club, spinRpm, sideSpin, x0, y0) {
   };
   return fl;
 }
-const AERO_DT = 1 / 60;   // one physics tick; the core substeps inside it
 // One aero tick against a passed-in ball + flight. Nothing here reads or writes
 // module state, so the live loop and simShotRest call it identically.
 function aeroFlightStep(b, fl, w) {
@@ -1999,7 +2022,8 @@ function landingBudget(fl, spin, surf) {
 // from the real physics. Keep it side-effect free.
 function landingRelease(fl, spin, surf) {
   const Dr = landingBudget(fl, spin, surf);
-  if (surf === "green") return Math.sign(Dr) * Math.sqrt(2 * TUNE.greenDecel * Math.abs(Dr));
+  if (surf === "green") return Math.sign(Dr) * (TUNE.aeroPhysics && window.Ballistics
+    ? greenRollSpeedSI(Math.abs(Dr)) : Math.sqrt(2 * TUNE.greenDecel * Math.abs(Dr)));
   const fr = TUNE.friction[surf] ?? 0.9;
   // Cap at fl.vh * bounce[surf].h: the ball can't leave the landing point faster
   // than it arrived (fl.vh) times the surface landing grip (bo.h). Without this,
@@ -2028,7 +2052,8 @@ function landingHop(fl, spin, surf) {
 // calibrated total. Pure — shared by the live settle branch and simShotRest.
 function hopSettleSpeed(hb, x, y, surf) {
   const residual = Math.max(0, hb.Dr - dist(hb.x0, hb.y0, x, y));
-  if (surf === "green") return Math.sqrt(2 * TUNE.greenDecel * residual);
+  if (surf === "green") return (TUNE.aeroPhysics && window.Ballistics)
+    ? greenRollSpeedSI(residual) : Math.sqrt(2 * TUNE.greenDecel * residual);
   const fr = TUNE.friction[surf] ?? 0.9;
   return residual * (1 - fr);
 }
@@ -2132,9 +2157,6 @@ function ballisticFlightStep(b) {
 // Velocities live in world-units-per-frame; deceleration is real m/s². These
 // convert between the two so the roll obeys measured turf numbers instead of
 // per-frame decay multipliers that made a 30 ft putt die in under two seconds.
-// (u/frame) → m/s. A function, not a const: M_PER_UNIT is declared further
-// down the file, so evaluating this at parse time hits its TDZ.
-const msPerUF = () => M_PER_UNIT / AERO_DT;
 function rollDecelMs(surf) {
   if (surf === "green") {
     return window.Ballistics.greenDecel(
@@ -2177,10 +2199,30 @@ function restSpeedThreshold() {
   return (TUNE.aeroPhysics && window.Ballistics)
     ? TUNE.aeroStopMs / msPerUF() : TUNE.stopThreshold;
 }
+// Dimensionless downhill gradient at a point — the real slope a rolling ball
+// feels. Greens come from the synthetic break field (rescaled, see
+// TUNE.greenGradScale); everything else from the baked DEM, whose gradient is
+// metres per world unit.
+function slopeGradAt(x, y, surf) {
+  if (surf === "green") {
+    const g = greenSlopeAt(x, y);
+    if (!g) return null;
+    const m = Math.hypot(g.x, g.y);
+    if (m < 1e-9) return null;
+    const s = Math.min(m * TUNE.greenGradScale, TUNE.greenGradMax);
+    return { x: (g.x / m) * s, y: (g.y / m) * s };
+  }
+  if (!HOLE._dem) return null;
+  const gv = HOLE._dem.gradAt(x, y);
+  const gx = gv.x / M_PER_UNIT, gy = gv.y / M_PER_UNIT;   // -> dimensionless
+  const m = Math.hypot(gx, gy);
+  if (m < 1e-9) return null;
+  const s = Math.min(m, TUNE.demGradMax);
+  return { x: (gx / m) * s, y: (gy / m) * s };
+}
 function stepGreenRoll(b) {
   if (TUNE.aeroPhysics && window.Ballistics) {
-    const g = greenSlopeAt(b.x, b.y);
-    rollStepSI(b, "green", g ? { x: g.x, y: g.y } : null);
+    rollStepSI(b, "green", slopeGradAt(b.x, b.y, "green"));
     return;
   }
   const sp = Math.hypot(b.vx, b.vy);
@@ -2232,7 +2274,7 @@ function rollStep(b) {
     // Real turf rolling: constant deceleration per surface + the true rolling
     // slope term. Replaces the per-frame decay multipliers, which were tuned
     // on the old compressed clock.
-    rollStepSI(b, surf, HOLE._dem ? HOLE._dem.gradAt(b.x, b.y) : null);
+    rollStepSI(b, surf, slopeGradAt(b.x, b.y, surf));
   } else {
     const sp = Math.hypot(b.vx, b.vy);
     const f = TUNE.friction[surf];
@@ -2378,7 +2420,8 @@ function resolveCup(b, speed, airborne, rand) {
     const lipOut = HOLE.holeRadius + BALL_RADIUS_UNITS + 0.05;  // current dist past center
     const targetFromCup = (1 + rand()) * ftU;       // 1–2 ft final resting dist
     const roll = Math.max(0.15 * ftU, targetFromCup - lipOut);  // remaining roll
-    const v = Math.sqrt(2 * TUNE.greenDecel * roll);
+    const v = (TUNE.aeroPhysics && window.Ballistics)
+      ? greenRollSpeedSI(roll) : Math.sqrt(2 * TUNE.greenDecel * roll);
     b.vx = dx * v; b.vy = dy * v; b.vz = 0;
     return { lip: true, grounded: true };
   }
@@ -2526,7 +2569,7 @@ function simShotRest(ball0, flight0) {
       if (surf === "green") {
         stepGreenRoll(b);                          // shared with live rollStep
       } else if (TUNE.aeroPhysics && window.Ballistics) {
-        rollStepSI(b, surf, HOLE._dem ? HOLE._dem.gradAt(b.x, b.y) : null);
+        rollStepSI(b, surf, slopeGradAt(b.x, b.y, surf));
       } else {
         const sp = Math.hypot(b.vx, b.vy);
         const f = TUNE.friction[surf];
@@ -3199,7 +3242,8 @@ function buildTrialShot(ang, frac, spin, onGreen) {
       // Short-putt floor: inside puttFloorFt never leave it short. Use at least the pace to
       // reach the cup on flat.
       if (flatU * YARDS_PER_UNIT * 3 <= TUNE.puttFloorFt) {
-        power = Math.max(power, Math.sqrt(2 * TUNE.greenDecel * flatU));
+        power = Math.max(power, (TUNE.aeroPhysics && window.Ballistics)
+          ? greenRollSpeedSI(flatU) : Math.sqrt(2 * TUNE.greenDecel * flatU));
       }
     } else {
       // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
@@ -4071,7 +4115,6 @@ function screenToWorld(sx, sy) {
 }
 // --- Terrain relief (tilted view) --------------------------------------
 // DEM elevation in WORLD UNITS (1 unit = 3 yds = 2.743 m). 0 without a DEM.
-const M_PER_UNIT = 2.7432;
 function terrainZ(x, y) {
   if (!HOLE) return 0;
   // Real baked DEM if the course has one (metres -> world units); else 0.
