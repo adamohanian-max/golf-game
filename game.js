@@ -49,6 +49,14 @@ const TUNE = {
   captureAssist: 0.08,     // max speed for the edge-catch drop (≈1.6× captureSpeed)
 
   // --- Ball flight ---
+  // REAL AERODYNAMICS (ballistics.js): drag + Magnus lift against the relative
+  // airflow, spin decay, RK4. Flight time becomes physical — a driver hangs
+  // ~6.5 s instead of the old arc's 1.25 s. Carry and total are UNCHANGED: the
+  // launch solver picks the ball speed that carries exactly the distance the
+  // club table already specifies, and the rollout still runs off the arc
+  // descriptor's landing bookkeeping. Flip false to fly the legacy arc.
+  aeroPhysics: true,
+  aeroSpinTilt: 26,      // ° of spin-axis tilt at full swipe curve (draw/fade)
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
   gravity: 0.044,        // downward accel (world units / frame^2) while airborne
   airDrag: 0.998,        // per-frame horizontal velocity bleed in the air
@@ -271,26 +279,26 @@ const TUNE = {
   // spin/lift — a plain projectile can't). PW and below from the table; SW/LW
   // extrapolated. Putter is the on-green roll (handled separately).
   clubs: {                                    // carry, maxH, land°, ballMph, spinRpm
-    driver: { name: "Driver", carry: 282, maxH: 35, land: 39, ball: 171, spin: 2545 },
-    "3w":   { name: "3 Wood", carry: 249, maxH: 32, land: 44, ball: 169, spin: 3663 },
-    "5w":   { name: "5 Wood", carry: 236, maxH: 33, land: 48, ball: 156, spin: 4322 },
-    hybrid: { name: "Hybrid", carry: 231, maxH: 31, land: 49, ball: 149, spin: 4587 },
-    "3i":   { name: "3 Iron", carry: 218, maxH: 30, land: 48, ball: 145, spin: 4404 },
-    "4i":   { name: "4 Iron", carry: 209, maxH: 31, land: 49, ball: 140, spin: 4782 },
-    "5i":   { name: "5 Iron", carry: 199, maxH: 33, land: 50, ball: 135, spin: 5280 },
-    "6i":   { name: "6 Iron", carry: 188, maxH: 32, land: 50, ball: 130, spin: 6204 },
-    "7i":   { name: "7 Iron", carry: 176, maxH: 34, land: 51, ball: 123, spin: 7124 },
-    "8i":   { name: "8 Iron", carry: 164, maxH: 33, land: 51, ball: 118, spin: 8078 },
-    "9i":   { name: "9 Iron", carry: 152, maxH: 32, land: 52, ball: 112, spin: 8793 },
-    pw:     { name: "PW",     carry: 142, maxH: 32, land: 52, ball: 104, spin: 9316 },
-    sw:     { name: "SW",     carry: 115, maxH: 31, land: 53, ball: 95,  spin: 10500 },
+    driver: { name: "Driver", carry: 282, maxH: 35, land: 39, launch: 10.9, ball: 171, spin: 2545 },
+    "3w":   { name: "3 Wood", carry: 249, maxH: 32, land: 44, launch: 9.2, ball: 169, spin: 3663 },
+    "5w":   { name: "5 Wood", carry: 236, maxH: 33, land: 48, launch: 9.4, ball: 156, spin: 4322 },
+    hybrid: { name: "Hybrid", carry: 231, maxH: 31, land: 49, launch: 10.2, ball: 149, spin: 4587 },
+    "3i":   { name: "3 Iron", carry: 218, maxH: 30, land: 48, launch: 10.4, ball: 145, spin: 4404 },
+    "4i":   { name: "4 Iron", carry: 209, maxH: 31, land: 49, launch: 11.0, ball: 140, spin: 4782 },
+    "5i":   { name: "5 Iron", carry: 199, maxH: 33, land: 50, launch: 12.1, ball: 135, spin: 5280 },
+    "6i":   { name: "6 Iron", carry: 188, maxH: 32, land: 50, launch: 14.1, ball: 130, spin: 6204 },
+    "7i":   { name: "7 Iron", carry: 176, maxH: 34, land: 51, launch: 16.3, ball: 123, spin: 7124 },
+    "8i":   { name: "8 Iron", carry: 164, maxH: 33, land: 51, launch: 18.1, ball: 118, spin: 8078 },
+    "9i":   { name: "9 Iron", carry: 152, maxH: 32, land: 52, launch: 20.4, ball: 112, spin: 8793 },
+    pw:     { name: "PW",     carry: 142, maxH: 32, land: 52, launch: 24.2, ball: 104, spin: 9316 },
+    sw:     { name: "SW",     carry: 115, maxH: 31, land: 53, launch: 28.0, ball: 95,  spin: 10500 },
     // minFrac: LW's own floor, below clubMinFrac. Full-swing LW floors at 90*0.667=60yd
     // carry. With chipRangeYds raised to 75, that floor now sits 15yd INSIDE the chip
     // ceiling — an intentional overlap (pins 60–75yd are chip-mode ground, but full swing
     // can still reach down to 60), so there is no dead zone and no hard seam between the
     // modes. Kept at 0.667 (not raised to match 75) precisely to preserve that overlap.
     // See buildTrialShot's ef calc.
-    lw:     { name: "LW",     carry: 90,  maxH: 30, land: 55, ball: 82,  spin: 11500, minFrac: 0.667 },
+    lw:     { name: "LW",     carry: 90,  maxH: 30, land: 55, launch: 31.5, ball: 82,  spin: 11500, minFrac: 0.667 },
     putter: { name: "Putter", carry: 30,  maxH: 0,  land: 0,  ball: 0,   spin: 0    },
   },
 
@@ -1730,8 +1738,94 @@ function setupFlight(b, ang, C, H, L, spinN) {
   b.vx = r.vx; b.vy = r.vy; b.z = r.z; b.vz = r.vz;
 }
 
+// =====================================================================
+//  Real aerodynamic flight (ballistics.js) — one stepper, live + predicted
+// =====================================================================
+// A bridge, not a rewrite: the arc descriptor `fl` still carries the rollout
+// bookkeeping (vh / L / spinN feed landingBudget + landingHop), so replacing
+// ONLY the airborne motion makes flight physical while carry and total stay
+// exactly on the calibrated table. The landing model becomes real separately.
+
+// Ball speed that carries exactly `C` world units with this club's real launch
+// angle and spin. Carry is monotonic in ball speed (unlike launch angle, where
+// it peaks and falls), so the bisection is well-posed. ~26 flight sims, run
+// once per swing — never per frame.
+function aeroSpeedForCarry(C, launchDeg, spinRpm) {
+  const Bal = window.Ballistics;
+  const targetM = C * M_PER_UNIT;
+  const carryAt = (mph) => Bal.flyToLanding(
+    Bal.launchState(mph, launchDeg, spinRpm, { x: 1, y: 0 }, 0), {}, { dt: 1 / 120 }).carry;
+  let lo = 20, hi = 240;
+  if (carryAt(hi) < targetM) return hi;
+  for (let k = 0; k < 26; k++) {
+    const mid = (lo + hi) / 2;
+    if (carryAt(mid) < targetM) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+// Wind as a real air-mass velocity (m/s). wind.dir is the bearing the wind
+// comes FROM; the legacy per-frame push moved the ball along (−sin, +cos), so
+// that is the air's own direction. Handing this to the aero core means a
+// headwind raises BOTH drag and lift — the ball climbs, stalls and drops short
+// — instead of merely being nudged.
+function aeroWindVec() {
+  if (!windEnabled || !wind.speed) return null;
+  const ms = wind.speed * 0.44704;
+  return { x: -Math.sin(wind.dir) * ms, y: Math.cos(wind.dir) * ms, z: 0 };
+}
+// Attach a real launch state to a flight descriptor that must carry `C`.
+function attachAero(fl, ang, C, club, spinRpm, sideSpin, x0, y0) {
+  const Bal = window.Ballistics;
+  if (!Bal || !TUNE.aeroPhysics || !club || !club.launch || !(C > 0)) return fl;
+  const spin = Math.max(200, spinRpm || 2500);
+  const mph = aeroSpeedForCarry(C, club.launch, spin);
+  fl.aero = {
+    st: Bal.launchState(mph, club.launch, spin,
+      { x: Math.cos(ang), y: Math.sin(ang) }, (sideSpin || 0) * TUNE.aeroSpinTilt),
+    x0, y0, mph, vhLegacy: fl.vh,   // vhLegacy: the pace the rollout was calibrated on
+  };
+  return fl;
+}
+const AERO_DT = 1 / 60;   // one physics tick; the core substeps inside it
+// One aero tick against a passed-in ball + flight. Nothing here reads or writes
+// module state, so the live loop and simShotRest call it identically.
+function aeroFlightStep(b, fl, w) {
+  const Bal = window.Ballistics;
+  const A = fl.aero.st;
+  Bal.step(A, AERO_DT / 2, { wind: w });   // 2 RK4 substeps: a single 1/60 step
+  Bal.step(A, AERO_DT / 2, { wind: w });   // measurably shortens carry at 75 m/s
+  b.x = fl.aero.x0 + A.p.x / M_PER_UNIT;
+  b.y = fl.aero.y0 + A.p.y / M_PER_UNIT;
+  b.z = A.p.z / M_PER_UNIT;
+  // legacy per-frame velocity stays in sync — clampToWorld, the cup's swept
+  // segment (px = b.x − b.vx) and the ball trail all read it
+  b.vx = A.v.x * AERO_DT / M_PER_UNIT;
+  b.vy = A.v.y * AERO_DT / M_PER_UNIT;
+  b.vz = A.v.z * AERO_DT / M_PER_UNIT;
+  fl.d = Math.hypot(A.p.x, A.p.y) / M_PER_UNIT;   // arc distance — drives the cine cut
+  return b.z <= 0;
+}
+// Rewrite the descriptor's landing terms from what the flight ACTUALLY did, so
+// the existing rollout math reads real numbers. `vh` stays in legacy per-frame
+// units because landingBudget multiplies it by a frame-dimensioned constant.
+function aeroLandingFl(fl) {
+  const A = fl.aero.st;
+  const vhMs = Math.hypot(A.v.x, A.v.y);
+  fl.L = Math.max(0.05, Math.atan2(Math.max(0, -A.v.z), Math.max(vhMs, 1e-6)));
+  fl.vh = fl.aero.vhLegacy;
+  return fl;
+}
+
 function arcFlightStep(b) {
   const fl = state.flight;
+  if (fl.aero) {
+    const landed = aeroFlightStep(b, fl, aeroWindVec());
+    clampToWorld(b);
+    if (!landed) return;
+    b.z = 0;
+    finishArcLanding(b, aeroLandingFl(fl));
+    return;
+  }
   const k = arcSpeedK(fl, fl.d);
   let inc = fl.vh * k;
   if (fl.d + inc > fl.landD) inc = fl.landD - fl.d;   // land exactly where the constant-speed model does
@@ -1759,7 +1853,15 @@ function arcFlightStep(b) {
   b.vz = b.z - prevz; // for the shadow/trail render
   clampToWorld(b);
 
-  if (fl.d >= fl.landD) {
+  if (fl.d >= fl.landD) finishArcLanding(b, fl);
+}
+// Touchdown hand-off: carry bookkeeping, surface verdict, then the rollout
+// (visible hops or a straight release). Split out of arcFlightStep so the
+// legacy arc AND the real aero flight land through IDENTICAL code — the old
+// engine's habit of duplicating motion logic is what let the predictor drift
+// away from the live shot.
+function finishArcLanding(b, fl) {
+  {
     // landed — record carry, then hand off to the surface bounce/roll
     b.z = 0;
     if (!shot.carried) {
@@ -2193,6 +2295,31 @@ function simShotRest(ball0, flight0) {
   for (let i = 0; i < TUNE.cineSimSteps; i++) {
     if (airborne && fl) {
       // --- arc phase (mirrors arcFlightStep) ---
+      if (fl.aero) {
+        // SAME stepper the live shot uses — the prediction cannot drift from
+        // the real flight because there is only one implementation.
+        const landed = aeroFlightStep(b, fl, aeroWindVec());
+        clampToWorld(b);
+        if (landed) {
+          b.z = 0;
+          const surf = surfaceAt(b.x, b.y);
+          if (surf === "water" || surf === "woods" || surf === "ob") return null;
+          carry = { x: b.x, y: b.y };
+          aeroLandingFl(fl);
+          const sp0 = Math.hypot(b.vx, b.vy) || 1, dx = b.vx / sp0, dy = b.vy / sp0;
+          const hop = landingHop(fl, b.spin, surf);
+          if (hop && hop.vz > 0.008) {
+            hopBudget = { x0: b.x, y0: b.y, Dr: hop.Dr };
+            b.vx = dx * hop.vh; b.vy = dy * hop.vh; b.vz = hop.vz; b.spin = 0;
+            fl = null;                       // airborne stays true → ballistic mirror
+          } else {
+            const v = landingRelease(fl, b.spin, surf);
+            b.vx = dx * v; b.vy = dy * v; b.vz = 0; b.spin = 0;
+            fl = null; airborne = false;
+          }
+        }
+        continue;
+      }
       const k = arcSpeedK(fl, fl.d);
       let inc = fl.vh * k;
       if (fl.d + inc > fl.landD) inc = fl.landD - fl.d;
@@ -3034,6 +3161,16 @@ function buildTrialShot(ang, frac, spin, onGreen) {
   flr.flight.floatMul = loMul;          // Low → less/no apex hang (see arcSpeedK)
   flr.flight.rolloutMul = hiT < 0 ? 1 + (TUNE.arcLowRoll - 1) * t : 1; // Low → runs out more (see landingRelease)
   if (t > 0) flr.flight.windMul = 1 + (windK - 1) * t; // high rides the wind, low punches through it
+  // Real flight: solve the launch conditions that carry exactly the C this
+  // club/lie/elevation already asked for, so distances are untouched while the
+  // ball actually flies. Spin rpm tracks the same modulation the arc used
+  // (lie flyers, chip spin, the FLIGHT slider) via the spinN ratio.
+  // target landD, not C: the arc model landed on a frame-quantized distance
+  // (ceil(C/vh0)·vh0), so matching C would systematically fly a few yards short
+  // of every historical calibration.
+  attachAero(flr.flight, ang, flr.flight.landD, c,
+             c.spin * (c.spinN > 0 ? effectiveSpinN / c.spinN : 1),
+             spinVal, b.x, b.y);
   return { usePutter: false, onGreen, f, hiT, mph,
            vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
 }
@@ -15660,7 +15797,13 @@ async function openManageDetail(t) {
 // the wall-clock duration is now stable. Substeps are pure arithmetic (cheap), and
 // update() early-returns when the ball isn't moving.
 const PHYS_DT = 1000 / 60;   // physics tick length (ms) — TUNE constants live at 60 Hz
-const PHYS_MAX_STEPS = 5;    // spiral-of-death guard: cap catch-up per rendered frame
+// Spiral-of-death guard: cap catch-up per rendered frame. Sized to the 250 ms
+// elapsed clamp below (250/16.7 ≈ 15), so physics keeps REAL time all the way
+// down to ~4 fps instead of silently entering slow motion. That mattered
+// little with the old 1.25 s arc; with real 6-8 s ball flights a starved
+// accumulator stretches a shot to twice its duration (measured: a headless
+// browser at 6 fps flew a 6.7 s 7-iron over 16.5 s of wall clock).
+const PHYS_MAX_STEPS = 15;
 let _physAccum = 0;
 let _physLast = performance.now();
 
