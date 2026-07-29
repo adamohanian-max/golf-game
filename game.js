@@ -2199,17 +2199,22 @@ function rollDecelMs(surf) {
 function rollStepSI(b, surf, grad) {
   const Bal = window.Ballistics, K = msPerUF(), dt = simDt();
   let vx = b.vx * K, vy = b.vy * K;
-  let sp = Math.hypot(vx, vy);
+  // ORDER IS THE WHOLE BALL GAME: slope acts on the FULL 2D velocity FIRST,
+  // and the heading is read AFTERWARDS. Taking the heading first and then
+  // projecting the slope-nudged velocity back onto it discards the
+  // perpendicular component — the ball could only speed up or slow down, never
+  // turn, so putts rolled dead straight. Break is exactly that perpendicular
+  // nudge accumulating over a roll.
+  if (grad) {
+    const k = Bal.SLOPE_ROLL_K * Bal.G * dt;   // (5/7)·g·sinθ for a rolling ball
+    vx -= k * grad.x; vy -= k * grad.y;
+  }
+  const sp = Math.hypot(vx, vy);
   // Travel direction is remembered so a ball that spins BACK to a stop and
   // reverses keeps a sane heading through the zero crossing.
   if (sp > 1e-6) { b._rdx = vx / sp; b._rdy = vy / sp; }
   const dx = b._rdx || 1, dy = b._rdy || 0;
   let sv = vx * dx + vy * dy;                 // signed speed along that heading
-  if (grad) {                                  // gravity along the surface
-    const k = Bal.SLOPE_ROLL_K * Bal.G * dt;
-    vx -= k * grad.x; vy -= k * grad.y;
-    sv = vx * dx + vy * dy;
-  }
   // Skid-then-roll: kinetic friction while the contact point slips (an order of
   // magnitude stronger than rolling resistance), then true rolling. This is the
   // whole reason an approach shot holds a green and a putt does not.
