@@ -40,6 +40,11 @@ const TUNE = {
   // low, shallow landing) and a checker is played forward/open (high, steep).
   // Degrees added to the club's launch angle at bias +1 (and subtracted at -1).
   chipLaunchSpread: 9,
+  // FLIGHT selector (High/Low) as a launch-angle delta, in degrees at full
+  // deflection. Under real physics trajectory EMERGES from launch conditions,
+  // so the old flightHiApex/flightHiLand multipliers (which post-scaled a
+  // scripted arc) do nothing — hitting it higher means launching it higher.
+  flightLaunchSpread: 5,
   puttSensitivity: 0.65,   // putt power scalar (< 1 = slower putts)
   // Putt control band: most putts are short, but max power reaches YARDS.maxPutt (50yd).
   // Two-segment power curve — the first puttControlFrac of input covers 0..puttControlYds
@@ -302,6 +307,18 @@ const TUNE = {
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
+  // ===================================================================
+  //  LEGACY — INERT while TUNE.aeroPhysics is true (which is the default)
+  // ===================================================================
+  // Everything from here to the end of this block fed the OLD scripted-release
+  // model: a landing computed a rollout BUDGET (landingBudget/landingRelease/
+  // landingHop/hopSettleSpeed) and the ball was re-paced to spend it. Real
+  // physics replaced that with an impulse at impact plus a skid-then-roll
+  // phase, so the entire family is bypassed — arcFlightStep returns before it.
+  // Tuning any of these has NO EFFECT on the live game. They survive only so
+  // aeroPhysics:false still runs, and should go with the flag.
+  //   superseded by -> TUNE.turf[surface] {e, mu, roll, dig}
+  //                    Ballistics.bounce / skidRoll / greenDecel
   bounce: {
     green:   { e: 0.30, h: 0.35 },  // greens hold the ball
     fairway: { e: 0.40, h: 0.48 },  // firm, releases forward
@@ -2039,6 +2056,7 @@ function finishArcLanding(b, fl) {
 // Rollout budget Dr (world units, signed; < 0 = spins back) for a first
 // touchdown. Pure — the single source both landingRelease AND landingHop draw
 // from, so the hop phase and the release can never disagree about the total.
+// LEGACY (inert when aeroPhysics is true — see the TUNE legacy block).
 function landingBudget(fl, spin, surf) {
   // Backspin check: a spinning ball grabs on landing. Low spin (driver) releases
   // and runs; high spin on receptive turf (wedge -> green) checks, and can roll
@@ -2066,6 +2084,8 @@ function landingBudget(fl, spin, surf) {
 // travel direction (< 0 = spins back). Pure — shared by arcFlightStep AND the
 // launch-time prediction (simShotRest), so the cinematic trigger can never drift
 // from the real physics. Keep it side-effect free.
+// LEGACY (inert when aeroPhysics is true). Superseded by the real impact
+// impulse in Ballistics.bounce + the skid phase in Ballistics.skidRoll.
 function landingRelease(fl, spin, surf) {
   const Dr = landingBudget(fl, spin, surf);
   if (surf === "green") return Math.sign(Dr) * (TUNE.aeroPhysics && window.Ballistics
@@ -2083,6 +2103,8 @@ function landingRelease(fl, spin, surf) {
 // derived from the DESIRED HOP DISTANCE (vz = Dhop·g/(2·vh) — never from the
 // arc's land-angle impact speed, which is ~25× too hot for the compressed arc
 // timebase). Pure — shared by arcFlightStep and simShotRest.
+// LEGACY (inert when aeroPhysics is true). Real hops now emerge from the
+// restitution in Ballistics.bounce instead of being scripted from a budget.
 function landingHop(fl, spin, surf) {
   const frac = TUNE.hopDrFrac[surf];
   if (!frac || fl.noLandCheck) return null;    // chips keep their tuned skid-release
@@ -2096,6 +2118,7 @@ function landingHop(fl, spin, surf) {
 // Residual roll pace once the hop phase settles: whatever ground the hops
 // actually covered comes out of the same Dr budget, so hop + roll = exactly the
 // calibrated total. Pure — shared by the live settle branch and simShotRest.
+// LEGACY (inert when aeroPhysics is true).
 function hopSettleSpeed(hb, x, y, surf) {
   const residual = Math.max(0, hb.Dr - dist(hb.x0, hb.y0, x, y));
   if (surf === "green") return (TUNE.aeroPhysics && window.Ballistics)
@@ -3447,7 +3470,9 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   // of every historical calibration.
   attachAero(flr.flight, ang, flr.flight.landD, c,
              c.spin * (c.spinN > 0 ? effectiveSpinN / c.spinN : 1),
-             spinVal, b.x, b.y, chipActive ? chipSpinParams().launchDelta : 0);
+             spinVal, b.x, b.y,
+             chipActive ? chipSpinParams().launchDelta
+                        : hiT * TUNE.flightLaunchSpread);
   return { usePutter: false, onGreen, f, hiT, mph,
            vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
 }
