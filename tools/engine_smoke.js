@@ -1,14 +1,21 @@
-// Engine smoke test — run via:  osascript -l JavaScript tools/engine_smoke.js <id> <repoRoot>
+// Engine smoke test — run via:
+//   osascript -l JavaScript tools/engine_smoke.js <id> <repoRoot> [--holes 1,4,7]
 //
 // Loads game.js into a headless JavaScriptCore environment with stubbed
-// DOM/canvas/Image/fetch, points the game at courses/<id>.json, then for EVERY
-// hole runs draw() in BOTH render modes (vector + photoreal) plus a full swing
-// and a putt. No exception across all holes = pass (exit 0). Any throw =>
-// non-zero exit with the failing holes, so verify_course.py can gate on it.
+// DOM/canvas/Image/fetch (tools/headless_stubs.js), points the game at
+// courses/<id>.json, then for EVERY hole runs draw() in BOTH render modes
+// (vector + photoreal) plus a full swing and a putt. No exception across all
+// holes = pass (exit 0). Any throw => non-zero exit with the failing holes, so
+// verify_course.py can gate on it.
+//
+// The full 18 is ~2 min (two draw() passes per hole) — use --holes to subset.
 //
 // processAerial() uses only drawImage/fillRect (no getImageData), so the real
 // aerial pipeline runs against a stub Image that fires onload synchronously —
 // the photoreal path is exercised for real, not faked.
+//
+// The DOM/canvas stubs live in tools/headless_stubs.js so tools/putt_matrix.js
+// can share them.
 
 ObjC.import('Foundation');
 
@@ -18,129 +25,25 @@ function readFile(p) {
   return ObjC.unwrap(s);
 }
 
-var STUBS = `
-// ---- headless DOM / canvas / browser stubs --------------------------------
-var __noop = function(){ return undefined; };
-function __ctx(){
-  var store = { canvas: { width: 1170, height: 2532 } };
-  function imgData(w, h){ w = w|0 || 1; h = h|0 || 1;
-    return { width: w, height: h, data: new Array(w*h*4).fill(0) }; }
-  var grad = { addColorStop: __noop };
-  var H = {
-    createImageData: function(a, b){ var w = (a && a.width) || a, h = (a && a.height) || b; return imgData(w, h); },
-    getImageData: function(x, y, w, h){ return imgData(w, h); },
-    createLinearGradient: function(){ return grad; },
-    createRadialGradient: function(){ return grad; },
-    createPattern: function(){ return {}; },
-    measureText: function(){ return { width: 0 }; },
-    isPointInPath: function(){ return false; },
-    getContextAttributes: function(){ return {}; }
-  };
-  return new Proxy(store, {
-    get: function(t, p){ if (p in H) return H[p]; if (p in t) return t[p]; return __noop; },
-    set: function(t, p, v){ t[p] = v; return true; }
-  });
-}
-function __el(){
-  var store = { style: {}, dataset: {},
-    classList: { add: __noop, remove: __noop, toggle: __noop, contains: function(){ return false; } },
-    children: [], childNodes: [],
-    textContent: "", innerHTML: "", innerText: "", value: "", checked: false,
-    width: 1170, height: 2532, clientWidth: 1170, clientHeight: 2532,
-    getContext: function(){ return __ctx(); },
-    getBoundingClientRect: function(){ return { left:0, top:0, right:1170, bottom:2532, width:1170, height:2532 }; },
-    querySelector: function(){ return __el(); },
-    querySelectorAll: function(){ return []; },
-    appendChild: function(c){ return c; },
-    insertBefore: function(c){ return c; },
-    removeChild: function(c){ return c; },
-    setAttribute: __noop, removeAttribute: __noop, getAttribute: function(){ return null; },
-    addEventListener: __noop, removeEventListener: __noop, dispatchEvent: __noop,
-    closest: function(){ return null; }, contains: function(){ return false; },
-    focus: __noop, blur: __noop, click: __noop, remove: __noop,
-    requestPointerLock: __noop, scrollIntoView: __noop
-  };
-  return new Proxy(store, {
-    get: function(t, p){ if (p in t) return t[p]; return __noop; },
-    set: function(t, p, v){ t[p] = v; return true; }
-  });
-}
-var __els = {};
-var document = {
-  getElementById: function(id){ return __els[id] || (__els[id] = __el()); },
-  createElement: function(){ return __el(); },
-  createElementNS: function(){ return __el(); },
-  createDocumentFragment: function(){ return __el(); },
-  createTextNode: function(){ return __el(); },
-  querySelector: function(){ return __el(); },
-  querySelectorAll: function(){ return []; },
-  getElementsByClassName: function(){ return []; },
-  addEventListener: __noop, removeEventListener: __noop,
-  body: __el(), documentElement: __el(), head: __el(),
-  hidden: false, visibilityState: "visible", cookie: ""
-};
-function FakeImage(){
-  var self = this; this.width = 2048; this.height = 2048;
-  this.onload = null; this.onerror = null;
-  this.addEventListener = function(ev, fn){ if (ev === "load") self.onload = fn; };
-  Object.defineProperty(this, "src", { set: function(v){
-    self._src = v; if (typeof self.onload === "function") self.onload();
-  }, get: function(){ return self._src; } });
-}
-var Image = FakeImage;
-var __deep = new Proxy(function(){ return __deep; }, {
-  get: function(){ return __deep; }, apply: function(){ return __deep; }
-});
-var requestAnimationFrame = function(){ return 0; };
-var cancelAnimationFrame = __noop;
-var setTimeout = function(){ return 0; };
-var clearTimeout = __noop;
-var setInterval = function(){ return 0; };
-var clearInterval = __noop;
-var performance = { now: function(){ return Date.now(); } };
-var getComputedStyle = function(){ return { getPropertyValue: function(){ return ""; } }; };
-var fetch = function(){ return new Promise(function(){}); };          // never resolves
-var localStorage = { getItem: function(){ return null; }, setItem: __noop, removeItem: __noop, clear: __noop };
-var sessionStorage = localStorage;
-var navigator = { userAgent: "jsc", platform: "headless", maxTouchPoints: 0, language: "en", vendor: "" };
-var console = { log: __noop, warn: __noop, error: __noop, info: __noop, debug: __noop };
-var supabase = __deep;
-// Leave AudioContext undefined so ensureAudio() returns null and every sound
-// helper hits its 'if (!ac) return' guard — audio isn't under test.
-var window = {
-  innerWidth: 1170, innerHeight: 2532, devicePixelRatio: 2,
-  addEventListener: __noop, removeEventListener: __noop,
-  requestAnimationFrame: requestAnimationFrame, cancelAnimationFrame: cancelAnimationFrame,
-  matchMedia: function(){ return { matches: false, addEventListener: __noop, addListener: __noop }; },
-  getComputedStyle: function(){ return { getPropertyValue: function(){ return ""; } }; },
-  localStorage: localStorage, sessionStorage: sessionStorage, navigator: navigator,
-  performance: performance, location: { href: "", search: "", hash: "", pathname: "/" },
-  AudioContext: undefined, webkitAudioContext: undefined,
-  scrollTo: __noop, setTimeout: setTimeout, clearTimeout: clearTimeout, fetch: fetch,
-  history: { pushState: __noop, replaceState: __noop }
-};
-// game.js reads these as BARE globals at module load (location.search, history.replaceState,
-// new URLSearchParams(location.search)) — mirror window's onto the global scope + stub
-// URLSearchParams if JSC lacks it, so the harness doesn't ReferenceError before draw() runs.
-var location = window.location;
-var history = window.history;
-if (typeof URLSearchParams === "undefined") {
-  URLSearchParams = function(){ return { get: function(){ return null; }, has: function(){ return false; }, getAll: function(){ return []; }, toString: function(){ return ""; } }; };
-}
-var __RESULT__ = null;
-`;
+// ballistics.js's UMD picks `self` then `globalThis`. Under osascript BOTH `self`
+// and `module` are undefined, so it lands on globalThis — while game.js reads
+// `window.Ballistics` off the STUB window. Wire them together or the whole
+// aeroPhysics branch silently never runs (buildTrialShot -> attachAero derefs
+// window.Ballistics and throws, and before this the harness had only ever
+// exercised the retired legacy physics).
+var BAL_PRELUDE = '\nwindow.Ballistics = (typeof Ballistics !== "undefined") ? Ballistics : globalThis.Ballistics;\n';
 
 var POSTLUDE = `
 ;(function(){
   var errors = [];
-  function settle(maxTicks){ for (var i = 0; i < maxTicks && (state.moving || state.airborne); i++) update(); }
   try {
     mode = "course";
     course = __COURSE__;                 // game.js's top-level 'let course'
-    course._dem = null; course._greens = null; course._img = undefined; course._imgReady = false;
-    var hs = course.holes;
+    course._dem = undefined; course._greens = null; course._img = undefined; course._imgReady = false;
+    var hs = course.holes, only = __ONLY__;
     for (var i = 0; i < hs.length; i++) {
       var rec = hs[i];
+      if (only && only.indexOf(rec.num) < 0) continue;
       try {
         setHole(rec);                    // frames camera + resets state + loads aerial (onload sync)
         draw();                          // photoreal (image ready after hole 0)
@@ -155,10 +58,12 @@ var POSTLUDE = `
         state.moving = false; state.airborne = false;
         launchShot(Math.atan2(HOLE.holePos.y - state.ball.y, HOLE.holePos.x - state.ball.x), 0.15, 0, true);
         settle(3000);
+        __N__++;
       } catch (e) { errors.push("hole " + rec.num + ": " + ((e && e.stack) || e)); }
     }
   } catch (e) { errors.push("setup: " + ((e && e.stack) || e)); }
-  __RESULT__ = { ok: errors.length === 0, errors: errors, holes: (course && course.holes ? course.holes.length : 0) };
+  __RESULT__ = { ok: errors.length === 0, errors: errors, holes: __N__,
+                 aero: !!(TUNE.aeroPhysics && window.Ballistics) };
 })();
 JSON.stringify(__RESULT__);
 `;
@@ -166,15 +71,23 @@ JSON.stringify(__RESULT__);
 function run(argv) {
   var id = argv[0];
   var base = argv[1];
-  if (!id || !base) throw new Error("usage: engine_smoke.js <id> <repoRoot>");
-  var gameSrc = readFile(base + "/game.js");
+  if (!id || !base) throw new Error("usage: engine_smoke.js <id> <repoRoot> [--holes 1,4,7]");
+  var only = "null";
+  for (var i = 2; i < argv.length; i++) {
+    if (argv[i] === "--holes" && argv[i + 1]) only = "[" + argv[i + 1] + "]";
+  }
   var courseJson = readFile(base + "/courses/" + id + ".json");
-  var big = STUBS + "\nvar __COURSE__ = " + courseJson + ";\n" + gameSrc + "\n" + POSTLUDE;
+  var big = readFile(base + "/tools/headless_stubs.js")
+          + "\nvar __N__ = 0;\nvar __ONLY__ = " + only + ";\n"
+          + readFile(base + "/ballistics.js") + BAL_PRELUDE
+          + "\nvar __COURSE__ = " + courseJson + ";\n"
+          + readFile(base + "/game.js") + "\n" + POSTLUDE;
   var out = eval(big);
   var res = JSON.parse(out);
   if (!res.ok) {
     throw new Error("ENGINE SMOKE FAIL (" + res.errors.length + " hole(s)):\n  " +
                     res.errors.slice(0, 8).join("\n  "));
   }
-  return "engine smoke PASS: " + res.holes + " holes (draw vector+photoreal, swing, putt)";
+  if (!res.aero) throw new Error("ENGINE SMOKE FAIL: aeroPhysics branch not live (window.Ballistics unbound)");
+  return "engine smoke PASS: " + res.holes + " holes, aero physics live (draw vector+photoreal, swing, putt)";
 }

@@ -178,13 +178,40 @@ const TUNE = {
     woods:   { e: 0.12, mu: 0.80, roll: 6.00, dig: 0.80 },
     ob:      { e: 0.12, mu: 0.80, roll: 6.00, dig: 0.80 },
   },
-  // The synthetic green field's gradient is an ABSTRACT shape, not a real
-  // grade — raw magnitudes run 0.20 median / 0.44 max, i.e. 20-44%, which as a
-  // literal slope would out-accelerate green friction and roll forever. Map it
-  // onto real green grades: typical ~0.8%, severe ~2.4%.
-  greenGradScale: 0.038,
-  greenGradMax: 0.024,
+  // --- Green surface, in real units (built by buildGreenTopo) ---------------
+  // The macro tilt is the baked DEM, plane-fit over the green polygon. The raw
+  // fit is NOT usable as a grade: over 2851 greens it medians 3.45% and p90
+  // 8.44%, and Harbour Town — physically flat — reads 9.1% median with a 0.2 ft
+  // plane residual, because the coarse DEM carries canopy/registration bias at
+  // green scale. A hard clamp would saturate 42% of greens at the cap and delete
+  // every green's character, so squash instead: s' = C·tanh(s/C). Identity at
+  // small s (a 1.0% green stays 1.0%), asymptote C, order-preserving.
+  gMacroCap:   0.028,    // dimensionless asymptote of the DEM macro tilt
+  gMicroGrade: 0.009,    // target RMS grade of the synthetic undulation lobes
+  gSynthTilt:  0.020,    // mean macro tilt where there is NO dem (blackwater, hogwarts)
+  // Damping exponent on course greenTopo tiltMul/undAmp. Measured on blackwater
+  // (1.35/1.7 AND stimp 13.5, which alone buys 1.27x more break than 11): at 0.6
+  // its greens ran 4.1% median, a 20 ft cross putt broke 10.5 ft and dead-pace
+  // 3 ft tap-ins only holed 80%. 0.4 keeps it clearly the meanest course in the
+  // list without turning putting into a different game.
+  gOptExp:     0.4,
+  // Physics cap on green slope, as a fraction of the grade above which a ball
+  // CANNOT rest ((5/7)·g·s > greenDecel(stimp)). Derived per hole from
+  // greenSpeed: stimp 11 -> 6.56%, 13.5 -> 5.34%, 14.5 -> 4.97%. See
+  // greenGradCap(). p99 of the built field is 3.9%, so this only ever bites
+  // where a course's greenTopo multipliers stack on a steep DEM.
+  gGradCapFrac: 0.92,
   demGradMax: 0.35,      // cap on real terrain slope used for off-green roll
+  // --- Green reading: ONE stated exaggeration, ONE absolute reference -------
+  // Every visual used to normalise by the green's own gmax, so a 0.5% green drew
+  // the same arrows and dots as a 3.5% one and the drawn ground mesh ran ~9%
+  // grade against a 0.76% physics field. Now: drawn relief = real feet × gExag,
+  // and intensity = grade / gRefGrade.
+  gExag:       2.0,      // the single vertical exaggeration on drawn green relief
+  gRefGrade:   0.04,     // grade that reads as "full" on dots / arrows / tint
+  gShadeExag:  24,       // hillshade normal exaggeration (lighting contrast only)
+  gContourFt:  0.5,      // contour interval, real feet
+  gArrowMinGrade: 0.004, // below this grade a fall-line arrow is noise — skip it
   aeroSettleVz: 0.55,    // m/s downward below which a bounce becomes a roll
   aeroStopMs: 0.06,      // m/s below which a rolling ball is at rest
   launchAngleDeg: 40,    // launch angle of a full shot (putts stay grounded)
@@ -279,7 +306,6 @@ const TUNE = {
   // Shaded-relief topo overlay (greens only). Intensity = drawImage globalAlpha.
   reliefAmbient: 0.14,   // always-on whisper on the in-play / target green
   reliefFull: 0.32,      // boosted by the slope button (+ fall-line arrows)
-  reliefExag: 6,         // vertical exaggeration -> hillshade contrast
   reliefShade: 1.8,      // highlight/shadow alpha scale per unit of relief
   reliefTint: 0.35,      // max warm-tint alpha on the steepest spots (a hint, not a ramp)
   // Flow dots: particles drifting downhill on greens-in-play (slope mode).
@@ -300,12 +326,10 @@ const TUNE = {
   // on screen (column-band warp), trees stand up from the woods mask, and a
   // hillshade overlay sells the slopes. All of it fades in with camera.tilt.
   tExag: 1.6,            // terrain relief exaggeration (1 = true DEM scale)
-  // Synthetic elevation fed into terrainZ so the tilted view actually rolls even
-  // on DEM-less courses (nearly all of them). Greens get a real, exaggerated
-  // undulation you can read break off; the whole course gets gentle cosmetic swells.
+  // Green undulation fed into terrainZ so the tilted view actually rolls. The
+  // MICRO field only (real feet × gExag): the macro tilt is a fit of the DEM,
+  // which terrainZ already lifts, so adding it here would double it.
   gUndOn: true,          // master switch: green vertical relief in the tilted view
-  gUndScale: 0.18,       // world-units per abstract green-h unit (~1.5ft realistic; 1 unit = 9ft)
-  gUndExag: 2.5,         // readability exaggeration atop realistic (net on-green ~4ft)
   gUndFall: 6.0,         // world-unit smoothstep falloff outside a green bbox -> 0 (no fairway distortion)
   gBroadAmp: 0.25,       // broad COSMETIC terrain amplitude, world units (~2ft); 0 disables. Physics ignores it.
   gBroadWL: 130,         // broad value-noise wavelength, world units (long gentle swells)
@@ -352,7 +376,6 @@ const TUNE = {
   gvGrid: 36,            // mesh cells per axis
   gvTilt: 0.95,          // initial viewing tilt (rad from top-down; 0 = flat plan view)
   gvTiltMin: 0.12, gvTiltMax: 1.48,   // near plan-view ↔ near ground-level (past ~1.5 the slab flips)
-  gvHeight: 0.07,        // full height range as a fraction of green radius (~true scale: field spans ±3ft)
   gvYawRate: 0.010,      // rad per horizontal drag px
   gvTiltRate: 0.006,     // rad per vertical drag px
   // Cinematic 3D landing: a launch-time forward sim (simShotRest) predicts where an
@@ -537,6 +560,10 @@ let YARDS_PER_UNIT = 3.0;
 // init-time work (recalcPower -> the physical green-pace closed form) reads it
 // long before the terrain section is reached.
 const M_PER_UNIT = 2.7432;
+// Feet per world unit: 1 unit = 3 yd = 9 ft EXACTLY, and every baked course
+// carries yardsPerUnit 3.0. The green field's heights are in feet and its
+// gradient is dimensionless, so this is the only conversion between them.
+const FT_PER_UNIT = 9;
 // Simulated seconds advanced per 60 Hz tick. TUNE.timeScale > 1 runs the whole
 // sim faster in WALL time without touching a single distance: the equations of
 // motion are time-invariant, so a trajectory sampled at a coarser dt traces the
@@ -645,24 +672,29 @@ function invertPuttPaceCurved(x, y, ang, D) {
     if (g.grad && pointInPoly(x, y, g.poly)) { onGreen = true; break; }
   }
   if (!onGreen) return base;
-  const rollLen = (v0) => {
-    const b = { x, y, vx: dirx * v0, vy: diry * v0 };
-    let len = 0;
+  // The target is the ball's straight-line DISPLACEMENT, not the arc length it
+  // travels. Arc length is not what the player asked for: on a 3% cross slope a
+  // putt covers 20 ft of arc but finishes only 19.5 ft from where it started —
+  // 2.6% short of the cup, 5.4% at 4% — because the surplus is spent on the
+  // curve. Displacement IS the "does it die at the hole" question, and it is
+  // what makes buildTrialShot's 20%-short..20%-long band mean what it says.
+  // Measured monotone in v0 at every grade the field can produce, so the
+  // bisection below stays well posed.
+  const rollDisp = (v0) => {
+    const b = startRollingSpin({ x, y, vx: dirx * v0, vy: diry * v0 });
     for (let i = 0; i < 9000; i++) {
-      const px = b.x, py = b.y;
       b.x += b.vx; b.y += b.vy;                   // position first (matches rollStep order)
-      len += Math.hypot(b.x - px, b.y - py);
       stepGreenRoll(b);                            // per-step break scan — matches live rollStep
       if (Math.hypot(b.vx, b.vy) < restSpeedThreshold()) break;
     }
-    return len;
+    return Math.hypot(b.x - x, b.y - y);
   };
   // Bracket around the flat-green pace; widen only if slope pushes the root out
   // (uphill needs more pace, downhill less). Bounded guard loops keep it O(1).
   let lo = Math.max(1e-4, base * 0.2), hi = Math.max(base * 1.5, 1e-3), guard = 0;
-  while (rollLen(hi) < D && guard++ < 10) hi *= 1.5;
-  while (rollLen(lo) > D && guard++ < 20) lo *= 0.5;
-  for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; if (rollLen(mid) < D) lo = mid; else hi = mid; }
+  while (rollDisp(hi) < D && guard++ < 10) hi *= 1.5;
+  while (rollDisp(lo) > D && guard++ < 20) lo *= 0.5;
+  for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; if (rollDisp(mid) < D) lo = mid; else hi = mid; }
   return (lo + hi) / 2;
 }
 function recalcPower() {
@@ -890,7 +922,7 @@ function resetState() {
   holeDrop = null;   // clear any in-flight drop animation on a fresh hole
   state = {
     // z = height above ground, vz = vertical velocity, spin = sidespin (curve)
-    ball: { x: HOLE.teePos.x, y: HOLE.teePos.y, vx: 0, vy: 0, z: 0, vz: 0, spin: 0 },
+    ball: { x: HOLE.teePos.x, y: HOLE.teePos.y, vx: 0, vy: 0, z: 0, vz: 0, spin: 0, spinW: 0 },
     flight: null,                                     // active per-club arc, or null
     lastSafe: { x: HOLE.teePos.x, y: HOLE.teePos.y }, // restore point for water
     moving: false,
@@ -1814,7 +1846,8 @@ function greenSlopeAt(x, y) {
   }
   return null;
 }
-// Synthetic green-field height at a point (same field that breaks), or null off-green.
+// Green-field height in FEET above that green's centroid plane (the same field
+// that breaks), or null off-green.
 function greenHeightAt(x, y) {
   for (const g of HOLE._greens || []) {
     if (g.h && pointInPoly(x, y, g.poly)) return g.h(x, y);
@@ -1823,15 +1856,16 @@ function greenHeightAt(x, y) {
 }
 // Elevation at a world point in feet.
 // With a baked DEM: available everywhere on the course (fairway, rough, etc.).
-// Without a DEM: green-only, ±3ft relative to that green's midpoint.
+// Without a DEM: green-only, from the green field, which is already in FEET
+// relative to the green's centroid plane — no renormalisation (this used to force
+// every green to a ±3 ft range regardless of how tilted it actually was, and it
+// feeds playsLikeYards / elevAdjustCarry, which are yardage-book numbers).
 // Returns null if no elevation data is available for this point.
 function terrainElevAt(x, y) {
   if (HOLE._dem) return HOLE._dem.elevAt(x, y) * 3.28084;  // metres → feet
   for (const g of HOLE._greens || []) {
     if (!pointInPoly(x, y, g.poly)) continue;
-    const hMid = (g.hmin + g.hmax) / 2;
-    const hHalf = (g.hmax - g.hmin) / 2 || 1;
-    return (g.h(x, y) - hMid) / hHalf * 3.0;
+    return g.h(x, y) - (g.hmin + g.hmax) / 2;
   }
   return null;
 }
@@ -2364,6 +2398,23 @@ function rollDecelMs(surf) {
   }
   return (TUNE.turf[surf] || TUNE.turf.fairway).roll;
 }
+// A putt leaves the face ROLLING, not sliding. Without this the ball entered
+// skidRoll with slip u = sv and spent its whole first tick on KINETIC friction
+// (green mu 0.82 -> 8.0 m/s², and at timeScale 3.75 one tick is 62 ms), so the
+// pace inversion had to launch 35% hot to still reach the cup: a 20 ft putt left
+// at 3.32 m/s where the stimpmeter says 2.47 — and shot.mph showed the hot
+// number to the player. Handing the ball the rolling condition w = v/r makes the
+// stimp calibration exact end to end. THREE places build their own ball object
+// and all three have to agree or pace drifts from the live roll: launchShot,
+// simShotRest's copy (inherits — see there), invertPuttPaceCurved's forward roll.
+// turf.green.mu stays as it is: it is fitted for approach-shot check, and with a
+// putt no longer slipping it simply never fires on one.
+function startRollingSpin(b) {
+  if (!window.Ballistics) return b;
+  b.spinW = Math.hypot(b.vx, b.vy) * msPerUF() / window.Ballistics.BALL.r;
+  b._rdx = b._rdy = 0;              // fresh heading memory (see rollStepSI)
+  return b;
+}
 // One frame of real rolling: constant turf deceleration plus the true slope
 // term for a rolling sphere, a = (5/7)·g·∇h. Returns false once the ball is at
 // rest. `grad` is the dimensionless downhill gradient at the ball.
@@ -2413,18 +2464,33 @@ function restSpeedThreshold() {
   return (TUNE.aeroPhysics && window.Ballistics)
     ? TUNE.aeroStopMs / msPerUF() : TUNE.stopThreshold;
 }
+// Steepest grade a green may present, in dimensionless slope. This cap is
+// PHYSICAL, not cosmetic: a rolling ball cannot rest where (5/7)·g·s exceeds the
+// turf's rolling deceleration, which at stimp 11 is s = 0.4994/7.007 = 7.13%
+// (13.5 -> 5.81%, 14.5 -> 5.41%). Above that a stopped ball restarts itself and
+// rollStepSI's rest gate can never fire, so the ball trickles until it leaves the
+// green. Cap at gGradCapFrac of THIS hole's threshold — derived from greenSpeed,
+// not hardcoded, because blackwater/hogwarts run 13.5-14.5 — and a settled ball
+// always stays settled with 8% of margin.
+function greenGradCap() {
+  const Bal = window.Ballistics;
+  if (!Bal) return TUNE.gMacroCap * 2;   // legacy/no-module path: a sane fixed ceiling
+  return TUNE.gGradCapFrac * Bal.greenDecel((HOLE && HOLE.greenSpeed) || DEFAULT_STIMP)
+         / (Bal.SLOPE_ROLL_K * Bal.G);
+}
 // Dimensionless downhill gradient at a point — the real slope a rolling ball
-// feels. Greens come from the synthetic break field (rescaled, see
-// TUNE.greenGradScale); everything else from the baked DEM, whose gradient is
-// metres per world unit.
+// feels. Greens read buildGreenTopo's grad STRAIGHT (it is already a true grade;
+// the old abstract field needed a rescale, and the 0.038 it got is exactly why
+// putts did not break); everything else divides the baked DEM's gradient, which
+// is metres per world unit.
 function slopeGradAt(x, y, surf) {
   if (surf === "green") {
     const g = greenSlopeAt(x, y);
     if (!g) return null;
     const m = Math.hypot(g.x, g.y);
     if (m < 1e-9) return null;
-    const s = Math.min(m * TUNE.greenGradScale, TUNE.greenGradMax);
-    return { x: (g.x / m) * s, y: (g.y / m) * s };
+    const s = Math.min(m, greenGradCap());
+    return s === m ? g : { x: (g.x / m) * s, y: (g.y / m) * s };
   }
   if (!HOLE._dem) return null;
   const gv = HOLE._dem.gradAt(x, y);
@@ -2666,8 +2732,11 @@ function resolveCup(b, speed, airborne, rand) {
 // MUST MATCH the real step functions.
 // Returns { holed:true } | { x, y, surf, lipped } | null (never settled / dead ball).
 function simShotRest(ball0, flight0) {
+  // spinW is INHERITED, not re-derived: this receives the already-launched live
+  // ball, so a putt arrives rolling and an approach arrives with whatever the
+  // flight left. Dropping it made the prediction skid where the live ball rolls.
   const b = { x: ball0.x, y: ball0.y, vx: ball0.vx, vy: ball0.vy,
-              z: ball0.z, vz: ball0.vz, spin: ball0.spin };
+              z: ball0.z, vz: ball0.vz, spin: ball0.spin, spinW: ball0.spinW || 0 };
   let fl = Object.assign({}, flight0);
   // DEEP-copy the aero state. Object.assign is shallow, so the prediction would
   // otherwise step the LIVE ball's launch state to the end of its flight before
@@ -3487,13 +3556,19 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
       // estimate was 1D: it credited only the along-line gradient (a two-point
       // secant) and assumed a straight path, so big breakers and "perpendicular"
       // putts (which curl onto a longer arc) launched short. The 2D sim integrates
-      // the true gradient over the whole path and counts the real arc length.
+      // the true gradient over the whole path and measures where the ball ENDS UP
+      // relative to the ball (straight-line displacement) — see there.
       power = invertPuttPaceCurved(b.x, b.y, ang, targetU);
-      // Short-putt floor: inside puttFloorFt never leave it short. Use at least the pace to
-      // reach the cup on flat.
+      // Short-putt floor: inside puttFloorFt never leave it short — floor to the
+      // pace that reaches the cup ON THIS SLOPE, i.e. dead pace for the untouched
+      // distance. It used to floor to the FLAT closed form, which ignores gravity:
+      // once green grades became real that sent a downhill tap-in 2 ft past the
+      // hole on a 3% green and 15 ft past on blackwater's 4%+ at stimp 13.5.
       if (flatU * YARDS_PER_UNIT * 3 <= TUNE.puttFloorFt) {
-        power = Math.max(power, (TUNE.aeroPhysics && window.Ballistics)
-          ? greenRollSpeedSI(flatU) : Math.sqrt(2 * TUNE.greenDecel * flatU));
+        const dead = (TUNE.aeroPhysics && window.Ballistics)
+          ? invertPuttPaceCurved(b.x, b.y, ang, flatU)
+          : Math.sqrt(2 * TUNE.greenDecel * flatU);
+        power = Math.max(power, dead);
       }
     } else {
       // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
@@ -3657,6 +3732,10 @@ function launchShot(ang, frac, spin, onGreen) {
   state._lippedThisShot = false;
   state.flight = trial.flight;
   b.vx = trial.vx; b.vy = trial.vy; b.vz = trial.vz; b.z = trial.z; b.spin = trial.spin;
+  // A putt starts rolling (see startRollingSpin); a full shot gets its angular
+  // velocity from the landing (aeroToRoll), so clear any leftover here or the
+  // previous shot's spin would grind through this one's first ground contact.
+  if (trial.usePutter) startRollingSpin(b); else b.spinW = 0;
   shot.mph = trial.mph;
   state.airborne = !trial.usePutter;
   if (trial.hiT !== 0) resetFlightBias(); // one-shot: the selector never silently carries to the next swing
@@ -4454,7 +4533,7 @@ function greenUndZ(x, y) {
       const p = polyBBox(g.poly), f = TUNE.gUndFall;
       b = g._zbb = { minx: p.minx - f, maxx: p.maxx + f, miny: p.miny - f, maxy: p.maxy + f,
                      ix0: p.minx, ix1: p.maxx, iy0: p.miny, iy1: p.maxy,
-                     hmid: (g.hmin + g.hmax) * 0.5 };
+                     hmid: (g.hmicMin + g.hmicMax) * 0.5 };
     }
     if (x < b.minx || x > b.maxx || y < b.miny || y > b.maxy) continue;
     // Smoothstep weight: 1 inside the green bbox, easing to 0 at the expanded edge.
@@ -4463,7 +4542,11 @@ function greenUndZ(x, y) {
     const d = Math.hypot(dx, dy);
     if (d >= TUNE.gUndFall) continue;
     const t = 1 - d / TUNE.gUndFall, w = t * t * (3 - 2 * t); // smoothstep, C1
-    z += (g.h(x, y) - b.hmid) * TUNE.gUndScale * TUNE.gUndExag * w;
+    // hMicro, NOT h: terrainZ already lifts the ground by the DEM, and the
+    // green's macro tilt IS a squashed fit of that same DEM — adding full h
+    // would draw the macro twice and crease the collar by the difference
+    // (worst case ~8 ft on a steep-DEM green).
+    z += gzFt(g.hMicro(x, y) - b.hmid) * w;
   }
   return z;
 }
@@ -4767,75 +4850,168 @@ function contourSegments(h, x0, y0, x1, y1, levels, nx, ny) {
   }
   return segs;
 }
-// Precompute per-green topo (height field + contour segments in world coords).
-// Pass `dem` (from buildDEM) to use real elevation; omit for synthetic fallback.
-// `opts` (course JSON `greenTopo`) tunes the synthetic field's difficulty:
-//   { tiltMul, undAmp, lobes } — tilt multiplier, undulation amplitude
-//   multiplier, and number of sin×cos lobes (>1 = multi-break shelves).
+// Least-squares plane fit of the DEM over ONE green polygon -> dimensionless
+// slope. Least squares, not a centroid derivative: the DEM cell is 2 world units
+// (5.5 m) against an 8-11 unit green, so a two-point derivative reads a single
+// cell pair and jumps discontinuously as the bbox moves (measured on pinehurst:
+// centroid 4.09% median vs plane-fit 3.04%). The fit averages the whole polygon,
+// which is exactly the "macro fall" a green pad has, and its residual RMS is
+// 0.02-0.41 ft — at green scale the plane really is the right model.
+function demPlaneTilt(poly, bb, dem) {
+  const N = 14;
+  let n = 0, Su = 0, Sv = 0, Sz = 0, Suu = 0, Suv = 0, Svv = 0, Suz = 0, Svz = 0;
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+    const x = bb.minx + (bb.maxx - bb.minx) * i / N;
+    const y = bb.miny + (bb.maxy - bb.miny) * j / N;
+    if (!pointInPoly(x, y, poly)) continue;
+    const z = dem.elevAt(x, y), u = x - bb.cx, v = y - bb.cy;
+    n++; Su += u; Sv += v; Sz += z;
+    Suu += u * u; Suv += u * v; Svv += v * v; Suz += u * z; Svz += v * z;
+  }
+  const centroid = () => {
+    const g = dem.gradAt(bb.cx, bb.cy);
+    return { x: g.x / M_PER_UNIT, y: g.y / M_PER_UNIT };
+  };
+  // A sliver/practice green can have too few in-poly samples to fit a plane.
+  if (n < 6) return centroid();
+  const A = [[Suu, Suv, Su], [Suv, Svv, Sv], [Su, Sv, n]], B = [Suz, Svz, Sz];
+  for (let k = 0; k < 3; k++) {                       // Gaussian elim, partial pivot
+    let p = k;
+    for (let r = k + 1; r < 3; r++) if (Math.abs(A[r][k]) > Math.abs(A[p][k])) p = r;
+    const tA = A[k]; A[k] = A[p]; A[p] = tA;
+    const tB = B[k]; B[k] = B[p]; B[p] = tB;
+    if (Math.abs(A[k][k]) < 1e-12) return centroid();  // degenerate sample set
+    for (let r = k + 1; r < 3; r++) {
+      const f = A[r][k] / A[k][k];
+      for (let c = k; c < 3; c++) A[r][c] -= f * A[k][c];
+      B[r] -= f * B[k];
+    }
+  }
+  const s = [0, 0, 0];
+  for (let k = 2; k >= 0; k--) {
+    let acc = B[k];
+    for (let c = k + 1; c < 3; c++) acc -= A[k][c] * s[c];
+    s[k] = acc / A[k][k];
+  }
+  // s[0], s[1] are metres of elevation per world unit -> dimensionless
+  const gx = s[0] / M_PER_UNIT, gy = s[1] / M_PER_UNIT;
+  return isFinite(gx) && isFinite(gy) ? { x: gx, y: gy } : centroid();
+}
+// Soft magnitude squash toward an asymptote: identity at small slope, never
+// exceeds C, order-preserving, direction untouched. A hard Math.min() would
+// saturate 42% of baked greens at the cap and delete all per-green variety.
+function squashGrad(gx, gy, C) {
+  const m = Math.hypot(gx, gy);
+  if (m < 1e-9) return { x: 0, y: 0 };
+  const k = C * Math.tanh(m / C) / m;
+  return { x: gx * k, y: gy * k };
+}
+// Precompute per-green topo, in REAL UNITS.
+//   h(x, y)      -> FEET above the green's centroid plane (macro + micro). Three
+//                   consumers already pretended this was feet (terrainElevAt,
+//                   greenUndZ, the 3D inspect mesh); now it is.
+//   hMicro(x, y) -> FEET, the synthetic undulation ONLY. greenUndZ needs this:
+//                   terrainZ already lifts the ground by the DEM, so feeding it
+//                   full h would draw the macro tilt twice and crease the collar.
+//   grad(x, y)   -> TRUE DIMENSIONLESS slope (dh/dx, both in metres). One world
+//                   unit is 3 yd = 9 ft exactly, so grad = (dh_ft/du)/FT_PER_UNIT.
+//                   0.03 IS a 3% grade — slopeGradAt reads it straight, no magic
+//                   rescale (the old abstract field needed one, and the 0.038 it
+//                   got made every green play at ~0.76%: putts did not break).
+// Macro tilt is the DEM plane fit, direction kept and magnitude squashed
+// (TUNE.gMacroCap): over 2851 baked greens the raw fit medians 3.45% and p90
+// 8.44% — Harbour Town, which is physically flat, reads 9.1% median with a 0.2 ft
+// plane residual, so the coarse DEM carries canopy/registration bias at green
+// scale. The fall DIRECTION is real data; the magnitude is not, so a green keeps
+// the terrain's fall line and gives up its exaggerated steepness.
+// Micro is sin×cos lobes whose amplitude comes from a TARGET GRADE
+// (TUNE.gMicroGrade), so break no longer scales as 1/R — the old fixed amplitude
+// gave St Andrews' 42-unit double greens 8x less break than a 5-unit green.
+// `opts` (course JSON `greenTopo`) = { tiltMul, undAmp, lobes }, damped by
+// TUNE.gOptExp: linear multipliers on a REAL grade are brutal (blackwater's
+// 1.35/1.7 on top of stimp 13.5 took a 20 ft cross putt from 2.7 to 7.1 ft).
 function buildGreenTopo(polys, dem, opts) {
   const out = [];
   if (!polys) return out;
+  const o = opts || {};
+  const tiltM = Math.pow(o.tiltMul || 1, TUNE.gOptExp);
+  const undM  = Math.pow(o.undAmp  || 1, TUNE.gOptExp);
   for (const poly of polys) {
     if (poly.length < 3) continue;
     const bb = polyBBox(poly);
     const R = Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2 || 1;
-    let h, grad, hi, lo;
+    const r1 = hashSeed(bb.cx, bb.cy), r2 = hashSeed(bb.cy, bb.cx), r3 = hashSeed(bb.cx + 7.3, bb.cy - 2.1);
+    // --- macro: real terrain where we have it, deterministic synth where not
+    let mgx, mgy;
     if (dem) {
-      // Real elevation: shift so the green centroid is zero, then use DEM.
-      const base = dem.elevAt(bb.cx, bb.cy);
-      h = (x, y) => dem.elevAt(x, y) - base;
-      grad = (x, y) => dem.gradAt(x, y);
-      // hi/lo: approximate dominant slope direction from centroid gradient
-      const cg = dem.gradAt(bb.cx, bb.cy), cgm = Math.hypot(cg.x, cg.y) || 1;
-      hi = { x: bb.cx - cg.x / cgm * R, y: bb.cy - cg.y / cgm * R };
-      lo = { x: bb.cx + cg.x / cgm * R, y: bb.cy + cg.y / cgm * R };
+      const t = demPlaneTilt(poly, bb, dem);
+      const s = squashGrad(t.x, t.y, TUNE.gMacroCap * tiltM);
+      mgx = s.x; mgy = s.y;
     } else {
-      const o = opts || {};
-      const r1 = hashSeed(bb.cx, bb.cy), r2 = hashSeed(bb.cy, bb.cx), r3 = hashSeed(bb.cx + 7.3, bb.cy - 2.1);
-      const theta = r1 * Math.PI * 2;
-      const tmag = (0.6 + 0.5 * r2) * (o.tiltMul || 1);
-      const dirx = Math.cos(theta), diry = Math.sin(theta);
-      // Undulation lobes: lobe 0 is the classic single sin×cos; extra lobes
-      // (course-requested) are shorter-wavelength, lower-amplitude harmonics
-      // that add shelves/tiers — true multi-break.
-      const amp0 = 0.5 * (o.undAmp || 1);
-      const lobes = [];
-      for (let li = 0, nLb = Math.max(1, o.lobes || 1); li < nLb; li++) {
-        const rs = li === 0 ? r3 : hashSeed(bb.cx * (li + 1.7) - 3.1, bb.cy * (li + 0.6) + 11.4);
-        lobes.push({
-          wl: R * (0.7 + 0.6 * rs) / (1 + li * 0.9),
-          ph: rs * 6.2831,
-          amp: amp0 * Math.pow(0.62, li),
-        });
-      }
-      h = (x, y) => {
-        const along = ((x - bb.cx) * dirx + (y - bb.cy) * diry) / R;
-        let und = 0;
-        for (const L of lobes) und += L.amp * Math.sin((x - bb.cx) / L.wl + L.ph) * Math.cos((y - bb.cy) / L.wl - L.ph);
-        return tmag * along + und;
-      };
-      grad = (x, y) => {
-        let gx = tmag * dirx / R, gy = tmag * diry / R;
-        for (const L of lobes) {
-          gx += L.amp * Math.cos((x - bb.cx) / L.wl + L.ph) * Math.cos((y - bb.cy) / L.wl - L.ph) / L.wl;
-          gy -= L.amp * Math.sin((x - bb.cx) / L.wl + L.ph) * Math.sin((y - bb.cy) / L.wl - L.ph) / L.wl;
-        }
-        return { x: gx, y: gy };
-      };
-      hi = { x: bb.cx + dirx * R, y: bb.cy + diry * R };
-      lo = { x: bb.cx - dirx * R, y: bb.cy - diry * R };
+      const th = r1 * Math.PI * 2, g = TUNE.gSynthTilt * (0.55 + 0.9 * r2) * tiltM;
+      mgx = Math.cos(th) * g; mgy = Math.sin(th) * g;
     }
-    let hmin = Infinity, hmax = -Infinity, gmax = 1e-6;
+    // --- micro: amplitude ∝ wavelength, so |∇lobe| = amp/(wl·FT_PER_UNIT) is
+    // R-INDEPENDENT. Weights are normalised by their sum, so `lobes: 3` SPLITS
+    // one grade budget across three wavelengths (shelves) instead of tripling
+    // the slope — that is what multi-break means. Wavelength: the old
+    // R*(0.7..1.3) gave lobe 0 a spatial PERIOD of ~3x the green, i.e. a second
+    // tilt rather than a lobe; R*(0.40..0.70) puts one clean spine/bowl on it.
+    const nLb = Math.max(1, o.lobes || 1);
+    let wsum = 0;
+    for (let li = 0; li < nLb; li++) wsum += Math.pow(0.62, li);
+    const microG = TUNE.gMicroGrade * undM, lobes = [];
+    for (let li = 0; li < nLb; li++) {
+      const rs = li === 0 ? r3 : hashSeed(bb.cx * (li + 1.7) - 3.1, bb.cy * (li + 0.6) + 11.4);
+      const wl = R * (0.40 + 0.30 * rs) / (1 + li * 0.9);
+      lobes.push({ wl, ph: rs * 6.2831,
+                   amp: microG * FT_PER_UNIT * Math.SQRT2 * wl * Math.pow(0.62, li) / wsum });
+    }
+    const hMicro = (x, y) => {                       // FEET
+      let z = 0;
+      for (const L of lobes) z += L.amp * Math.sin((x - bb.cx) / L.wl + L.ph) * Math.cos((y - bb.cy) / L.wl - L.ph);
+      return z;
+    };
+    const h = (x, y) =>                              // FEET
+      FT_PER_UNIT * (mgx * (x - bb.cx) + mgy * (y - bb.cy)) + hMicro(x, y);
+    const grad = (x, y) => {                         // DIMENSIONLESS
+      let gx = mgx * FT_PER_UNIT, gy = mgy * FT_PER_UNIT;   // ft per world unit
+      for (const L of lobes) {
+        gx += L.amp * Math.cos((x - bb.cx) / L.wl + L.ph) * Math.cos((y - bb.cy) / L.wl - L.ph) / L.wl;
+        gy -= L.amp * Math.sin((x - bb.cx) / L.wl + L.ph) * Math.sin((y - bb.cy) / L.wl - L.ph) / L.wl;
+      }
+      return { x: gx / FT_PER_UNIT, y: gy / FT_PER_UNIT };
+    };
+    // hi/lo (drawGreen's vector wash endpoints) both come from the macro fall
+    // line now — uphill is -macro — so the wash runs down the real slope.
+    // A dead-flat macro would collapse hi/lo onto the centroid and hand
+    // drawGreen a degenerate gradient, so fall back to a fixed axis.
+    const mm0 = Math.hypot(mgx, mgy);
+    const ux = mm0 > 1e-9 ? mgx / mm0 : 1, uy = mm0 > 1e-9 ? mgy / mm0 : 0;
+    const hi = { x: bb.cx - ux * R, y: bb.cy - uy * R };
+    const lo = { x: bb.cx + ux * R, y: bb.cy + uy * R };
+    let hmin = Infinity, hmax = -Infinity, hmicMin = Infinity, hmicMax = -Infinity, gmax = 1e-6;
     const N = 22;
     for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
       const sx = bb.minx + (bb.maxx - bb.minx) * i / N, sy = bb.miny + (bb.maxy - bb.miny) * j / N;
       const v = h(sx, sy);
       if (v < hmin) hmin = v; if (v > hmax) hmax = v;
+      const vm = hMicro(sx, sy);
+      if (vm < hmicMin) hmicMin = vm; if (vm > hmicMax) hmicMax = vm;
       const gv = grad(sx, sy), gm = Math.hypot(gv.x, gv.y);
-      if (gm > gmax) gmax = gm;
+      if (gm > gmax) gmax = gm;   // steepest real grade here — census/debug only
     }
-    const nL = 7, levels = [];
-    for (let kk = 1; kk <= nL; kk++) levels.push(hmin + (hmax - hmin) * kk / (nL + 1));
+    // Contours at a REAL interval, like a yardage book — not 7 levels stretched
+    // over whatever range this green happens to have (which drew the same seven
+    // lines on a 0.8 ft green and a 21 ft double green). Doubled while it would
+    // draw more than 14 lines, halved once on a nearly flat green so it still
+    // shows something.
+    let step = TUNE.gContourFt;
+    const span = hmax - hmin;
+    while (span / step > 14) step *= 2;
+    if (span < 1.5 * step) step = Math.max(0.25, step / 2);
+    const levels = [];
+    for (let L = Math.ceil(hmin / step) * step; L < hmax; L += step) levels.push(L);
     // Chain each level's marching-squares segments into polylines and round
     // them (Chaikin) so contours draw as flowing curves, not kinked cells.
     const contours = [];
@@ -4849,7 +5025,7 @@ function buildGreenTopo(polys, dem, opts) {
           : { pts: chaikinOpen(path), closed: false });
       }
     }
-    out.push({ poly, contours, h, grad, gmax, hmin, hmax, hi, lo });
+    out.push({ poly, contours, h, hMicro, grad, gmax, hmin, hmax, hmicMin, hmicMax, hi, lo });
   }
   return out;
 }
@@ -5121,6 +5297,16 @@ function drawAppleGreenDashes(gs) {
 // steepest spots + thin fall-line arrows. Shown only on the green in play and the
 // target green; faint always-on (ambient), boosted to full detail by the slope button.
 
+// Absolute steepness 0..1 for every green-reading visual. Normalising by the
+// green's OWN gmax (what all of them used to do) meant a 0.5% green and a 3.5%
+// green drew identical arrows and identical dot speeds — the readout carried no
+// information about how much a putt would actually break. gRefGrade is a fixed
+// grade (4%: severe but playable), so intensity compares BETWEEN greens and
+// between courses.
+function greenGradeT(gx, gy) { return Math.min(1, Math.hypot(gx, gy) / TUNE.gRefGrade); }
+// Drawn height (world units) for a green-field height in FEET, with the one
+// stated exaggeration. Everything that draws green relief goes through this.
+function gzFt(ft) { return ft / FT_PER_UNIT * TUNE.gExag; }
 // Downhill fall-line arrow at a world point (rotates with the camera via wx/wy).
 // Constant screen-space line width so it reads at any zoom.
 function drawFallArrow(x, y, grad, t) {
@@ -5155,14 +5341,14 @@ function buildGreenRelief(g) {
   const w = bb.maxx - bb.minx, h = bb.maxy - bb.miny, long = Math.max(w, h) || 1;
   const RMAX = 96, scale = RMAX / long;
   const W = Math.max(8, Math.round(w * scale)), H = Math.max(8, Math.round(h * scale));
-  const sx = w / W, sy = h / H, gmax = g.gmax || 1e-6, EX = TUNE.reliefExag;
+  const sx = w / W, sy = h / H, EX = TUNE.gShadeExag;
   let lx = -0.55, ly = -0.55, lz = 0.63;              // light from NW, up
   const ll = Math.hypot(lx, ly, lz); lx /= ll; ly /= ll; lz /= ll;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const cg = c.getContext("2d"), im = cg.createImageData(W, H), D = im.data;
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const X = bb.minx + (i + 0.5) * sx, Y = bb.miny + (j + 0.5) * sy;
-    const gr = g.grad(X, Y), t = Math.min(1, Math.hypot(gr.x, gr.y) / gmax);
+    const gr = g.grad(X, Y), t = greenGradeT(gr.x, gr.y);
     let nx = -gr.x * EX, ny = -gr.y * EX, nz = 1;
     const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
     const d = Math.max(-1, Math.min(1, (nx * lx + ny * ly + nz * lz) - lz)); // vs flat
@@ -5188,9 +5374,11 @@ function drawGreenArrows(g) {
   for (let j = 0; j < ay; j++) for (let i = 0; i < ax; i++) {
     const px = bb.minx + (i + 0.5) * adx, py = bb.miny + (j + 0.5) * ady;
     if (!pointInPoly(px, py, g.poly)) continue;
-    const gr = g.grad(px, py), t = Math.min(1, Math.hypot(gr.x, gr.y) / (g.gmax || 1e-6));
-    if (t < 0.08) continue;
-    drawFallArrow(px, py, gr, t);
+    const gr = g.grad(px, py);
+    // Absolute cull: the old `t < 0.08` was RELATIVE to this green's steepest
+    // spot, so a dead-flat green still drew a full field of arrows.
+    if (Math.hypot(gr.x, gr.y) < TUNE.gArrowMinGrade) continue;
+    drawFallArrow(px, py, gr, greenGradeT(gr.x, gr.y));
   }
 }
 // --- Flow dots: particles drifting downhill along the green's gradient ------
@@ -5217,11 +5405,10 @@ function updateFlowDots(g) {
   const target = Math.min(TUNE.flowMaxDots, Math.round(f.area * TUNE.flowDensity));
   // trickle-spawn toward target (avoids a pop-in burst on first frame)
   for (let n = 0; n < 6 && f.dots.length < target; n++) { const d = spawnFlowDot(g, f.bb); if (d) f.dots.push(d); }
-  const gmax = g.gmax || 1e-6;
   for (let i = f.dots.length - 1; i >= 0; i--) {
     const d = f.dots[i];
     const gr = g.grad(d.x, d.y), gm = Math.hypot(gr.x, gr.y) || 1e-6;
-    d.t = Math.min(1, gm / gmax);                       // steepness 0..1 (drives speed + alpha)
+    d.t = greenGradeT(gr.x, gr.y);   // ABSOLUTE steepness 0..1 (drives speed + alpha)
     const sp = TUNE.flowSpeed * (TUNE.flowMinFrac + (1 - TUNE.flowMinFrac) * d.t);
     d.vx = -gr.x / gm * sp; d.vy = -gr.y / gm * sp;     // unit downhill * speed
     d.x += d.vx; d.y += d.vy; d.age++;
@@ -5365,8 +5552,13 @@ function closeGreenView() {
 function buildGreenViewMesh(g) {
   const bb = polyBBox(g.poly);
   const R = Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2 * 1.02 || 1;
-  const hMid = (g.hmin + g.hmax) / 2, hHalf = Math.max((g.hmax - g.hmin) / 2, 1e-6);
-  const zOf = (x, y) => (g.h(x, y) - hMid) / hHalf * R * TUNE.gvHeight; // world-unit height
+  // TRUE scale x the one stated exaggeration. This used to renormalise by the
+  // green's own height range, so a dead-flat green looked exactly as tilted as a
+  // severe one — the inspect view could not tell you how much break there was.
+  // Full h here (not hMicro): this mesh is green-local, there is no DEM under it
+  // to double-count.
+  const hMid = (g.hmin + g.hmax) / 2;
+  const zOf = (x, y) => gzFt(g.h(x, y) - hMid);           // world-unit height
   const N = TUNE.gvGrid, M = N + 1;
   const W = bb.maxx - bb.minx || 1, H = bb.maxy - bb.miny || 1;
   // grid corners: world-relative coords + height
@@ -5391,7 +5583,7 @@ function buildGreenViewMesh(g) {
     const edge = !pointInPoly(x0, y0, g.poly) || !pointInPoly(x1, y0, g.poly)
               || !pointInPoly(x1, y1, g.poly) || !pointInPoly(x0, y1, g.poly);
     const gr = g.grad(ccx, ccy);
-    let nx = -gr.x * TUNE.reliefExag, ny = -gr.y * TUNE.reliefExag, nz = 1;
+    let nx = -gr.x * TUNE.gShadeExag, ny = -gr.y * TUNE.gShadeExag, nz = 1;
     const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
     const d = Math.max(-1, Math.min(1, nx * lx + ny * ly + nz * lz - lz));
     const hn = (g.h(ccx, ccy) - g.hmin) / Math.max(g.hmax - g.hmin, 1e-6); // 0 low .. 1 high
@@ -8125,7 +8317,8 @@ function setHole(rec) {
   if (glob) {
     // share precomputed DEM + topo + aerial across every hole (load once)
     if (!course._dem && course.dem) course._dem = buildDEM(course.dem);
-    if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green, null, course.greenTopo);  // always synthetic — DEM too coarse for green topo
+    // macro tilt from the DEM (plane-fit + squashed), micro synthetic — see buildGreenTopo
+    if (!course._greens) course._greens = buildGreenTopo(course.surfaces.green, course._dem, course.greenTopo);
     HOLE._greens = course._greens;
     HOLE._dem = course._dem || null;
     HOLE._demRec = course.dem || null; // raw grid — hillshade bakes from it
@@ -8151,7 +8344,8 @@ function setHole(rec) {
   } else {
     HOLE._dem = rec.dem ? buildDEM(rec.dem) : null;
     HOLE._demRec = rec.dem || null; // raw grid — hillshade bakes from it
-    HOLE._greens = buildGreenTopo(HOLE.surfaces.green, null, rec.greenTopo || (course && course.greenTopo));  // always synthetic
+    // macro tilt from the DEM (plane-fit + squashed), micro synthetic — see buildGreenTopo
+    HOLE._greens = buildGreenTopo(HOLE.surfaces.green, HOLE._dem, rec.greenTopo || (course && course.greenTopo));
     HOLE._img = null; HOLE._imgReady = false;
     if (src.aerial && src.aerial.file && typeof Image !== "undefined") {
       const target = HOLE;
