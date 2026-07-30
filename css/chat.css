@@ -1,0 +1,286 @@
+/* =====================================================================
+   IN-ROUND CHAT — speech bubbles, not a chat window.
+
+   The whole point of this file is that chat NEVER costs you a swing:
+     - #chat-stack and every descendant is pointer-events:none, so a swipe
+       that starts on a bubble still reaches the canvas underneath. There is
+       deliberately no tap target here; history lives in the HUD menu.
+     - #chat-bar (the typing surface) is the one exception — it IS interactive,
+       and while it's open canSwing() is gated off in game.js so a stray
+       gesture can't fire a shot behind the keyboard.
+
+   Anchored under the scorecard by anchorChat() (inline `top`), same trick
+   anchorMatchBoard() uses, because the scorecard's height moves with the
+   viewport.
+   ===================================================================== */
+
+#chat-stack {
+  position: fixed;
+  left: var(--s-3);
+  top: calc(var(--sat) + 86px);      /* JS overwrites with the measured value */
+  width: min(300px, 74vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 45;                       /* over #live-turn (40), under scrims (60) */
+  pointer-events: none;              /* ← the non-intrusion guarantee */
+}
+#chat-stack * { pointer-events: none; }
+
+/* ---- a bubble ---- */
+.ch-b {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.ch-b.ch-in { opacity: 1; transform: none; }
+.ch-b.ch-out { opacity: 0; transform: translateY(-4px); }
+
+.ch-body {
+  background: var(--glass-solid);
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  backdrop-filter: blur(var(--blur-xs));
+  border: 1px solid var(--border-hair);
+  border-radius: var(--r-lg);
+  border-top-left-radius: 6px;       /* the "spoken from the avatar" corner */
+  padding: 7px 11px;
+  font-size: var(--t-cap);
+  font-weight: var(--fw-reg);
+  line-height: 1.32;
+  color: var(--text);
+  overflow-wrap: anywhere;           /* a 100-char run can't widen the stack */
+  box-shadow: var(--shadow-1);
+}
+
+/* opponent avatar — reuses the .bot-av look (modals.css) at HUD scale */
+.ch-av {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--bav, var(--accent));
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: 9.5px;
+  letter-spacing: .02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-1);
+}
+
+/* ---- my own lines: right-aligned + dimmer, so they read as sent ---- */
+.ch-b.ch-mine { justify-content: flex-end; }
+.ch-b.ch-mine .ch-body {
+  background: var(--accent-soft);
+  border-color: var(--border-edge);
+  border-top-left-radius: var(--r-lg);
+  border-bottom-right-radius: 6px;
+  color: var(--text-muted);
+}
+.ch-b.ch-mine .ch-tick {
+  font-size: 9px;
+  opacity: .5;
+  margin-left: 5px;
+  vertical-align: 1px;
+}
+.ch-b.ch-mine.ch-pending .ch-body { opacity: .55; }   /* in flight */
+.ch-b.ch-mine.ch-failed .ch-body {
+  border-color: var(--status-error);
+  color: var(--status-error);
+}
+
+/* Toast lives at top:18% and can land on top of the stack on a short
+   viewport. While the stack is occupied, push it clear. */
+body.has-chat #toast { top: calc(var(--sat) + 18% + 62px); }
+
+/* =====================================================================
+   Send affordance — human matches only.
+   ===================================================================== */
+#chat-send-btn {
+  position: fixed;
+  left: var(--s-3);
+  bottom: calc(var(--sab) + var(--s-4) + 168px);   /* above #tilt-view-btn */
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  z-index: 15;
+}
+#chat-send-btn.ch-unread::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brass-bright);
+  box-shadow: 0 0 0 2px var(--surface-hud);
+}
+
+#chat-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;                        /* above every HUD control */
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  padding: var(--s-2) var(--s-3) calc(var(--sab) + var(--s-2));
+  background: var(--surface-panel);
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  backdrop-filter: blur(var(--blur-md));
+  border-top: 1px solid var(--border-edge);
+}
+#chat-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--w-08);
+  border: 1px solid var(--border-hair);
+  border-radius: var(--r-pill);
+  padding: 10px 14px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;                    /* ≥16px or iOS Safari zooms on focus */
+  outline: none;
+}
+#chat-text:focus { border-color: var(--accent); }
+#chat-text::placeholder { color: var(--text-faint); }
+#chat-count {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+#chat-count.ch-max { color: var(--status-over); }
+/* .menu-btn is a 260px-wide menu control; in this flex row it has to shrink to
+   its label or it crushes the input to a few characters. */
+#chat-send {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 10px 18px;
+  font-size: var(--t-cap);
+}
+
+/* Typing: clear the controls that would sit under the keyboard, exactly
+   like body.gv-open does for the green-inspect view. */
+body.chat-open #hm-club-row,
+body.chat-open #shot-power,
+body.chat-open #chat-send-btn,
+body.chat-open #hint,
+body.chat-open #live-turn { display: none !important; }
+
+/* Bot sign-off inside the match-results card (#match-results, z60, covers the
+   bubble stack — so the parting line is rendered here instead). */
+.mr-quote {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+  padding: var(--s-3);
+  background: var(--w-05);
+  border: 1px solid var(--border-hair);
+  border-radius: var(--r-md);
+}
+.mr-quote .ch-av { width: 26px; height: 26px; font-size: 11px; }
+.mr-quote-txt {
+  font-size: var(--t-cap);
+  line-height: 1.35;
+  color: var(--text-muted);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+.mr-quote-who {
+  display: block;
+  font-style: normal;
+  font-size: var(--t-micro);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+}
+
+/* =====================================================================
+   Session transcript (HUD menu → "Chat log"). A plain overlay, opened on
+   demand — this is NOT the in-round surface.
+   ===================================================================== */
+#chat-log {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--surface-scrim);
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  backdrop-filter: blur(var(--blur-md));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+}
+.cl-box {
+  width: min(420px, 100%);
+  max-height: 76vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-edge);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  box-shadow: var(--shadow-3);
+}
+.cl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.cl-head h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-h2);
+  font-weight: var(--fw-bold);
+  color: var(--text);
+}
+#cl-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.cl-row { display: flex; gap: var(--s-2); align-items: baseline; }
+.cl-row.cl-mine { flex-direction: row-reverse; text-align: right; }
+.cl-who {
+  font-size: var(--t-micro);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  min-width: 54px;
+}
+.cl-txt { font-size: var(--t-cap); color: var(--text); overflow-wrap: anywhere; }
+.cl-row.cl-mine .cl-txt { color: var(--text-muted); }
+.cl-empty {
+  font-size: var(--t-cap);
+  color: var(--text-faint);
+  text-align: center;
+  padding: var(--s-5) 0;
+}
+
+/* ---- mobile: the bottom-left button column rebases (see hud.css) ---- */
+body.is-mobile #chat-send-btn { bottom: calc(var(--sab) + var(--s-4) + 104px); }
+body.is-mobile #chat-stack { width: min(280px, 70vw); }

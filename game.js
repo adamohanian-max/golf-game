@@ -2471,6 +2471,7 @@ function rollStep(b) {
       playNearMiss();
       cameraPunch(0.018);
       if (!cine) showToast("So close!");
+      chatEvent("youLipOut");
       if (cup.grounded) state.airborne = false;
       else if (cup.hop) state.airborne = true;
     }
@@ -2482,6 +2483,7 @@ function rollStep(b) {
     state.moving = false;
     shot.total = dist(shot.startX, shot.startY, b.x, b.y) * YARDS_PER_UNIT;
     // Fairway-hit: tee shot on par 4/5 — check where ball came to rest
+    const wasTeeShot = state._teeShot;
     if (state._teeShot) {
       state._teeShot = false;
       state.fairwayHit = surfaceAt(b.x, b.y) === "fairway";
@@ -2498,12 +2500,21 @@ function rollStep(b) {
       playPenalty();
       haptic(14);
       showToast(rest === "water" ? "Water · +1 stroke" : "Out of bounds · +1 stroke", 2000, "warn");
+      chatEvent(rest === "water" ? "youWater" : "youOB");
     } else {
       state.lastSafe = { x: b.x, y: b.y };
       if (chipEnabled && rest !== "green" &&
           dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT < TUNE.chipRangeYds &&
           earnMilestone("hint-chip")) {
         showToast("Chip mode: a short swipe floats the ball to the flag", 2400, "gold");
+      }
+      // A bomb off the tee, or an approach stuffed close — the two shots an
+      // opponent would actually remark on. Putts are excluded: the shot has to
+      // have STARTED off the green to count as an approach.
+      if (wasTeeShot && shot.total >= CHAT.bombYds) chatEvent("youBomb");
+      else if (rest === "green" && surfaceAt(shot.startX, shot.startY) !== "green" &&
+               dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT * 3 <= CHAT.stiffFt) {
+        chatEvent("youStiff");
       }
     }
     // reframe to fit the remaining shot and re-aim the camera up the line to the
@@ -2781,6 +2792,7 @@ function canSwing() {
   return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition
     && !greenView  // 3D green inspect open: swings/aiming suspended
     && !cine       // cinematic landing playing: input suspended until it closes
+    && !chatOpen   // typing a message: a stray gesture must never fire a shot
     && myTurn();   // live match: only the "away" / honors player may swing
 }
 
@@ -3458,8 +3470,25 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   // Loft presented by an abbreviated swing (see TUNE.partialLoftDeg). A pure
   // function of `ef`, so it is continuous across the chip/full boundary and
   // cannot double-count with either slider's launch delta below.
-  const loftAdd = TUNE.partialLoftDeg *
-                  Math.max(0, Math.min(1, 1 - ef / TUNE.partialLoftRef));
+  const pitchLoft = TUNE.partialLoftDeg *
+                    Math.max(0, Math.min(1, 1 - ef / TUNE.partialLoftRef));
+  // ...but a greenside CHIP is not just a very short pitch, and the ramp above
+  // runs the wrong way for one. partialLoftDeg models a partial swing played
+  // ball-forward with a full release, which is exactly a 40 yd pitch — and it
+  // gives the SHORTEST swings the MOST loft, so a 15 yd chip was launching at
+  // 47.5° and landing at 53°, straight down with no horizontal speed left to
+  // run with. That is why every chip checked or spun backwards: measured, even
+  // cutting its backspin from 9717 to 4756 rpm moved the roll-out by 0.4 yd,
+  // because spin was never the thing stopping it — the descent angle was.
+  // A real chip is played ball-back with the hands ahead, which DE-lofts; the
+  // high, soft one is the LONGER shot. So inside chip range the loft ramps UP
+  // with length, from chipLoftDeg at a nipped bump to the pitch value by
+  // chipLoftRef — above which chips and pitches are the same shot again, which
+  // is what leaves the 40 yd pitch (and 544ed1e's fix to it) untouched.
+  const loftAdd = chipActive
+    ? pitchLoft + (TUNE.chipLoftDeg - pitchLoft) *
+                  (1 - Math.min(1, Math.max(0, ef) / TUNE.chipLoftRef))
+    : pitchLoft;
   // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
   const lieSurf = surfaceAt(b.x, b.y);
   const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
@@ -7606,6 +7635,17 @@ function showResult() {
   const conceded = state._conceded; state._conceded = false;
   const hb = (HOLE.isRange || conceded) ? { isBest: false } : recordHoleBest(holeNum, state.strokes);
 
+  // Opponent reaction to MY hole (before the quick-path return below, so an
+  // ordinary bogey can still draw a line). A pickup isn't a real score.
+  if (!conceded && !HOLE.isRange) {
+    if (level === 4) chatEvent("youAce");
+    else if (level >= 2) chatEvent("youEagle");
+    else if (level === 1) chatEvent("youBirdie");
+    else if (d === 1) chatEvent("youBogey");
+    else if (d >= 2) chatEvent("youBlowup");
+    if (round.holesPlayed === 9) chatEvent("turn9");
+  }
+
   // Ordinary hole (par or worse, no personal best, mid-round): skip the modal —
   // quick score toast + auto-advance. A forced tap on all 18 holes adds up.
   if ((level === 0 || conceded) && !hb.isBest && !dailyMode && !matchDecided &&
@@ -9842,6 +9882,9 @@ function startCourse() {
   // Match standings toggle lives in the HUD menu; only relevant in a match.
   const hmMatch = document.getElementById("hm-match");
   if (hmMatch) hmMatch.classList.toggle("hidden", !matchLive());
+  // Chat log: any match has chat (bots talk too), so gate on inMatch not matchLive.
+  const hmChatLog = document.getElementById("hm-chat-log");
+  if (hmChatLog) hmChatLog.classList.toggle("hidden", !inMatch());
   selectedClub = "driver";
   shot.carry = shot.total = null; shot.mph = 0;
   round.score = 0; round.holesPlayed = 0; round.holeStats = []; round._submitted = false;
@@ -14270,6 +14313,7 @@ function enterLiveMatch() {
   closeMatchSetup();
   closeMatchMenu();
   startCourse();
+  resetChatSession();   // after startCourse: `round` is fresh, so is the chat budget
   startBoardPoll();
   subscribeMatchRealtime(activeMatch.id);   // push updates (latency); poll is the fallback
   autoShowMatchBoard();
@@ -14304,6 +14348,10 @@ function subscribeMatchRealtime(matchId) {
     _rtChannel = c.channel("match-" + matchId)
       .on("postgres_changes", { event: "*", schema: "public", table: "match_players", filter: "match_id=eq." + matchId }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "matches", filter: "id=eq." + matchId }, onChange)
+      // Chat rides the same channel. onChatRows dedupes by row id against the
+      // board-poll backstop, so a message can arrive twice and render once.
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "match_chat", filter: "match_id=eq." + matchId },
+          (p) => onChatRows([p && p.new].filter(Boolean)))
       .subscribe((status) => { if (status === "SUBSCRIBED") renderMatchBoard(); });  // catch up on (re)subscribe
   } catch (e) { console.warn("realtime subscribe failed:", e); }
 }
@@ -14411,6 +14459,7 @@ function tickMatchHud() {
               "|" + (lastOpp ? Object.keys(lastOpp.hole_scores || {}).length : 0);
   if (key === _lastMatchHudKey) return;
   _lastMatchHudKey = key;
+  chatWatchMatch();   // up/down moved? the opponent may have something to say
   updateScorecard();
   // The scorebug's first render happens before the opponent row is populated,
   // so it would otherwise sit on placeholder names until a hole completes.
@@ -14752,6 +14801,7 @@ async function checkMatchCloseout() {
 
 async function renderMatchBoard() {
   if (!activeMatch) return;
+  fetchChatSince();   // chat backstop behind Realtime, same heartbeat as the board
   const rows = await fetchMatchPlayers(activeMatch.id);
   onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync — needed every
                       // poll regardless of panel visibility, so this always runs
@@ -14844,6 +14894,9 @@ function closeMatchResults() {
   const rm = document.getElementById("mr-rematch"), nb = document.getElementById("mr-next-bot");
   if (rm) { rm.classList.add("hidden"); delete rm.dataset.human; }
   if (nb) nb.classList.add("hidden");
+  _chatSignoff = null;                  // same: per-match, never leaks forward
+  const q = document.getElementById("mr-quote");
+  if (q) { q.classList.add("hidden"); q.innerHTML = ""; }
 }
 
 // Ladder settlement: runs once when a bot match reaches the results screen
@@ -14853,6 +14906,10 @@ function settleBotMatch() {
   const rows = cpuMatchRows();          // [me, cpuOpp] — synchronous, offline-safe
   const mp = computeMatchPlay(rows[0], rows[1], matchHoleCount);
   const won = !!(mp && mp.result && mp.result.indexOf("Won") === 0);
+  // Bot's parting line, from ITS point of view: I won → it lost. This one does
+  // NOT bubble — #match-results (z60) covers the stack (z45) the moment it
+  // opens — so it's stashed and rendered inside the results card instead.
+  _chatSignoff = botSignoff(won ? "loseMatch" : (mp && mp.result === "Halved") ? "halveMatch" : "winMatch");
   if (won && markBotBeaten(activeMatch._bot)) {
     const next = nextBotAfter(activeMatch._bot);
     showToast(next ? next.name + " unlocked" : "Ladder complete — you beat them all", 2800, "gold");
@@ -14898,8 +14955,21 @@ async function rematchHumanMatch() {
   openMatchLobby();
 }
 
+// The bot's parting line, picked once in settleBotMatch. Re-rendered (not
+// re-picked) because renderMatchResults re-runs under a 4s poll.
+function renderChatSignoff() {
+  const el = document.getElementById("mr-quote");
+  if (!el) return;
+  if (!_chatSignoff) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  const s = _chatSignoff;
+  el.innerHTML = `<span class="ch-av" style="--bav:${esc(s.color || "var(--accent)")}">${esc(s.ini)}</span>` +
+    `<span class="mr-quote-txt"><span class="mr-quote-who">${esc(s.name)}</span>${esc(s.text)}</span>`;
+  el.classList.remove("hidden");
+}
+
 async function renderMatchResults() {
   if (!activeMatch) return;
+  renderChatSignoff();
   const rows = await fetchMatchPlayers(activeMatch.id);
   const allDone = rows.length && rows.every(r => r.finished);
   const titleEl = document.getElementById("mr-title");
@@ -14981,6 +15051,7 @@ function leaveMatch() {
   cpuMatch = false;
   cpuOpp = null;
   toggleMatchBoard(false);
+  resetChatSession();
 }
 
 // =====================================================================
@@ -15339,6 +15410,735 @@ function markBotBeaten(id) {              // true only on the FIRST win
 function botUnlocked(i) { return isTournamentAdmin() || i === 0 || botBeaten(BOTS[i - 1].id); }
 function nextBotAfter(id) { const i = botIndex(id); return i >= 0 ? BOTS[i + 1] || null : null; }
 
+// =====================================================================
+//  IN-ROUND CHAT — opponents that talk. Bots have voices; humans type.
+//
+//  Shape: one event bus, two producers, one renderer.
+//    chatEvent(ev)  ← ~10 hook sites in the existing physics/score/match code
+//        └─ botMaybeSay(ev)   local, rate-gated, zero network
+//    onChatRows(rows) ← human lines arriving over Realtime / the board poll
+//        └─ both funnel into chatSay() → a speech bubble in #chat-stack
+//
+//  Two hard rules the design is built around:
+//   1. Chat NEVER costs a swing. #chat-stack is pointer-events:none end to end
+//      (chat.css) so a swipe starting on a bubble still reaches the canvas, and
+//      canSwing() gates on !chatOpen so the typing bar can't eat a gesture.
+//   2. Bots are QUIET. Roughly one line per 3-4 holes, hard-capped per round.
+//      Big moments (your ace, a closeout) bypass the cooldown; everything else
+//      rolls against the bot's own `talk` weight and usually loses.
+//
+//  Free text is unmoderated by decision (100-char cap, no filter/report/block).
+//  That is fine off-store but is NOT App Store Guideline 1.2 compliant — see the
+//  chat section of CLAUDE.md before the next iOS submission.
+// =====================================================================
+const CHAT = {
+  cooldownHoles: 3,   // holes of silence required between ordinary lines
+  perRound: 5,        // hard cap on ordinary lines per round
+  minGapMs: 2600,     // never let two bubbles land on top of each other
+  bubbleMs: 5200,     // how long a bubble stays up
+  fadeMs: 240,        // must match the .ch-b transition in chat.css
+  maxBubbles: 3,
+  logMax: 60,
+  maxLen: 100,        // free-text cap (mirrored by a DB CHECK constraint)
+  stiffFt: 8,         // approach inside this = "youStiff"
+  bombYds: 265,       // tee shot past this = "youBomb"
+  theyStiffYds: 8,    // bot approach inside this = "theyStiff"
+};
+// These bypass the cooldown AND the per-round cap — a hole-in-one that goes
+// unremarked because the budget was spent is worse than one extra line.
+// (win/lose/halveMatch are NOT here: they don't bubble at all, they're rendered
+// inside the match-results card by botSignoff — see settleBotMatch.)
+const CHAT_BIG = new Set(["youAce", "youEagle", "dormie", "greet"]);
+
+// Some events are near-synonyms. Rather than write near-identical lines twice
+// for 14 bots, an uncovered event falls through to its cousin — so a bot that
+// has something to say about water also has it about OB, and any bot with a
+// birdie line will use it for an eagle. Checked before the tone pool.
+const CHAT_ALIAS = { youOB: "youWater", youEagle: "youBirdie", theyStiff: "theyBirdie" };
+
+// Fallback pools, keyed by tone rather than by bot. Per-bot signature lines
+// below always win; these are the FLOOR, so no event a hook fires can land in
+// accidental silence. (Bots being quiet must come from the rate gate — talk
+// weight, cooldown, per-round cap — never from missing data.)
+const CHAT_TONE = {
+  supportive: {
+    greet: ["good luck out there!", "should be a fun one. play well."],
+    turn9: ["nine more. still anyone's game.", "halfway. holding up alright?"],
+    idle: ["lovely day for it.", "this course is a treat."],
+    youBirdie: ["oh, nicely done.", "that's lovely golf."],
+    youBogey: ["ah, bad luck. plenty of time.", "shake that one off."],
+    youBlowup: ["forget that one. it happens to everybody.", "long round yet. chin up."],
+    youWater: ["oh, rotten luck.", "that's a hard place to miss."],
+    youLipOut: ["ohh, that deserved to drop.", "cruel. that was in."],
+    youBomb: ["goodness, that's a long way.", "lovely strike."],
+    youStiff: ["ooh, that's close. lovely iron.", "right at it."],
+    theyBirdie: ["that one behaved for once.", "pleased with that."],
+    theyBogey: ["ah well. my own fault.", "should have taken more club."],
+    theyBlowup: ["oh dear. best forgotten.", "let's pretend that didn't happen."],
+    swingUp: ["somehow i'm ahead. long way to go though."],
+    swingDown: ["you're playing the better golf. genuinely."],
+    allSquare: ["all square. couldn't be better, could it."],
+    dormie: ["i think this one might be slipping away from me."],
+  },
+  cocky: {
+    greet: ["hope you brought enough golf balls.", "let's see what you've got."],
+    turn9: ["nine down. i'm just warming up.", "back nine is where i live."],
+    idle: ["you can hit it when you're ready.", "no rush. i've got all day."],
+    youBirdie: ["fine. that was fine.", "enjoy that one."],
+    youBogey: ["oof. that'll sting.", "the course is winning."],
+    youBlowup: ["woof. big number.", "i've seen better."],
+    youWater: ["ohhh that's wet.", "say goodbye to that one."],
+    youLipOut: ["OOOH. stayed out. brutal.", "that's got to hurt."],
+    youBomb: ["decent. i'd have been past it.", "not bad. not mine, but not bad."],
+    youStiff: ["lucky. that's a lucky one.", "fine, that's close."],
+    theyBirdie: ["THAT is how it's done.", "textbook. next."],
+    theyBogey: ["nonsense. that was nonsense.", "won't happen again."],
+    theyBlowup: ["don't watch this one.", "reloading. moving on."],
+    swingUp: ["and there it is. i can feel it."],
+    swingDown: ["means nothing. long way to go."],
+    allSquare: ["all square. exactly where i want you."],
+    dormie: ["no. no no no. not happening."],
+  },
+  flat: {
+    greet: ["let's play.", "ready."],
+    turn9: ["nine to go.", "halfway."],
+    idle: ["mm.", "your shot."],
+    youBirdie: ["good birdie.", "under par. fine."],
+    youBogey: ["tough.", "dropped one."],
+    youBlowup: ["that's a number.", "long hole."],
+    youWater: ["wrong side.", "wet."],
+    youLipOut: ["stayed out.", "unlucky."],
+    youBomb: ["long.", "that carried."],
+    youStiff: ["close.", "good strike."],
+    theyBirdie: ["that'll do.", "as planned."],
+    theyBogey: ["dropped one.", "an error."],
+    theyBlowup: ["poor hole.", "that was bad."],
+    swingUp: ["up."],
+    swingDown: ["down one."],
+    allSquare: ["all square."],
+    dormie: ["running out of holes."],
+  },
+  bummed: {
+    greet: ["let's hope it's better than last week.", "right. here we go again."],
+    turn9: ["nine more of this.", "somehow still out here."],
+    idle: ["i've lost the feel completely.", "can't find the middle today."],
+    youBirdie: ["must be nice.", "i've forgotten what those feel like."],
+    youBogey: ["welcome to my world.", "join the club."],
+    youBlowup: ["now you know how i feel every hole.", "i do that twice a nine."],
+    youWater: ["we all have our nemesis.", "at least it wasn't sand. mine's sand."],
+    youLipOut: ["of course it stayed out. this course hates us both."],
+    youBomb: ["that's further than my last three combined."],
+    youStiff: ["straight at it. showoff."],
+    theyBirdie: ["a birdie. write it down, nobody will believe it."],
+    theyBogey: ["about right.", "par for my course, that."],
+    theyBlowup: ["there it is. knew it was coming.", "i've invented a new shot."],
+    swingUp: ["don't get comfortable. i always give it back."],
+    swingDown: ["yep. that tracks."],
+    allSquare: ["level. won't last."],
+    dormie: ["here we go. same as always."],
+  },
+  awed: {
+    greet: ["wow, ok, playing with you. no pressure on me.", "i'll try to keep up!"],
+    turn9: ["nine holes with you already. learning a lot.", "you're so far ahead of me."],
+    idle: ["you make it look easy.", "i'm just happy to be here honestly."],
+    youBirdie: ["ok that was genuinely amazing.", "how do you DO that?"],
+    youBogey: ["oh no, sorry! you'll get it straight back.", "even you? that's oddly reassuring."],
+    youBlowup: ["hey, it happens! i do that constantly.", "don't feel bad, truly."],
+    youWater: ["ohh, i always do that too.", "i've lost nine balls today. you're fine."],
+    youLipOut: ["nooo! that was in!", "oh that's so unlucky."],
+    youBomb: ["how do you HIT it that far?", "i lost that one in the sky."],
+    youStiff: ["that's incredible. right next to it.", "wow. straight at the flag."],
+    theyBirdie: ["i made a birdie! me!", "sorry — i'm a bit excited about that one."],
+    theyBogey: ["yep. that's about my level.", "sorry, i'm not making this much of a match."],
+    theyBlowup: ["oh dear. pretend you didn't see that.", "that was embarrassing, sorry."],
+    swingUp: ["am i ahead? that can't be right."],
+    swingDown: ["you're miles ahead. i knew this would happen."],
+    allSquare: ["all square with you? nobody's going to believe me."],
+    dormie: ["i think that's me done. it's been an honour honestly."],
+  },
+};
+
+// talk = probability a non-big line actually fires once the cooldown clears.
+// Roughly inverse to skill: the rookies chirp, the legends barely speak.
+const BOT_VOICES = {
+  chip: { tone: "awed", talk: 0.5, lines: {
+    youAce:     ["A HOLE IN ONE. i've never even seen one before!!"],
+    youBirdie:  ["that was gorgeous. i'd take that on any hole.", "birdie! ok you're really good at this."],
+    youBogey:   ["oh no, sorry. i've hit worse though, honestly.", "that's still better than my usual!"],
+    youBlowup:  ["hey, it happens. i do that about four times a round.", "don't feel bad. truly."],
+    youWater:   ["ohh the water. i always do that too.", "i've lost nine balls today. you're fine."],
+    youBomb:    ["how do you HIT it that far?", "that went so far i lost it in the sky."],
+    theyBogey:  ["yep. that's about right for me.", "sorry, i'm not making this much of a match."],
+    theyBlowup: ["oh dear. pretend you didn't see that one.", "i think i've invented a new shot."],
+    swingDown:  ["you're miles ahead. i knew this would happen."],
+    winMatch:   ["i WON? i won! i'm going to tell everyone about this!"],
+    loseMatch:  ["thanks for playing with me. i learned loads, genuinely."],
+    halveMatch: ["a halve! against you! i'll take that all day."],
+  }},
+  sandy: { tone: "bummed", talk: 0.45, lines: {
+    youAce:     ["an ace. meanwhile i'm three feet under the lip somewhere."],
+    youBirdie:  ["clean strike. must be nice, hitting grass.", "birdie. i've forgotten what those feel like."],
+    youBogey:   ["welcome to my world.", "bogey golf is honest golf."],
+    youWater:   ["sand, water — we all have our nemesis."],
+    youStiff:   ["straight at it. no sand involved. showoff."],
+    theyBogey:  ["out of the bunker in one. small victories.", "sand again. of course it was sand."],
+    theyBlowup: ["found a new bunker. i collect them.", "that's the third beach this round."],
+    theyBirdie: ["a birdie! from a bunker! write it down."],
+    swingUp:    ["don't get comfortable. i live in trouble."],
+    winMatch:   ["won it from the sand. that's the only way i know how."],
+    loseMatch:  ["good match. i'll be raking for a while."],
+    halveMatch: ["halved. fair result for two scrappers."],
+  }},
+  bo: { tone: "flat", talk: 0.3, lines: {
+    youAce:     ["A one. I have never made one. I will make a bogey next hole."],
+    youBirdie:  ["Birdie. I will make a bogey.", "One under. I will make a bogey."],
+    youBogey:   ["Bogey. Same as me. This is my whole game."],
+    youBlowup:  ["Worse than a bogey. I do not go there."],
+    theyBogey:  ["Bogey.", "Another bogey. As expected."],
+    theyBirdie: ["That was not a bogey. I am unsettled."],
+    swingUp:    ["I am ahead. I did not change anything."],
+    swingDown:  ["I am behind. I did not change anything."],
+    winMatch:   ["I won with bogeys. I always win with bogeys."],
+    loseMatch:  ["You beat the bogeys. Well played."],
+    halveMatch: ["Halved. The bogeys held."],
+  }},
+  shorty: { tone: "supportive", talk: 0.42, lines: {
+    youAce:     ["a hole in one! oh that's wonderful. well done you."],
+    youBirdie:  ["lovely birdie. really nicely played.", "that's the shot of the day so far."],
+    youBogey:   ["ah, bad luck. you'll get it back.", "no harm done. long round yet."],
+    youWater:   ["oh, rotten luck. shake it off."],
+    youBomb:    ["goodness, that's a long way. i'd need two shots for that."],
+    theyBogey:  ["not my best, but it'll do.", "up and down. that's my game."],
+    theyBirdie: ["ooh, a birdie! don't see many of those from me."],
+    swingDown:  ["you're playing lovely golf. genuinely."],
+    winMatch:   ["what a nice match that was. thank you kindly."],
+    loseMatch:  ["you played beautifully. thoroughly deserved."],
+    halveMatch: ["all square. couldn't ask for a better afternoon."],
+  }},
+  boomer: { tone: "cocky", talk: 0.55, lines: {
+    youAce:     ["A HOLE IN ONE?? ok. ok. i'm not talking for a bit."],
+    youBirdie:  ["fine. that was fine.", "birdie. enjoy it while it lasts."],
+    youBogey:   ["oof. the course is winning.", "that'll do damage."],
+    youBlowup:  ["woof. i've seen better swings at a driving range.", "that's a big number pal."],
+    youWater:   ["ohhh that's WET. tough break.", "sunday best right there."],
+    youBomb:    ["ok that one got out there. i'd have been past it.", "not bad. now do it without the cart path."],
+    youStiff:   ["lucky. that's a lucky one."],
+    theyBirdie: ["THAT is what the big stick is for.", "see, when it's straight, it's over."],
+    theyBogey:  ["the slice. the SLICE. i swear the range was fine.", "blocked it. every single time."],
+    theyBlowup: ["the slice is a LIFESTYLE at this point.", "i'm reloading. don't watch this one."],
+    swingUp:    ["and that's the turn. i can feel it."],
+    swingDown:  ["nothing. this means nothing. long way to go."],
+    dormie:     ["oh no. no no no. i am NOT losing this."],
+    winMatch:   ["easy game. rematch when you've had a lesson."],
+    loseMatch:  ["you got me. don't spend it all at once."],
+    halveMatch: ["a halve. i'll take it. i shouldn't, but i will."],
+  }},
+  faye: { tone: "flat", talk: 0.32, lines: {
+    youAce:     ["A one. Statistically that should not have happened. Congratulations."],
+    youBirdie:  ["Correct club, correct line. Nothing to critique."],
+    youBogey:   ["That was a two-shot mistake dressed as one."],
+    youBlowup:  ["You should have laid up. The percentages were not close."],
+    youWater:   ["The water was the miss. It was always the miss."],
+    youBomb:    ["Long. Though the fairway was 30 yards left of where you aimed."],
+    theyBirdie: ["Wedge to the fat side, putt uphill. That is the whole plan."],
+    theyBogey:  ["An acceptable bogey. I never had a worse score in play."],
+    swingUp:    ["I am ahead because I stopped taking risks on hole three."],
+    winMatch:   ["The plan was sound. Thank you for the match."],
+    loseMatch:  ["You outplayed the plan. That is rarer than you think."],
+    halveMatch: ["Halved. On reflection, the correct result."],
+  }},
+  rusty: { tone: "cocky", talk: 0.5, lines: {
+    youAce:     ["ARE YOU KIDDING ME. an ace. against ME."],
+    youBirdie:  ["oh COME ON.", "great. brilliant. lovely for you."],
+    youBogey:   ["HA. now you know how it feels."],
+    youBlowup:  ["welcome to the club. it's a bad club."],
+    youWater:   ["THE WATER. it's always the water. i hate this hole."],
+    theyBirdie: ["THAT'S IT. that's the golf swing. i've found it.", "birdie. i'm never missing again."],
+    theyBogey:  ["that putter is going in the bin. i mean it this time.", "unbelievable. UNBELIEVABLE."],
+    theyBlowup: ["right. i'm done. i'm actually done.", "no more driver today. never again."],
+    swingUp:    ["NOW we're playing. i can smell it."],
+    swingDown:  ["fine. FINE. i'll just birdie everything then."],
+    dormie:     ["not like this. not like this."],
+    winMatch:   ["YES. get IN. i knew it was in there somewhere."],
+    loseMatch:  ["nope. not talking about it. good match though."],
+    halveMatch: ["halved?? i had that won four times."],
+  }},
+  iris: { tone: "supportive", talk: 0.3, lines: {
+    youAce:     ["A hole in one. How lovely for you. I'll try to catch up."],
+    youBirdie:  ["Oh, well played. Truly.", "Lovely birdie. You're making me work."],
+    youBogey:   ["Bad luck. These greens are unkind, aren't they."],
+    youWater:   ["Oh, that's a shame. I nearly went there myself. Nearly."],
+    theyBirdie: ["Pin high again. I do apologise.", "That one behaved. How nice."],
+    theyBogey:  ["Hm. I'll have that back, I think."],
+    swingUp:    ["Goodness, am I ahead? I hadn't been counting."],
+    dormie:     ["I think that may be that. Lovely playing with you."],
+    winMatch:   ["Thank you, that was a delight. Do let's play again."],
+    loseMatch:  ["Beaten fairly. You were excellent. Genuinely."],
+    halveMatch: ["All square. How very civil of us both."],
+  }},
+  ace: { tone: "flat", talk: 0.22, lines: {
+    youAce:     ["One. Good.", "That's a one. Nicely done."],
+    youBirdie:  ["Good birdie.", "That'll do."],
+    youBogey:   ["Tough."],
+    youWater:   ["Wrong side. Happens."],
+    theyBirdie: ["Two putts from twenty feet. Fine."],
+    theyBogey:  ["First one of those in a while."],
+    swingUp:    ["Up one."],
+    winMatch:   ["Good match. You'll get me next time."],
+    loseMatch:  ["You were better today. Simple as that."],
+    halveMatch: ["Halved. Fair."],
+  }},
+  wren: { tone: "supportive", talk: 0.28, lines: {
+    youAce:     ["A hole in one — genuinely, that's the best thing I'll see all week."],
+    youBirdie:  ["That's a tour birdie. No notes.", "Beautiful. Committed to it and got rewarded."],
+    youBogey:   ["Don't dwell. Best players in the world make those."],
+    youBlowup:  ["Long round. That number won't decide it."],
+    youStiff:   ["Now THAT is an iron shot. Flushed it."],
+    youBomb:    ["Serious speed. You'd hold your own on any tee."],
+    theyBirdie: ["Putter's behaving. Long may it last."],
+    theyBogey:  ["My fault entirely. Wrong club, wrong shot."],
+    swingUp:    ["Still plenty of golf. You're striking it better than the card says."],
+    winMatch:   ["Really enjoyed that. You pushed me properly."],
+    loseMatch:  ["You beat a tour winner today. Don't let anyone tell you otherwise."],
+    halveMatch: ["Halved with me. That's a hell of a day's work."],
+  }},
+  blaze: { tone: "cocky", talk: 0.2, lines: {
+    youAce:     ["An ace. I've made four. But I remember the first one best."],
+    youBirdie:  ["Nice. I made six in a row here once, but nice."],
+    youBogey:   ["The course does that to people. It's done it to better."],
+    youBlowup:  ["I've seen tour pros put up worse on this hole. Barely."],
+    youWater:   ["That water has beaten a lot of famous men."],
+    theyBirdie: ["Still got it. Never lost it, actually."],
+    theyBogey:  ["Even the greats drop one. Ask anyone."],
+    swingUp:    ["This is the part I've done a hundred times."],
+    winMatch:   ["Add it to the list. Good fight though, kid."],
+    loseMatch:  ["You beat me. Not many have. Enjoy that one."],
+    halveMatch: ["Halved. I'll be thinking about the 14th all night."],
+  }},
+  miles: { tone: "flat", talk: 0.15, lines: {
+    youAce:     ["One stroke. Optimal."],
+    youBirdie:  ["Under par. Acceptable."],
+    youBogey:   ["Over par."],
+    youBomb:    ["Distance noted. Mine is longer."],
+    theyBirdie: ["Fairway. Green. Two putts. Repeat."],
+    theyBogey:  ["An error. It will not repeat."],
+    swingUp:    ["Ahead. As modelled."],
+    winMatch:   ["Match complete. Outcome expected."],
+    loseMatch:  ["You exceeded the model. Noted."],
+    halveMatch: ["Halved. Unmodelled."],
+  }},
+  domino: { tone: "flat", talk: 0.14, lines: {
+    youAce:     ["The hole wanted it. Rare, that."],
+    youBirdie:  ["You found the one line that works. There's only ever one."],
+    youBogey:   ["You saw the shot too late. It was there."],
+    youBlowup:  ["That hole was decided on the tee. You just hadn't noticed yet."],
+    youWater:   ["Everyone goes in eventually. You went early."],
+    theyBirdie: ["It was always going in.", "I knew that at address."],
+    theyBogey:  ["A gift. Take it while it's offered."],
+    swingUp:    ["You're playing the course. I'm playing you."],
+    dormie:     ["It ended a few holes ago. This was the formality."],
+    winMatch:   ["You knew before I did. Most do."],
+    loseMatch:  ["Interesting. I'll be thinking about you."],
+    halveMatch: ["Neither of us won. Only one of us minds."],
+  }},
+  keeper: { tone: "flat", talk: 0.08, lines: {   // near-silent by design
+    youAce:     ["The course allowed that. Remember it."],
+    youBlowup:  ["The grass knew before you did."],
+    youWater:   ["That water has been there longer than the holes have."],
+    youStiff:   ["The green accepted it. It doesn't have to."],
+    theyBirdie: ["I know every blade between here and the cup."],
+    swingUp:    ["The course and I have an understanding."],
+    dormie:     ["It is finished. It was finished at the first."],
+    winMatch:   ["Nobody has beaten me. You came closer than most."],
+    loseMatch:  ["You beat me. I will re-cut the greens tonight and think about it."],
+    halveMatch: ["Halved. No one halves with me."],
+  }},
+};
+
+// ---- session state ----
+let chatEnabled = lsGet("golf.chat", true) !== false;
+let chatOpen = false;                 // typing bar up → canSwing() is gated off
+let _chatCount = 0;                   // ordinary (non-big) lines used this round
+let _chatLastHole = -99;              // round.holesPlayed when a bot last spoke
+let _chatLastAt = 0;                  // performance.now() of the last bubble
+let _chatGreeted = false;
+let _chatPicks = {};                  // ev → last index used, to avoid repeats
+let _chatLog = [];                    // {who, text, mine, at} for the HUD-menu log
+let _chatSeen = new Set();            // match_chat row ids already rendered
+let _chatSince = null;                // only bubble rows newer than match entry
+let _chatUnread = false;
+let _chatLastDiff = null;             // match-play diff, for swing detection
+let _chatRollHole = -1;               // hole the talk roll was made for
+let _chatRollPass = false;            // ...and whether it passed
+let _chatSignoff = null;              // bot's parting line, shown in #match-results
+
+const elChatStack = document.getElementById("chat-stack");
+const elChatBtn = document.getElementById("chat-send-btn");
+const elChatBar = document.getElementById("chat-bar");
+const elChatText = document.getElementById("chat-text");
+const elChatCount = document.getElementById("chat-count");
+const elChatLog = document.getElementById("chat-log");
+
+// Reset everything that is per-match. Called on entering a match and on leaving
+// one, so a fresh round always starts with a full chat budget and an empty stack.
+function resetChatSession() {
+  _chatCount = 0; _chatLastHole = -99; _chatLastAt = 0; _chatGreeted = false;
+  _chatPicks = {}; _chatLog = []; _chatSeen = new Set(); _chatLastDiff = null;
+  _chatSince = new Date().toISOString();   // never replay history as bubbles
+  _chatUnread = false; _chatSignoff = null;
+  _chatRollHole = -1; _chatRollPass = false;
+  closeChatBar();
+  if (elChatStack) { elChatStack.innerHTML = ""; elChatStack.classList.add("hidden"); }
+  document.body.classList.remove("has-chat");
+  syncChatBtn();
+}
+
+// =====================================================================
+//  Bot producer — rate-gated, entirely local (no network, works offline).
+// =====================================================================
+function botVoice() {
+  // Only the LADDER bots have voices. The random Quick Match CPU never sets
+  // activeMatch._bot, so it stays silent — which is correct: it has no identity.
+  if (!cpuMatch || !activeMatch || !activeMatch._bot) return null;
+  return BOT_VOICES[activeMatch._bot] || null;
+}
+// Resolution order: the bot's own line → its cousin event (CHAT_ALIAS) → the
+// bot's tone pool → the cousin's tone pool. Anything a hook fires resolves.
+function chatLinesFor(v, ev) {
+  const alias = CHAT_ALIAS[ev];
+  const pool = CHAT_TONE[v.tone] || {};
+  const tries = [v.lines && v.lines[ev],
+                 alias && v.lines && v.lines[alias],
+                 pool[ev],
+                 alias && pool[alias]];
+  for (const t of tries) if (t && t.length) return t;
+  return null;
+}
+// Never the same line twice running for a given event.
+function chatPick(ev, pool) {
+  if (pool.length === 1) return pool[0];
+  let i = Math.floor(Math.random() * pool.length);
+  if (i === _chatPicks[ev]) i = (i + 1) % pool.length;
+  _chatPicks[ev] = i;
+  return pool[i];
+}
+function botMaybeSay(ev) {
+  if (!chatEnabled) return;
+  const v = botVoice(); if (!v) return;
+  const pool = chatLinesFor(v, ev); if (!pool) return;
+  // Bubbles never overlap, not even for a big moment.
+  if (performance.now() - _chatLastAt < CHAT.minGapMs) return;
+  const big = CHAT_BIG.has(ev);
+  if (!big) {
+    if (round.holesPlayed - _chatLastHole < CHAT.cooldownHoles) return;
+    if (_chatCount >= CHAT.perRound) return;
+    // ONE talk roll per hole, not per event. A hole can fire several eligible
+    // events (bogey + water + the bot's own bogey); rolling each one gave a
+    // chatty bot and a near-mute bot nearly the same line count, because
+    // several bites at 8% ≈ one bite at 44%. Per-hole keeps `talk` meaningful.
+    if (_chatRollHole !== round.holesPlayed) {
+      _chatRollHole = round.holesPlayed;
+      _chatRollPass = Math.random() <= v.talk;
+    }
+    if (!_chatRollPass) return;                 // usually loses — that's the point
+    _chatCount++;
+  }
+  // A big line doesn't spend the round budget, but it does buy quiet after it.
+  _chatLastHole = round.holesPlayed;
+  const bot = botById(activeMatch._bot);
+  chatSay({ text: chatPick(ev, pool), who: bot ? bot.name : "Opponent",
+            ini: bot ? bot.ini : "??", color: bot ? bot.color : null });
+}
+
+// The one entry point every hook site calls. Chat only exists inside a match —
+// a solo round stays silent.
+function chatEvent(ev) {
+  if (!inMatch()) return;
+  botMaybeSay(ev);
+}
+
+// Resolve a line WITHOUT the rate gate and WITHOUT rendering a bubble — for the
+// match-results card, which sits above the bubble stack and has its own slot for
+// the bot's sign-off. Returns {name, ini, color, text} or null.
+function botSignoff(ev) {
+  if (!chatEnabled) return null;
+  const v = botVoice(); if (!v) return null;
+  const pool = chatLinesFor(v, ev); if (!pool) return null;
+  const bot = botById(activeMatch._bot);
+  return { name: bot ? bot.name : "Opponent", ini: bot ? bot.ini : "??",
+           color: bot ? bot.color : null, text: chatPick(ev, pool) };
+}
+
+// Match-play swings: fires when the up/down number actually moves. Called from
+// tickMatchHud, which already only runs its body when a score changed.
+function chatWatchMatch() {
+  if (!matchPlay() || !lastOpp) return;
+  const me = meSnapshot(); if (!me) return;
+  const mp = computeMatchPlay(me, lastOpp, matchHoleCount);
+  const d = mp.diff;
+  if (_chatLastDiff === null) { _chatLastDiff = d; return; }   // first read: baseline only
+  if (d === _chatLastDiff) return;
+  const prev = _chatLastDiff;
+  _chatLastDiff = d;
+  // Dormie-and-worse for the bot (I'm up by exactly what's left) is the loudest
+  // moment in match play — check it before the generic swings.
+  if (!mp.decided && d > 0 && d === mp.remaining) chatEvent("dormie");
+  else if (d === 0) chatEvent("allSquare");
+  else if (d > prev) chatEvent("swingDown");   // I gained → the bot is now worse off
+  else chatEvent("swingUp");                   // I lost ground → the bot is up
+}
+
+// =====================================================================
+//  Renderer — bubbles in #chat-stack. Nothing here is interactive.
+// =====================================================================
+// Anchored under the scorecard (or under the standings panel when that's open),
+// the same measured-inline-top trick anchorMatchBoard() uses.
+function anchorChat() {
+  if (!elChatStack || elChatStack.classList.contains("hidden")) return;
+  const sc = document.getElementById("scorecard");
+  const board = document.getElementById("match-standings");
+  let bottom = 0;
+  if (board && !board.classList.contains("hidden")) bottom = board.getBoundingClientRect().bottom;
+  else if (sc && !sc.classList.contains("hidden")) bottom = sc.getBoundingClientRect().bottom;
+  elChatStack.style.top = bottom ? Math.round(bottom + 8) + "px" : "";
+}
+window.addEventListener("resize", anchorChat);
+
+function chatInitials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "??";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// The single renderer both producers funnel into. Returns the bubble element so
+// sendChat can mark it pending/failed.
+function chatSay(o) {
+  const text = String((o && o.text) || "").trim();
+  if (!text || !elChatStack) return null;
+  _chatLog.push({ who: o.mine ? (getPlayerName() || "You") : (o.who || ""),
+                  text, mine: !!o.mine, at: Date.now() });
+  while (_chatLog.length > CHAT.logMax) _chatLog.shift();
+  _chatLastAt = performance.now();
+
+  elChatStack.classList.remove("hidden");
+  document.body.classList.add("has-chat");
+  const b = document.createElement("div");
+  b.className = "ch-b" + (o.mine ? " ch-mine" : "");
+  const av = o.mine ? "" :
+    `<span class="ch-av" style="--bav:${esc(o.color || "var(--accent)")}">${esc(o.ini || chatInitials(o.who))}</span>`;
+  b.innerHTML = av + `<div class="ch-body">${esc(text)}` +
+    (o.mine ? '<span class="ch-tick">&#10003;</span>' : "") + "</div>";
+  elChatStack.appendChild(b);
+  requestAnimationFrame(() => b.classList.add("ch-in"));
+  while (elChatStack.children.length > CHAT.maxBubbles) elChatStack.removeChild(elChatStack.firstChild);
+  anchorChat();
+
+  setTimeout(() => {
+    b.classList.add("ch-out");
+    setTimeout(() => {
+      if (b.parentNode) b.parentNode.removeChild(b);
+      if (elChatStack && !elChatStack.children.length) {
+        elChatStack.classList.add("hidden");
+        document.body.classList.remove("has-chat");
+      }
+    }, CHAT.fadeMs);
+  }, CHAT.bubbleMs);
+  return b;
+}
+
+// =====================================================================
+//  Human transport — match_chat rows over Realtime, with the board poll as a
+//  backstop. Both paths feed one _chatSeen id-set so neither can double-render.
+// =====================================================================
+function chatUrl() { return LB_URL + "/rest/v1/match_chat"; }
+function chatTransportOn() { return !!(LB_ON() && activeMatch && activeMatch.id && !cpuMatch); }
+// The name written on send AND compared on receive — must be ONE expression.
+// A guest with no name set stores the "Player" fallback, so comparing the raw
+// getPlayerName() ("") against it fails and my own line renders twice (a
+// Realtime push can land before my POST response banks the row id).
+function chatMyName() { return getPlayerName() || "Player"; }
+
+async function sendChat(raw) {
+  const body = String(raw || "").replace(/\s+/g, " ").trim().slice(0, CHAT.maxLen);
+  if (!body) return;
+  const bub = chatSay({ text: body, mine: true });   // optimistic — feels instant
+  if (!chatTransportOn()) return;                    // bot match / offline: local echo only
+  if (bub) bub.classList.add("ch-pending");
+  try {
+    const r = await fetch(chatUrl(), {
+      method: "POST",
+      headers: authHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify({ match_id: activeMatch.id, user_id: myUid() || null,
+                             player_name: chatMyName(), body }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    // Bank my own row id so the inbound echo doesn't render it a second time.
+    const rows = await r.json().catch(() => []);
+    (rows || []).forEach((row) => { if (row && row.id != null) _chatSeen.add(row.id); });
+    if (bub) bub.classList.remove("ch-pending");
+  } catch (e) {
+    if (bub) { bub.classList.remove("ch-pending"); bub.classList.add("ch-failed"); }
+    console.warn("chat send failed:", e);
+  }
+}
+
+function onChatRows(rows) {
+  if (!rows || !rows.length) return;
+  const uid = myUid();
+  const myName = chatMyName().toLowerCase();
+  rows.slice()
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")))
+    .forEach((row) => {
+      if (!row) return;
+      if (row.id != null) {
+        if (_chatSeen.has(row.id)) return;
+        _chatSeen.add(row.id);
+      }
+      if (row.created_at && (!_chatSince || row.created_at > _chatSince)) _chatSince = row.created_at;
+      // Logged in → compare uid. Guest → compare name, which is safe because
+      // match_players has unique(match_id, player_name): two guests in the same
+      // match cannot share a name, so a name match really is me.
+      const isMine = uid ? row.user_id === uid
+                         : String(row.player_name || "").toLowerCase() === myName;
+      if (isMine) return;                 // already on screen from the optimistic echo
+      if (!chatEnabled) return;
+      chatSay({ text: row.body, who: row.player_name || "Opponent",
+                ini: chatInitials(row.player_name), color: "var(--green-500)" });
+      if (!chatOpen) { _chatUnread = true; syncChatBtn(); }
+    });
+}
+
+async function fetchChatSince() {
+  if (!chatTransportOn()) return;
+  const since = _chatSince ? "&created_at=gt." + encodeURIComponent(_chatSince) : "";
+  try {
+    const r = await fetch(chatUrl() + "?match_id=eq." + encodeURIComponent(activeMatch.id) +
+                          since + "&order=created_at.asc&limit=30", { headers: lbHeaders() });
+    if (r.ok) onChatRows(await r.json());
+  } catch (e) { /* poll backstop — a miss is covered by Realtime and the next tick */ }
+}
+
+// =====================================================================
+//  Typing bar + the session log. The bar is the ONE interactive chat surface,
+//  and canSwing() is gated while it's up.
+// =====================================================================
+function chatCanSend() {
+  return matchLive() && !cpuMatch && mode === "course" && !greenView && !cine;
+}
+function syncChatBtn() {
+  if (!elChatBtn) return;
+  const show = chatEnabled && chatCanSend() && !chatOpen;
+  elChatBtn.classList.toggle("hidden", !show);
+  elChatBtn.classList.toggle("ch-unread", show && _chatUnread);
+}
+function syncChatCount() {
+  if (!elChatCount || !elChatText) return;
+  const left = CHAT.maxLen - elChatText.value.length;
+  elChatCount.textContent = String(left);
+  elChatCount.classList.toggle("ch-max", left <= 10);
+}
+function openChatBar() {
+  if (!elChatBar || !elChatText) return;
+  chatOpen = true; _chatUnread = false;
+  document.body.classList.add("chat-open");
+  elChatBar.classList.remove("hidden");
+  elChatText.value = "";
+  syncChatCount();
+  syncChatBtn();
+  setTimeout(() => { try { elChatText.focus(); } catch (e) {} }, 30);
+}
+function closeChatBar() {
+  chatOpen = false;
+  document.body.classList.remove("chat-open");
+  if (elChatBar) elChatBar.classList.add("hidden");
+  if (elChatText) { try { elChatText.blur(); } catch (e) {} }
+  syncChatBtn();
+}
+function submitChat() {
+  const v = elChatText ? elChatText.value : "";
+  closeChatBar();
+  if (v.trim()) sendChat(v);
+}
+function openChatLog() {
+  renderChatLog();
+  if (elChatLog) elChatLog.classList.remove("hidden");
+}
+function closeChatLog() { if (elChatLog) elChatLog.classList.add("hidden"); }
+function renderChatLog() {
+  const list = document.getElementById("cl-list");
+  if (!list) return;
+  if (!_chatLog.length) {
+    list.innerHTML = '<div class="cl-empty">Nothing said yet this round.</div>';
+    return;
+  }
+  list.innerHTML = _chatLog.map((m) =>
+    `<div class="cl-row${m.mine ? " cl-mine" : ""}">` +
+    `<span class="cl-who">${esc(m.mine ? "You" : shortName(m.who || "Opp"))}</span>` +
+    `<span class="cl-txt">${esc(m.text)}</span></div>`).join("");
+  list.scrollTop = list.scrollHeight;
+}
+
+(function wireChat() {
+  if (elChatBtn) elChatBtn.addEventListener("click", (e) => { e.stopPropagation(); openChatBar(); });
+  const sendBtn = document.getElementById("chat-send");
+  if (sendBtn) sendBtn.addEventListener("click", (e) => { e.stopPropagation(); submitChat(); });
+  if (elChatText) {
+    elChatText.addEventListener("input", syncChatCount);
+    elChatText.addEventListener("keydown", (e) => {
+      e.stopPropagation();                       // never let typing reach the aim keys
+      if (e.key === "Enter") { e.preventDefault(); submitChat(); }
+      else if (e.key === "Escape") { e.preventDefault(); closeChatBar(); }
+    });
+  }
+  // Tap anywhere outside the bar closes it (and can't fire a swing: the
+  // pointerdown lands before canSwing() is re-enabled on the next frame).
+  document.addEventListener("pointerdown", (e) => {
+    if (chatOpen && elChatBar && !elChatBar.contains(e.target)) closeChatBar();
+  }, true);
+  const clClose = document.getElementById("cl-close");
+  if (clClose) clClose.addEventListener("click", (e) => { e.stopPropagation(); closeChatLog(); });
+  if (elChatLog) elChatLog.addEventListener("click", (e) => { if (e.target === elChatLog) closeChatLog(); });
+  const logBtn = document.getElementById("hm-chat-log");
+  if (logBtn) logBtn.addEventListener("click", () => { closeHud(); openChatLog(); });
+  // Per-device cosmetic toggle, same pattern as break arrows / cinematic landings.
+  const tgl = document.getElementById("hm-chat");
+  if (tgl) {
+    tgl.classList.toggle("active", chatEnabled);
+    tgl.addEventListener("click", () => {
+      chatEnabled = !chatEnabled;
+      lsSet("golf.chat", chatEnabled);
+      tgl.classList.toggle("active", chatEnabled);
+      if (!chatEnabled) {
+        closeChatBar();
+        if (elChatStack) { elChatStack.innerHTML = ""; elChatStack.classList.add("hidden"); }
+        document.body.classList.remove("has-chat");
+      }
+      syncChatBtn();
+    });
+  }
+})();
+
+// Assertable rate state for the Playwright gates (see the chat section of
+// CLAUDE.md). `tune` is live-mutable so a test can hold bubbles on screen long
+// enough to screenshot them (the default 5.2s life is shorter than an MCP
+// round trip), and `voices` lets a test enumerate the roster.
+window._chatDebug = {
+  get count() { return _chatCount; },
+  get lastHole() { return _chatLastHole; },
+  get log() { return _chatLog.slice(); },
+  get enabled() { return chatEnabled; },
+  get signoff() { return _chatSignoff; },
+  get holesPlayed() { return round.holesPlayed; },
+  tune: CHAT,
+  voices: BOT_VOICES,
+  say: (ev) => chatEvent(ev),
+  line: (ev) => { const v = botVoice(); return v ? chatLinesFor(v, ev) : null; },
+  // TEST ONLY — walks the hole counter so the cooldown/cap gate can be asserted
+  // without playing 9 real holes. Never called by game code.
+  _setHolesPlayed: (n) => { round.holesPlayed = n | 0; },
+};
+
 // `bot` (optional) = a BOTS entry: fixed identity + trait knobs instead of the
 // random Quick Match opponent. activeMatch._bot marks a ladder match — the
 // random CPU fallback never sets it, so it can never advance the ladder.
@@ -15387,6 +16187,7 @@ function startCpuMatch(format, holes, bot) {
     if (typeof closeBotSelect === "function") closeBotSelect();
     closeMatchResults();
     startCourse();
+    resetChatSession();   // after startCourse: fresh `round`, fresh chat budget
     startBoardPoll();
     autoShowMatchBoard();
     updateMatchBug();   // show the tour-style scorebug for the match
@@ -15625,6 +16426,9 @@ function cpuDriverTick() {
       cpuOpp._planPin.x !== HOLE.holePos.x || cpuOpp._planPin.y !== HOLE.holePos.y) cpuPlanHole();
   checkHoleConcede();                     // bot already in with a score I can't match? pick up
   pumpLiveAdvance();                      // snappy hole-advance once the bot holes out
+  // Greet on the first live tick rather than in startCpuMatch — by here we know
+  // we're on the course with a fresh `round`, so the cooldown clock starts right.
+  if (!_chatGreeted) { _chatGreeted = true; chatEvent("greet"); }
 
   // Resolve an in-flight bot shot → land the ball.
   if (cpuOpp._phase === "flying") {
@@ -15648,9 +16452,16 @@ function cpuDriverTick() {
       cpuOpp.pars[HOLE.num] = HOLE.par;
       cpuRecomputeScore();
       checkMatchCloseout();
+      // The bot reacting to its OWN hole. This never routes through showResult
+      // (that's the player's path only), so the events hook here.
+      const bd = cpuOpp.cur_strokes - HOLE.par;
+      if (bd <= -1) chatEvent("theyBirdie");
+      else if (bd === 1) chatEvent("theyBogey");
+      else if (bd >= 2) chatEvent("theyBlowup");
     } else {
       cpuOpp.cur_to_pin = Math.round(dist(cpuOpp.cur_x, cpuOpp.cur_y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT);
       cpuOpp.cur_lie = cpuLie(cpuOpp.cur_x, cpuOpp.cur_y);
+      if (cpuOpp.cur_to_pin <= CHAT.theyStiffYds) chatEvent("theyStiff");
     }
     cpuOpp._phase = "idle";
     const next = cpuOpp._plan[cpuOpp._i];
@@ -16311,6 +17122,7 @@ function loop() {
   updateStats();
   updateWindChip();
   updateGreenViewBtn();
+  syncChatBtn();      // chat button only in a live HUMAN match (cheap; class-toggle)
   updateTiltBtn();
   update3DMode();  // cheap — no-ops unless mode/course actually changed
   if (render3D && window.Course3D) window.Course3D.render();
