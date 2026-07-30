@@ -383,6 +383,7 @@ const TUNE = {
   // green inside the distance-scaled threshold below — the game cuts to the 3D green
   // as the ball descends. The bar scales with shot length so a 200yd approach earns
   // the cut at ~10 ft while a greenside chip needs a near kick-in.
+  cineMinShotYds: 60,    // never cut on a shot struck from nearer the pin than this
   cineFtPerYd: 0.05,     // trigger distance (ft from the cup) per yard of shot length
   cineMinFt: 4,          // floor of that trigger distance (short chips)
   cineMaxFt: 11,         // ceiling (long approaches)
@@ -2899,6 +2900,14 @@ function maybeArmCine() {
   cinePending = null;
   if (!cineEnabled || mode !== "course" || !HOLE || HOLE.isRange) return;
   if (!state.airborne || !state.flight) return;   // putts/bump-and-runs never cut
+  // Approach shots only. The cut is a reward for flying one in from distance;
+  // on a greenside chip it fired constantly (cineMinFt is 4 ft, and a chip is
+  // solved to rest AT the pin, so nearly every one cleared the bar) and turned
+  // the whole short game into a cutscene. Measured from where the ball is when
+  // it is struck — maybeArmCine runs before the ball has moved.
+  const fromPinYds = dist(state.ball.x, state.ball.y,
+                          HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+  if (fromPinYds < TUNE.cineMinShotYds) return;
   const g = (HOLE._greens || []).find((gr) => pointInPoly(HOLE.holePos.x, HOLE.holePos.y, gr.poly));
   if (!g) return;                                  // vector-fallback hole without a pin green
   const r = simShotRest(state.ball, state.flight);
