@@ -104,6 +104,20 @@ const TUNE = {
   // is time-invariant — a coarser dt traces the same path through space, it
   // just gets there sooner) while a shot resolves in about a second.
   timeScale: 3.75,
+  // Wall-clock pace for the SHORTEST chips, ramped back up to timeScale at
+  // chipRangeYds (see swingTimeScale). At a flat 3.75 a 15 yd chip is over in
+  // ~0.4 s of real time: the launch and the landing — the two moments a chip is
+  // actually about — both happen inside a couple of frames and cannot be read.
+  // A longer pitch has enough airtime to follow, hence the ramp rather than a
+  // flat slow-mo. Costs nothing in accuracy: the sim is time-invariant, and
+  // aeroFlightStep already substeps at a fixed 1/120 s whatever the pace —
+  // verified with `shot_matrix --timescale`, which lands every chip inside
+  // 0.13 yd of where it lands at full pace.
+  // 1.0 = real time, deliberately: a chip is the one shot whose whole story is
+  // the first and last half-second, and real time is the pace it actually has.
+  // With the ramp a 15 yd chip plays 2.4x slower than before, 30 yd 1.8x, and
+  // by 75 yd it is untouched.
+  chipTimeScale: 1.0,
   // Turf impact + rolling, per surface. `e` = normal restitution (scaled down
   // with impact speed inside the impulse model), `mu` = contact friction that
   // converts backspin into check, `roll` = rolling deceleration in m/s².
@@ -123,7 +137,16 @@ const TUNE = {
     // ~0.6 s and a real SECOND hop, and the lighter crater lets the skid phase
     // do the stopping where you can see it. mu takes back the run the other two
     // add. Release distances land on the fitted table below either way.
-    green:   { e: 0.28, mu: 0.82, roll: 0, dig: 0.55 },   // roll comes from stimp
+    // mu 0.82 -> 0.74 after the aero re-fit gave every club its tour-accurate
+    // descent angle. The green is NOT grabbier than it was — measured at MATCHED
+    // descent it reproduces the old release within a yard (5i 38.8° -> 9.9 yd
+    // now vs 40.0° -> 9.2 yd before), so the shorter release was the honest
+    // consequence of landing steeper, not a turf bug. What it did break is the
+    // FLIGHT selector: at 0.82 the stock shot sat at 0.8 yd of release, on the
+    // floor and indistinguishable from a high shot (-0.5), so the top half of
+    // the selector's range did nothing. 0.74 lifts stock clear of the floor
+    // (5i 2.6, low 15.1, high 0.1) and is the smallest value that does.
+    green:   { e: 0.28, mu: 0.74, roll: 0, dig: 0.55 },   // roll comes from stimp
     rough:   { e: 0.10, mu: 0.55, roll: 9.00, dig: 0.50 },
     bunker:  { e: 0.10, mu: 0.85, roll: 7.00, dig: 0.85 },
     water:   { e: 0.00, mu: 1.00, roll: 9.00, dig: 0.95 },
@@ -491,7 +514,13 @@ const M_PER_UNIT = 2.7432;
 // exact same path through space — carry, rollout, break and putt distance are
 // all unchanged, they just happen sooner. The RK4 substep size stays fixed (see
 // aeroFlightStep), so accuracy is unchanged too.
-const simDt = () => TUNE.timeScale / 60;
+// `simScale` is the pace for the shot currently in flight; null = TUNE.timeScale.
+// It is set ONCE per swing, before buildTrialShot, so the chip solver, the
+// simShotRest prediction and the live steps all integrate at the same dt — if
+// the prediction ran at a different pace from the shot it predicts, a chip
+// auto-solved to rest at the pin would stop somewhere else.
+let simScale = null;
+const simDt = () => (simScale ?? TUNE.timeScale) / 60;
 const msPerUF = () => M_PER_UNIT / simDt();  // (world units/tick) -> m/s
 // Cup capture radius (world units) and default green speed — OSM carries no
 // stimp rating, so we default it; per-course green speeds come later.
@@ -3282,6 +3311,19 @@ function chipActiveNow() {
   if (surfaceAt(b.x, b.y) === "green") return false;
   return dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT < TUNE.chipRangeYds;
 }
+// Wall-clock pace for one swing. Short chips play slower so the launch and the
+// landing are legible, ramping back to the full TUNE.timeScale by chipRangeYds.
+// The putter is excluded on purpose: puttMaxPower / puttOffGreenPower are
+// frame-dimensioned and derived once in recalcPower() at TUNE.timeScale, so a
+// stroke struck at any other pace would carry the wrong power.
+function swingTimeScale(onGreen) {
+  if (onGreen || selectedClub === "putter" || !chipActiveNow()) return TUNE.timeScale;
+  const b = state.ball;
+  const yds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+  const t = Math.max(0, Math.min(1, yds / TUNE.chipRangeYds));
+  return TUNE.chipTimeScale + (TUNE.timeScale - TUNE.chipTimeScale) * t;
+}
+
 // Chip SPIN slider -> { landFrac, spinScale } (bias -1..+1). More spin lands the ball
 // deeper (higher landFrac) and checks harder (higher spinScale); less spin lands short
 // and runs. Neutral (0) reproduces TUNE.chipLandFrac / TUNE.chipSpin exactly.
@@ -3499,6 +3541,8 @@ function launchShot(ang, frac, spin, onGreen) {
   }
   measurePoint = null; // shot fired — clear the rangefinder marker
   previewFracTouched = false; // fresh shot next time — let the chip-assist auto-default re-engage
+  // Pace for THIS swing, chosen before anything is solved or predicted below.
+  simScale = swingTimeScale(onGreen);
   const trial = buildTrialShot(ang, frac, spin, onGreen);
   if (!trial) return;
   const b = state.ball;

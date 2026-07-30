@@ -224,6 +224,15 @@ if (argv.includes('--turf')) {
   t.e = e; t.mu = mu; t.dig = dig;
   if (Number.isFinite(roll)) t.roll = roll;
 }
+// --timescale N runs the whole matrix at a different wall-clock pace. Chips are
+// played at TUNE.chipTimeScale rather than TUNE.timeScale so their launch and
+// landing are legible, and that is only safe if the sim really is
+// time-invariant — a chip is auto-solved to REST at the pin, so a dt that moved
+// the rest point would quietly move every chip's aim. Run the matrix at both
+// paces and diff the rest column to prove it does not.
+if (argv.includes('--timescale')) {
+  TUNE.timeScale = +argv[argv.indexOf('--timescale') + 1];
+}
 
 const CHIP_TARGETS = [15, 20, 30, 40, 50, 60, 74];
 const FULL_CLUBS = ['driver', '5i', '7i', 'pw', 'lw'];
@@ -238,6 +247,19 @@ for (const id of FULL_CLUBS) {
 // LW just under its full-swing floor — the other side of the chip boundary
 rows.push({ club: 'lw', mode: 'full', target: null,
             ...shotFor('lw', TUNE.clubs.lw.minFrac, { chip: false, surf: SURF }) });
+
+// FLIGHT selector on a full swing. A high shot lands steeper and must check
+// MORE; a knockdown lands shallower and must run OUT. That ordering is the
+// point of the selector, and it is the thing a turf re-tune can quietly
+// destroy: slicken the green enough to restore an iron's release and high and
+// low collapse onto each other. Gated below, not assumed.
+for (const id of ['5i', '7i']) {
+  for (const bias of [-1, 1]) {
+    rows.push({ club: id, mode: 'full' + (bias > 0 ? '-hi' : '-lo'),
+                target: TUNE.clubs[id].carry,
+                ...shotFor(id, 1, { chip: false, flightBias: bias, surf: SURF }) });
+  }
+}
 
 // the chip/pitch band
 for (const id of ['lw', 'sw']) {
@@ -285,12 +307,30 @@ if (gate) {
   };
 
   if (SURF === 'green') {
-    // full-shot release must not drift (game.js:88-92 fit: 5i 10, 7i 6, PW 2, LW dead)
-    band('driver release', find('driver', 'full').releaseYd, 2.0, 8.0);
-    band('5i release', find('5i', 'full').releaseYd, 8.0, 15.0);
-    band('7i release', find('7i', 'full').releaseYd, 2.0, 8.0);
-    band('pw release', find('pw', 'full').releaseYd, -2.0, 4.0);
+    // Full-shot release. These bands were re-cut after the 2026-07-29 aero
+    // re-fit; the previous ones (5i 8-15) were measured when the 5i came down
+    // at 39° instead of 47° and so encoded the shallow-descent bug rather than
+    // any property of the turf. Control test behind the new numbers: at MATCHED
+    // descent the green still releases what it always did (5i 38.8° -> 9.9 yd
+    // now vs 40.0° -> 9.2 yd before), so only the targets moved, not the model.
+    band('driver release', find('driver', 'full').releaseYd, 1.5, 6.0);
+    band('5i release', find('5i', 'full').releaseYd, 1.0, 5.0);
+    band('7i release', find('7i', 'full').releaseYd, -1.0, 2.5);
+    band('pw release', find('pw', 'full').releaseYd, -2.0, 1.5);
     band('lw release', find('lw', 'full').releaseYd, -2.5, 1.5);
+
+    // FLIGHT selector: high checks, low runs out. Ordering AND a real gap —
+    // the failure mode is not inversion, it is collapse, which is exactly what
+    // a too-grabby green produces by pinning every shot to zero release.
+    for (const id of ['5i', '7i']) {
+      const lo = find(id, 'full-lo').releaseYd;
+      const st = find(id, 'full').releaseYd;
+      const hi = find(id, 'full-hi').releaseYd;
+      if (!(lo > st && st > hi)) {
+        fails.push(`${id} FLIGHT order broken: low ${lo.toFixed(1)} / stock ${st.toFixed(1)} / high ${hi.toFixed(1)} (want low > stock > high)`);
+      }
+      band(`${id} FLIGHT spread`, lo - hi, 2.0, 99);
+    }
   }
 
   // the fix itself
