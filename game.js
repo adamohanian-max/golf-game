@@ -46,6 +46,16 @@ const TUNE = {
   // so the 40 yd pitch keeps exactly the shape 544ed1e gave it.
   chipLoftDeg: 0,
   chipLoftRef: 0.45,
+  // Whole-band lift on top of that ramp — see the derivation at `loftAdd`. Held
+  // flat out to chipLoftHoldYds, faded to nothing by chipRangeYds so the 74/76 yd
+  // chip-vs-full-swing seam stays smooth.
+  chipLoftBoost: 4,       // degrees, at the shortest chip
+  // 0 = fade starts immediately, i.e. the lift is largest on the shortest chip
+  // and reaches nothing at chipRangeYds. Holding it flat out to 40 yd was tried
+  // first and crushed the mid-band roll-out this whole pass exists to protect:
+  // a 20 yd chip went to +4.7 deg and its release fell 4.1 -> 0.6 yd. Fading
+  // from the start keeps 2.0 yd there while the 15 yd chip still gets ~+4.
+  chipLoftHoldYds: 0,     // full boost out to here, then fades to 0 at chipRangeYds
   // ...and it is a FLOOR, not a flat value. Held flat, backspin fell off a cliff
   // at the chipRangeYds boundary: a 74 yd chip attached 7130 rpm while the same
   // wedge one yard further out (full swing, chipBoost) attached 11500. Same
@@ -3652,10 +3662,29 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   // with length, from chipLoftDeg at a nipped bump to the pitch value by
   // chipLoftRef — above which chips and pitches are the same shot again, which
   // is what leaves the 40 yd pitch (and 544ed1e's fix to it) untouched.
-  const loftAdd = chipActive
+  let loftAdd = chipActive
     ? pitchLoft + (TUNE.chipLoftDeg - pitchLoft) *
                   (1 - Math.min(1, Math.max(0, ef) / TUNE.chipLoftRef))
     : pitchLoft;
+  // ...and then the whole chip band lifts by chipLoftBoost, because the ramp
+  // above (which exists to make chips RELEASE) left them flat — a 15 yd chip
+  // apexed 5 ft. Held flat out to chipLoftHoldYds and faded to nothing by
+  // chipRangeYds so a 74 yd chip still matches a 76 yd full swing; a constant
+  // offset would put a step in launch angle exactly at that boundary, which is
+  // the seam chipLoftRef and chipSpinRef exist to protect.
+  // Keyed on PIN DISTANCE, not `ef`: the same ef is a different distance for a
+  // lob wedge than a sand wedge, so an ef-keyed fade would retire the boost
+  // ~10 yd earlier for the SW.
+  // Sized at 4°, which is the most height that still leaves a chip running:
+  // measured at 15 yd, +4° takes apex 5→8 ft and keeps 2.2 yd of release, while
+  // +10° gives 12 ft and kills release outright (4.4 → 0.2 yd). Apex saturates
+  // at 12 ft by +8° anyway, so the top of that range buys nothing.
+  if (chipActive && TUNE.chipLoftBoost) {
+    const pinYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
+    const span = Math.max(1, TUNE.chipRangeYds - TUNE.chipLoftHoldYds);
+    const k = 1 - Math.max(0, Math.min(1, (pinYds - TUNE.chipLoftHoldYds) / span));
+    loftAdd += TUNE.chipLoftBoost * k;
+  }
   // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
   const lieSurf = surfaceAt(b.x, b.y);
   const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;

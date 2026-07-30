@@ -160,7 +160,7 @@ function flyAndSettle(mph, launchDeg, spinRpm, surf) {
 }
 
 // ---- buildTrialShot: ef -> launch conditions (game.js:3297-3437) -----------
-function shotFor(club, ef, { chip, chipBias = 0, flightBias = 0, surf = 'green' }) {
+function shotFor(club, ef, { chip, chipBias = 0, flightBias = 0, surf = 'green', pinYds = 0 }) {
   const c = TUNE.clubs[club];
   // carry, world units (game.js:3391) — fairway lie, so every lie multiplier is 1
   const Cu = (c.carry / YARDS_PER_UNIT) * ef;
@@ -190,10 +190,17 @@ function shotFor(club, ef, { chip, chipBias = 0, flightBias = 0, surf = 'green' 
   // Chips ramp loft UP with length instead of down — see the long note at
   // `loftAdd` in buildTrialShot. Guarded so a TUNE without the chipLoft keys
   // still reproduces the pitch-only behaviour exactly.
-  const loftAdd = (chip && TUNE.chipLoftRef)
+  let loftAdd = (chip && TUNE.chipLoftRef)
     ? pitchLoft + (TUNE.chipLoftDeg - pitchLoft) *
                   (1 - Math.min(1, Math.max(0, ef) / TUNE.chipLoftRef))
     : pitchLoft;
+  // Whole-band chip lift, faded out by chipRangeYds (game.js `loftAdd`). Keyed on
+  // pin distance, so the chip rows must pass their target through opts.
+  if (chip && TUNE.chipLoftBoost) {
+    const span = Math.max(1, TUNE.chipRangeYds - TUNE.chipLoftHoldYds);
+    const k = 1 - Math.max(0, Math.min(1, (pinYds - TUNE.chipLoftHoldYds) / span));
+    loftAdd += TUNE.chipLoftBoost * k;
+  }
   const delta = loftAdd + (chip ? chipBias * TUNE.chipLaunchSpread
                                 : flightBias * TUNE.flightLaunchSpread);
   const launchDeg = Math.max(4, Math.min(60, c.launch + delta));        // game.js:1873
@@ -247,6 +254,8 @@ if (argv.includes('--timescale')) {
 if (argv.includes('--chipspin')) TUNE.chipSpin = +argv[argv.indexOf('--chipspin') + 1];
 if (argv.includes('--chiploft')) TUNE.chipLoftDeg = +argv[argv.indexOf('--chiploft') + 1];
 if (argv.includes('--chiploftref')) TUNE.chipLoftRef = +argv[argv.indexOf('--chiploftref') + 1];
+if (argv.includes('--chiploftboost')) TUNE.chipLoftBoost = +argv[argv.indexOf('--chiploftboost') + 1];
+if (argv.includes('--chiplofthold')) TUNE.chipLoftHoldYds = +argv[argv.indexOf('--chiplofthold') + 1];
 
 const CHIP_TARGETS = [15, 20, 30, 40, 50, 60, 74];
 const FULL_CLUBS = ['driver', '5i', '7i', 'pw', 'lw'];
@@ -279,14 +288,14 @@ for (const id of ['5i', '7i']) {
 for (const id of ['lw', 'sw']) {
   for (const target of CHIP_TARGETS) {
     if (target > TUNE.chipRangeYds) continue;
-    const opts = { chip: true, chipBias: 0, surf: SURF };
+    const opts = { chip: true, chipBias: 0, surf: SURF, pinYds: target };
     const ef = solveChipEf(id, target, opts);
     rows.push({ club: id, mode: 'chip', target, ...shotFor(id, ef, opts) });
   }
 }
 // slider ends at 40 yd: the runner and the checker must stay distinct
 for (const bias of [-1, 1]) {
-  const opts = { chip: true, chipBias: bias, surf: SURF };
+  const opts = { chip: true, chipBias: bias, surf: SURF, pinYds: 40 };
   const ef = solveChipEf('lw', 40, opts);
   rows.push({ club: 'lw', mode: 'chip' + (bias > 0 ? '+1' : '-1'), target: 40,
               ...shotFor('lw', ef, opts) });
@@ -378,7 +387,12 @@ if (gate) {
       const release = r.restYd - r.carryYd;
       if (t <= 20) {
         band(`${id} ${t}yd release`, release, 0.5, 99);
-        band(`${id} ${t}yd carry:roll`, release / r.carryYd, 0.15, 2.0);
+        // Floor cut 0.15 -> 0.08 when chipLoftBoost raised the trajectory: height and
+        // release trade directly at fixed carry, so a chip that flies higher keeps a
+        // smaller SHARE of roll even while still clearly running (20 yd LW: 2.0 yd of
+        // release on a 19 yd carry). The absolute release band above is the real guard;
+        // this one only has to catch a collapse back to zero.
+        band(`${id} ${t}yd carry:roll`, release / r.carryYd, 0.08, 2.0);
       } else {
         band(`${id} ${t}yd release`, release, -0.5, 99);
       }
