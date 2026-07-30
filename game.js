@@ -30,7 +30,22 @@ const TUNE = {
   // what engages the skid). At 0.1 a chip arrived with ~1150 rpm, never skidded,
   // and settled straight into 0.41 m/s2 green rolling — a putt that happened to
   // fly. Real greenside wedges spin 5000-9000 rpm even on a soft shot.
-  chipSpin: 0.80,
+  // Then 0.80 overshot the other way: it is a FLOOR, so a 15 yd nip was handed
+  // 9717 rpm — 85% of a full lob wedge — and every chip in the band checked or
+  // spun BACKWARDS. 0.30 with the chipLoftDeg ramp below restores the classic
+  // carry:roll (LW ~1:0.5, SW ~1:0.8 at 15 yd). Worth knowing before touching
+  // either knob alone: spin and loft only work TOGETHER here. Dropping spin by
+  // itself from 9717 to 4756 rpm moved a 15 yd chip's roll by 0.4 yd, because
+  // the descent angle was what stopped it; dropping loft by itself bought 0.9.
+  chipSpin: 0.30,
+  // Loft a NIPPED greenside chip presents, in degrees on top of the club's own
+  // launch angle, ramping up to the normal partial-swing (pitch) loft by
+  // chipLoftRef. See the derivation at `loftAdd` in buildTrialShot: the pitch
+  // ramp alone gave the shortest chips the steepest descent, which is what made
+  // every chip check or spin back. chipLoftRef 0.45 is ~40 yd for a lob wedge,
+  // so the 40 yd pitch keeps exactly the shape 544ed1e gave it.
+  chipLoftDeg: 0,
+  chipLoftRef: 0.45,
   // ...and it is a FLOOR, not a flat value. Held flat, backspin fell off a cliff
   // at the chipRangeYds boundary: a 74 yd chip attached 7130 rpm while the same
   // wedge one yard further out (full swing, chipBoost) attached 11500. Same
@@ -118,6 +133,16 @@ const TUNE = {
   // With the ramp a 15 yd chip plays 2.4x slower than before, 30 yd 1.8x, and
   // by 75 yd it is untouched.
   chipTimeScale: 1.0,
+  // ...and the touchdown itself gets a further slow-motion window on top (see
+  // updatePace). Armed while the ball is descending below chipLandSlowZ and held
+  // chipLandSlowMs past that, so the bounce and the release are both inside it.
+  chipLandSlowMul: 2,     // extra pace divisor during the window
+  chipLandSlowMs: 800,    // how long it holds after the ball stops descending
+  chipLandSlowZ: 0.5,     // ball height (world units, ~4.5 ft) that arms it
+  // Same treatment for the cinematic landing cut: the ball's pace is halved for
+  // as long as the cut is on screen. Combined with chipLandSlowMul by taking the
+  // slower of the two, not the product.
+  cineSlowMul: 2,
   // Turf impact + rolling, per surface. `e` = normal restitution (scaled down
   // with impact speed inside the impulse model), `mu` = contact friction that
   // converts backspin into check, `roll` = rolling deceleration in m/s².
@@ -341,11 +366,15 @@ const TUNE = {
   cineCutFrac: 0.62,     // cut to 3D this far down the descent (0 = apex, 1 = touchdown).
                          // Later than before: the old arc fell in ~0.4 s, a real one
                          // takes ~3 s, so cutting at 0.35 left a long dead hover.
-  cineHoldMs: 900,       // linger on the settled ball before returning to the course
+  // Cut timings run at HALF their original speed (900/4200/0.04): the cut is the
+  // one moment the 3D green is on screen and it was over before it read. The
+  // ball's own pace is halved alongside them via cineSlowMul, so the push-in and
+  // the shot it is following stay in step.
+  cineHoldMs: 1800,      // linger on the settled ball before returning to the course
   cineZoomIn: 1.18,      // slow push-in over the landing (multiplies the fit-to-screen zoom)
-  cineZoomMs: 4200,      // duration of the push-in ease (real descents are seconds
+  cineZoomMs: 8400,      // duration of the push-in ease (real descents are seconds
                          // long — a 2.6 s ease finished before the ball landed)
-  cineYawDrift: 0.04,    // gentle orbit (rad/s) while the cinematic plays
+  cineYawDrift: 0.02,    // gentle orbit (rad/s) while the cinematic plays
   cineBallZ: 1.0,        // flight-height scale in the 3D view (1 = true world scale)
   cineSimSteps: 9000,    // forward-sim frame cap (~150 s of ball time). Real flights
                          // are 5-7 s and real putts roll for many seconds, so the old
@@ -520,8 +549,29 @@ const M_PER_UNIT = 2.7432;
 // the prediction ran at a different pace from the shot it predicts, a chip
 // auto-solved to rest at the pin would stop somewhere else.
 let simScale = null;
+let shotBaseScale = null;  // pace picked for the current swing, before any dilation
+let shotIsChip = false;    // this swing took the chip pace (see swingTimeScale)
+let landSlowUntil = 0;     // performance.now() ms at which the landing slo-mo ends
 const simDt = () => (simScale ?? TUNE.timeScale) / 60;
 const msPerUF = () => M_PER_UNIT / simDt();  // (world units/tick) -> m/s
+// Change the pace MID-shot (landing slo-mo, cinematic cut). The ball's stored
+// velocity is in world units per TICK, and a tick is worth simDt seconds, so the
+// same b.vx means a different physical speed at a different pace: without the
+// rescale below the ball visibly jumps the instant the pace changes. Physical
+// speed is b.v * msPerUF() and msPerUF is proportional to 1/scale, so holding it
+// constant means scaling the stored velocity by exactly next/prev.
+// b.spinW is rad/s and the aero state (fl.aero.st) is SI — both pace-agnostic.
+// In flight b.vx is re-derived from the SI state every tick so the rescale is
+// redundant there; it is done unconditionally anyway so the touchdown frame,
+// where the roll phase inherits b.vx, is right.
+function setSimScale(next) {
+  const prev = simScale ?? TUNE.timeScale;
+  if (next === prev) return;
+  const k = next / prev;
+  const b = state.ball;
+  b.vx *= k; b.vy *= k; b.vz *= k;
+  simScale = next;
+}
 // Cup capture radius (world units) and default green speed — OSM carries no
 // stimp rating, so we default it; per-course green speeds come later.
 // Hole: real is 4.25" (~0.02 units) but that's brutal for feel-based putting, so
@@ -1819,8 +1869,33 @@ function elevAdjustCarry(sx, sy, ang, Cflat) {
 // =====================================================================
 //  Physics
 // =====================================================================
+// Pace for THIS tick. The per-swing base (swingTimeScale) can be dilated further
+// by two things that want the same moment to be readable: a chip's touchdown and
+// the cinematic landing cut. They are combined by taking the SLOWER of the two,
+// never the product — a chip that triggers the cut would otherwise run at a
+// quarter speed nobody asked for.
+function updatePace() {
+  const base = shotBaseScale ?? TUNE.timeScale;
+  // Idle resets to the DEFAULT pace, not this shot's. The putt-pace preview
+  // (invertPuttPaceCurved -> greenBaseSpeed) reads msPerUF() live, so leaving a
+  // chip's slower clock in place between strokes would mis-scale the next putt.
+  if (!state.moving) { setSimScale(TUNE.timeScale); landSlowUntil = 0; return; }
+  const b = state.ball, now = performance.now();
+  // Arm on the way DOWN, just above the turf, and hold the window open past the
+  // bounce so the check/release is visible too — re-armed every frame while low,
+  // so the window always ends chipLandSlowMs after the ball is done descending.
+  if (shotIsChip && state.airborne && b.vz < 0 && b.z <= TUNE.chipLandSlowZ) {
+    landSlowUntil = now + TUNE.chipLandSlowMs;
+  }
+  let div = 1;
+  if (landSlowUntil > now) div = Math.max(div, TUNE.chipLandSlowMul);
+  if (cine) div = Math.max(div, TUNE.cineSlowMul);
+  setSimScale(base / div);
+}
+
 function update() {
   if (!state.moving || state.inHole) return;
+  updatePace();
   if (state.airborne) flightStep(state.ball);
   else rollStep(state.ball);
 }
@@ -3571,7 +3646,9 @@ function launchShot(ang, frac, spin, onGreen) {
   measurePoint = null; // shot fired — clear the rangefinder marker
   previewFracTouched = false; // fresh shot next time — let the chip-assist auto-default re-engage
   // Pace for THIS swing, chosen before anything is solved or predicted below.
-  simScale = swingTimeScale(onGreen);
+  simScale = shotBaseScale = swingTimeScale(onGreen);
+  shotIsChip = simScale !== TUNE.timeScale;   // only a chip gets the reduced pace
+  landSlowUntil = 0;
   const trial = buildTrialShot(ang, frac, spin, onGreen);
   if (!trial) return;
   const b = state.ball;

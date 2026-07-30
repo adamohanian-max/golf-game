@@ -184,9 +184,16 @@ function shotFor(club, ef, { chip, chipBias = 0, flightBias = 0, surf = 'green' 
 
   // launch angle (game.js:3433-3437). partialLoftDeg/Ref are the Phase-1 knobs;
   // absent, loftAdd is 0 and this is the pre-fix behaviour exactly.
-  const loftAdd = TUNE.partialLoftDeg
+  const pitchLoft = TUNE.partialLoftDeg
     ? TUNE.partialLoftDeg * Math.max(0, Math.min(1, 1 - ef / TUNE.partialLoftRef))
     : 0;
+  // Chips ramp loft UP with length instead of down — see the long note at
+  // `loftAdd` in buildTrialShot. Guarded so a TUNE without the chipLoft keys
+  // still reproduces the pitch-only behaviour exactly.
+  const loftAdd = (chip && TUNE.chipLoftRef)
+    ? pitchLoft + (TUNE.chipLoftDeg - pitchLoft) *
+                  (1 - Math.min(1, Math.max(0, ef) / TUNE.chipLoftRef))
+    : pitchLoft;
   const delta = loftAdd + (chip ? chipBias * TUNE.chipLaunchSpread
                                 : flightBias * TUNE.flightLaunchSpread);
   const launchDeg = Math.max(4, Math.min(60, c.launch + delta));        // game.js:1873
@@ -233,6 +240,13 @@ if (argv.includes('--turf')) {
 if (argv.includes('--timescale')) {
   TUNE.timeScale = +argv[argv.indexOf('--timescale') + 1];
 }
+// --chipspin N / --chiploft N override the two knobs that set a chip's SHAPE,
+// same in-memory trick as --turf: chipSpin is the backspin floor a short chip
+// gets as a fraction of the club's full-swing value, chipLoftDeg the loft a
+// chip presents on top of the club's own launch angle.
+if (argv.includes('--chipspin')) TUNE.chipSpin = +argv[argv.indexOf('--chipspin') + 1];
+if (argv.includes('--chiploft')) TUNE.chipLoftDeg = +argv[argv.indexOf('--chiploft') + 1];
+if (argv.includes('--chiploftref')) TUNE.chipLoftRef = +argv[argv.indexOf('--chiploftref') + 1];
 
 const CHIP_TARGETS = [15, 20, 30, 40, 50, 60, 74];
 const FULL_CLUBS = ['driver', '5i', '7i', 'pw', 'lw'];
@@ -344,10 +358,29 @@ if (gate) {
       // only ever land on a tread. Pre-existing; it used to be smeared out by
       // the rollout the chip no longer has.
       band(`${id} ${t}yd rest`, r.restYd, t - 2.2, t + 2.2);
-      if (t >= 20) {
+      // Hop visibility applies to the PITCHES (>=30 yd), not the running chips.
+      // 544ed1e added these because a 40 yd pitch arrived with no visible hop;
+      // a 15-20 yd chip legitimately skips once low and then runs, so demanding
+      // two 0.6 ft hops of it would just be demanding the wrong shot.
+      if (t >= 30) {
         band(`${id} ${t}yd hop ft`, r.hop1Ft, 0.6, 99);
         band(`${id} ${t}yd hop s`, r.hop1S, 0.35, 99);
         band(`${id} ${t}yd hops`, r.hopCount, 2, 99);
+      }
+      // A chip must RELEASE. Nothing here checked the carry/roll split, which is
+      // how "every chip in the band rolls backwards" shipped unnoticed: rest was
+      // right at every target, because solveChipEf simply flew the ball the whole
+      // way. Short chips are the running shot and must clearly run; by 40 yd it
+      // is a pitch and is allowed to check, but never to reverse.
+      // Greenside (<=20 yd) is the RUNNING shot and must clearly release.
+      // From 30 yd up it is a pitch, allowed to check — but never to reverse,
+      // which is the actual defect this whole pass exists to kill.
+      const release = r.restYd - r.carryYd;
+      if (t <= 20) {
+        band(`${id} ${t}yd release`, release, 0.5, 99);
+        band(`${id} ${t}yd carry:roll`, release / r.carryYd, 0.15, 2.0);
+      } else {
+        band(`${id} ${t}yd release`, release, -0.5, 99);
       }
     }
   }
