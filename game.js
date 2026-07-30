@@ -2679,8 +2679,12 @@ function rollStep(b) {
     }
     // reframe to fit the remaining shot and re-aim the camera up the line to the
     // pin (smoothly) so the next shot is already oriented toward the hole.
-    frameRemaining();
-    if (autoAimEnabled) aimAtHole();
+    // Suppressed while the match camera is held on the tee — liveCameraTick does
+    // this once when the hold releases (both players away).
+    if (!cameraTeeHold()) {
+      frameRemaining();
+      if (autoAimEnabled) aimAtHole();
+    }
     manualClubThisShot = false; // manual pick was for the shot just hit
     autoClub(); // pick the club for the next shot's distance to the pin
     updateScorecard();
@@ -4318,7 +4322,12 @@ function updateCamera() {
   // the normal at-rest framing re-fits when the shot settles. Uses last frame's
   // view affine (one-frame lag, converges over a few frames).
   if (state.moving && !view.gtilesProj && !view.threeProj && !view.appleProj && !HOLE.isRange) {
-    const yf = (wy(state.ball.x, state.ball.y) - ws(state.ball.z || 0)) / Math.max(1, vpH());
+    // Band measured against the PLAY AREA, not the raw viewport: the mobile top
+    // bar covers ~9.5% of the height, so a ball at yf 0.08 of the SCREEN was
+    // hidden behind it while still reading as safely inside a 0.05 raw band.
+    const _rsv = hudReserve();
+    const _pTop = _rsv.top, _pH = Math.max(120, vpH() - _rsv.top - _rsv.bot);
+    const yf = (wy(state.ball.x, state.ball.y) - ws(state.ball.z || 0) - _pTop) / _pH;
     if (yf < 0.05 || yf > 0.95) {
       // time-based, not per-frame: flights are now seconds long, so a fixed
       // per-frame factor compounded into a runaway zoom-out (0.97^500)
@@ -4373,6 +4382,43 @@ function applyDeviceMode() {
 }
 mqMobile.addEventListener("change", () => { applyDeviceMode(); resize(); });
 
+// MEASURED mobile HUD bands. The constants below are a floor, not the truth: the
+// mobile top bar is a full-width card whose height moves with its CONTENT (a
+// match adds the "Match: 2 UP" line; the shot-info block adds rows), so a fixed
+// 78 under-reserves exactly when the bar is tallest and the framed landing area
+// gets painted over. Cached, never measured inside hudReserve() — that runs
+// several times a frame (frameScaleForAngle, frameClubReach, computeViewMatrix,
+// visibleRect, paintGreen3D, the 3D bridge) and per-call layout reads would
+// thrash. Only ever RAISES the constant, so it can't reduce clearance.
+let _hudBand = { top: 0, bot: 0 };
+function measureHudBands() {
+  _hudBand = { top: 0, bot: 0 };
+  if (IS_DESKTOP) return;   // desktop bar is a top-LEFT panel, not a full-width band
+  // TOP ONLY, deliberately. Measure a band only if it spans the width and so
+  // really can hide the shot line. The mobile top bar does (left:0;right:0).
+  // The club wheel does NOT — it's a 96px dial in the bottom-RIGHT corner, and
+  // measuring it reserved 182px instead of the tuned 124, cutting 9% off the
+  // play area and pulling the camera IN. That shrinks the very span this fix
+  // exists to reveal, so the bottom stays on its hand-tuned constant.
+  const sc = document.getElementById("scorecard");
+  if (sc && !sc.classList.contains("hidden") && getComputedStyle(sc).display !== "none") {
+    const r = sc.getBoundingClientRect();
+    if (r.height > 0) _hudBand.top = Math.max(0, Math.round(r.bottom));
+  }
+}
+// Re-measure exactly when a band's box changes (match text wrapping in/out, the
+// shot-info rows toggling, a moved/resized HUD, orientation) instead of polling.
+// measureHudBands() only reads layout, so this can't feed back into itself.
+if (typeof ResizeObserver === "function") {
+  const _bandRO = new ResizeObserver(() => {
+    const t = _hudBand.top, b = _hudBand.bot;
+    measureHudBands();
+    if (_hudBand.top !== t || _hudBand.bot !== b) applyView();  // reserve moved -> rebuild matrix
+  });
+  const _scEl = document.getElementById("scorecard");
+  if (_scEl) _bandRO.observe(_scEl);
+}
+
 // HUD bands (px) the camera keeps the framed hole clear of: safe-area inset + the
 // per-device reserve on each edge. Top/bottom hold the scorecard/stats and club UI.
 function hudReserve() {
@@ -4380,8 +4426,8 @@ function hudReserve() {
     // Mobile: HUD is a top bar + bottom strip -> reserve those, use full width.
     const m = HUD_RESERVE.mobile;
     return {
-      top: safeInset.t + m.top,
-      bot: safeInset.b + m.bot,
+      top: Math.max(safeInset.t + m.top, _hudBand.top),
+      bot: Math.max(safeInset.b + m.bot, _hudBand.bot),
       left: safeInset.l + m.side,
       right: safeInset.r + m.side,
     };
@@ -4409,6 +4455,8 @@ function resize() {
   applyView();
   if (typeof clampHudPositions === "function") clampHudPositions(); // keep moved panels on-screen
   if (typeof positionStatsBar === "function") positionStatsBar();   // re-dock shot info under the top bar
+  measureHudBands();   // bar height moves with the viewport -> re-read the real bands
+  applyView();         // ...and re-apply, since the reserve just changed the matrix
   // Re-anchor the swing hint above the ball if the viewport changed while it's
   // still showing (orientation flip before the player's first swing).
   if (elHint && hudVis.hint && !elHint.classList.contains("hidden")) positionHint();
@@ -14841,7 +14889,8 @@ let lastOpp = null;    // opponent's last polled match_players row
 let lastMe = null;     // my last polled row
 let oppShot = null;    // active opponent arc tween, or null
 let _lastOppSeq = -1;  // last opponent cur_shot.seq I started animating
-let _spectating = false;     // camera is following the opponent's ball
+let _spectating = false;
+let _teeHeld = false;      // camera is parked on the tee until both players are away     // camera is following the opponent's ball
 let _awaitLive = null;       // {hole, advance, since} while waiting for opp to finish a hole
 
 // --- Disconnect/deadlock watchdog -------------------------------------------
@@ -14933,6 +14982,28 @@ function myTurn() {
   return sameName(t, me.player_name);
 }
 
+// Has the OPPONENT hit a tee shot on the hole I'm standing on?
+// The cur_at_rest term is load-bearing: the bot only increments cur_strokes when
+// its flight RESOLVES (cpuDriverTick), so mid-tee-shot it still reads 0 while
+// cur_at_rest is false. Without it the hold would release the instant the bot
+// swung rather than when its ball came down.
+function oppTeedOff() {
+  if (!lastOpp || !HOLE || lastOpp.cur_hole !== HOLE.num) return false;
+  return (lastOpp.cur_strokes | 0) > 0 || lastOpp.cur_at_rest === false;
+}
+// Both players away on this hole. state.strokes is zeroed per hole in resetState.
+function bothTeedOff() { return (state.strokes | 0) > 0 && oppTeedOff(); }
+
+// HOLD the camera on the tee framing until both players have played. Two people
+// share a tee box, so reframing after the first drive yanks the view away from
+// the player who hasn't hit yet. oppResponsive() is in the condition on purpose
+// (same fail-safe myTurn uses): an opponent who never tees off must not leave me
+// staring at the tee, unable to see my own ball.
+function cameraTeeHold() {
+  return liveMatch() && mode === "course" && !!HOLE && !HOLE.isRange &&
+         oppResponsive() && !bothTeedOff();
+}
+
 // Opponent's current ball position (tween while a shot is in flight, else its
 // resting spot), in world units. null when nothing to show on this hole.
 function oppGhostPos() {
@@ -14999,7 +15070,16 @@ function oppFinishedHole(h) { return !!(lastOpp && (lastOpp.hole_scores || {})[h
 // Per-frame: follow the opponent's ball while it's their turn; snap back to my
 // ball framing when the turn returns to me.
 function liveCameraTick() {
-  if (!liveMatch() || mode !== "course") { _spectating = false; return; }
+  if (!liveMatch() || mode !== "course") { _spectating = false; _teeHeld = false; return; }
+  // Tee hold: don't chase the opponent's ball until both of us are away. Their
+  // ball still DRAWS (oppGhostPos feeds the renderer independently), so you watch
+  // the shot inside a frozen frame instead of the camera lurching to follow it.
+  if (cameraTeeHold()) { _teeHeld = true; return; }
+  // Hold just ended -> reframe once so the camera doesn't stay parked on the tee.
+  if (_teeHeld) {
+    _teeHeld = false;
+    if (!_spectating) { frameRemaining(); if (autoAimEnabled) aimAtHole(); }
+  }
   const watch = !myTurn() && lastOpp && lastOpp.cur_hole === (HOLE && HOLE.num);
   if (watch) {
     const g = oppGhostPos();
@@ -17497,7 +17577,12 @@ window.GolfBridge = {
       : Math.min(clubReachYds, Math.max(TUNE.reachMinYds, pinDistYds + TUNE.reachPinMarginYds));
     const Ru = reachYds / YARDS_PER_UNIT;
     const a = camera.tAngle, dirX = -Math.sin(a), dirY = -Math.cos(a); // up-screen dir
-    return { bx: b.x, by: b.y, rx: b.x + dirX * Ru, ry: b.y + dirY * Ru, moving: !!state.moving };
+    // `hold` freezes the 3D framing the same way `moving` does. Without it the
+    // tee hold would only pin the 2D camera: setCamera re-captures its target
+    // from these anchors on every at-rest frame, so it would drift to follow my
+    // ball anyway once it settled.
+    return { bx: b.x, by: b.y, rx: b.x + dirX * Ru, ry: b.y + dirY * Ru,
+             moving: !!state.moving, hold: cameraTeeHold() };
   },
   // Mirrors drawTrees()'s own cache/guard exactly (game.js ~3938-3947) so the
   // 3D renderer shares the identical tree list the 2D renderer already

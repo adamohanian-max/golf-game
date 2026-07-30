@@ -595,12 +595,46 @@ function setCamera() {
   // up, which streams in a few seconds. A drive that outruns the frame is
   // handled by the widen-guard below, and losing the ball briefly at the top of
   // a big drive is what real golf broadcasts look like anyway.
-  const SPAN_MAX_U = 70;
+  // The budget that actually governs streaming is camera ALTITUDE (footprint),
+  // not shot span — so cap the distance and solve the span from it, rather than
+  // capping the span and letting the distance fall out. The old `SPAN_MAX_U = 70`
+  // clamped the FRAMED span to 70u while a driver reaches ~99u, and at low pitch
+  // screen-y is linear in ground distance, so the landing point projected to
+  // y ≈ -10..+11 on a 844px screen: measured 14 of Pebble's 18 holes put the
+  // spot the ball was headed for behind the HUD bar or off the top entirely
+  // (pitch 55 hid only h18, because perspective already reveals ground beyond
+  // the reach anchor). D_MAX_M is the same tradeoff the span clamp encoded,
+  // expressed in the unit that causes it: measured 675 m at pitch 0 streams in
+  // a few seconds, so allow a little headroom above that and no more.
+  const D_MAX_M = 820;
   const SPAN_MIN_M = 14;   // tap-in floor: tight putt framing, ball + cup clear
-  const REACH_F = 0.15, BALL_F = 0.85;  // anchor fractions of the play area
+  // PITCH-DEPENDENT, because the clamp only actually breaks the low-pitch view.
+  // Measured on all 18 Pebble holes at 390x844: with a flat 70u clamp, pitch 0
+  // hid the landing spot on 14 of 18 holes (screen y -8..+11 behind an 80px bar)
+  // while pitch 55 hid only h18, and by 4px — perspective already reveals ground
+  // beyond the reach anchor once the camera leans over. So keep the 70u clamp at
+  // high pitch, where it costs nothing and its streaming budget is the measured
+  // one (D ~356 m), and lift it only as the camera flattens out. Removing it at
+  // every pitch pushed pitch-55 D to 503 m, past the ~413 m the note below
+  // records as the point where the photoreal mesh crawls in.
+  const SPAN_MAX_U_HI = 70;      // pitch >= SPREAD_PITCH — unchanged behaviour
+  const SPAN_MAX_U_LO = 1e9;     // pitch 0 — frame the true reach, D_MAX_M bounds it
+  // Anchor fractions of the play area. Spreading them apart buys span for FREE
+  // (no extra altitude), so spend that before spending distance. The HI pair is
+  // the original 0.70 spread shifted DOWN 3%: same span, same D, but it lifts the
+  // reach anchor clear of the bar on the one high-pitch hole that was clipping.
+  const REACH_F_HI = 0.18, BALL_F_HI = 0.88;
+  const REACH_F_LO = 0.07, BALL_F_LO = 0.93;
+  const SPREAD_PITCH = 45;
+  const st = Math.max(0, Math.min(1, pitchDeg / SPREAD_PITCH));
+  const REACH_F = REACH_F_LO + (REACH_F_HI - REACH_F_LO) * st;
+  const BALL_F = BALL_F_LO + (BALL_F_HI - BALL_F_LO) * st;
+  const SPAN_MAX_U = SPAN_MAX_U_LO + (SPAN_MAX_U_HI - SPAN_MAX_U_LO) * st;
   let tOx, tOy, tD;
-  if (A && A.moving && _hold) {
-    ({ Ox: tOx, Oy: tOy, D: tD } = _hold);   // FROZEN target while the ball is in flight
+  if (A && (A.moving || A.hold) && _hold) {
+    // FROZEN while the ball is in flight, and while the match camera is held on
+    // the tee until both players are away (A.hold).
+    ({ Ox: tOx, Oy: tOy, D: tD } = _hold);
   } else {
     if (A) {
       const rsv = g.hudReserve ? g.hudReserve() : { top: 0, bot: 0 };
@@ -613,13 +647,20 @@ function setCamera() {
       const rd = Math.hypot(A.rx - A.bx, A.ry - A.by);
       const ux = rd > 1e-6 ? (A.rx - A.bx) / rd : 0;
       const uy = rd > 1e-6 ? (A.ry - A.by) / rd : 0;
+      // Span clamp is pitch-dependent (see above); D_MAX_M is the real budget.
       const Rm = Math.max(Math.min(rd, SPAN_MAX_U) * m, SPAN_MIN_M);
       const AA = (u) => f * cp - u * sp;
       let D = Rm / (uR / AA(uR) - uB / AA(uB));
       if (!isFinite(D) || D <= 0) D = Rm * 3;           // degenerate-pitch guard
-      const sR = uR * D / AA(uR);          // reach anchor, metres ahead of look-at
-      tOx = A.bx + ux * (Rm - sR) / m;     // look-at = reach point − sR along aim
-      tOy = A.by + uy * (Rm - sR) / m;
+      D = Math.min(D, D_MAX_M);                          // streaming budget
+      // Anchor the look-at off the BALL, not off the reach point. Identical to
+      // `reach − sR` whenever D is the exact two-anchor solution (−sB == Rm − sR
+      // by construction), but when D got clamped to the budget it is the anchor
+      // we must keep: solving from the reach end instead would slide the frame
+      // forward and drop the ball off the bottom of the screen.
+      const sB = uB * D / AA(uB);          // ball offset from look-at, along aim
+      tOx = A.bx - ux * sB / m;
+      tOy = A.by - uy * sB / m;
       tD = D;
       _aimUx = ux; _aimUy = uy;            // for the opening pull-back seed
     } else {
@@ -629,7 +670,9 @@ function setCamera() {
       tOy = (-view.d * sx0 + view.a * sy0) / det;
       tD = (m * dpr / scale) * H * APPLE_CAM_K;   // flat-zoom fallback (no anchors)
     }
-    if (!A || !A.moving) _hold = { Ox: tOx, Oy: tOy, D: tD };  // capture at-rest target
+    // Capture the at-rest target. Mirrors the freeze test above, so the FIRST
+    // frame of a hold establishes the frame that the hold then keeps.
+    if (!A || !(A.moving || A.hold)) _hold = { Ox: tOx, Oy: tOy, D: tD };
   }
   tD = Math.max(20, Math.min(6000, tD));
 
@@ -679,7 +722,13 @@ function setCamera() {
   if (S && S.ball && ready) {
     const bp = project(S.ball.x, S.ball.y,
       (g.terrainZ ? g.terrainZ(S.ball.x, S.ball.y) : 0) + (S.ball.z || 0));
-    const yf = bp.y / H;
+    // Bands measured against the PLAY AREA, not the raw screen. On mobile the top
+    // bar covers ~9.5% of the height, so a ball resting at yf 0.08 was completely
+    // hidden behind it yet sat well inside the old 0.05 raw-screen band and never
+    // widened. Re-read the reserve here (it is cached on the game side).
+    const gr = g.hudReserve ? g.hudReserve() : { top: 0, bot: 0 };
+    const pTop = gr.top, pBot = H - gr.bot, pH = Math.max(120, pBot - pTop);
+    const yf = (bp.y - pTop) / pH;   // 0 = just under the bar, 1 = top of the club UI
     const off = !bp.inFront || yf < 0.05 || yf > 0.95 || bp.x < -40 || bp.x > W + 40;
     // fully LOST (not merely at the band edge) — happens at rest too, e.g. the
     // first seconds on a coastal hole while the height field heals under the
