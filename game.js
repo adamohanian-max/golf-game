@@ -128,11 +128,19 @@ const TUNE = {
   // aeroFlightStep already substeps at a fixed 1/120 s whatever the pace —
   // verified with `shot_matrix --timescale`, which lands every chip inside
   // 0.13 yd of where it lands at full pace.
-  // 1.0 = real time, deliberately: a chip is the one shot whose whole story is
-  // the first and last half-second, and real time is the pace it actually has.
-  // With the ramp a 15 yd chip plays 2.4x slower than before, 30 yd 1.8x, and
-  // by 75 yd it is untouched.
-  chipTimeScale: 1.0,
+  // Was 1.0 (real time), which read as too slow in play; 2.0 is ~1.5x quicker at
+  // the distances a chip is actually watched from — 1.6x at 10 yd, 1.5x at 15,
+  // 1.4x at 20. Against the original flat 3.75 a 15 yd chip still plays 1.6x
+  // slower, 30 yd 1.4x, and 75 yd is untouched.
+  // The speedup TAPERS with distance and is exactly 1.0x at chipRangeYds. That
+  // is the ramp doing its job: the top of the band is pinned to timeScale so a
+  // 74 yd chip and a 76 yd full swing play at the same pace, and there is no
+  // speed step at the boundary. Chipping cannot be sped up uniformly without
+  // raising timeScale, which would re-pace every full shot and putt.
+  // This one constant also paces the landing window below, which divides it —
+  // so the touchdown speeds up by the same factor and stays half the speed of
+  // the flight around it.
+  chipTimeScale: 2.0,
   // ...and the touchdown itself gets a further slow-motion window on top (see
   // updatePace). Armed while the ball is descending below chipLandSlowZ and held
   // chipLandSlowMs past that, so the bounce and the release are both inside it.
