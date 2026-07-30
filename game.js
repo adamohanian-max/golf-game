@@ -380,26 +380,30 @@ const TUNE = {
   // spin/lift — a plain projectile can't). PW and below from the table; SW/LW
   // extrapolated. Putter is the on-green roll (handled separately).
   clubs: {                                    // carry, maxH, land°, ballMph, spinRpm
-    driver: { name: "Driver", carry: 282, maxH: 35, land: 39, launch: 10.9, ball: 171, spin: 2545 },
-    "3w":   { name: "3 Wood", carry: 249, maxH: 32, land: 44, launch: 9.2, ball: 169, spin: 3663 },
-    "5w":   { name: "5 Wood", carry: 236, maxH: 33, land: 48, launch: 9.4, ball: 156, spin: 4322 },
-    hybrid: { name: "Hybrid", carry: 231, maxH: 31, land: 49, launch: 10.2, ball: 149, spin: 4587 },
-    "3i":   { name: "3 Iron", carry: 218, maxH: 30, land: 48, launch: 10.4, ball: 145, spin: 4404 },
-    "4i":   { name: "4 Iron", carry: 209, maxH: 31, land: 49, launch: 11.0, ball: 140, spin: 4782 },
-    "5i":   { name: "5 Iron", carry: 199, maxH: 33, land: 50, launch: 12.1, ball: 135, spin: 5280 },
-    "6i":   { name: "6 Iron", carry: 188, maxH: 32, land: 50, launch: 14.1, ball: 130, spin: 6204 },
-    "7i":   { name: "7 Iron", carry: 176, maxH: 34, land: 51, launch: 16.3, ball: 123, spin: 7124 },
-    "8i":   { name: "8 Iron", carry: 164, maxH: 33, land: 51, launch: 18.1, ball: 118, spin: 8078 },
-    "9i":   { name: "9 Iron", carry: 152, maxH: 32, land: 52, launch: 20.4, ball: 112, spin: 8793 },
-    pw:     { name: "PW",     carry: 142, maxH: 32, land: 52, launch: 24.2, ball: 104, spin: 9316 },
-    sw:     { name: "SW",     carry: 115, maxH: 31, land: 53, launch: 28.0, ball: 95,  spin: 10500 },
+    driver: { name: "Driver", carry: 275, maxH: 35, land: 39, launch: 10.9, ball: 171, spin: 2545 },
+    // 3w ball speed was 169 — an outlier (TrackMan's 3-wood average is 158, and
+    // every other row here sits ~4 mph over its TrackMan value). At 169 no aero
+    // model can carry it 243 while a 171 mph driver carries 275; 162 puts its
+    // carry, apex and descent all on target at once.
+    "3w":   { name: "3 Wood", carry: 243, maxH: 32, land: 44, launch: 9.2, ball: 162, spin: 3663 },
+    "5w":   { name: "5 Wood", carry: 230, maxH: 33, land: 48, launch: 9.4, ball: 156, spin: 4322 },
+    hybrid: { name: "Hybrid", carry: 225, maxH: 31, land: 49, launch: 10.2, ball: 149, spin: 4587 },
+    "3i":   { name: "3 Iron", carry: 212, maxH: 30, land: 48, launch: 10.4, ball: 145, spin: 4404 },
+    "4i":   { name: "4 Iron", carry: 203, maxH: 31, land: 49, launch: 11.0, ball: 140, spin: 4782 },
+    "5i":   { name: "5 Iron", carry: 194, maxH: 33, land: 50, launch: 12.1, ball: 135, spin: 5280 },
+    "6i":   { name: "6 Iron", carry: 183, maxH: 32, land: 50, launch: 14.1, ball: 130, spin: 6204 },
+    "7i":   { name: "7 Iron", carry: 172, maxH: 34, land: 51, launch: 16.3, ball: 123, spin: 7124 },
+    "8i":   { name: "8 Iron", carry: 160, maxH: 33, land: 51, launch: 18.1, ball: 118, spin: 8078 },
+    "9i":   { name: "9 Iron", carry: 148, maxH: 32, land: 52, launch: 20.4, ball: 112, spin: 8793 },
+    pw:     { name: "PW",     carry: 136, maxH: 32, land: 52, launch: 24.2, ball: 104, spin: 9316 },
+    sw:     { name: "SW",     carry: 112, maxH: 31, land: 53, launch: 28.0, ball: 95,  spin: 10500 },
     // minFrac: LW's own floor, below clubMinFrac. Full-swing LW floors at 90*0.667=60yd
     // carry. With chipRangeYds raised to 75, that floor now sits 15yd INSIDE the chip
     // ceiling — an intentional overlap (pins 60–75yd are chip-mode ground, but full swing
     // can still reach down to 60), so there is no dead zone and no hard seam between the
     // modes. Kept at 0.667 (not raised to match 75) precisely to preserve that overlap.
     // See buildTrialShot's ef calc.
-    lw:     { name: "LW",     carry: 90,  maxH: 30, land: 55, launch: 31.5, ball: 82,  spin: 11500, minFrac: 0.667 },
+    lw:     { name: "LW",     carry: 88,  maxH: 30, land: 55, launch: 31.5, ball: 82,  spin: 11500, minFrac: 0.667 },
     putter: { name: "Putter", carry: 30,  maxH: 0,  land: 0,  ball: 0,   spin: 0    },
   },
 
@@ -465,8 +469,10 @@ const GREEN_COAST_K = 0.0825;  // lower = greens glide farther in the fast coast
                                // (kept at the same ratio to GREEN_DECEL_K so the coast↔tail
                                //  handoff pace stays smooth after the slowdown)
 
-// Real-world yardages. A full swing CARRIES YARDS.maxCarry in the air (bounce +
-// rollout add more); a full putt on the green rolls at most YARDS.maxPutt.
+// Real-world yardages. `maxCarry` is INERT — every full shot's carry now comes
+// from its own row in TUNE.clubs, and nothing reads this field (grep confirms);
+// it is kept only so the number is not silently lost. A full putt on the green
+// rolls at most YARDS.maxPutt, which IS live (see recalcPower).
 const YARDS = { maxCarry: 270, maxPutt: 50 };
 
 // World bounds are per-hole (set when a hole loads); start with a sane default.

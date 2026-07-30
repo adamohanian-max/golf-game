@@ -39,24 +39,42 @@
   const RHO_SEA = 1.225; // kg/m³ at 15 °C, sea level
   const G = 9.81;        // m/s²
 
-  // Fitted aero coefficients. clK/clP set the Magnus lift curve, cd0/cdS the
+  // Fitted aero coefficients. clK/clMax set the Magnus lift curve, cd0/cdS the
   // drag; spinTau is the spin-decay time constant (≈19 s at 100 mph — over a
   // 6 s flight a driver keeps ~73% of its launch spin, which is why real
   // drives flatten late instead of ballooning).
-  // These sit ON the published wind-tunnel values, not off in fudge-land: at a
-  // driver's spin ratio (S ≈ 0.074) they give Cd ≈ 0.250 and Cl ≈ 0.170, which
-  // is what a dimpled ball actually measures. Verified end-to-end — 171 mph /
-  // 10.9° / 2545 rpm flies 270 yd with a 7.1 s hang and a 42° descent, against
-  // a real tour driver's 275 yd / 6.3 s / 38°.
+  //
+  // The lift law SATURATES: Cl rises ~linearly with spin ratio at low S and
+  // flattens toward clMax near S ≈ 0.3, which is what a dimpled sphere actually
+  // measures (Bearman & Harvey). The earlier power law `clK · S^clP` was the
+  // single biggest source of error in this model — at a driver's S ≈ 0.07 it
+  // returned Cl ≈ 0.17 against a measured ≈ 0.11, so low-spin clubs floated,
+  // and the curve's slope was wrong across the rest of the bag: fed the real
+  // TrackMan launch numbers it flew every iron ~16 yd long and flat (7i 188 yd
+  // vs a tour 172), which forced the carry solver to hold ball speed DOWN and
+  // land the ball 5-10° too shallow.
+  // Drag carries a Reynolds term as well as a spin term. Without it the model
+  // cannot be right about both ends of the bag at once: a driver leaves at
+  // ~76 m/s (Re ≈ 2.2e5, past the dimple-induced drag crisis, Cd ≈ 0.23) while
+  // a wedge leaves at ~36 m/s and every club finishes its descent near 25 m/s,
+  // where Cd is materially higher. One spin-only Cd forced a compromise that
+  // under-carried the driver AND landed the long irons 6-10° too shallow.
+  // `cdRe` is that rise, ramped in linearly below `cdVRef`.
+  // Fitted by `node tools/ball_calibrate.mjs --fit` against all 14 club rows at
+  // once. Residuals: mean |descent| error 2.1°, mean |apex| error 1.6 yd, and
+  // the solved ball speed lands a mean 2.2 mph from the club table's own
+  // launch-monitor value. The one club that does not fit is the driver, which
+  // lands ~6° steeper than a tour drive — see the note in ball_calibrate.mjs.
   const COEF = {
-    clK: 0.48, clP: 0.40,     // Cl = clK · S^clP
-    cd0: 0.237, cdS: 0.18,    // Cd = cd0 + cdS · S
-    spinTau: 19.0,            // s  (≈19 s at 100 mph)
-    clMax: 0.45,              // physical ceiling on the lift coefficient
+    clK: 6.726, clMax: 0.330,   // Cl = clMax · (1 − e^(−clK·S))
+    cd0: 0.1694, cdS: 0.137,    // Cd = cd0 + cdS·S + cdRe·max(0, 1 − v/cdVRef)
+    cdRe: 0.3254, cdVRef: 65,   // m/s
+    spinTau: 30.3,              // s
   };
 
-  const liftCoef = (S) => Math.min(COEF.clMax, COEF.clK * Math.pow(S, COEF.clP));
-  const dragCoef = (S) => COEF.cd0 + COEF.cdS * S;
+  const liftCoef = (S) => COEF.clMax * (1 - Math.exp(-COEF.clK * S));
+  const dragCoef = (S, v) =>
+    COEF.cd0 + COEF.cdS * S + COEF.cdRe * Math.max(0, 1 - v / COEF.cdVRef);
 
   // Acceleration (m/s²) on a ball moving at v with spin ω through air moving
   // at `wind`. `rho` lets courses at altitude play longer (thinner air = less
@@ -69,7 +87,7 @@
     const w = Math.hypot(spin.x, spin.y, spin.z);
     const S = (w * BALL.r) / sp;                             // spin ratio
     const q = 0.5 * (rho || RHO_SEA) * sp * sp * BALL.A / BALL.m;  // accel scale
-    const Cd = dragCoef(S), Cl = liftCoef(S);
+    const Cd = dragCoef(S, sp), Cl = liftCoef(S);
     // drag: opposes relative airflow
     let ax = -q * Cd * (rx / sp), ay = -q * Cd * (ry / sp), az = -q * Cd * (rz / sp);
     if (w > 1e-6) {

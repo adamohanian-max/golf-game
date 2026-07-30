@@ -9,12 +9,22 @@
 // (`ball` mph, `spin` rpm, `maxH` apex yd, `land` descent °). Under the aero
 // model those are INPUTS and carry is an OUTPUT, so calibration is two-level:
 //
-//   global (4 params) : Cd/Cl curve shape — fit so apex + descent angle match
+//   global (7 params) : Cd/Cl curve shape — fit so apex + descent angle match
 //                       the table across ALL clubs at once
-//   per club (1 param): launch angle — solved so carry hits the table exactly
+//   per club (1 param): ball speed — solved so carry hits the table exactly
 //
 // Exits nonzero if any club's carry drifts past --tol, so this can gate a
 // commit the same way engine_smoke gates course bakes.
+//
+// KNOWN RESIDUAL (2026-07-29 fit): the model's descent angle spans ~44-54°
+// across the bag where the tour spans 39-55°, i.e. it is not quite sensitive
+// enough to spin. Everything from the 6-iron down lands within ~1° of tour, the
+// long irons come in 3-4° shallow, and the DRIVER lands ~6° too steep (45° vs
+// 39°) — so drives run less than they should. This was chased hard: raising the
+// spin term (cdS) over-steepens the wedges past 60° and demands a 137 mph
+// 9-iron, and cdVRef shifts the whole bag together instead of spreading it.
+// Fixing it properly needs a Cl that depends on Reynolds as well as spin ratio,
+// not another knob on the current curve.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -61,66 +71,108 @@ const LAUNCH_DEG = {
 // monotonic in ball speed, so this bisection is well-posed (unlike launch
 // angle). Ball speed is also the honest free parameter: it encodes how hard
 // THIS player hits THIS club, while launch/spin are properties of the club.
-function solveSpeed(club, coef) {
+// `fast` runs the search at a coarser integration step and a shorter bisection.
+// The fit calls evaluate() thousands of times, and at full precision that took
+// minutes; the reported table is always re-run at full precision.
+const FINE = { dt: 1 / 120, iters: 34 };
+const FAST = { dt: 1 / 100, iters: 18 };
+
+function solveSpeed(club, coef, prec = FINE) {
   Object.assign(B.COEF, coef);
   const deg = LAUNCH_DEG[club.id];
   const carryAt = (mph) => {
     const s = B.launchState(mph, deg, club.spin, { x: 1, y: 0 }, 0);
-    return B.flyToLanding(s, {}, {}).carry / YD;
+    return B.flyToLanding(s, {}, { dt: prec.dt }).carry / YD;
   };
   let lo = 30, hi = 230;
   if (carryAt(hi) < club.carryYd) return { mph: hi, reach: false };
-  for (let k = 0; k < 34; k++) {
+  for (let k = 0; k < prec.iters; k++) {
     const mid = (lo + hi) / 2;
     if (carryAt(mid) < club.carryYd) lo = mid; else hi = mid;
   }
   return { mph: (lo + hi) / 2, reach: true };
 }
 
-function evaluate(clubs, coef) {
+function evaluate(clubs, coef, prec = FINE) {
   Object.assign(B.COEF, coef);
   const rows = [];
   for (const c of clubs) {
-    const { mph, reach } = solveSpeed(c, coef);
+    const { mph, reach } = solveSpeed(c, coef, prec);
     const deg = LAUNCH_DEG[c.id];
     const s = B.launchState(mph, deg, c.spin, { x: 1, y: 0 }, 0);
-    const r = B.flyToLanding(s, {}, {});
+    const r = B.flyToLanding(s, {}, { dt: prec.dt });
     rows.push({ ...c, launchDeg: deg, solvedMph: mph, reach,
       carry: r.carry / YD, apex: r.apex / YD, hang: r.hang, desc: r.descentDeg });
   }
   return rows;
 }
 
-// global objective: apex + descent shape across every club (carry is already
-// exact by construction), plus a nudge keeping launch angles physically sane
+// Global objective: apex + descent shape across every club (carry is already
+// exact by construction), plus the solved ball speed against the table's own
+// launch-monitor value. That third term is not cosmetic — a fit that hits the
+// shape by quietly hitting the ball 8 mph softer than a tour player is wrong
+// about the flight, and it is what left the old coefficients landing mid-irons
+// 10° too shallow.
 function cost(rows) {
   let e = 0;
   for (const r of rows) {
     if (!r.reach) { e += 1e4; continue; }
-    e += Math.pow(r.apex - r.apexYd, 2) * 2.0;       // trajectory height
-    e += Math.pow(r.desc - r.landDeg, 2) * 0.5;      // descent angle (holds greens)
-    // solved ball speed should stay near the table's own launch-monitor value
-    e += Math.pow(r.solvedMph - r.ball, 2) * 0.35;
+    e += Math.pow(r.apex - r.apexYd, 2) * 1.5;       // trajectory height
+    // descent carries the most weight: it is what decides whether a shot holds
+    // a green, and it was the metric the old coefficients missed by 10 degrees
+    e += Math.pow(r.desc - r.landDeg, 2) * 3.0;
+    e += Math.pow(r.solvedMph - r.ball, 2) * 1.0;    // ball speed off the face
   }
   return e;
 }
 
-function fit(clubs, seed) {
-  let best = { ...seed }, bestCost = cost(evaluate(clubs, best));
-  const keys = ['clK', 'clP', 'cd0', 'cdS', 'spinTau'];
-  let stepSize = { clK: 0.12, clP: 0.12, cd0: 0.03, cdS: 0.06, spinTau: 5 };
+const KEYS = ['clK', 'clMax', 'cd0', 'cdS', 'cdRe', 'cdVRef', 'spinTau'];
+const STEP0 = { clK: 1.2, clMax: 0.04, cd0: 0.03, cdS: 0.06, cdRe: 0.05, cdVRef: 8, spinTau: 5 };
+const STEP_MIN = { clK: 0.01, clMax: 0.0015, cd0: 0.0006, cdS: 0.001, cdRe: 0.001, cdVRef: 0.3, spinTau: 0.15 };
+// spinTau is bounded to the measured range for a golf ball (~15-40 s). Left free
+// the search runs it to 130 s — i.e. no spin decay at all — because an
+// ever-rising spin ratio is a cheap way to buy late lift.
+const inBounds = (c) => c.clK > 0.5 && c.clK < 30 && c.clMax > 0.15 && c.clMax < 0.6 &&
+                        c.cd0 > 0.10 && c.cd0 < 0.40 && c.cdS > 0 && c.cdS < 1.2 &&
+                        c.cdRe >= 0 && c.cdRe < 0.5 &&
+                        c.cdVRef >= 35 && c.cdVRef <= 95 &&
+                        c.spinTau >= 15 && c.spinTau <= 40;
+
+function descend(clubs, seed) {
+  let best = { ...seed }, bestCost = cost(evaluate(clubs, best, FAST));
+  let stepSize = { ...STEP0 };
   for (let pass = 0; pass < 60; pass++) {
     let improved = false;
-    for (const k of keys) {
+    for (const k of KEYS) {
       for (const dir of [1, -1]) {
         const trial = { ...best, [k]: best[k] + dir * stepSize[k] };
-        if (trial.clK <= 0.02 || trial.clP <= 0.05 || trial.cd0 <= 0.05 || trial.spinTau < 4) continue;
-        const c = cost(evaluate(clubs, trial));
+        if (!inBounds(trial)) continue;
+        const c = cost(evaluate(clubs, trial, FAST));
         if (c < bestCost - 1e-9) { best = trial; bestCost = c; improved = true; }
       }
     }
-    if (!improved) for (const k of keys) stepSize[k] *= 0.55;
-    if (Object.values(stepSize).every((v, i) => v < [0.002, 0.002, 0.0006, 0.001, 0.15][i])) break;
+    if (!improved) for (const k of KEYS) stepSize[k] *= 0.55;
+    if (KEYS.every((k) => stepSize[k] < STEP_MIN[k])) break;
+  }
+  return best;
+}
+
+// Coordinate descent is a local method and the old single-start version visibly
+// parked in a local minimum, so run it from a spread of seeds and keep the best.
+function fit(clubs, seed) {
+  const seeds = [
+    seed,
+    { clK: 6.726, clMax: 0.330, cd0: 0.1694, cdS: 0.137, cdRe: 0.3254, cdVRef: 65, spinTau: 30.3 },
+    { clK: 6.726, clMax: 0.330, cd0: 0.1694, cdS: 0.137, cdRe: 0.3254, cdVRef: 80, spinTau: 30.3 },
+    { clK: 4.0, clMax: 0.40, cd0: 0.21, cdS: 0.30, cdRe: 0.05, cdVRef: 55, spinTau: 22 },
+    { clK: 12.0, clMax: 0.24, cd0: 0.20, cdS: 0.12, cdRe: 0.22, cdVRef: 75, spinTau: 30 },
+  ];
+  let best = null, bestCost = Infinity;
+  for (const s of seeds) {
+    if (!inBounds(s)) continue;
+    const c = descend(clubs, s);
+    const score = cost(evaluate(clubs, c, FINE));   // rank at full precision
+    if (score < bestCost) { best = c; bestCost = score; }
   }
   return { coef: best, cost: bestCost };
 }
@@ -135,9 +187,9 @@ if (argv.includes('--fit')) {
   const res = fit(clubs, coef);
   coef = res.coef;
   console.log('fitted coefficients (paste into ballistics.js COEF):');
-  console.log('  clK: ' + coef.clK.toFixed(3) + ', clP: ' + coef.clP.toFixed(3) +
+  console.log('  clK: ' + coef.clK.toFixed(3) + ', clMax: ' + coef.clMax.toFixed(3) +
               ', cd0: ' + coef.cd0.toFixed(4) + ', cdS: ' + coef.cdS.toFixed(3) +
-              ', spinTau: ' + coef.spinTau.toFixed(1));
+              ', cdRe: ' + coef.cdRe.toFixed(4) + ', spinTau: ' + coef.spinTau.toFixed(1));
   console.log('  shape cost: ' + res.cost.toFixed(1) + '\n');
 }
 
