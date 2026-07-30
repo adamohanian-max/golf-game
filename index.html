@@ -13,13 +13,14 @@
   <link rel="icon" type="image/png" href="icons/apple-touch-icon.png?v=1">
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=59">
-  <link rel="stylesheet" href="css/base.css?v=70">
+  <link rel="stylesheet" href="css/base.css?v=71">
   <link rel="stylesheet" href="css/hud.css?v=100">
   <link rel="stylesheet" href="css/menu.css?v=84">
   <link rel="stylesheet" href="css/courses.css?v=8">
   <link rel="stylesheet" href="css/modals.css?v=82">
   <link rel="stylesheet" href="css/tournament.css?v=60">
   <link rel="stylesheet" href="css/tour.css?v=13">
+  <link rel="stylesheet" href="css/chat.css?v=1">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -43,6 +44,21 @@
     // a referrer-restricted key here (+ render the real Google logo, ToS).
     window.GOOGLE_TILES_TOKEN = "" ||
       (function () { try { return localStorage.getItem("golf.googleTilesToken") || ""; } catch (e) { return ""; } })();
+
+    // Local dev overrides. local-config.js is GITIGNORED — it is where a dev key
+    // lives so no secret ever sits in a tracked file (a stray `git commit -a`
+    // would otherwise push a live, billed Map Tiles key). Loaded on localhost /
+    // .local only; missing is the normal case (onerror swallows it). Async is
+    // safe: gtiles3d reads GOOGLE_TILES_TOKEN in enter(), i.e. when a course
+    // starts, not at load. Create it with: python3 tools/local_config.py
+    (function () {
+      var h = location.hostname;
+      if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(h) && !/\.local$/.test(h)) return;
+      var s = document.createElement("script");
+      s.src = "./local-config.js";
+      s.onerror = function () {};   // not present = nothing to override
+      document.head.appendChild(s);
+    })();
   </script>
 
 
@@ -149,6 +165,7 @@
       <button class="hm-item" id="hm-aim"><span class="ic ic-target"></span>Aim at pin</button>
       <button class="hm-item active" id="hm-chip"><span class="ic ic-chip"></span>Chip mode</button>
       <button class="hm-item hidden" id="hm-match"><span class="ic ic-trophy"></span>Match board</button>
+      <button class="hm-item hidden" id="hm-chat-log"><span class="ic ic-chat"></span>Chat log</button>
       <button class="hm-item hidden" id="hm-forfeit"><span class="ic ic-x"></span>Forfeit hole</button>
     </div>
     <div class="hm-sep"></div>
@@ -159,6 +176,7 @@
     <button class="hm-item active" id="hm-slope"><span class="ic ic-slope"></span>Slope</button>
     <button class="hm-item" id="hm-arrows"><span class="ic ic-chev-down"></span>Break arrows</button>
     <button class="hm-item active" id="hm-cine"><span class="ic ic-green3d"></span>Cinematic landings</button>
+    <button class="hm-item active" id="hm-chat"><span class="ic ic-chat"></span>Opponent chat</button>
     <button class="hm-item active" id="hm-powerprev"><span class="ic ic-target"></span>Power slider</button>
     <button class="hm-item active" id="hm-oob"><span class="ic ic-ob"></span>OB areas</button>
     <button class="hm-item active" id="hm-sound"><span class="ic ic-sound"></span>Sound</button>
@@ -181,6 +199,27 @@
   <div id="live-turn" class="hidden"></div>
   <div id="hud-edit-bar" class="hidden">Drag to move · pinch or <button id="hud-zoom-out" class="hud-zoom">−</button><button id="hud-zoom-in" class="hud-zoom">+</button> to resize · <button id="hud-edit-done">Done</button></div>
   <div id="toast" class="hidden"></div>
+
+  <!-- In-round chat. #chat-stack is pointer-events:none (chat.css) so a swipe
+       that starts on a bubble still reaches the canvas. #chat-bar IS
+       interactive, and canSwing() is gated while it's open. -->
+  <div id="chat-stack" class="hidden"></div>
+  <button id="chat-send-btn" class="hidden" aria-label="Send a message"><span class="ic ic-chat"></span></button>
+  <div id="chat-bar" class="hidden">
+    <input id="chat-text" type="text" maxlength="100" autocomplete="off"
+           autocapitalize="sentences" enterkeyhint="send" placeholder="Say something…">
+    <span id="chat-count">100</span>
+    <button id="chat-send" class="menu-btn">Send</button>
+  </div>
+  <div id="chat-log" class="hidden">
+    <div class="cl-box">
+      <div class="cl-head">
+        <h2>Chat</h2>
+        <button id="cl-close" class="menu-btn secondary" data-back>Close</button>
+      </div>
+      <div id="cl-list"></div>
+    </div>
+  </div>
 
   <div id="shot-power" class="hidden">
     <span class="cs-end cs-top" id="sp-top">max</span>
@@ -824,6 +863,9 @@
         <p id="mr-sub"></p>
       </div>
       <div id="mr-banner" class="mr-banner"></div>
+      <!-- Bot's parting line. Lives here rather than in the #chat-stack bubbles
+           because this card (z60) covers the stack (z45) the moment it opens. -->
+      <div id="mr-quote" class="mr-quote hidden"></div>
       <div id="mr-list" class="mr-list"></div>
       <div id="mr-scorecard" class="mr-sc-wrap"></div>
       <div class="mr-actions">
@@ -845,6 +887,6 @@
        script so it is also require()-able by tools/ball_calibrate.mjs — the
        calibration gate runs the exact code the browser flies. -->
   <script defer src="ballistics.js?v=5"></script>
-  <script defer src="game.js?v=361"></script>
+  <script defer src="game.js?v=362"></script>
 </body>
 </html>
