@@ -21,7 +21,7 @@ const TUNE = {
   // capped at club carry). Tight band -> a chip is never very short or very far from the hole.
   chipReachLo: 0.8,      // softest chip still flies 80% of the way to the pin
   chipReachHi: 1.2,      // hardest chip flies 120% (never blows way past)
-  chipLandFrac: 0.75,    // nominal carry share of the target (see chipSpinParams —
+  chipLandFrac: 0.90,    // nominal carry share of the target (see chipSpinParams —
                          // under real physics this is a TRAJECTORY hint, not the
                          // solved quantity: the total is solved against simShotRest)
   // Chip backspin multiplier. Was 0.1, which is INVERTED under real physics: the
@@ -30,16 +30,39 @@ const TUNE = {
   // what engages the skid). At 0.1 a chip arrived with ~1150 rpm, never skidded,
   // and settled straight into 0.41 m/s2 green rolling — a putt that happened to
   // fly. Real greenside wedges spin 5000-9000 rpm even on a soft shot.
-  chipSpin: 0.62,
+  chipSpin: 0.80,
+  // ...and it is a FLOOR, not a flat value. Held flat, backspin fell off a cliff
+  // at the chipRangeYds boundary: a 74 yd chip attached 7130 rpm while the same
+  // wedge one yard further out (full swing, chipBoost) attached 11500. Same
+  // player, same club, 1.6x the spin — which is why a 60-75 yd "pitch" behaved
+  // like a bump-and-run. Ramp back up to the full-swing value as the chip
+  // lengthens. Keyed on `ef`, NOT on swipe strength: `f` is not continuous
+  // across the boundary (a 74 yd chip and a 76 yd full shot can both be f=1).
+  chipSpinRef: 0.75,     // ef at which the ramp reaches the full-swing baseline (1.0)
   // Chip spin slider (bias -1..+1, 0 = neutral = the two values above). More spin ->
   // land deeper + check; less spin -> land short + run. Total still finishes near the pin.
-  chipLandSpread: 0.22,  // bias shifts landFrac: 0.53 (full run) .. 0.75 (neutral) .. 0.97 (land at pin)
-  chipSpinRange: 1.7,    // exponential backspin scale: chipSpin*1.7^bias -> 0.36 (run) .. 0.62 .. 1.05 (bites)
+  chipLandSpread: 0.10,  // bias shifts landFrac: 0.80 (run) .. 0.90 (neutral) .. 0.98 (land at pin);
+                         // narrowed to keep the band inside the [0.5, 0.98] clamp now landFrac is 0.90
+  chipSpinRange: 1.7,    // exponential backspin scale on top of the ramp: base*1.7^bias
   // The slider also picks the TRAJECTORY, which is how a real player chooses
   // between these two shots: a runner is played back in the stance (delofted,
   // low, shallow landing) and a checker is played forward/open (high, steep).
   // Degrees added to the club's launch angle at bias +1 (and subtracted at -1).
   chipLaunchSpread: 9,
+  // Partial swings present MORE LOFT. Every club's `launch` below is a TrackMan
+  // FULL-SWING tour average — a 7-iron really does leave the face at 16°. But a
+  // player abbreviating a wedge shortens the backswing, opens the face and keeps
+  // the shaft neutral, and the ball comes off far higher: a 40 yd pitch launches
+  // 40-50°, not the LW's full-swing 31.5°. Without this, every shot inside chip
+  // range flew its full-swing trajectory at a fraction of the speed — flat,
+  // driving, and it landed dead. Keyed on `ef` (the carry fraction) rather than
+  // on swipe strength or chip/full mode, so it is CONTINUOUS across the
+  // chipRangeYds boundary. Free in distance: aeroSpeedForCarry re-solves ball
+  // speed for the same carry, so only the SHAPE changes (and in this range the
+  // drag/lift optimum sits near 40°, so a lofted pitch needs LESS ball speed).
+  partialLoftDeg: 20,    // ° added at a fully-abbreviated swing (ef -> 0)
+  partialLoftRef: 0.85,  // ef at/above which nothing is added. Deliberately equal to
+                         // clubMinFrac: every full swing except LW's low band is untouched.
   // FLIGHT selector (High/Low) as a launch-angle delta, in degrees at full
   // deflection. Under real physics trajectory EMERGES from launch conditions,
   // so the old flightHiApex/flightHiLand multipliers (which post-scaled a
@@ -92,7 +115,15 @@ const TUNE = {
     // (5i 10 yd, 7i 6, PW 2, LW checks dead); the rest hold the club totals.
     fairway: { e: 0.10, mu: 0.40, roll: 5.60, dig: 0.30 },
     tee:     { e: 0.10, mu: 0.40, roll: 5.60, dig: 0.30 },
-    green:   { e: 0.08, mu: 0.80, roll: 0, dig: 0.72 },   // roll comes from stimp
+    // Green e was 0.08 with dig 0.72: the rebound came out below aeroSettleVz,
+    // so an approach got ONE ~0.1 ft hop lasting 2-3 render frames (invisible at
+    // timeScale 3.75) and dig deleted 72% of its forward speed in that single
+    // frame. The ball thudded and stopped. A receptive green does bounce — 0.28
+    // (decayed by impact speed inside bounce()) gives a ~1.5 ft first hop over
+    // ~0.6 s and a real SECOND hop, and the lighter crater lets the skid phase
+    // do the stopping where you can see it. mu takes back the run the other two
+    // add. Release distances land on the fitted table below either way.
+    green:   { e: 0.28, mu: 0.82, roll: 0, dig: 0.55 },   // roll comes from stimp
     rough:   { e: 0.10, mu: 0.55, roll: 9.00, dig: 0.50 },
     bunker:  { e: 0.10, mu: 0.85, roll: 7.00, dig: 0.85 },
     water:   { e: 0.00, mu: 1.00, roll: 9.00, dig: 0.95 },
@@ -3248,9 +3279,14 @@ function chipActiveNow() {
 // Chip SPIN slider -> { landFrac, spinScale } (bias -1..+1). More spin lands the ball
 // deeper (higher landFrac) and checks harder (higher spinScale); less spin lands short
 // and runs. Neutral (0) reproduces TUNE.chipLandFrac / TUNE.chipSpin exactly.
-function chipSpinParams() {
+function chipSpinParams(ef) {
   const landFrac = Math.max(0.5, Math.min(0.98, TUNE.chipLandFrac + chipSpinBias * TUNE.chipLandSpread));
-  const spinScale = TUNE.chipSpin * Math.pow(TUNE.chipSpinRange, chipSpinBias);
+  // Backspin ramps from chipSpin (a nipped 15 yd flop) up to the full-swing
+  // value at chipSpinRef, so 74 yd and 76 yd behave alike — see TUNE.chipSpinRef.
+  // `ef` is absent at the call sites that only want landFrac; they get the floor.
+  const base = TUNE.chipSpin +
+               (1 - TUNE.chipSpin) * Math.min(1, Math.max(0, ef || 0) / TUNE.chipSpinRef);
+  const spinScale = base * Math.pow(TUNE.chipSpinRange, chipSpinBias);
   // Launch delta: the slider picks the shot's SHAPE (low runner vs high
   // checker) and the physics turns that into roll-out, instead of the old
   // model where the slider directly dialled a rollout budget.
@@ -3371,6 +3407,11 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
     // override, e.g. LW drops lower to meet chip mode's ceiling with no gap).
     ef = Math.max(f, c.minFrac ?? TUNE.clubMinFrac);
   }
+  // Loft presented by an abbreviated swing (see TUNE.partialLoftDeg). A pure
+  // function of `ef`, so it is continuous across the chip/full boundary and
+  // cannot double-count with either slider's launch delta below.
+  const loftAdd = TUNE.partialLoftDeg *
+                  Math.max(0, Math.min(1, 1 - ef / TUNE.partialLoftRef));
   // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
   const lieSurf = surfaceAt(b.x, b.y);
   const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
@@ -3408,7 +3449,7 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   // then had only 0.41 m/s2 of green friction to stop it: 37 yd of run-out.
   const lieSpinRaw = lieEffectEnabled ? (TUNE.lieSpin[lieSurf] ?? 1) : 1;
   const lieSpinMul = chipActive ? Math.sqrt(lieSpinRaw) : lieSpinRaw;
-  const spinScale = chipActive ? chipSpinParams().spinScale : chipBoost;
+  const spinScale = chipActive ? chipSpinParams(ef).spinScale : chipBoost;
   const effectiveSpinN = Math.min(1, c.spinN * spinScale * lieSpinMul * (1 + (spinK - 1) * t));
   // Flyer descent: rough/sand shots also come in shallower (less lift), so the
   // steepness half of the landing check fades too and the ball releases. Chips skip it.
@@ -3433,8 +3474,8 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   attachAero(flr.flight, ang, flr.flight.landD, c,
              c.spin * (c.spinN > 0 ? effectiveSpinN / c.spinN : 1),
              spinVal, b.x, b.y,
-             chipActive ? chipSpinParams().launchDelta
-                        : hiT * TUNE.flightLaunchSpread);
+             loftAdd + (chipActive ? chipSpinParams(ef).launchDelta
+                                   : hiT * TUNE.flightLaunchSpread));
   return { usePutter: false, onGreen, f, hiT, mph,
            vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
 }
