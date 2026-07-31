@@ -4044,6 +4044,17 @@ function finishWheelSwing() {
 
 canvas.addEventListener("wheel", onWheel, { passive: false });
 
+// Render-pace activity tap (see renderPace). One capture-phase, passive block
+// rather than a bumpActivity() call threaded through each handler: this has to
+// catch EVERY input path — swing swipes, HUD drags, the club wheel, the tilt
+// slider, menu taps, keys — and the failure mode of missing one is a UI that
+// feels dead until something else wakes the pace. Each listener does a single
+// timestamp write; capture+passive means it cannot block or be stopped by a
+// downstream preventDefault/stopPropagation.
+for (const ev of ["pointerdown", "pointermove", "pointerup", "touchstart", "wheel", "keydown"]) {
+  window.addEventListener(ev, bumpActivity, { capture: true, passive: true });
+}
+
 // =====================================================================
 //  Rendering
 // =====================================================================
@@ -4320,6 +4331,20 @@ function applyView() {
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
 
+// Is the camera EXACTLY parked? The eases snap once the residual is sub-visible
+// (see updateCamera), so these strict equalities are genuinely reachable — that
+// is the whole reason the ground warp cache can park.
+// ONE definition on purpose. It gates the Apple green-detail settle counter AND
+// the render pace (renderPace below); a second copy would drift, and a pace that
+// believes the camera is parked while it is still easing shows as judder in the
+// middle of a glide — the hardest kind of stutter to attribute.
+function cameraParked() {
+  return camera.angle === camera.tAngle && camera.scale === camera.tScale &&
+    camera.tilt === camera.tTilt && !cameraAiming && !camTouch &&
+    Math.abs(applePitch - applePitchT) < 0.05 &&
+    Math.abs(camera.focus.x - camera.tFocus.x) + Math.abs(camera.focus.y - camera.tFocus.y) < 0.02;
+}
+
 // Ease focus, scale and (while aiming) angle toward their targets each frame.
 let _camEaseT = 0;  // last updateCamera timestamp (time-based ease below)
 function updateCamera() {
@@ -4376,11 +4401,7 @@ function updateCamera() {
     if (!state.moving) applePitchT = appleUserPitch;
     // Green-detail settle gate: count consecutive frames with the camera
     // exactly parked (ease snaps make these strict equalities reachable).
-    const parked = camera.angle === camera.tAngle && camera.scale === camera.tScale &&
-      camera.tilt === camera.tTilt && !cameraAiming && !camTouch &&
-      Math.abs(applePitch - applePitchT) < 0.05 &&
-      Math.abs(camera.focus.x - camera.tFocus.x) + Math.abs(camera.focus.y - camera.tFocus.y) < 0.02;
-    _apSettleN = parked ? _apSettleN + 1 : 0;
+    _apSettleN = cameraParked() ? _apSettleN + 1 : 0;
   } else {
     applePitchT = 0;
     // (No hard zoom cap here — club-reach framing now owns off-green zoom on
@@ -4545,6 +4566,7 @@ function resize() {
   // three-based grounds size their own canvas (Mapbox self-observes; the gtiles
   // WebGLRenderer does not) — push the new viewport through.
   if (window.GTiles3D && window.GTiles3D.resize) window.GTiles3D.resize();
+  markDirty();   // the canvas was just cleared by the resize — repaint even if parked
 }
 window.addEventListener("resize", resize);
 window.addEventListener("orientationchange", resize);
@@ -8500,6 +8522,7 @@ function pickPin(rec) {
 }
 
 function setHole(rec) {
+  markDirty();   // whole scene changes — must repaint even from a parked pace
   if (greenView) closeGreenView();
   if (cine || cinePending) closeCine();
   // live match: drop any in-flight shot marker / opponent tween from the last hole
@@ -9387,6 +9410,12 @@ const elTiltRange = document.getElementById("tilt-range");
   }
 }
 elTiltRange.addEventListener("input", () => {
+  // Pitch is the one camera control the render pace cannot infer. cameraParked()
+  // describes the 2D affine, and the gtiles pitch does not move it — so without
+  // this a slider drag on Pebble renders at the 10fps idle pace. (GTiles3D's own
+  // "am I settled" answer can't cover it either: it only learns the camera moved
+  // when render() runs, and the pace is what decides whether render() runs.)
+  bumpActivity();
   if (gtilesGround) {
     const deg = (Math.max(0, Math.min(100, elTiltRange.value)) / 100) * 65;
     lsSet("golf.gtilesPitch", elTiltRange.value);
@@ -10226,12 +10255,22 @@ window.addEventListener("keyup", (e) => {
 
 function showMenu() {
   mode = "menu";
+  // Paint ONE frame on the way in, then renderPace parks: the menu is opaque
+  // over the canvas, so anything still painting behind it is pure battery burn.
+  // The single frame means any sliver that does show is correct, not stale.
+  markDirty();
   if (greenView) closeGreenView();
   if (cine || cinePending) closeCine();
   // Home abandons a local bot/CPU match — there is no resume path, and leaving
   // it live bleeds match HUD (turn banner, "Match:" score) into the next solo
   // round. Online matches are left untouched here (their lifecycle is remote).
   if (cpuMatch && activeMatch) leaveMatch();
+  // The tournament countdown is a 1Hz interval + DOM write for a round you are
+  // no longer playing. Every other exit stops it (handleTournamentRoundComplete,
+  // the round-end Home button); going Home mid-round did not, so it ran for the
+  // rest of the session. Here rather than on the two buttons: this covers every
+  // path into the menu. Restarted by startTournamentTimer() on the next round.
+  stopTournamentTimer();
   elMenu.classList.remove("hidden");
   elCourseSelect.classList.add("hidden");
   elPreview.classList.add("hidden");
@@ -11918,6 +11957,7 @@ function stopFriendsPoll() { if (_friendsPoll) { clearInterval(_friendsPoll); _f
 async function renderFriends() {
   const body = document.getElementById("fr-body");
   if (!body) return;
+  if (document.hidden) return;   // 4s poll behind a modal nobody can see
   document.querySelectorAll("#friends-modal .fr-tab").forEach(t =>
     t.classList.toggle("active", t.dataset.tab === _frTab));
   if (_frTab === "add") { renderFriendAdd(body); return; }
@@ -14656,6 +14696,7 @@ function stopMatchPoll() {
 
 async function renderMatchLobby() {
   if (!activeMatch) return;
+  if (document.hidden) return;   // 2s x 2 requests; nobody is watching the lobby
   // Refresh the match row so players see when the host presses Begin.
   const fresh = await fetchMatchById(activeMatch.id);
   if (fresh) activeMatch = Object.assign(activeMatch, fresh);
@@ -15332,6 +15373,16 @@ async function checkMatchCloseout() {
 
 async function renderMatchBoard() {
   if (!activeMatch) return;
+  // Each tick here is TWO network round-trips (fetchChatSince + fetchMatchPlayers),
+  // every 3s. Skip them when nobody can act on the result:
+  //  - hidden tab: browsers throttle timers but do not stop them.
+  //  - home menu: the in-course Home buttons deliberately leave an ONLINE match
+  //    live ("their lifecycle is remote", showMenu) — correct, but it left this
+  //    poll and the Realtime socket running on the menu for the rest of the
+  //    session. Stopping the WORK rather than the match keeps that intent.
+  // Safe in both cases because visibilitychange already forces liveResync() on
+  // return, and re-entering the course resumes the poll on its own tick.
+  if (document.hidden || mode === "menu") return;
   fetchChatSince();   // chat backstop behind Realtime, same heartbeat as the board
   const rows = await fetchMatchPlayers(activeMatch.id);
   onLivePoll(rows);   // drive live turn order / opponent ghost / hole-advance sync — needed every
@@ -15525,6 +15576,10 @@ async function renderMatchResults() {
   // `finished` — gating the header (and the card below) on allDone left a "Won
   // 3&2" reading "Match standings · 0/2 in the clubhouse" with an empty card.
   const final = !!(allDone || matchDecided);
+  // The 4s poll exists to fill the card in while the others finish. Once the
+  // match is final nothing can change, but it kept fetching for as long as the
+  // card stayed on screen — which, after a round, is until the player taps away.
+  if (final) stopResultsPoll();
   const titleEl = document.getElementById("mr-title");
   const subEl = document.getElementById("mr-sub");
   const bannerEl = document.getElementById("mr-banner");
@@ -17072,6 +17127,10 @@ function openQuickMatch() {
 function closeQuickMatch() {
   const ov = document.getElementById("quick-match");
   if (ov) ov.classList.add("hidden");
+  // Own the teardown rather than trusting callers to pair it. Every caller today
+  // does stop the timers, but hiding a matchmaking overlay while a 1.5s
+  // rpcFindMatch poll keeps running is a leak waiting for the next caller.
+  stopQmTimers();
 }
 function syncQuickToggles() {
   const ov = document.getElementById("quick-match");
@@ -17386,6 +17445,13 @@ function renderProgress() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) liveResync();
   });
+  // Coming back to the foreground: renderPace parked while hidden, so nothing
+  // would repaint until the next real change. Force one frame. (Registered
+  // separately from the resync above because this one is not match-specific —
+  // it applies to every mode, and liveResync() no-ops outside a live match.)
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) markDirty();
+  });
   window.addEventListener("online", () => liveResync());
 })();
 
@@ -17658,6 +17724,62 @@ function prebakeOneBucket() {
   }
 }
 
+// ---- RENDER PACE ------------------------------------------------------------
+// Golf is a turn-based game: the ball flies for a few seconds a shot and the
+// screen is STATIC for the rest of the round. The loop nevertheless painted
+// every frame, forever, from boot — update() early-outs at rest but draw() had
+// no gate at all, and neither did GTiles3D.render(). Measured at 390x844, ball
+// at rest, camera parked, no input: Pebble burned 358 ms of CPU per WALL SECOND
+// (36% of a core) and actively dragging the camera cost 381 — i.e. standing
+// still cost the same as moving. The opaque home menu painted the whole course
+// behind itself at 60 fps for 67 ms/s.
+//
+// So pace the PAINT, not the loop. Physics is untouched: it runs off the fixed
+// accumulator below and must keep its cadence regardless of what is drawn.
+//
+// Three tiers. IDLE is a low frame rate rather than a hard stop on purpose —
+// the flag pennant and the flow dots animate off performance.now(), so a hard
+// stop reads as a hang; at 10 fps the course still visibly lives.
+const PACE_ACTIVE = 0;        // ms between paints — 0 = every frame the browser offers
+const PACE_IDLE = 100;        // 10 fps: nothing is moving but the scene still breathes
+let _lastPaintAt = 0;
+let _lastActivityAt = 0;      // last real user input (see bumpActivity)
+let _paceDirty = true;        // force exactly one paint, even when parked
+// Any input restores full frame rate immediately. Called from the EXISTING
+// pointer/wheel/key handlers — the 400 ms tail in renderPace covers the gap
+// between a gesture ending and whatever it started (a camera ease, a shot).
+function bumpActivity() { _lastActivityAt = performance.now(); }
+// Something changed that a parked pace would otherwise never show: hole change,
+// resize, mode change, returning to a visible tab, a HUD toggle.
+function markDirty() { _paceDirty = true; }
+// Minimum ms between painted frames right now. Infinity = park (paint nothing
+// until markDirty()).
+function renderPace() {
+  // Backgrounded: rAF is already suspended by the UA on every browser that
+  // matters, but say it explicitly — a throttled-not-stopped rAF still paints.
+  if (document.hidden) return Infinity;
+  // The home menu is opaque and covers the canvas (css/menu.css: position:fixed,
+  // inset:0). markDirty() on the way in paints one frame, so any sliver that
+  // does show is correct and current; after that there is nothing to animate.
+  if (mode === "menu") return Infinity;
+  if (state.moving || holeDrop || holeTransition || cine || cinePending || greenView) return PACE_ACTIVE;
+  if (!cameraParked() || cameraAiming || camTouch || aimKey) return PACE_ACTIVE;
+  if (cw.raf) return PACE_ACTIVE;                       // club wheel mid-spin
+  if (particles.length) return PACE_ACTIVE;
+  // An opponent's ball is flying on my screen during a live match. Test the
+  // tween's own `moving` flag — oppGhostPos() also returns a position for a ball
+  // sitting at REST, and treating that as activity would pin the pace to 60 for
+  // the whole hole any time an opponent is on it.
+  if (liveMatch()) {
+    const og = oppGhostPos();
+    if (og && og.moving) return PACE_ACTIVE;
+  }
+  // Photoreal tiles still streaming or refining — those frames genuinely differ.
+  if (gtilesGround && window.GTiles3D && window.GTiles3D.isSettled && !window.GTiles3D.isSettled()) return PACE_ACTIVE;
+  if (performance.now() - _lastActivityAt < 400) return PACE_ACTIVE;
+  return PACE_IDLE;
+}
+
 function loop() {
   const now = performance.now();
   let elapsed = now - _physLast;
@@ -17692,17 +17814,25 @@ function loop() {
   update3DMode();  // cheap — no-ops unless mode/course actually changed
   if (render3D && window.Course3D) window.Course3D.render();
   updateGtilesMode(); // cheap — no-ops unless mode/course actually changed
-  if (gtilesGround && window.GTiles3D) {
-    // The cinematic landing + 3D green inspect paint a full-screen 2D scene on
-    // the TRANSPARENT #game canvas; hide the tiles behind them (and stop
-    // rendering) or the live photoreal ground ghosts through and keeps moving.
-    const overlay = !!(greenView || cine);
-    window.GTiles3D.setHidden(overlay);
-    if (!overlay) window.GTiles3D.render();  // sync camera + tiles BEFORE draw()
+  // PAINT GATE. Everything above is state; everything below is pixels. Both the
+  // tiles render and draw() sit behind it — gating only draw() would leave the
+  // 10 ms/frame WebGL pass running, which is most of the cost on Pebble.
+  const pace = renderPace();
+  if (_paceDirty || (pace !== Infinity && now - _lastPaintAt >= pace)) {
+    _paceDirty = false;
+    _lastPaintAt = now;
+    if (gtilesGround && window.GTiles3D) {
+      // The cinematic landing + 3D green inspect paint a full-screen 2D scene on
+      // the TRANSPARENT #game canvas; hide the tiles behind them (and stop
+      // rendering) or the live photoreal ground ghosts through and keeps moving.
+      const overlay = !!(greenView || cine);
+      window.GTiles3D.setHidden(overlay);
+      if (!overlay) window.GTiles3D.render();  // sync camera + tiles BEFORE draw()
+    }
+    // Apple ground sync (Butter Brook) happens inside draw() itself — see
+    // appleGroundActive()/syncAppleGround() above.
+    draw();
   }
-  // Apple ground sync (Butter Brook) happens inside draw() itself — see
-  // appleGroundActive()/syncAppleGround() above.
-  draw();
   maybePrebakeBucket();
   requestAnimationFrame(loop);
 }

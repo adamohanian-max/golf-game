@@ -946,6 +946,7 @@ function enter(opts) {
   // Known-offline up front → don't even try; game.js keeps the 2D aerial.
   if (typeof navigator !== "undefined" && navigator.onLine === false) { _failed = true; return; }
   _failed = false; _errCount = 0; _enterAt = performance.now(); _placed = false; ready = false;
+  _settledAt = 0; _forceRender = 3;   // fresh entry — the park gate must start open
   _introPending = true;   // round entry → opening whole-course flyover to the tee
   buildRenderer();
   container.style.display = "block"; _hidden = false;
@@ -1005,6 +1006,34 @@ function render() {
   _errTAt = nowR;
   _errT = camMoved ? 12 : Math.max(6, _errT - 6 * dtR / 800);
   tiles.errorTarget = _errT;
+
+  // ---- PARK GATE ----------------------------------------------------------
+  // Everything below this point is the expensive half: the LOD traversal, a
+  // forced recursive updateMatrixWorld over every loaded tile, ~28 BVH-less
+  // full-scene raycasts (refreshGridBatch alone re-samples the whole height
+  // grid round-robin FOREVER by design), and the WebGL draw. Measured at rest
+  // with the camera parked it was 3.8 ms/frame at 60 fps — burned on a scene
+  // that is pixel-identical frame to frame.
+  //
+  // Quiescent means all four: the camera did not move, the errorTarget ramp has
+  // walked back down to 6 (so no refinement is pending), the tile queues are
+  // empty (loadProgress 1), and the BALL is not moving — the ball matters
+  // because refreshPrecisionAnchors() below re-solves its height offset, and a
+  // putt under a parked camera would otherwise drift off the mesh.
+  //
+  // _placed && ready are required before parking can ever happen. Without them
+  // a tileset that never produces geometry would park immediately (no camera
+  // motion, empty queues) and deadlock: the FAIL_TIMEOUT_MS check below needs
+  // frames to run in order to give up and hand the course back to the 2D aerial.
+  const _st = gb() && gb().getState ? gb().getState() : null;
+  const quiet = !camMoved && _errT <= 6.001 && tiles.loadProgress >= 1 && !(_st && _st.moving);
+  _settledAt = quiet ? (_settledAt || nowR) : 0;
+  // Hold past quiescence: TilesFadePlugin cross-fades each refinement over
+  // 500 ms, so parking on the first quiet frame freezes a half-faded tile.
+  const parked = _settledAt && nowR - _settledAt > SETTLE_HOLD_MS && _placed && ready;
+  if (parked && _forceRender <= 0) return;   // canvas keeps its last frame
+  if (_forceRender > 0) _forceRender--;
+
   tiles.setResolutionFromRenderer(camera, renderer);
   tiles.update();
   tiles.group.updateMatrixWorld(true);
@@ -1046,6 +1075,7 @@ function render() {
       _ballOff = null; _pinOff = null; _greenOffs = new Map();
       _introSeed = _introPending;   // seed on the first frame that HAS a target
       _introPending = false;
+      _settledAt = 0; _forceRender = 3;   // new hole: nothing about the old frame holds
     }
     refreshGridBatch(24);
     refreshPrecisionAnchors();   // exact ball/pin columns + rigid per-green offsets
@@ -1056,6 +1086,13 @@ let _lastHole = null;
 let _lastCamPos = null;
 let _errT = 6, _errTAt = 0;   // ramped errorTarget (motion-coarse LOD)
 let _justResumed = false;     // set by setHidden(false); one-frame motion amnesty
+// Park gate (see render()). _settledAt = when the scene first went quiescent,
+// 0 while anything is still moving/streaming. _forceRender = frames that must
+// render no matter what, for the cases where the scene changed under us and
+// there is no motion to detect: hole change, resume from hidden, resize, enter.
+let _settledAt = 0;
+let _forceRender = 3;
+const SETTLE_HOLD_MS = 700;   // > TilesFadePlugin's 500ms cross-fade
 let _guardK = 1;              // off-screen-ball framing widener (≥1, eased back at rest)
 let _guardLostN = 0;          // consecutive rest-lost frames (anti-flicker latch)
 
@@ -1064,6 +1101,7 @@ function resize() {
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   if (camera) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
+  _settledAt = 0; _forceRender = 3;   // setSize cleared the buffer — a parked gate would leave it blank
 }
 
 function setPitch(deg) { pitchDeg = Math.max(0, Math.min(85, deg)); }
@@ -1083,9 +1121,14 @@ function setHidden(h) {
     // SNAPS to the new framing (a cut, not a cross-course glide), and
     // _justResumed keeps that snap from tripping the motion-coarse LOD.
     _camEase = null; _camEaseT = 0; _groundMEase = null; _justResumed = true;
+    _settledAt = 0; _forceRender = 3;   // render() was stopped while hidden — repaint the new framing
   }
 }
 function isReady() { return ready; }
+// Is the photoreal ground quiescent — camera parked, no tile still streaming or
+// refining? game.js's renderPace holds the whole app at full frame rate until
+// this goes true, so streaming tiles fade in smoothly instead of at 10 fps.
+function isSettled() { return !!(_placed && ready && _settledAt); }
 function failed() { return _failed; }  // Google unavailable → game.js uses 2D aerial
 
 // Google logo + data-credit strings (MANDATORY per Map Tiles API ToS). Typed
@@ -1134,6 +1177,6 @@ function debug() {
 }
 
 window.GTiles3D = {
-  enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, pxPerMeterAt, groundSquash, occludedAt, isReady, failed,
+  enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, pxPerMeterAt, groundSquash, occludedAt, isReady, isSettled, failed,
   getAttributions, worldToLngLat, lngLatToWorld, debug, anchorDiag,
 };
