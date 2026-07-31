@@ -63,7 +63,33 @@ const TUNE = {
   // like a bump-and-run. Ramp back up to the full-swing value as the chip
   // lengthens. Keyed on `ef`, NOT on swipe strength: `f` is not continuous
   // across the boundary (a 74 yd chip and a 76 yd full shot can both be f=1).
-  chipSpinRef: 0.75,     // ef at which the ramp reaches the full-swing baseline (1.0)
+  chipSpinRef: 0.80,     // ef at which the ramp reaches the full-swing baseline (1.0)
+  // ...and the ramp is CURVED, not linear. Linear was why lowering chipSpin did
+  // nothing: at ef 0.454 (a 40 yd lob wedge) a linear ramp is already at 0.72,
+  // so the floor barely registers and a 40 yd chip carried 8319 rpm — 72% of a
+  // FULL lob wedge. Measured, dropping the floor 0.30 -> 0.15 moved that chip's
+  // roll-out by 0.0 yd and its spin by 700 rpm. The exponent bends the middle of
+  // the band down while still meeting the full-swing value at chipSpinRef, which
+  // is the 74/76 yd seam chipSpinRef exists to protect (gated to 250 rpm in
+  // shot_matrix). Raising chipSpinRef instead does NOT work — at 2.0 the 74 yd
+  // chip falls to 6156 rpm against the full swing's 11500 and the seam tears.
+  // chipSpinPow 1 is byte-for-byte the old linear ramp.
+  chipSpinPow: 2.2,
+  // Tangential contact friction for a CHIP's landing, replacing turf.<surf>.mu
+  // for that impact and the skid that follows it. Chips died on the green
+  // because the friction impulse mu*Jn came out at 88-113% of the ball's entire
+  // forward momentum — a 30-50 yd chip's first bounce did not slow it, it
+  // REVERSED it (vh 13.3 -> -1.07 m/s at 40 yd), so carry == rest and the ball
+  // hopped in place. Backspin is not the cause and cannot be the cure: forcing
+  // the whole band down to ~1000 rpm still left a 40 yd chip rolling 0.1 yd,
+  // because jt = min(mu*Jn, m*um) is pinned to the Coulomb term and never sees
+  // the slip. The honest reading is that turf.green.mu 0.74 is fitted to
+  // full-shot impact speeds (a 7i arrives at 44 m/s vertical, a chip at 6-17)
+  // and a chip's smaller pitch mark grips less. 0.40 is the fairway value.
+  // FADED back to turf.green.mu by chipRangeYds (same pin-distance ramp as
+  // chipLoftBoost): un-faded, a 74 yd chip ran 14.7 yd while the same wedge one
+  // yard further out (full swing) checked dead.
+  chipMu: 0.40,
   // Chip spin slider (bias -1..+1, 0 = neutral = the two values above). More spin ->
   // land deeper + check; less spin -> land short + run. Total still finishes near the pin.
   chipLandSpread: 0.10,  // bias shifts landFrac: 0.80 (run) .. 0.90 (neutral) .. 0.98 (land at pin);
@@ -2108,10 +2134,31 @@ function aeroLandingFl(fl) {
 // Ground contact for a real flight: apply the turf impulse and decide whether
 // the ball bounces again or starts rolling. Shared by the live step and the
 // predictor. Returns "roll" | "air" | "dead".
+// Turf profile for a landing or a roll, with the CHIP softening folded in.
+// `k` is the chip fade fraction (1 at the shortest chip, 0 at chipRangeYds, and
+// 0/undefined for every full swing) — see TUNE.chipMu. It rides on the flight
+// descriptor and then on the ball (b._chipK) so the bounce and the skid that
+// follows it can never disagree about what the ball just hit.
+// Math.min so the blend can only ever make a surface LESS grabby: fairway is
+// already at chipMu and must not change, and nothing should make a chip grip
+// harder than the full shot would.
+// MOWN TURF ONLY. chipMu says "a chip's small, slow pitch mark grips less than a
+// full shot's" — that is an argument about grass. Sand is a different contact
+// regime (the ball plugs), and softening a bunker's 0.85 to 0.40 would let a
+// chip that lands in a trap skitter out of it.
+const CHIP_MU_SURF = { green: 1, fairway: 1, tee: 1, rough: 1 };
+
+function turfFor(surf, k) {
+  const t = TUNE.turf[surf] || TUNE.turf.fairway;
+  if (!k || TUNE.chipMu == null || !CHIP_MU_SURF[surf]) return t;
+  const mu = Math.min(t.mu, t.mu + (TUNE.chipMu - t.mu) * k);
+  return { e: t.e, mu, roll: t.roll, dig: t.dig };
+}
+
 function aeroGroundContact(b, fl, surf) {
   const Bal = window.Ballistics, A = fl.aero.st;
   if (surf === "water" || surf === "woods" || surf === "ob") return "dead";
-  Bal.bounce(A, TUNE.turf[surf] || TUNE.turf.fairway);
+  Bal.bounce(A, turfFor(surf, fl.chipK));
   fl.aero.hops = (fl.aero.hops || 0) + 1;
   if (A.v.z < TUNE.aeroSettleVz || fl.aero.hops > 8) {
     A.v.z = 0; A.p.z = 0;
@@ -2133,6 +2180,10 @@ function aeroToRoll(b, fl) {
   const vm = Math.hypot(A.v.x, A.v.y) || 1;
   const dx = A.v.x / vm, dy = A.v.y / vm;
   b.spinW = A.spin.y * dx - A.spin.x * dy;
+  // Carry the chip fade onto the ball: state.flight is nulled the instant this
+  // returns, and rollStepSI still has the whole skid to run under the same
+  // contact friction the bounce just used.
+  b._chipK = fl.chipK || 0;
 }
 
 function arcFlightStep(b) {
@@ -2459,7 +2510,7 @@ function rollStepSI(b, surf, grad) {
   // Skid-then-roll: kinetic friction while the contact point slips (an order of
   // magnitude stronger than rolling resistance), then true rolling. This is the
   // whole reason an approach shot holds a green and a putt does not.
-  const t = TUNE.turf[surf] || TUNE.turf.fairway;
+  const t = turfFor(surf, b._chipK);
   const prof = surf === "green" ? { mu: t.mu, roll: rollDecelMs("green") } : t;
   const r = Bal.skidRoll(sv, b.spinW || 0, prof, dt);
   sv = r.sv; b.spinW = r.w;
@@ -2758,8 +2809,12 @@ function simShotRest(ball0, flight0) {
   // spinW is INHERITED, not re-derived: this receives the already-launched live
   // ball, so a putt arrives rolling and an approach arrives with whatever the
   // flight left. Dropping it made the prediction skid where the live ball rolls.
+  // _chipK likewise: aeroToRoll stamps it at touchdown, but a ball handed to
+  // this ALREADY rolling (a putt, a re-sim of a settled ball) never lands again,
+  // so it has to inherit rather than start at 0 — see TUNE.chipMu / turfFor.
   const b = { x: ball0.x, y: ball0.y, vx: ball0.vx, vy: ball0.vy,
-              z: ball0.z, vz: ball0.vz, spin: ball0.spin, spinW: ball0.spinW || 0 };
+              z: ball0.z, vz: ball0.vz, spin: ball0.spin, spinW: ball0.spinW || 0,
+              _chipK: ball0._chipK || 0 };
   let fl = Object.assign({}, flight0);
   // DEEP-copy the aero state. Object.assign is shallow, so the prediction would
   // otherwise step the LIVE ball's launch state to the end of its flight before
@@ -3518,9 +3573,13 @@ function chipSpinParams(ef) {
   const landFrac = Math.max(0.5, Math.min(0.98, TUNE.chipLandFrac + chipSpinBias * TUNE.chipLandSpread));
   // Backspin ramps from chipSpin (a nipped 15 yd flop) up to the full-swing
   // value at chipSpinRef, so 74 yd and 76 yd behave alike — see TUNE.chipSpinRef.
+  // CURVED by chipSpinPow (see there): a linear ramp is already at 0.72 by the
+  // time a lob wedge is only hitting it 40 yd, which is why the whole band spun
+  // like a full swing and why moving the chipSpin floor alone did nothing.
   // `ef` is absent at the call sites that only want landFrac; they get the floor.
+  const t = Math.min(1, Math.max(0, ef || 0) / TUNE.chipSpinRef);
   const base = TUNE.chipSpin +
-               (1 - TUNE.chipSpin) * Math.min(1, Math.max(0, ef || 0) / TUNE.chipSpinRef);
+               (1 - TUNE.chipSpin) * Math.pow(t, TUNE.chipSpinPow);
   const spinScale = base * Math.pow(TUNE.chipSpinRange, chipSpinBias);
   // Launch delta: the slider picks the shot's SHAPE (low runner vs high
   // checker) and the physics turns that into roll-out, instead of the old
@@ -3683,12 +3742,21 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   // measured at 15 yd, +4° takes apex 5→8 ft and keeps 2.2 yd of release, while
   // +10° gives 12 ft and kills release outright (4.4 → 0.2 yd). Apex saturates
   // at 12 ft by +8° anyway, so the top of that range buys nothing.
+  // Pin distance also drives the chip's CONTACT fade (chipK below), so it is
+  // measured once here rather than twice.
+  const pinYds = chipActive
+    ? dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT : 0;
   if (chipActive && TUNE.chipLoftBoost) {
-    const pinYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
     const span = Math.max(1, TUNE.chipRangeYds - TUNE.chipLoftHoldYds);
     const k = 1 - Math.max(0, Math.min(1, (pinYds - TUNE.chipLoftHoldYds) / span));
     loftAdd += TUNE.chipLoftBoost * k;
   }
+  // How much of TUNE.chipMu this shot's landing gets: full at a nipped chip,
+  // gone by chipRangeYds so a 74 yd chip and a 76 yd full swing hit the ground
+  // the same way. Same pin-distance ramp as chipLoftBoost above, and for the
+  // same reason — a constant offset would put a step at exactly that boundary.
+  const chipK = chipActive
+    ? 1 - Math.max(0, Math.min(1, pinYds / TUNE.chipRangeYds)) : 0;
   // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
   const lieSurf = surfaceAt(b.x, b.y);
   const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
@@ -3738,6 +3806,7 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   const flr = buildFlight(ang, C, H, landDeg * Math.PI / 180, effectiveSpinN,
                           1 + (TUNE.arcApex - 1) * loMul);
   flr.flight.noLandCheck = chipActive; // chips: release tuned by the spin slider alone
+  flr.flight.chipK = chipK;             // chip contact softening (see TUNE.chipMu / turfFor)
   flr.flight.floatMul = loMul;          // Low → less/no apex hang (see arcSpeedK)
   flr.flight.rolloutMul = hiT < 0 ? 1 + (TUNE.arcLowRoll - 1) * t : 1; // Low → runs out more (see landingRelease)
   if (t > 0) flr.flight.windMul = 1 + (windK - 1) * t; // high rides the wind, low punches through it
@@ -3786,6 +3855,10 @@ function launchShot(ang, frac, spin, onGreen) {
   // velocity from the landing (aeroToRoll), so clear any leftover here or the
   // previous shot's spin would grind through this one's first ground contact.
   if (trial.usePutter) startRollingSpin(b); else b.spinW = 0;
+  // Same reason: aeroToRoll re-stamps this at touchdown, so anything left over
+  // here is the PREVIOUS shot's chip fade and would soften this roll (a putt
+  // never lands at all, so it would keep a chip's contact friction forever).
+  b._chipK = 0;
   shot.mph = trial.mph;
   state.airborne = !trial.usePutter;
   if (trial.hiT !== 0) resetFlightBias(); // one-shot: the selector never silently carries to the next swing

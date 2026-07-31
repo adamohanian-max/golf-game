@@ -93,9 +93,20 @@ function landDUnits(Cu, Hu) {
 // Mirrors arcFlightStep's aero branch (game.js:1946-1970) then the rollStep
 // loop, ticking at the live simDt() so hop DURATIONS are measured on the same
 // clock the renderer samples.
-function flyAndSettle(mph, launchDeg, spinRpm, surf) {
+// turfFor (game.js): a CHIP lands with TUNE.chipMu instead of the surface's own
+// tangential friction, faded out by chipRangeYds. `chipK` is that fade (1 at the
+// shortest chip, 0 for every full swing). Math.min so the blend can only soften.
+// Mown turf only — sand plugs, so a bunker keeps its own grip (game.js CHIP_MU_SURF).
+const CHIP_MU_SURF = { green: 1, fairway: 1, tee: 1, rough: 1 };
+function turfFor(surf, chipK) {
+  const t = TUNE.turf[surf] || TUNE.turf.fairway;
+  if (!chipK || TUNE.chipMu == null || !CHIP_MU_SURF[surf]) return t;
+  return { ...t, mu: Math.min(t.mu, t.mu + (TUNE.chipMu - t.mu) * chipK) };
+}
+
+function flyAndSettle(mph, launchDeg, spinRpm, surf, chipK = 0) {
   const A = B.launchState(mph, launchDeg, spinRpm, { x: 1, y: 0 }, 0);
-  const turf = TUNE.turf[surf] || TUNE.turf.fairway;
+  const turf = turfFor(surf, chipK);
   const dt = simDt();
 
   let apex = 0, t = 0, carry = null, descentDeg = null, hops = 0;
@@ -172,8 +183,12 @@ function shotFor(club, ef, { chip, chipBias = 0, flightBias = 0, surf = 'green',
   if (chip) {
     // chipSpinParams (game.js:3251-3259). chipSpinRef is the Phase-2 ramp; when
     // it is absent this reduces to the old flat chipSpin.
+    // The ramp is CURVED by chipSpinPow (absent => 1 => the old linear ramp):
+    // linear was already at 0.72 by a 40 yd lob wedge, so the whole band spun
+    // like a full swing. See TUNE.chipSpinPow.
     const base = TUNE.chipSpinRef
-      ? TUNE.chipSpin + (1 - TUNE.chipSpin) * Math.min(1, ef / TUNE.chipSpinRef)
+      ? TUNE.chipSpin + (1 - TUNE.chipSpin) *
+          Math.pow(Math.min(1, ef / TUNE.chipSpinRef), TUNE.chipSpinPow ?? 1)
       : TUNE.chipSpin;
     spinScale = base * Math.pow(TUNE.chipSpinRange, chipBias);
   } else {
@@ -201,13 +216,15 @@ function shotFor(club, ef, { chip, chipBias = 0, flightBias = 0, surf = 'green',
     const k = 1 - Math.max(0, Math.min(1, (pinYds - TUNE.chipLoftHoldYds) / span));
     loftAdd += TUNE.chipLoftBoost * k;
   }
+  // Contact softening for this chip's landing (game.js buildTrialShot `chipK`).
+  const chipK = chip ? 1 - Math.max(0, Math.min(1, pinYds / TUNE.chipRangeYds)) : 0;
   const delta = loftAdd + (chip ? chipBias * TUNE.chipLaunchSpread
                                 : flightBias * TUNE.flightLaunchSpread);
   const launchDeg = Math.max(4, Math.min(60, c.launch + delta));        // game.js:1873
 
   const targetM = landDUnits(Cu, Hu) * M_PER_UNIT;
   const mph = aeroSpeedForCarry(targetM, launchDeg, rpm);
-  return { ef, launchDeg, rpm, mph, ...flyAndSettle(mph, launchDeg, rpm, surf) };
+  return { ef, launchDeg, rpm, mph, ...flyAndSettle(mph, launchDeg, rpm, surf, chipK) };
 }
 
 // solveChipEf (game.js:3272-3296): bisect ef so the ball COMES TO REST at target
@@ -252,13 +269,27 @@ if (argv.includes('--timescale')) {
 // gets as a fraction of the club's full-swing value, chipLoftDeg the loft a
 // chip presents on top of the club's own launch angle.
 if (argv.includes('--chipspin')) TUNE.chipSpin = +argv[argv.indexOf('--chipspin') + 1];
+// --chipspinpow N curves the chip spin ramp (1 = the old linear one);
+// --chipmu N is the chip's contact friction, faded to the surface's own mu by
+// chipRangeYds. These two ARE the chip pass — sweep them, not the turf table,
+// which is shared with every full swing.
+if (argv.includes('--chipspinpow')) TUNE.chipSpinPow = +argv[argv.indexOf('--chipspinpow') + 1];
+if (argv.includes('--chipmu')) TUNE.chipMu = +argv[argv.indexOf('--chipmu') + 1];
+if (argv.includes('--chipspinref')) TUNE.chipSpinRef = +argv[argv.indexOf('--chipspinref') + 1];
 if (argv.includes('--chiploft')) TUNE.chipLoftDeg = +argv[argv.indexOf('--chiploft') + 1];
 if (argv.includes('--chiploftref')) TUNE.chipLoftRef = +argv[argv.indexOf('--chiploftref') + 1];
 if (argv.includes('--chiploftboost')) TUNE.chipLoftBoost = +argv[argv.indexOf('--chiploftboost') + 1];
 if (argv.includes('--chiplofthold')) TUNE.chipLoftHoldYds = +argv[argv.indexOf('--chiplofthold') + 1];
 
 const CHIP_TARGETS = [15, 20, 30, 40, 50, 60, 74];
-const FULL_CLUBS = ['driver', '5i', '7i', 'pw', 'lw'];
+// Five representative clubs by default (the gate's release table). `--clubs all`
+// or `--clubs driver,7i` widens it — the whole bag is useful for reading off
+// ball-flight numbers, but slow and noisy as a regression gate.
+const DEFAULT_FULL_CLUBS = ['driver', '5i', '7i', 'pw', 'lw'];
+const clubArg = argv.includes('--clubs') ? argv[argv.indexOf('--clubs') + 1] : null;
+const FULL_CLUBS = !clubArg ? DEFAULT_FULL_CLUBS
+  : clubArg === 'all' ? Object.keys(TUNE.clubs).filter((k) => k !== 'putter')
+  : clubArg.split(',');
 
 const rows = [];
 
@@ -371,7 +402,12 @@ if (gate) {
       // 544ed1e added these because a 40 yd pitch arrived with no visible hop;
       // a 15-20 yd chip legitimately skips once low and then runs, so demanding
       // two 0.6 ft hops of it would just be demanding the wrong shot.
-      if (t >= 30) {
+      // Scoped to the LW as well as to >=30 yd: with TUNE.chipMu in, a 30 yd
+      // SAND wedge is no longer a pitch at all — it carries 17 and runs 12, one
+      // low skip and gone, which is the shot that club is for. The lob wedge is
+      // where the high, two-hop pitch has to survive, and it is the club the
+      // 40 yd shape assertions below are written about.
+      if (t >= 30 && id === 'lw') {
         band(`${id} ${t}yd hop ft`, r.hop1Ft, 0.6, 99);
         band(`${id} ${t}yd hop s`, r.hop1S, 0.35, 99);
         band(`${id} ${t}yd hops`, r.hopCount, 2, 99);
@@ -387,21 +423,30 @@ if (gate) {
       const release = r.restYd - r.carryYd;
       if (t <= 20) {
         band(`${id} ${t}yd release`, release, 0.5, 99);
-        // Floor cut 0.15 -> 0.08 when chipLoftBoost raised the trajectory: height and
-        // release trade directly at fixed carry, so a chip that flies higher keeps a
-        // smaller SHARE of roll even while still clearly running (20 yd LW: 2.0 yd of
-        // release on a 19 yd carry). The absolute release band above is the real guard;
-        // this one only has to catch a collapse back to zero.
-        band(`${id} ${t}yd carry:roll`, release / r.carryYd, 0.08, 2.0);
+        // Floor 0.15 -> 0.08 (chipLoftBoost bought height with release) -> 0.30
+        // (TUNE.chipMu bought the release back without touching the height).
+        // 0.30 is a real contract now, not a collapse detector: a greenside chip
+        // that carries 9 and runs 5 is the shot, and the way this regresses is
+        // for the number to sag, so the floor has to sit near the measurement.
+        band(`${id} ${t}yd carry:roll`, release / r.carryYd, 0.30, 2.0);
       } else {
-        band(`${id} ${t}yd release`, release, -0.5, 99);
+        // Was -0.5 (a pitch may check, must not reverse). Now every chip in the
+        // band genuinely runs, so the floor is positive and scaled: the fade to
+        // the surface's own mu by chipRangeYds means the LONG end of the band
+        // legitimately releases least.
+        band(`${id} ${t}yd release`, release, t >= 60 ? 0.2 : 1.5, 99);
       }
     }
   }
+  // The 40 yd lob-wedge pitch: 544ed1e's shape (high, steep, lands soft) has to
+  // survive the chip pass. Apex floor 30 -> 26 ft and roll ceiling 2 -> 8 yd are
+  // both consequences of the ball now RUNNING: solveChipEf re-solves to rest at
+  // the pin, so a shot that releases carries less and therefore apexes lower.
+  // The launch angle is untouched — this is the same trajectory, hit softer.
   const p40 = find('lw', 'chip', 40);
-  band('lw 40yd apex ft', p40.apexFt, 30, 99);
+  band('lw 40yd apex ft', p40.apexFt, 26, 99);
   band('lw 40yd descent', p40.descentDeg, 45, 90);
-  band('lw 40yd roll', p40.rollYd, -99, 2);
+  band('lw 40yd roll', p40.rollYd, -99, 8);
 
   // continuity: a 74yd chip and a full-swing LW must attach the same backspin
   const chip74 = find('lw', 'chip', 74), fullLo = rows.find((r) => r.mode === 'full' && r.club === 'lw' && r.target === null);
