@@ -573,8 +573,7 @@ function setCamera() {
   if (!_placed || !tiles || !camera) return;
   const g = gb(), view = g.getView(), cam = g.getCamera(), m = M();
   const W = window.innerWidth, H = window.innerHeight;
-  const dpr = window.devicePixelRatio || 1;
-  const scale = view.scale || cam.scale || 8;
+  const scale = view.scale || cam.scale || 8;   // css px per world unit (flat camera)
   const geo = g.geoAffine();
   const toLL = (x, y) => [geo[0] * x + geo[1] * y + geo[2], geo[3] * x + geo[4] * y + geo[5]];
 
@@ -606,7 +605,17 @@ function setCamera() {
   // the reach anchor). D_MAX_M is the same tradeoff the span clamp encoded,
   // expressed in the unit that causes it: measured 675 m at pitch 0 streams in
   // a few seconds, so allow a little headroom above that and no more.
-  const D_MAX_M = 820;
+  // The ceiling is PITCH-DEPENDENT now. 820 was measured against the framing
+  // this file used to solve at pitch 0; that framing is gone — pitch 0 is the
+  // flat 2D camera verbatim (see FLAT REFERENCE below), which needs ~883 m on a
+  // 390x844 phone and more on a taller viewport. Clamping it back to 820 would
+  // silently re-introduce exactly the gap this change exists to close, so the
+  // low end buys the altitude and pays for it in streaming: the pitch-0
+  // footprint is ~1.6x today's, so the photoreal mesh takes longer to replace
+  // the satellite fill. Deliberate trade — if it reads too slow, D_MAX_LO is
+  // the one knob to walk back, not the framing. The HI end is untouched.
+  const D_MAX_LO = 1200;   // pitch 0 — must clear the flat camera's own D
+  const D_MAX_HI = 820;    // pitch >= SPREAD_PITCH — the measured streaming budget
   const SPAN_MIN_M = 14;   // tap-in floor: tight putt framing, ball + cup clear
   // PITCH-DEPENDENT, because the clamp only actually breaks the low-pitch view.
   // Measured on all 18 Pebble holes at 390x844: with a flat 70u clamp, pitch 0
@@ -623,6 +632,10 @@ function setCamera() {
   // (no extra altitude), so spend that before spending distance. The HI pair is
   // the original 0.70 spread shifted DOWN 3%: same span, same D, but it lifts the
   // reach anchor clear of the bar on the one high-pitch hole that was clipping.
+  // NOTE the LO pair (and SPAN_MAX_U_LO) no longer decide the pitch-0 view — at
+  // st = 0 the blend below hands the framing wholly to the flat camera. They
+  // still shape the middle of the slider, where a spread wider than the flat
+  // camera's is what makes the lean read well.
   const REACH_F_HI = 0.18, BALL_F_HI = 0.88;
   const REACH_F_LO = 0.07, BALL_F_LO = 0.93;
   const SPREAD_PITCH = 45;
@@ -630,6 +643,21 @@ function setCamera() {
   const REACH_F = REACH_F_LO + (REACH_F_HI - REACH_F_LO) * st;
   const BALL_F = BALL_F_LO + (BALL_F_HI - BALL_F_LO) * st;
   const SPAN_MAX_U = SPAN_MAX_U_LO + (SPAN_MAX_U_HI - SPAN_MAX_U_LO) * st;
+  const D_MAX_M = D_MAX_LO + (D_MAX_HI - D_MAX_LO) * st;
+  // FLAT REFERENCE — the non-google 2D camera, read straight off the affine the
+  // game solves every frame anyway (frameClubReach off the green, the ball<->pin
+  // fit of frameScaleForAngle on it). `view.scale` is css px per world unit, so
+  // D = H·m·K/scale inverts it exactly; the look-at is the world point under the
+  // RAW screen centre, because the affine centres its focus on the play area
+  // while the pinhole looks through the middle of the frame.
+  // This is what "2D" means on every other course, and at pitch 0 it is now what
+  // it means here too — including on the green, where the flat camera uses a
+  // bbox fit the two-anchor solve simply cannot express.
+  const det = view.a * view.e - view.b * view.d || 1;
+  const fsx = W / 2 - view.c, fsy = H / 2 - view.f;
+  const fOx = (view.e * fsx - view.b * fsy) / det;
+  const fOy = (-view.d * fsx + view.a * fsy) / det;
+  const fD = m * H * APPLE_CAM_K / scale;
   let tOx, tOy, tD;
   if (A && (A.moving || A.hold) && _hold) {
     // FROZEN while the ball is in flight, and while the match camera is held on
@@ -663,12 +691,22 @@ function setCamera() {
       tOy = A.by - uy * sB / m;
       tD = D;
       _aimUx = ux; _aimUy = uy;            // for the opening pull-back seed
+      // Blend to the FLAT REFERENCE as the camera flattens. st = 1 (the 55°
+      // default, anything past SPREAD_PITCH) is the anchor solve untouched;
+      // st = 0 is the flat 2D camera exactly — same scale, same look-at, at
+      // every ball position. The two solves disagreed by ~25% at pitch 0 (0.86
+      // vs 0.70 anchor spread, an uncapped play aspect, and an 820 m ceiling the
+      // flat camera doesn't have), so sliding to "2D" landed somewhere no other
+      // course plays. Lerping rather than switching keeps the slider a glide.
+      tOx = fOx + (tOx - fOx) * st;
+      tOy = fOy + (tOy - fOy) * st;
+      tD = fD + (tD - fD) * st;
     } else {
-      const det = view.a * view.e - view.b * view.d || 1;
-      const sx0 = W / 2 - view.c, sy0 = H / 2 - view.f;
-      tOx = (view.e * sx0 - view.b * sy0) / det;
-      tOy = (-view.d * sx0 + view.a * sy0) / det;
-      tD = (m * dpr / scale) * H * APPLE_CAM_K;   // flat-zoom fallback (no anchors)
+      // No anchors (menu backdrop, pre-hole): the flat camera is the whole
+      // answer. Note there is no `dpr` here — view.scale is CSS px per world
+      // unit, and multiplying it in put this fallback 2-3x too far out on a
+      // phone. Nothing gameplay-facing hit it, which is why it went unseen.
+      tOx = fOx; tOy = fOy; tD = fD;
     }
     // Capture the at-rest target. Mirrors the freeze test above, so the FIRST
     // frame of a hold establishes the frame that the hold then keeps.

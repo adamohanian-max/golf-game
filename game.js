@@ -4050,9 +4050,12 @@ function frameScaleForAngle(angle, ox, oy) {
   const rsv = hudReserve();
   const availW = Math.max(120, vpW() - rsv.left - rsv.right);
   let   availH = Math.max(120, vpH() - rsv.top - rsv.bot);
-  // 2D-only: cap the play-area aspect so a tall viewport becomes margin, not zoom
-  // (keeps native phone framing == mobile-web). The 3D grounds keep their own math.
-  if (!gtilesGroundActive() && !appleGroundActive())
+  // Cap the play-area aspect so a tall viewport becomes margin, not zoom (keeps
+  // native phone framing == mobile-web). Apple opts OUT: its pinhole is probe-
+  // calibrated against MapKit's own safe-area layout, so the raw geometry has to
+  // survive. gtiles opts IN — its camera is now DERIVED from this affine at low
+  // pitch (gtiles3d setCamera), so anything not shared here is a parity gap.
+  if (!appleGroundActive())
     availH = Math.min(availH, availW * PLAY_ASPECT_MAX);
   return { w, h, scale: Math.min(availW / w, availH / (h * camera.tTilt)) };
 }
@@ -4097,11 +4100,12 @@ function frameClubReach(pNowDeg) {
   const mapH = _appleMapH || cssH;
   const rsv = hudReserve();
   const availHraw = Math.max(120, cssH - rsv.top - rsv.bot);
-  // 2D-only: cap the play-area aspect (as in frameScaleForAngle) so a tall viewport
+  // Cap the play-area aspect (as in frameScaleForAngle) so a tall viewport
   // becomes margin, not zoom — the ball/reach anchors frame a centered capped band,
-  // surplus height splits top/bottom. Apple/gtiles keep the exact raw geometry so
-  // their pinhole/tiles calibration is untouched.
-  const flat2D = !gtilesGroundActive() && !appleGroundActive();
+  // surplus height splits top/bottom. Apple keeps the exact raw geometry so its
+  // probe-calibrated pinhole is untouched; gtiles shares the cap, because at low
+  // pitch its camera IS this solve (gtiles3d setCamera blends to it).
+  const flat2D = !appleGroundActive();
   const availWc = Math.max(120, vpW() - rsv.left - rsv.right);
   const availH = flat2D ? Math.min(availHraw, availWc * PLAY_ASPECT_MAX) : availHraw;
   const topPad = rsv.top + (flat2D ? (availHraw - availH) / 2 : 0);
@@ -4124,7 +4128,12 @@ function frameClubReach(pNowDeg) {
   const uB = cssH / 2 - (topPad + 0.85 * availH);   // ball anchor (negative = below)
   // Pitch is constant across zoom now (no putt-zoom flatten ramp), so the
   // framing distance solves in one pass at the fixed pitch.
-  const pDeg = pNowDeg != null ? pNowDeg : appleUserPitch;
+  // Under gtiles this solve is the FLAT REFERENCE the tiles camera blends toward
+  // at low pitch (gtiles3d setCamera), so it must be the pitch-0 answer. The
+  // gtiles branch of the tilt slider never writes appleUserPitch — but startup
+  // seeds that variable from golf.applePitch regardless of backend, so a stale
+  // Apple pitch would silently tilt Pebble's reference.
+  const pDeg = pNowDeg != null ? pNowDeg : gtilesGroundActive() ? 0 : appleUserPitch;
   const p = pDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p);
   let D = Rm / (uR / (f * cp - uR * sp) - uB / (f * cp - uB * sp));
   // Flyover courses hold the MapKit min distance (map drifts off the overlay
@@ -4542,10 +4551,17 @@ const GT_SIZE = {
   // 42.7mm ball and 108mm cup are exactly proportional to the turf they sit
   // on (cup ≈ 2.5× ball, both a fraction of the green). Floors only bind at
   // long framings where a real ball IS sub-pixel.
-  ballM: 0.02135, ballExag: 2.0, ballMin: 2.0, ballMax: 10,     // regulation 42.7mm ball ×2 (playtest: 1.0 too small)
-  cupM: 0.054,   cupExag: 1.0,  cupMin: 2.0, cupMax: 9,         // regulation 108mm cup
-  flagM: 2.13,   flagExag: 1.5, flagMin: 10, flagMax: 40,       // 7ft flagstick
-  teeM: 0.10,    teeExag: 3.0,  teeMin: 2.5, teeMax: 7,         // tee-marker sphere
+  // The FLOORS are flat-mode parity, not free numbers. A real ball is sub-pixel
+  // at every play framing, so both renderers sit on their floor almost always —
+  // and the flat one's is the number the whole game was played at. Set below it
+  // and the SAME shot reads half-size the moment you're on Pebble: at 2 px the
+  // ball was 4 px across against 8 px everywhere else, which is what "far too
+  // hard to see the ball" was. Each floor mirrors its flat counterpart:
+  //   ball max(ws(BALL_RADIUS_UNITS), 4) · cup max(ws(holeRadius), 3) · tee max(ws(0.4), 5)
+  ballM: 0.02135, ballExag: 2.0, ballMin: 4.0, ballMax: 10,     // regulation 42.7mm ball ×2 (playtest: 1.0 too small)
+  cupM: 0.054,   cupExag: 1.0,  cupMin: 3.0, cupMax: 9,         // regulation 108mm cup
+  flagM: 2.13,   flagExag: 1.5, flagMin: 10, flagMax: 40,       // 7ft flagstick (flat floor is 8 — already clear)
+  teeM: 0.10,    teeExag: 3.0,  teeMin: 5.0, teeMax: 7,         // tee-marker sphere
 };
 function ballDrawRadius() {
   if (view.appleProj) return Math.max(4, Math.min(18, view.appleScale * APPLE_BALL_DRAW_UNITS));
