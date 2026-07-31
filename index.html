@@ -718,12 +718,16 @@
     </div>
   </div>
 
-  <div id="bot-select" class="hidden" data-holes="9">
+  <div id="bot-select" class="hidden" data-holes="9" data-format="match">
     <div class="ne-box bot-box">
       <button id="bot-back" class="menu-back" data-back>← Back</button>
       <h2>Play a Bot</h2>
-      <p class="ne-sub">Match play against the clubhouse roster. Beat a bot to unlock the next.</p>
+      <p class="ne-sub">Match play or stroke play against the clubhouse roster. Beat a bot to unlock the next.</p>
       <p id="bot-admin-note" class="ne-sub bot-admin-note hidden">Admin — full roster unlocked</p>
+      <div class="seg" role="radiogroup" aria-label="Format">
+        <button class="seg-btn bot-fmt" data-format="match" role="radio">Match play</button>
+        <button class="seg-btn bot-fmt" data-format="stroke" role="radio">Stroke play</button>
+      </div>
       <div class="seg" role="radiogroup" aria-label="Length">
         <button class="seg-btn bot-len" data-holes="9" role="radio">9 holes</button>
         <button class="seg-btn bot-len" data-holes="18" role="radio">18 holes</button>
@@ -887,6 +891,6 @@
        script so it is also require()-able by tools/ball_calibrate.mjs — the
        calibration gate runs the exact code the browser flies. -->
   <script defer src="ballistics.js?v=5"></script>
-  <script defer src="game.js?v=369"></script>
+  <script defer src="game.js?v=370"></script>
 </body>
 </html>

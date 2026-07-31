@@ -8117,11 +8117,13 @@ function buildScorecardSection(holes, showTot) {
   return `<table class="re-sc"><thead>${hRow}</thead><tbody>${pRow}${sRow}</tbody></table>`;
 }
 
-// Combined post-round match card: HOLE / PAR / one row per player (YOU first,
-// then opponents). Reuses scoreClass + the .re-sc look. Par comes from my own
+// Combined match card: HOLE / PAR / one row per player (YOU first, then
+// opponents). Reuses scoreClass + the .re-sc look. Par comes from my own
 // round.holeStats (shared course); each opponent's strokes from its hole_scores
-// map (bots: cpuOpp.hole_scores; humans: match_players.hole_scores). Gated to
-// match end by the caller, so cards are complete.
+// map (bots: cpuOpp.hole_scores; humans: match_players.hole_scores).
+// Used LIVE mid-round (HUD → Scorecard) as well as at the end, so the "·"
+// placeholder for a hole a player hasn't finished is load-bearing — a card is
+// routinely partial, and a match-play closeout leaves it partial forever.
 function buildMatchScorecard(rows) {
   if (!rows || !rows.length || !round.holeStats.length) return "";
   const parOf = {}, holeNums = [];
@@ -8163,13 +8165,36 @@ function buildMatchScorecard(rows) {
   return html;
 }
 
+// Rows for the in-round match card, synchronously — showRoundSummary can't wait
+// on a fetch. Bots: cpuMatchRows() already builds my row from live round state.
+// Humans: the 3s board poll's cached rows, with MY row overlaid from
+// meSnapshot() so my own card never lags my play by a poll.
+function matchCardRows() {
+  if (cpuMatch) return cpuMatchRows();
+  const rows = (_matchBugRows || []).slice();
+  const me = meSnapshot();
+  if (!me) return rows;
+  // meSnapshot() has no user_id and a guest's player_name can be "", so
+  // isMeEntry may not find me in the polled rows. buildMatchScorecard falls back
+  // to rows[0] when that happens — hence the unshift, which makes that fallback
+  // correct. Don't "fix" isMeEntry: match-play scoring leans on its semantics.
+  const i = rows.findIndex(isMeEntry);
+  if (i >= 0) rows[i] = Object.assign({}, rows[i], me);
+  else rows.unshift(me);
+  return rows;
+}
+
 function buildRoundScorecard() {
-  const stats = round.holeStats;
-  const front = stats.slice(0, Math.min(9, stats.length));
-  const back  = stats.slice(9, Math.min(18, stats.length));
-  let html = "";
-  if (front.length) html += buildScorecardSection(front, back.length === 0);
-  if (back.length)  html += buildScorecardSection(back, true);
+  // In a match the card shows every player, one row each (same table, same
+  // scoreClass colors); solo rounds keep the single-YOU card untouched.
+  let html = inMatch() ? buildMatchScorecard(matchCardRows()) : "";
+  if (!html) {
+    const stats = round.holeStats;
+    const front = stats.slice(0, Math.min(9, stats.length));
+    const back  = stats.slice(9, Math.min(18, stats.length));
+    if (front.length) html += buildScorecardSection(front, back.length === 0);
+    if (back.length)  html += buildScorecardSection(back, true);
+  }
   if (!html) html = '<div class="re-sc-empty">No holes completed yet</div>';
   document.getElementById("re-scorecard").innerHTML = html;
 }
@@ -8245,12 +8270,15 @@ function showRoundSummary(midRound = false) {
   document.getElementById("re-header-title").textContent = midRound ? "Scorecard" : "Round Complete";
   // Match play: the header carries the match, not the gross total.
   const mStat = matchStatusText();
+  // Stroke-play match: my total means little without theirs, so carry it too.
+  const oTail = oppSummaryText();
+  const tail = oTail ? " · " + oTail : "";
   document.getElementById("re-subtitle").textContent = midRound
     // `played` counts COMPLETED holes — the player is standing on the next one.
-    ? `${course ? course.name : "Golf"} · Hole ${Math.min(played + 1, n)} of ${n} · ${mStat || formatToPar(round.score)}`
+    ? `${course ? course.name : "Golf"} · Hole ${Math.min(played + 1, n)} of ${n} · ${mStat || formatToPar(round.score)}${tail}`
     : mStat
       ? `${course ? course.name : "Golf"} · ${mStat}`
-      : `${course ? course.name : "Golf"} · ${totStrk} (${formatToPar(round.score)})`;
+      : `${course ? course.name : "Golf"} · ${totStrk} (${formatToPar(round.score)})${tail}`;
   document.getElementById("re-replay").textContent = midRound ? "Resume" : "Play Again";
   // A match is a single locked round — replaying it would corrupt the shared
   // standings, so hide the replay button at the end of a match.
@@ -14798,11 +14826,26 @@ function matchStatusText() {
   return mp.result || mp.status;
 }
 
-// Match play: the opponent's stroke count on the hole I'm standing on — their
-// live count while they play it, their final once they've holed out. Null when
-// they're on another hole, or there's no opponent to compare against.
+// The opponent's headline score for a STROKE-play match: gross + to-par, e.g.
+// "Bo Geyman 82 (+10)". Match play doesn't get one — up/down IS the score
+// there, and matchStatusText() already carries it. Null outside a live match,
+// or before the opponent has a hole in the books.
+function oppSummaryText() {
+  if (!matchLive() || matchPlay() || !lastOpp) return null;
+  const hs = lastOpp.hole_scores || {};
+  let gross = 0, n = 0;
+  for (const k in hs) { gross += hs[k] | 0; n++; }
+  if (!n) return null;
+  return `${shortName(oppName())} ${gross} (${formatToPar(lastOpp.score | 0)})`;
+}
+
+// The opponent's stroke count on the hole I'm standing on — their live count
+// while they play it, their final once they've holed out. Null when they're on
+// another hole, or there's no opponent to compare against. Any format: knowing
+// what the other player is lying is just as much the point in stroke play, and
+// the caller (updateScorecard) keeps the "Match" up/down label match-play-only.
 function oppHoleStrokes(h) {
-  if (!matchPlay() || !lastOpp || h == null) return null;
+  if (!matchLive() || !lastOpp || h == null) return null;
   const done = (lastOpp.hole_scores || {})[h];
   if (done != null) return { n: done | 0, done: true };
   if (lastOpp.cur_hole !== h || lastOpp.cur_strokes == null) return null;
@@ -14816,7 +14859,9 @@ function oppHoleStrokes(h) {
 // actually changed.
 let _lastMatchHudKey = "";
 function tickMatchHud() {
-  if (!matchPlay() || mode !== "course") { _lastMatchHudKey = ""; return; }
+  // Any live format — stroke play needs the same per-frame refresh to show the
+  // bot's stroke count. chatWatchMatch() self-gates on matchPlay().
+  if (!matchLive() || mode !== "course") { _lastMatchHudKey = ""; return; }
   const oh = oppHoleStrokes(HOLE && HOLE.num);
   // hole_scores count also catches the opponent FINISHING a hole, so the
   // up/down status updates without waiting for the standings poll.
@@ -15296,17 +15341,32 @@ function closeMatchResults() {
   if (q) { q.classList.add("hidden"); q.innerHTML = ""; }
 }
 
+// Ladder verdict for a finished bot match: 1 won / 0 halved / -1 lost, null if
+// the match isn't settled yet. Match play reads computeMatchPlay's result (null
+// until decided or all holes are in — a 3&2 closeout counts). Stroke play has
+// no closeout, so it needs its own completion guard: without `finished` on both
+// rows, quitting on hole 1 while a stroke ahead would unlock the next bot.
+function botMatchVerdict(rows) {
+  if (activeMatch && activeMatch.format === "stroke") {
+    if (!rows.every(r => r.finished)) return null;
+    return Math.sign((rows[1].score | 0) - (rows[0].score | 0));   // lower to-par wins
+  }
+  const mp = computeMatchPlay(rows[0], rows[1], matchHoleCount);
+  if (!mp || !mp.result) return null;
+  return mp.result === "Halved" ? 0 : mp.result.indexOf("Won") === 0 ? 1 : -1;
+}
+
 // Ladder settlement: runs once when a bot match reaches the results screen
 // (both end paths funnel here — scorecard confirm and early closeout).
-// Win = match-play victory; halved/lost don't advance the ladder.
+// Win = beat the bot in whichever format was played; halved/lost don't advance.
 function settleBotMatch() {
   const rows = cpuMatchRows();          // [me, cpuOpp] — synchronous, offline-safe
-  const mp = computeMatchPlay(rows[0], rows[1], matchHoleCount);
-  const won = !!(mp && mp.result && mp.result.indexOf("Won") === 0);
+  const v = botMatchVerdict(rows);
+  const won = v === 1;
   // Bot's parting line, from ITS point of view: I won → it lost. This one does
   // NOT bubble — #match-results (z60) covers the stack (z45) the moment it
   // opens — so it's stashed and rendered inside the results card instead.
-  _chatSignoff = botSignoff(won ? "loseMatch" : (mp && mp.result === "Halved") ? "halveMatch" : "winMatch");
+  _chatSignoff = botSignoff(won ? "loseMatch" : v === 0 ? "halveMatch" : "winMatch");
   if (won && markBotBeaten(activeMatch._bot)) {
     const next = nextBotAfter(activeMatch._bot);
     showToast(next ? next.name + " unlocked" : "Ladder complete — you beat them all", 2800, "gold");
@@ -15326,11 +15386,14 @@ function settleBotMatch() {
 // Start another ladder match from the results screen (Rematch / Next bot).
 function startBotFromResults(bot) {
   if (!bot) return;
+  // Read both off the match that just ended — leaveMatch() clears activeMatch,
+  // so a Rematch would otherwise silently drop back to match play.
   const holes = matchHoleCount;
+  const format = (activeMatch && activeMatch.format === "stroke") ? "stroke" : "match";
   leaveMatch();                         // resets cpuMatch/cpuOpp/activeMatch, closes results
   closeHud();
   elScorecard.style.display = "none";
-  startCpuMatch("match", holes, bot);
+  startCpuMatch(format, holes, bot);
 }
 
 // Rematch for a finished human-vs-human match (§5/§7.2 "rematch loop" — the
@@ -15369,13 +15432,17 @@ async function renderMatchResults() {
   renderChatSignoff();
   const rows = await fetchMatchPlayers(activeMatch.id);
   const allDone = rows.length && rows.every(r => r.finished);
+  // A match-play closeout ends the match with holes unplayed, so NEITHER row is
+  // `finished` — gating the header (and the card below) on allDone left a "Won
+  // 3&2" reading "Match standings · 0/2 in the clubhouse" with an empty card.
+  const final = !!(allDone || matchDecided);
   const titleEl = document.getElementById("mr-title");
   const subEl = document.getElementById("mr-sub");
   const bannerEl = document.getElementById("mr-banner");
   const listEl = document.getElementById("mr-list");
   if (!listEl) return;
-  if (titleEl) titleEl.textContent = allDone ? "Final standings" : "Match standings";
-  if (subEl) subEl.textContent = allDone
+  if (titleEl) titleEl.textContent = final ? "Final standings" : "Match standings";
+  if (subEl) subEl.textContent = final
     ? "Match complete"
     : `${rows.filter(r => r.finished).length}/${rows.length} in the clubhouse`;
   // Human rematch (§5/§7.2 "rematch loop"): a finished human-vs-human match
@@ -15387,9 +15454,11 @@ async function renderMatchResults() {
     if (rm) { rm.dataset.human = "1"; rm.classList.remove("hidden"); }
   }
 
-  // Full per-hole scorecard only once everyone's holed out; live poll fills it in.
+  // Per-hole scorecard, always — buildMatchScorecard prints "·" for holes a
+  // player hasn't finished, which is exactly what a closeout should show. The
+  // live poll fills the rest in for a match still being played out.
   const scEl = document.getElementById("mr-scorecard");
-  if (scEl) scEl.innerHTML = allDone ? buildMatchScorecard(rows) : "";
+  if (scEl) scEl.innerHTML = buildMatchScorecard(rows);
 
   // 1v1 match-play has its own win/loss verdict.
   if (matchPlay()) {
@@ -16984,6 +17053,7 @@ function openBotSelect() {
   const ov = document.getElementById("bot-select");
   if (!ov) return;
   ov.dataset.holes = ov.dataset.holes || "9";
+  ov.dataset.format = ov.dataset.format || "match";
   syncBotToggles();
   syncBotCourseRow();
   renderBotList();
@@ -16997,6 +17067,12 @@ function syncBotToggles() {
   const ov = document.getElementById("bot-select");
   if (!ov) return;
   ov.querySelectorAll(".bot-len").forEach(b => b.classList.toggle("active", b.dataset.holes === ov.dataset.holes));
+  ov.querySelectorAll(".bot-fmt").forEach(b => b.classList.toggle("active", b.dataset.format === ov.dataset.format));
+}
+// The picker's format, normalized the same way quickFind() normalizes its own.
+function botFormat() {
+  const ov = document.getElementById("bot-select");
+  return (ov && ov.dataset.format === "stroke") ? "stroke" : "match";
 }
 function renderBotList() {
   const list = document.getElementById("bot-list");
@@ -17026,6 +17102,9 @@ function renderBotList() {
   ov.querySelectorAll(".bot-len").forEach(b => b.addEventListener("click", () => {
     ov.dataset.holes = b.dataset.holes; syncBotToggles();
   }));
+  ov.querySelectorAll(".bot-fmt").forEach(b => b.addEventListener("click", () => {
+    ov.dataset.format = b.dataset.format; syncBotToggles();
+  }));
   const back = document.getElementById("bot-back");
   if (back) back.addEventListener("click", () => { closeBotSelect(); openPlayMenu(); });
   const crnd = document.getElementById("bot-course-random");
@@ -17042,7 +17121,7 @@ function renderBotList() {
     if (!p) return;
     const bot = botById(p.dataset.bot);
     if (bot && botUnlocked(botIndex(bot.id))) {
-      startCpuMatch("match", parseInt(ov.dataset.holes, 10) || 9, bot);
+      startCpuMatch(botFormat(), parseInt(ov.dataset.holes, 10) || 9, bot);
     }
   });
 })();
