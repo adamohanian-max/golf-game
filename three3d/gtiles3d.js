@@ -816,10 +816,18 @@ function setCamera() {
         // The apex fraction is recovered from the anchors themselves rather than
         // read across the bridge, so this file keeps owning no game tunables.
         const apexF = rd > 1e-6 ? Math.hypot(A.ax - A.bx, A.ay - A.by) / rd : 0.55;
+        // Each sample carries the height the ball ACTUALLY has there, not the
+        // full apex: a parabola through 0 at both ends, normalised to 1 at
+        // apexF. Holding az flat across the spread framed "apex height at 0.70
+        // of the carry", where a real ball is already well into its descent —
+        // measured D 369 -> 502 m at pitch 55, past the ~413 m this file records
+        // as where the photoreal mesh starts crawling in.
+        const hpk = 4 * apexF * (1 - apexF) || 1;
         const pts = [-0.15, 0, 0.15].map((d) => {
           const t = Math.max(0.05, Math.min(0.95, apexF + d));
           const px = A.bx + (A.rx - A.bx) * t, py = A.by + (A.ry - A.by) * t;
-          return { x: px, y: py, z: tzf(px, py) + A.az };
+          const hz = A.az * Math.max(0, Math.min(1, 4 * t * (1 - t) / hpk));
+          return { x: px, y: py, z: tzf(px, py) + hz };
         });
         _apexFitN = 0;
         for (; _apexFitN < 12 && D < D_MAX_M; _apexFitN++) {
