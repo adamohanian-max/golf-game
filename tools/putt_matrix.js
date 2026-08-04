@@ -5,6 +5,8 @@
 //     --gate           exit 1 on a regression
 //     --holes 1,4,7    subset (default: all)
 //     --dists 6,20,30  distances in FEET (default 3,5,6,10,20,30,45)
+//     --offgreen       ALSO sweep the off-green putter (bump-and-run) branch
+//     --offdists 8,20  off-green distances in YARDS (default 5,8,12,20,30)
 //     --timescale N    re-run the sim at another pace
 //     --stimp N        override every hole's greenSpeed in memory
 //     --dtcheck        run the matrix at this timeScale AND 0.25, compare
@@ -66,6 +68,57 @@ var POSTLUDE = `
              stimp: HOLE.greenSpeed, mph: mph, grade: gm,
              disp_ft: Math.hypot(ex, ey) * FT_PER_UNIT_OR_9, lat_ft: lat,
              ticks: ticks, holed: !!state.inHole, restSurf: surfaceAt(state.ball.x, state.ball.y) };
+  }
+
+  // One OFF-GREEN putter stroke (bump-and-run). Deliberately a separate function
+  // from runOne: that one places the ball on the aim line and rejects any lie
+  // that is not green, and always passes onGreen=true, so the entire off-green
+  // branch of buildTrialShot went untested. This one sweeps the compass at
+  // radius D looking for the first rough/fairway spot, aims back at the pin and
+  // fires with the putter, which is the shot a player actually plays from just
+  // off the collar. Distances are YARDS here, not feet — a bump-and-run is a
+  // yardage shot, and the interesting range (5-30 yd) is silly in feet.
+  function runOff(rec, D_yd) {
+    var pin = HOLE.holePos, U = D_yd / YARDS_PER_UNIT, sp = null;
+    for (var k = 0; k < 144 && !sp; k++) {
+      var a = k * Math.PI * 2 / 144;
+      var x = pin.x + Math.cos(a) * U, y = pin.y + Math.sin(a) * U, s = surfaceAt(x, y);
+      if (s === "rough" || s === "fairway") sp = { x: x, y: y, surf: s, ang: Math.atan2(pin.y - y, pin.x - x) };
+    }
+    if (!sp) return null;
+    resetState();
+    var b = state.ball;
+    b.x = sp.x; b.y = sp.y;
+    b.z = b.vz = b.vx = b.vy = b.spin = 0; b.spinW = 0; b._chipK = 0;
+    state.moving = false; state.airborne = false; state.inHole = false;
+    chipEnabled = true; autoClubEnabled = false; manualClubThisShot = true; selectedClub = "putter";
+    previewFrac = 0.5; previewFracTouched = false;
+    var sx = b.x, sy = b.y;
+    launchShot(sp.ang, 0.5, 0, false);          // dead pace: f=0.5 -> target IS the pin
+    var mph = (typeof shot !== "undefined" && shot) ? shot.mph : null;
+    var ticks = settle(6000), e = state.ball;
+    return { hole: rec.num, D_yd: D_yd, lie: sp.surf, mph: mph,
+             rest_yd: Math.hypot(e.x - sx, e.y - sy) * YARDS_PER_UNIT,
+             toPin_yd: Math.hypot(e.x - pin.x, e.y - pin.y) * YARDS_PER_UNIT,
+             ticks: ticks, holed: !!state.inHole,
+             restSurf: surfaceAt(e.x, e.y) };
+  }
+
+  function offMatrix() {
+    var rows = [], hs = course.holes;
+    for (var i = 0; i < hs.length; i++) {
+      var rec = hs[i];
+      if (CFG.holes && CFG.holes.indexOf(rec.num) < 0) continue;
+      try {
+        setHole(rec);
+        if (CFG.stimp) HOLE.greenSpeed = CFG.stimp;
+        for (var d = 0; d < CFG.offDists.length; d++) {
+          try { var r = runOff(rec, CFG.offDists[d]); if (r) rows.push(r); }
+          catch (e) { out.errors.push("offgreen hole " + rec.num + " D" + CFG.offDists[d] + ": " + ((e && e.stack) || e)); }
+        }
+      } catch (e) { out.errors.push("offgreen hole " + rec.num + ": " + ((e && e.stack) || e)); }
+    }
+    return rows;
   }
 
   function matrix() {
@@ -136,6 +189,7 @@ var POSTLUDE = `
     delete course.aerial; delete course.surfaceMask;
     course._dem = undefined; course._greens = null; course._img = undefined; course._imgReady = false;
     if (CFG.timescale) { TUNE.timeScale = CFG.timescale; recalcPower(); }
+    if (CFG.offgreen) out.off = offMatrix();
     var m = matrix();
     out.rows = m.rows; out.census = m.census;
     out.timeScale = TUNE.timeScale;
@@ -234,6 +288,28 @@ function report(res, cfg) {
              "%  cap " + f2((res.census[0] && res.census[0].cap) != null ? res.census[0].cap * 100 : null) + "%");
   lines.push("       relief span ft p50 " + f2(pctl(spans, 0.5)) + "  p90 " + f2(pctl(spans, 0.9)) +
              "   contours p50 " + pctl(cont, 0.5) + " max " + (cont.length ? Math.max.apply(null, cont) : 0));
+  if (res.off) {
+    lines.push("");
+    lines.push("OFF-GREEN PUTTER (bump-and-run, dead pace, " + res.off.length + " strokes)");
+    lines.push("  D yd |  n  |  med rest |  med err% |  worst err% | mph p90");
+    var byY = {};
+    for (var o1 = 0; o1 < res.off.length; o1++) {
+      var ro = res.off[o1]; (byY[ro.D_yd] = byY[ro.D_yd] || []).push(ro);
+    }
+    for (var o2 = 0; o2 < cfg.offDists.length; o2++) {
+      var gy = byY[cfg.offDists[o2]] || [], rests = [], errs = [], mphs = [];
+      for (var o3 = 0; o3 < gy.length; o3++) {
+        if (gy[o3].holed) continue;
+        rests.push(gy[o3].rest_yd);
+        errs.push(Math.abs(gy[o3].rest_yd - gy[o3].D_yd) / gy[o3].D_yd * 100);
+        if (gy[o3].mph != null) mphs.push(gy[o3].mph);
+      }
+      lines.push("  " + String(cfg.offDists[o2]).padStart(5) + " | " + String(gy.length).padStart(3) +
+                 " |   " + f2(pctl(rests, 0.5)) + "   |   " + f2(pctl(errs, 0.5)) +
+                 "   |    " + f2(errs.length ? Math.max.apply(null, errs) : null) +
+                 "    | " + f2(pctl(mphs, 0.9)));
+    }
+  }
   if (res.dt) {
     // pair rows by (hole, D, aim) and compare
     var key2 = function (r) { return r.hole + "|" + r.D_ft + "|" + Math.round(r.aim * 1000); };
@@ -356,6 +432,29 @@ function gate(res, cfg) {
     if (med > 0.15) fails.push("pace error median " + f2(med) + " ft, want <= 0.15");
     if (mx > 0.60) fails.push("pace error max " + f2(mx) + " ft, want <= 0.60");
   }
+  // Off-green putter (bump-and-run). Gated LOOSER than the on-green pace check
+  // and on purpose: this roll crosses a surface seam, and which TICK the ball
+  // steps over the collar is discrete against turf that decelerates 18x faster
+  // than the green, so predicted and live displacement can differ by a tick's
+  // worth of rough. What is NOT allowed is the failure this gate was written for
+  // — the stroke saturating against a ceiling and ignoring the target entirely,
+  // which measured as a 20 yd bump-and-run stopping at 4.8 yd (-76%).
+  if (res.off && res.off.length) {
+    var offErr = [], sat = 0;
+    for (var f1 = 0; f1 < res.off.length; f1++) {
+      var ro2 = res.off[f1];
+      if (ro2.holed) continue;
+      var pe = (ro2.rest_yd - ro2.D_yd) / ro2.D_yd;
+      offErr.push(Math.abs(pe));
+      if (pe < -0.35) sat++;                    // finished a third short: a ceiling, not a miss
+    }
+    if (offErr.length) {
+      var omed = pctl(offErr, 0.5), omax = Math.max.apply(null, offErr);
+      if (omed > 0.10) fails.push("off-green putter pace error median " + f2(omed * 100) + "%, want <= 10%");
+      if (omax > 0.30) fails.push("off-green putter pace error max " + f2(omax * 100) + "%, want <= 30%");
+    }
+    if (sat) fails.push(sat + " off-green putter stroke(s) finished >35% short — the pace is being clamped, not solved");
+  }
   if (stuck) fails.push(stuck + " putt(s) never came to rest (>=1200 ticks)");
   if (rows.length && offGreen / rows.length > 0.05)
     warns.push(Math.round(offGreen / rows.length * 100) + "% of putts rest off the green");
@@ -414,13 +513,16 @@ function gate(res, cfg) {
 
 function run(argv) {
   var cfg = { id: argv[0], base: argv[1], holes: null, dists: [3, 5, 6, 10, 20, 30, 45],
-              json: false, gate: false, timescale: null, stimp: null, dtcheck: false };
-  if (!cfg.id || !cfg.base) throw new Error("usage: putt_matrix.js <courseId> <repoRoot> [--json|--gate|--holes 1,4|--dists 6,20|--timescale N|--stimp N|--dtcheck]");
+              json: false, gate: false, timescale: null, stimp: null, dtcheck: false,
+              offgreen: false, offDists: [5, 8, 12, 20, 30] };
+  if (!cfg.id || !cfg.base) throw new Error("usage: putt_matrix.js <courseId> <repoRoot> [--json|--gate|--holes 1,4|--dists 6,20|--offgreen|--offdists 8,20|--timescale N|--stimp N|--dtcheck]");
   for (var i = 2; i < argv.length; i++) {
     var a = argv[i];
     if (a === "--json") cfg.json = true;
     else if (a === "--gate") cfg.gate = true;
     else if (a === "--dtcheck") cfg.dtcheck = true;
+    else if (a === "--offgreen") cfg.offgreen = true;
+    else if (a === "--offdists") { cfg.offgreen = true; cfg.offDists = argv[++i].split(",").map(Number); }
     else if (a === "--holes") cfg.holes = argv[++i].split(",").map(Number);
     else if (a === "--dists") cfg.dists = argv[++i].split(",").map(Number);
     else if (a === "--timescale") cfg.timescale = Number(argv[++i]);

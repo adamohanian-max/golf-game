@@ -138,7 +138,14 @@ const TUNE = {
   // Pace forgiveness at the cup: a grounded putt that crosses near-dead-center at a good
   // (not rammed) pace is grabbed by the lip and drops, like real life. Off-center / faster
   // passes keep the normal lip-out. Only rewards already-good pace + line.
-  captureAssist: 0.08,     // max speed for the edge-catch drop (≈1.6× captureSpeed)
+  // 0.08 was 3.51 m/s — 2.15x the speed at which a real ball can physically be
+  // captured dead centre. A ball must fall about its own radius while crossing
+  // the cup, so the ceiling is v < d*sqrt(g/2r) = 1.64 m/s for a 4.25" hole;
+  // anything above that skips the far lip no matter how pure the line. 0.062 is
+  // 2.72 m/s (1.66x) — still generous, because the cup here is 2.33x real and a
+  // wider cup genuinely does take more speed, but no longer the single most
+  // unphysical number on the putting path.
+  captureAssist: 0.062,    // max speed for the edge-catch drop (≈1.24× captureSpeed)
 
   // --- Ball flight ---
   // REAL AERODYNAMICS (ballistics.js): drag + Magnus lift against the relative
@@ -177,6 +184,20 @@ const TUNE = {
   // so the touchdown speeds up by the same factor and stays half the speed of
   // the flight around it.
   chipTimeScale: 2.0,
+  // Wall-clock pace for a stroke played FROM the green. Same argument as
+  // chipTimeScale, and the same value: a 20 ft putt at stimp 11 rolls 4.94 s in
+  // reality (v0 = sqrt(2*a*D) = 2.47 m/s, a = 0.4994, t = v0/a) and at a flat
+  // 3.75 it was over in 1.32 s — the one shot in golf that is watched in real
+  // time, played as a flick. At 2.0 it takes 2.5 s, still 1.9x quicker than
+  // life. Free in accuracy for the same reason chips are: the pace is set in
+  // launchShot BEFORE buildTrialShot, so invertPuttPaceCurved solves at the
+  // very dt the live steps then integrate at. Halving dt to 1/30 s also halves
+  // the first-order Euler distance bias the dt-invariance check measures.
+  // NOT a flat ramp like the chip's: a putt has no equivalent of chipRangeYds
+  // to taper back to, and there is no pace step to hide — the shot on the other
+  // side of the boundary is an off-green putter stroke, which deliberately
+  // keeps timeScale (see swingTimeScale).
+  puttTimeScale: 2.0,
   // ...and the touchdown itself gets a further slow-motion window on top (see
   // updatePace). Armed while the ball is descending below chipLandSlowZ and held
   // chipLandSlowMs past that, so the bounce and the release are both inside it.
@@ -231,7 +252,15 @@ const TUNE = {
   // every green's character, so squash instead: s' = C·tanh(s/C). Identity at
   // small s (a 1.0% green stays 1.0%), asymptote C, order-preserving.
   gMacroCap:   0.028,    // dimensionless asymptote of the DEM macro tilt
-  gMicroGrade: 0.009,    // target RMS grade of the synthetic undulation lobes
+  // 0.009 left the field with a realistic MEDIAN and no tail: measured across
+  // pinehurst / harbour town / blackwater the p50 sat at 2.2-2.7% (right) but the
+  // steepest point on any green in the game was 3.8-4.4%, against caps of
+  // 5.3-6.6% that were never approached. Real courses have 4-5% shelves, false
+  // fronts and run-offs, so there was no genuinely severe putt anywhere. 0.013
+  // lifts the tail while leaving the median alone; the macro term is deliberately
+  // NOT the lever here, since the DEM's magnitude above ~3% is noise (see
+  // gMacroCap). greenGradCap() still guarantees a ball can always come to rest.
+  gMicroGrade: 0.013,    // target RMS grade of the synthetic undulation lobes
   gSynthTilt:  0.020,    // mean macro tilt where there is NO dem (blackwater, hogwarts)
   // Damping exponent on course greenTopo tiltMul/undAmp. Measured on blackwater
   // (1.35/1.7 AND stimp 13.5, which alone buys 1.27x more break than 11): at 0.6
@@ -274,9 +303,10 @@ const TUNE = {
   arcLowSuppress: 1.0,   // how much the Low/knockdown button ignores the apex boost + float (1 = fully flat & penetrating)
   arcLowRoll: 1.6,       // Low/knockdown rollout multiplier (1 = normal; >1 = runs out more after landing)
   arcDescentPow: 2.3,    // 2 = old parabola; 2.3 drops a touch more steeply (carry-neutral)
-  ballTrailMax: 90,      // trail points. Sized in RENDER frames, so its world
-                         // length scales with ball speed — at real flight speeds
-                         // 18 frames covered ~1/6 of the old streak.
+  ballTrailMax: 90,      // trail points. Sized in PHYSICS TICKS now (the sampler moved
+                         // out of draw() so the tail no longer thins when the frame rate
+                         // drops); at 60 Hz that is the same length it always was, and
+                         // its world extent still scales with ball speed.
   ballShadowAlpha: 0.28, // ground-shadow opacity at deck level
   ballShadowFade: 0.012, // shadow alpha falloff per world-unit of height (fade only, no grow)
   spinFactor: 0.0085,   // how hard a curved swipe bends flight (draw/fade) — rescaled ÷1.175
@@ -535,6 +565,21 @@ const TUNE = {
   reachPinMarginYds: 12, // forward context kept beyond the pin when the reach span is clamped to it
   reachMinYds: 20,       // reach-span floor — never over-zoom a tiny chip (the D floor usually bites first)
   puttFrameMarginYds: 4, // on-green frame = ball→cup + this (tight putt camera, cup always in view)
+  frameApexFrac: 0.55,   // where the apex sits along the reach line, as a fraction. The THIRD
+                         // framing anchor (frameAnchors az): the reach point is where the ball
+                         // lands, not the top of the shot on screen, and a camera framed only
+                         // for the ground span has to widen mid-flight to keep the ball — which
+                         // on the photoreal ground coarsened tile LOD and moved the mesh the
+                         // ball's drawn height is measured from. Framing the apex at address is
+                         // what lets that camera hold perfectly still through a shot.
+  frameApexK: 1.10,      // margin on the club's rated maxH, for FRAMING ONLY. maxH is a physics
+                         // reference (ball_calibrate measures the model against it) and the model
+                         // does not match it club for club: shot_matrix flies a driver to 38.1 yd
+                         // against a rated 35 (+9%) and a PW to 35.2 against 32 (+10%), while a
+                         // LW only reaches 23 against 30. 1.10 covers the worst UNDER-rating, and
+                         // over-rated clubs just get a slightly wide frame — the safe direction,
+                         // since with the camera frozen for the shot nothing can widen later.
+                         // Buys camera altitude only; the flight is untouched.
   flatMinDistM: 90,      // close-shot camera-distance floor on non-Apple courses (Apple keeps APPLE_MIN_DIST_M)
   rolloutK: 7.0,    // CHIP release distance scale (× landing speed) — low skidding balls release more
   rolloutKFull: 4.0,// FULL-shot release scale: calibrated so totals match tour (driver ~305,
@@ -646,8 +691,18 @@ function setSimScale(next) {
 }
 // Cup capture radius (world units) and default green speed — OSM carries no
 // stimp rating, so we default it; per-course green speeds come later.
-// Hole: real is 4.25" (~0.02 units) but that's brutal for feel-based putting, so
-// the cup plays a bit larger / more forgiving on the green.
+// Hole: real is 4.25" (0.0197 units) but that's brutal for feel-based putting —
+// there is no read or aim aid here, and swipe aim resolves to about +/-1 deg,
+// which at 5 ft is +/-1.05" against only 1.28" of real margin. So the cup plays
+// larger.
+// 0.055 (11.9", 2.80x real) was too large, and putt_matrix says exactly WHERE:
+// with no read the measured make rates already bracketed tour at short range
+// (3 ft 94%/83% vs 99%, 5 ft 75%/58% vs 77% on pinehurst/blackwater) while the
+// oversize leaked almost entirely into LAG putts, where a slow near-centre
+// arrival gets caught by a cup nearly three times too wide — 20 ft 24% vs a
+// tour 15%, 30 ft 15% vs 7%, 45 ft 12% vs ~4%. Hence a modest cut aimed at the
+// long end (9.9", 2.33x real) rather than the halving that would also gut the
+// 3- and 5-footers that are already honest.
 const HOLE_RADIUS_UNITS = 0.055;
 // Real golf ball: 1.68" diameter -> ~0.023 yd radius -> ~0.008 units.
 const BALL_RADIUS_UNITS = 0.008;
@@ -711,12 +766,13 @@ function greenBaseSpeed(D) {
 function invertPuttPaceCurved(x, y, ang, D) {
   const dirx = Math.cos(ang), diry = Math.sin(ang);
   const base = greenBaseSpeed(D);
-  // On a green? (one scan). If not, no break — flat closed-form, skip the sim.
-  let onGreen = false;
-  for (const g of HOLE._greens || []) {
-    if (g.grad && pointInPoly(x, y, g.poly)) { onGreen = true; break; }
-  }
-  if (!onGreen) return base;
+  // Legacy (non-aero) has no per-surface stepper worth simulating — flat
+  // closed-form, skip the sim. Under aeroPhysics the roll below dispatches on
+  // surfaceAt, so it is meaningful from ANY lie, and the off-green putter
+  // (bump-and-run) solves through the same inversion the green does. This used
+  // to bail whenever the ball was not inside a green polygon, which is what made
+  // the two sides of the collar behave like different games.
+  if (!TUNE.aeroPhysics || !window.Ballistics) return base;
   // The target is the ball's straight-line DISPLACEMENT, not the arc length it
   // travels. Arc length is not what the player asked for: on a 3% cross slope a
   // putt covers 20 ft of arc but finishes only 19.5 ft from where it started —
@@ -725,14 +781,47 @@ function invertPuttPaceCurved(x, y, ang, D) {
   // what makes buildTrialShot's 20%-short..20%-long band mean what it says.
   // Measured monotone in v0 at every grade the field can produce, so the
   // bisection below stays well posed.
+  // Which surface is the predicted ball on? Green membership is the same cheap
+  // polygon scan stepGreenRoll already does every step, and OSM greens outrank
+  // the mask in surfaceAt, so an in-poly hit IS "green".
+  // The expensive call is surfaceAt (mask sample, else a sweep over every surface
+  // polygon), so it is reached only once the green scan misses. Do NOT try to
+  // cache it across steps: sampling the surround once on green-exit and reusing
+  // it was tried, and on a course with sand around the greens (harbour town) the
+  // rough->bunker transition went unseen and left a 1.55 ft worst-case pace
+  // error. The live rollStep re-reads the surface every step; this has to as
+  // well, or the two disagree exactly where the ball is leaving the green — the
+  // failure this whole dispatch exists to fix. Off-green rolls are short anyway
+  // (rough decelerates ~18x faster than green), so the extra calls are few.
+  const onGreenAt = (b) => {
+    for (const g of HOLE._greens || []) {
+      if (g.grad && pointInPoly(b.x, b.y, g.poly)) return true;
+    }
+    return false;
+  };
+  // Every probe is remembered and the BEST one is returned — see solveChipEf,
+  // which does the same for the same reason. Displacement is not a smooth
+  // function of v0 once the roll crosses a surface seam: which TICK the ball
+  // steps over the collar is discrete, and rough decelerates 18x faster than a
+  // stimp-11 green, so a hair more pace can carry the ball a whole tick further
+  // into the green and add yards. Bisection converges onto that jump and the
+  // interval midpoint then sits on an arbitrary side of it — measured, that was
+  // +/-15% on bump-and-runs that started in rough and finished on the green,
+  // while putts that never left the green solved exactly. Keeping the best
+  // measured root costs nothing: the rolls have already been paid for.
+  let best = null;
   const rollDisp = (v0) => {
     const b = startRollingSpin({ x, y, vx: dirx * v0, vy: diry * v0 });
     for (let i = 0; i < 9000; i++) {
       b.x += b.vx; b.y += b.vy;                   // position first (matches rollStep order)
-      stepGreenRoll(b);                            // per-step break scan — matches live rollStep
+      clampToWorld(b);                             // ...and the edge bounce, same as rollStep
+      stepGroundRoll(b, onGreenAt(b) ? "green" : surfaceAt(b.x, b.y));
       if (Math.hypot(b.vx, b.vy) < restSpeedThreshold()) break;
     }
-    return Math.hypot(b.x - x, b.y - y);
+    const disp = Math.hypot(b.x - x, b.y - y);
+    const err = Math.abs(disp - D);
+    if (!best || err < best.err) best = { v0, err };
+    return disp;
   };
   // Bracket around the flat-green pace; widen only if slope pushes the root out
   // (uphill needs more pace, downhill less). Bounded guard loops keep it O(1).
@@ -740,14 +829,31 @@ function invertPuttPaceCurved(x, y, ang, D) {
   while (rollDisp(hi) < D && guard++ < 10) hi *= 1.5;
   while (rollDisp(lo) > D && guard++ < 20) lo *= 0.5;
   for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; if (rollDisp(mid) < D) lo = mid; else hi = mid; }
-  return (lo + hi) / 2;
+  return best ? best.v0 : (lo + hi) / 2;
 }
 function recalcPower() {
   // Full shots follow a per-club arc (see setupFlight); only the putt caps are
   // derived here.
+  // puttMaxPower is frame-dimensioned (units per TICK) and greenBaseSpeed divides
+  // by msPerUF(), which reads the LIVE simScale — so this has to be derived at
+  // the default pace, not at whatever pace the last stroke left behind. Holing
+  // out with a putt now leaves simScale at puttTimeScale, and setHole calls this
+  // straight after; without the reset the off-green putter would inherit a cap
+  // sized for the wrong dt. Assigned directly rather than through setSimScale:
+  // that rescales the ball's stored velocity, which is not wanted here.
+  const _scale = simScale;
+  simScale = null;                     // null -> simDt() falls back to TUNE.timeScale
   TUNE.puttMaxPower = greenBaseSpeed(YARDS.maxPutt / YARDS_PER_UNIT);
-  // Off-green putter (bump-and-run): fairway friction=0.97 → roll dist ≈ v/(1-friction).
-  // Calibrate so a max swing rolls ~30 yards on fairway.
+  simScale = _scale;
+  // DRIVING RANGE ONLY. This is the closed form of the LEGACY per-frame
+  // exponential roll (fairway friction 0.97 -> dist ~ v/(1-friction)), calibrated
+  // back when a max swing rolled ~30 yards under that model. It has had no
+  // physical meaning since rolling became constant deceleration in rollStepSI:
+  // 0.195 u/frame is 8.56 m/s, which is 7.2 yd of fairway, 4.4 of rough and 80 yd
+  // of stimp-11 green. The course path used to launch off it (blew every fringe
+  // putt 40 yd past) and then to CLAMP with it (saturated every 20 yd bump at
+  // 4.8 yd); it now solves through invertPuttPaceCurved instead and reads this
+  // nowhere. The range keeps it because there is no pin there to solve to.
   TUNE.puttOffGreenPower = (30 / YARDS_PER_UNIT) * (1 - TUNE.friction.fairway);
   // Normalize each club's spin (rpm) to 0..1 for the landing check/backspin.
   for (const c in TUNE.clubs) {
@@ -1977,6 +2083,7 @@ function update() {
   updatePace();
   if (state.airborne) flightStep(state.ball);
   else rollStep(state.ball);
+  sampleBallTrail(state.ball);   // world-space motion trail (see ballTrail)
 }
 
 // Keep the ball inside the play area (gentle bounce off the boundary walls).
@@ -2065,8 +2172,16 @@ function aeroSpeedForCarry(C, launchDeg, spinRpm) {
   const targetM = C * M_PER_UNIT;
   const carryAt = (mph) => Bal.flyToLanding(
     Bal.launchState(mph, launchDeg, spinRpm, { x: 1, y: 0 }, 0), {}, { dt: 1 / 120 }).carry;
-  let lo = 20, hi = 240;
+  // The LOW end of the bracket is load-bearing for chipping. At 20 mph — the old
+  // floor — this model carries 8.1 yd at 35 deg and 8.4 yd at 45, which is longer
+  // than an entire greenside chip. Any request under that returned ~20 mph, so
+  // every chip below ~8.4 yd of carry flew the SAME shot and then released:
+  // measured, an 8 yd chip finished 17-19 yd from the ball (+115%/+133%). The
+  // floor had quietly become the answer. 4 mph carries 0.35 yd, under anything
+  // the game can ask for, and the flight model is monotone and stable down there.
+  let lo = 4, hi = 240;
   if (carryAt(hi) < targetM) return hi;
+  if (carryAt(lo) > targetM) return lo;   // symmetric with the high end — never silently floor
   for (let k = 0; k < 26; k++) {
     const mid = (lo + hi) / 2;
     if (carryAt(mid) < targetM) lo = mid; else hi = mid;
@@ -2598,6 +2713,54 @@ function stepGreenRoll(b) {
   }
 }
 
+// Velocity step for a grounded ball at its CURRENT position, dispatched by
+// surface. Split out of rollStep so invertPuttPaceCurved's forward roll can
+// decelerate a PREDICTED path exactly the way the live one will: it used to call
+// stepGreenRoll unconditionally, so any predicted path that ran off the green
+// kept rolling at green stimp. That mis-paced every putt near a green edge —
+// pinehurst measured a 5.79 ft worst-case pace error against a 0.00 ft median,
+// entirely on the 6 putts that finished off the green. Callers own position,
+// clamping and the cup; this owns velocity only.
+function stepGroundRoll(b, surf) {
+  if (surf === "green") {
+    // Two-phase green roll + capped, gated slope break — shared helper (see
+    // stepGreenRoll). Fast off the putter face (coast), crisp constant-decel
+    // finish (tail), downhill break along the same field that draws the contours.
+    stepGreenRoll(b);
+    return;
+  }
+  if (TUNE.aeroPhysics && window.Ballistics) {
+    // Real turf rolling: constant deceleration per surface + the true rolling
+    // slope term. Replaces the per-frame decay multipliers, which were tuned
+    // on the old compressed clock.
+    rollStepSI(b, surf, slopeGradAt(b.x, b.y, surf));
+    return;
+  }
+  const sp = Math.hypot(b.vx, b.vy);
+  const f = TUNE.friction[surf];
+  // Same two-phase finish as the green, for every non-chip shot (full swings,
+  // putts): fast exponential coast while moving, then a crisp constant-decel
+  // tail below rollCoastSpeed instead of the exponential's endless asymptotic
+  // creep. Chips (state.flight.noLandCheck) keep the old pure-coast rollout —
+  // their skid/release feel is tuned by the spin slider alone.
+  const isChip = !!(state.flight && state.flight.noLandCheck);
+  if (!isChip && sp <= TUNE.rollCoastSpeed && sp > 0) {
+    const tailDecel = TUNE.rollCoastSpeed * (1 - f); // matches coast's instantaneous decel at the handoff — no speed jump
+    const k = Math.max(0, sp - tailDecel) / sp;
+    b.vx *= k;
+    b.vy *= k;
+  } else {
+    b.vx *= f;
+    b.vy *= f;
+  }
+  // Terrain slope on fairway/rough: roll downhill when DEM is available
+  if (HOLE._dem && sp > TUNE.slopeStopSpeed) {
+    const gv = HOLE._dem.gradAt(b.x, b.y);
+    b.vx -= TUNE.fairwaySlopeAccel * gv.x;
+    b.vy -= TUNE.fairwaySlopeAccel * gv.y;
+  }
+}
+
 // --- Grounded: roll with per-surface friction, hole capture, water penalty ---
 function rollStep(b) {
   b.x += b.vx;
@@ -2615,41 +2778,7 @@ function rollStep(b) {
     if (showSlope && earnMilestone("hint-green"))
       showToast("Contours show the break · arrows point downhill", 2400, "gold");
   }
-  if (surf === "green") {
-    // Two-phase green roll + capped, gated slope break — shared helper (see
-    // stepGreenRoll). Fast off the putter face (coast), crisp constant-decel
-    // finish (tail), downhill break along the same field that draws the contours.
-    stepGreenRoll(b);
-  } else if (TUNE.aeroPhysics && window.Ballistics) {
-    // Real turf rolling: constant deceleration per surface + the true rolling
-    // slope term. Replaces the per-frame decay multipliers, which were tuned
-    // on the old compressed clock.
-    rollStepSI(b, surf, slopeGradAt(b.x, b.y, surf));
-  } else {
-    const sp = Math.hypot(b.vx, b.vy);
-    const f = TUNE.friction[surf];
-    // Same two-phase finish as the green, for every non-chip shot (full swings,
-    // putts): fast exponential coast while moving, then a crisp constant-decel
-    // tail below rollCoastSpeed instead of the exponential's endless asymptotic
-    // creep. Chips (state.flight.noLandCheck) keep the old pure-coast rollout —
-    // their skid/release feel is tuned by the spin slider alone.
-    const isChip = !!(state.flight && state.flight.noLandCheck);
-    if (!isChip && sp <= TUNE.rollCoastSpeed && sp > 0) {
-      const tailDecel = TUNE.rollCoastSpeed * (1 - f); // matches coast's instantaneous decel at the handoff — no speed jump
-      const k = Math.max(0, sp - tailDecel) / sp;
-      b.vx *= k;
-      b.vy *= k;
-    } else {
-      b.vx *= f;
-      b.vy *= f;
-    }
-    // Terrain slope on fairway/rough: roll downhill when DEM is available
-    if (HOLE._dem && sp > TUNE.slopeStopSpeed) {
-      const gv = HOLE._dem.gradAt(b.x, b.y);
-      b.vx -= TUNE.fairwaySlopeAccel * gv.x;
-      b.vy -= TUNE.fairwaySlopeAccel * gv.y;
-    }
-  }
+  stepGroundRoll(b, surf);
 
 
   const speed = Math.hypot(b.vx, b.vy);
@@ -2930,28 +3059,7 @@ function simShotRest(ball0, flight0) {
       // --- roll phase (mirrors rollStep) ---
       b.x += b.vx; b.y += b.vy;
       clampToWorld(b);
-      const surf = surfaceAt(b.x, b.y);
-      if (surf === "green") {
-        stepGreenRoll(b);                          // shared with live rollStep
-      } else if (TUNE.aeroPhysics && window.Ballistics) {
-        rollStepSI(b, surf, slopeGradAt(b.x, b.y, surf));
-      } else {
-        const sp = Math.hypot(b.vx, b.vy);
-        const f = TUNE.friction[surf];
-        const isChip = !!(state.flight && state.flight.noLandCheck);
-        if (!isChip && sp <= TUNE.rollCoastSpeed && sp > 0) {
-          const tailDecel = TUNE.rollCoastSpeed * (1 - f);
-          const k = Math.max(0, sp - tailDecel) / sp;
-          b.vx *= k; b.vy *= k;
-        } else {
-          b.vx *= f; b.vy *= f;
-        }
-        if (HOLE._dem && sp > TUNE.slopeStopSpeed) {
-          const gv = HOLE._dem.gradAt(b.x, b.y);
-          b.vx -= TUNE.fairwaySlopeAccel * gv.x;
-          b.vy -= TUNE.fairwaySlopeAccel * gv.y;
-        }
-      }
+      stepGroundRoll(b, surfaceAt(b.x, b.y));      // shared with live rollStep
       const speed = Math.hypot(b.vx, b.vy);
       // Mirror rollStep's gate: allow a re-drop when a lipped ball is grounded and
       // slow (roll phase is always grounded here) so a slope-return still holes.
@@ -3327,21 +3435,39 @@ function swipeToShot(dxs, dys, dt, powerScale) {
     const p1 = appleUnproject(view.appleProj, s0.x + dxs, s0.y + dys);
     ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
   } else if (view.gtilesProj) {
-    // Google photoreal 3D: same problem, same fix as the Apple ground — the flat
-    // affine inverse is wrong under the pitched tiles camera (screen-vertical is
+    // Google photoreal 3D: same problem as the Apple ground — the flat affine
+    // inverse is wrong under the pitched tiles camera (screen-vertical is
     // foreshortened), so the shot wouldn't follow the line the finger traced.
-    // Unproject a SHORT segment through the ball's screen position: the sample
-    // stays near the ball, where the mesh is loaded, and direction is all we
-    // need. GTiles3D.unproject raycasts the real mesh and can miss (tiles not
-    // streamed yet) — fall back to the flat formula rather than firing blind.
-    const b = state.ball;
-    const s0 = window.GTiles3D.project(b.x, b.y, terrainZRender(b.x, b.y));
-    const L = Math.hypot(dxs, dys) || 1, k = 60 / L;   // ~60px probe, same heading
-    const p0 = window.GTiles3D.unproject(s0.x, s0.y);
-    const p1 = window.GTiles3D.unproject(s0.x + dxs * k, s0.y + dys * k);
-    ang = (p0 && p1)
-      ? Math.atan2(p1.y - p0.y, p1.x - p0.x)
-      : Math.atan2(dys / view.tilt, dxs) - view.angle;
+    //
+    // Solved by FORWARD projection, never a raycast. This used to unproject two
+    // screen points against the tile mesh, which made the shot's HEADING — a
+    // physics input — depend on which tiles happened to be streamed, and silently
+    // fell through to the flat formula (a different answer) when a ray missed.
+    // Project instead: two unit steps either side of the ball give the local
+    // screen<-world Jacobian, and inverting a 2x2 turns the swipe into a world
+    // direction. Deterministic, mesh-independent, and offsetAt cancels because
+    // both probes sit within a unit of the ball at the same ground reference.
+    // Same technique applyView already uses to derive view.gtilesScale.
+    const b = state.ball, tz = terrainZRender(b.x, b.y);
+    const av = view.angle, ux = -Math.sin(av), uy = -Math.cos(av); // screen-up in world
+    const s0 = window.GTiles3D.project(b.x, b.y, tz);
+    const sU = window.GTiles3D.project(b.x + ux, b.y + uy, tz);         // +1u up-screen
+    const sR = window.GTiles3D.project(b.x - uy, b.y + ux, tz);         // +1u screen-right
+    // Columns are the screen displacement of one world unit along (right, up).
+    const j00 = sR.x - s0.x, j01 = sU.x - s0.x;
+    const j10 = sR.y - s0.y, j11 = sU.y - s0.y;
+    const det = j00 * j11 - j01 * j10;
+    // The chosen (right, up) pair only names the basis the Jacobian is measured
+    // in and is then rotated back out of, so the result does not depend on it
+    // being the tiles camera's exact bearing.
+    if (s0.inFront && sU.inFront && sR.inFront && Math.abs(det) > 1e-9) {
+      const wr = (j11 * dxs - j01 * dys) / det;   // world units along screen-right
+      const wu = (-j10 * dxs + j00 * dys) / det;  // world units along screen-up
+      const wxw = -uy * wr + ux * wu, wyw = ux * wr + uy * wu;
+      ang = Math.atan2(wyw, wxw);
+    } else {
+      ang = Math.atan2(dys / view.tilt, dxs) - view.angle;  // degenerate camera only (never in normal play)
+    }
   } else {
     ang = Math.atan2(dys / view.tilt, dxs) - view.angle; // undo tilt squash, then rotation
   }
@@ -3554,12 +3680,20 @@ function chipActiveNow() {
   return dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT < TUNE.chipRangeYds;
 }
 // Wall-clock pace for one swing. Short chips play slower so the launch and the
-// landing are legible, ramping back to the full TUNE.timeScale by chipRangeYds.
-// The putter is excluded on purpose: puttMaxPower / puttOffGreenPower are
-// frame-dimensioned and derived once in recalcPower() at TUNE.timeScale, so a
-// stroke struck at any other pace would carry the wrong power.
+// landing are legible, ramping back to the full TUNE.timeScale by chipRangeYds;
+// a stroke from the green takes puttTimeScale so the roll reads at walking pace.
+// The gate is ON GREEN, not "putter selected". That used to be load-bearing —
+// the off-green stroke was powered by puttOffGreenPower, frame-dimensioned and
+// derived once in recalcPower() at TUNE.timeScale, so striking it at any other
+// pace carried the wrong power. It no longer is: both putter branches now go
+// through invertPuttPaceCurved, which re-solves at whatever dt is live, and the
+// only remaining reader of those constants is the driving range (which is pinned
+// to TUNE.timeScale anyway). So the off-green putter COULD take puttTimeScale
+// too; it is left at TUNE.timeScale deliberately, as a pace/feel choice rather
+// than a correctness constraint.
 function swingTimeScale(onGreen) {
-  if (onGreen || selectedClub === "putter" || !chipActiveNow()) return TUNE.timeScale;
+  if (onGreen) return TUNE.puttTimeScale;
+  if (selectedClub === "putter" || !chipActiveNow()) return TUNE.timeScale;
   const b = state.ball;
   const yds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
   const t = Math.max(0, Math.min(1, yds / TUNE.chipRangeYds));
@@ -3603,26 +3737,50 @@ function solveChipEf(ang, frac, spin, onGreen, targetYds, club) {
   const b = state.ball;
   const carryEf = Math.min(1, (targetYds * chipSpinParams().landFrac) / club.carry);
   if (!TUNE.aeroPhysics || !window.Ballistics) return carryEf;   // legacy arc
+  // Every probe is REMEMBERED, and the best one is what gets returned. The
+  // objective is a staircase, not a smooth curve: buildFlight quantizes the carry
+  // target to whole frames (landD = ceil(C/vh0)*vh0), which is ~7% of the shot at
+  // chip `ef`s, so bisection converges onto a step EDGE and the midpoint of the
+  // final interval can sit on either side of a 7% jump. Returning the measured
+  // best instead of the interval midpoint costs nothing (the sims already ran)
+  // and cannot be worse than the midpoint.
+  let best = null;
   const restYds = (ef) => {
     const t = buildTrialShot(ang, frac, spin, onGreen, ef);
     if (!t || !t.flight) return null;
     const r = simShotRest({ x: b.x, y: b.y, vx: t.vx, vy: t.vy, z: t.z, vz: t.vz, spin: t.spin },
                           t.flight);
     if (!r) return null;                       // water / OB / never settled
-    if (r.holed) return targetYds;             // in the cup — perfect by definition
-    return dist(b.x, b.y, r.x, r.y) * YARDS_PER_UNIT;
+    const d = r.holed ? targetYds              // in the cup — perfect by definition
+                      : dist(b.x, b.y, r.x, r.y) * YARDS_PER_UNIT;
+    const err = Math.abs(d - targetYds);
+    if (!best || err < best.err) best = { ef, err };
+    return d;
   };
-  let lo = 0.02, hi = Math.min(1, Math.max(carryEf * 2.2, 0.25));
+  // BOTH ends are bracket-checked. Only the high end used to be, and the low end
+  // is the one that bit: a flat 0.02 floor is 1.8 yd of carry for a lob wedge but
+  // 3.4 for a 7 iron, and when even that overshoots, every iteration below takes
+  // hi = mid, the interval collapses onto `lo`, and this returns ~0.02 exactly as
+  // if it had converged. That is how an 8 yd chip finished 17 yd away and nothing
+  // reported a failure. Scale the floor with the ask so a big club can still be
+  // asked for a small shot.
+  let lo = Math.min(0.02, carryEf * 0.25), hi = Math.min(1, Math.max(carryEf * 2.2, 0.25));
   const dHi = restYds(hi);
   if (dHi == null) return carryEf;             // unusable prediction — keep the old estimate
   if (dHi < targetYds) return hi;              // can't reach even at the top of the band
+  const dLo = restYds(lo);
+  if (dLo != null && dLo > targetYds) return lo; // softest strike this club has is still too long
   for (let k = 0; k < 14; k++) {
     const mid = (lo + hi) / 2;
     const d = restYds(mid);
-    if (d == null) return carryEf;
-    if (d < targetYds) lo = mid; else hi = mid;
+    // A null probe means the ball died in water/OB/woods, which can only happen
+    // because it went TOO FAR — so it is an upper bound, not a reason to abandon
+    // the solve. Bailing to carryEf here (a pure CARRY estimate that ignores the
+    // release the chip is built around) is what made a chip over a hazard-backed
+    // green blow the pin by 30-50%, intermittently, depending on what was behind it.
+    if (d == null || d >= targetYds) hi = mid; else lo = mid;
   }
-  return (lo + hi) / 2;
+  return best ? best.ef : (lo + hi) / 2;
 }
 function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   if (frac <= 0.05) return null;
@@ -3660,9 +3818,36 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
           : Math.sqrt(2 * TUNE.greenDecel * flatU);
         power = Math.max(power, dead);
       }
+    } else if (!HOLE.isRange && TUNE.aeroPhysics && window.Ballistics) {
+      // Off-green bump-and-run: the SAME numeric inversion the green uses, so a
+      // given swipe means the same thing either side of the collar. It used to be
+      // puttOffGreenPower * puttSensitivity * sqrt(f) — an uninverted power ramp —
+      // so stepping one inch off the fringe silently changed the stroke's whole
+      // character. Now meaningful from any lie because the predicted roll
+      // decelerates by surfaceAt (see stepGroundRoll).
+      const flatU = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y);
+      const band = TUNE.puttBandLo + (TUNE.puttBandHi - TUNE.puttBandLo) * f;
+      const targetU = Math.min(flatU * band, YARDS.maxPutt / YARDS_PER_UNIT);
+      // No separate lie multiplier here. The lie's cost is already PHYSICAL in
+      // the solved pace — rough decelerates several times faster than green, so
+      // the inversion asks for more speed by itself. Re-applying TUNE.lie on top
+      // would charge for the same rough twice and leave every fringe putt short.
+      //
+      // And no separate POWER ceiling either. The line above already caps how far
+      // a putter stroke may be asked to send the ball (YARDS.maxPutt, exactly as
+      // the on-green branch caps it); a second clamp on the solved speed was
+      // TUNE.puttOffGreenPower * puttSensitivity = 0.195 u/frame = 8.56 m/s, and
+      // that constant is the closed form of the RETIRED per-frame exponential
+      // decay (dist ~ v/(1-friction)), never re-derived when rolling became
+      // constant deceleration. Its real meaning under rollStepSI is 7.2 yd of
+      // fairway, 4.4 of rough — and 80 yd of stimp-11 green. So it saturated:
+      // measured, a 20 yd bump-and-run stopped at 4.8 yd and every swipe strength
+      // produced the identical stroke. The trade is deliberate — a long bump
+      // through rough now asks for a launch speed a real putter could not make,
+      // which is the price of the swipe meaning the same thing everywhere.
+      power = invertPuttPaceCurved(b.x, b.y, ang, targetU);
     } else {
-      // off-green bump-and-run (or range): calibrated to fairway friction (~30 yards max);
-      // simple sqrt ramp (its max is already tiny). Range putts keep the on-green ramp.
+      // Driving range: no pin to solve to, so keep the calibrated power ramp.
       const maxPow = onGreen ? TUNE.puttMaxPower : TUNE.puttOffGreenPower;
       const ramp = onGreen ? puttPowerFrac(f) : Math.sqrt(f);
       const lieMul = (onGreen || !lieEffectEnabled) ? 1 : (TUNE.lie[surfaceAt(b.x, b.y)] ?? 1);  // bump from rough/sand loses pace
@@ -3841,7 +4026,9 @@ function launchShot(ang, frac, spin, onGreen) {
   previewFracTouched = false; // fresh shot next time — let the chip-assist auto-default re-engage
   // Pace for THIS swing, chosen before anything is solved or predicted below.
   simScale = shotBaseScale = swingTimeScale(onGreen);
-  shotIsChip = simScale !== TUNE.timeScale;   // only a chip gets the reduced pace
+  // A putt is off the default pace too now, so this can't be inferred from the
+  // scale alone — it gates the landing slo-mo, and a putt never lands.
+  shotIsChip = !onGreen && simScale !== TUNE.timeScale;
   landSlowUntil = 0;
   const trial = buildTrialShot(ang, frac, spin, onGreen);
   if (!trial) return;
@@ -7159,7 +7346,38 @@ function drawPhotoSurfaces() {
   drawCanopy();      // tilted only: the photo's own woods pixels, extruded
 }
 
-let ballTrail = [];   // recent airborne ball positions (screen px) for motion trail
+// Motion trail: WORLD positions of the airborne ball, projected at draw time.
+// It used to store baked screen px, which meant any camera motion between two
+// samples left the retained points at stale screen coordinates — the tail kinked
+// and lagged behind the ball whenever the camera moved, most visibly on the
+// photoreal ground where a drive used to pull the camera back mid-flight. World
+// coords cannot smear: every point re-projects through the same mapping the live
+// ball does, so the tail and the ball can never disagree.
+//
+// Each entry caches its own projection under `gen` (trailGen below), so a static
+// camera projects the tail exactly once.
+let ballTrail = [];   // { x, y, z (world), sx, sy, gen (cached projection) }
+let _trailFrame = 0;  // per-draw counter — the fallback generation
+// A value that changes exactly when the world->screen mapping does. The tiles
+// camera reports its own (frozen for the whole shot, so the tail projects once
+// per flight); the flat affine's six coefficients plus the terrain-lift terms
+// ARE its mapping. The other perspective grounds have no cheap signature, so
+// they fall back to reprojecting every frame.
+function trailGen() {
+  if (view.gtilesProj && window.GTiles3D && window.GTiles3D.camSeq) return "g" + window.GTiles3D.camSeq();
+  if (view.threeProj || view.appleProj) return "p" + _trailFrame;
+  return "f" + view.a + "|" + view.b + "|" + view.c + "|" + view.d + "|" + view.e + "|" +
+         view.f + "|" + view.kz + "|" + view.zFocus + "|" + view.scale;
+}
+// Sample the trail from the PHYSICS step, not from draw(). Sampling in draw tied
+// the tail's point spacing to the paint rate, so it thinned out at exactly the
+// moments the frame rate dropped. Clearing stays in draw() (see there) so a ball
+// at rest still shows no tail even though update() early-returns.
+function sampleBallTrail(b) {
+  if (!(b.z > 0.4)) { ballTrail.length = 0; return; }
+  ballTrail.push({ x: b.x, y: b.y, z: b.z, sx: 0, sy: 0, gen: null });
+  if (ballTrail.length > TUNE.ballTrailMax) ballTrail.shift();
+}
 let penaltyAnim = null; // { t0, fx, fy } — render-only fade-out at the hazard, fade-in at the drop
 let _vignette = null; // cached edge-darkening gradient, keyed to viewport size
 
@@ -7597,12 +7815,23 @@ function draw() {
     // clamped so a far ball stays a readable dot and a putt-zoom ball never balloons.
     const baseR = ballDrawRadius();
 
-    // motion trail while airborne — dissolves from tail to ball
-    if (b.z > 0.4) {
-      ballTrail.push({ x: gx, y: gy - lift });
-      if (ballTrail.length > TUNE.ballTrailMax) ballTrail.shift();
-    } else {
-      ballTrail.length = 0;
+    // Motion trail while airborne — dissolves from tail to ball. Points are
+    // pushed in WORLD units by the physics step (sampleBallTrail); here they are
+    // projected through the same mapping the live ball uses, so camera motion
+    // moves the whole tail coherently instead of smearing it. The clear stays
+    // here because update() early-returns at rest and in the hole.
+    _trailFrame++;
+    if (!(b.z > 0.4)) ballTrail.length = 0;
+    else {
+      const gen = trailGen();
+      for (let i = 0; i < ballTrail.length; i++) {
+        const p = ballTrail[i];
+        if (p.gen === gen) continue;
+        const py = wyg(p.x, p.y);
+        p.sx = wx(p.x, p.y);
+        p.sy = py - ballLiftPx(p.x, p.y, p.z, py);
+        p.gen = gen;
+      }
     }
     ctx.lineCap = "round";
     for (let i = 1; i < ballTrail.length; i++) {
@@ -7611,8 +7840,8 @@ function draw() {
       ctx.strokeStyle = `rgba(255,255,255,${f * f * 0.45})`;
       ctx.lineWidth = baseR * f * 1.2;
       ctx.beginPath();
-      ctx.moveTo(ballTrail[i - 1].x, ballTrail[i - 1].y);
-      ctx.lineTo(ballTrail[i].x, ballTrail[i].y);
+      ctx.moveTo(ballTrail[i - 1].sx, ballTrail[i - 1].sy);
+      ctx.lineTo(ballTrail[i].sx, ballTrail[i].sy);
       ctx.stroke();
     }
     ctx.lineCap = "butt";
@@ -17870,16 +18099,32 @@ window.GolfBridge = {
     const pinDistYds = dist(b.x, b.y, HOLE.holePos.x, HOLE.holePos.y) * YARDS_PER_UNIT;
     // On the green the frame is the PUTT: ball → cup + a small margin, no
     // club-reach floor — the 3D camera zooms right into the putt line.
-    const reachYds = surfaceAt(b.x, b.y) === "green"
+    const onGreen = surfaceAt(b.x, b.y) === "green";
+    const reachYds = onGreen
       ? pinDistYds + TUNE.puttFrameMarginYds
       : Math.min(clubReachYds, Math.max(TUNE.reachMinYds, pinDistYds + TUNE.reachPinMarginYds));
     const Ru = reachYds / YARDS_PER_UNIT;
     const a = camera.tAngle, dirX = -Math.sin(a), dirY = -Math.cos(a); // up-screen dir
+    // APEX anchor. The reach point is where the ball LANDS; it is not the top of
+    // the shot on screen. The ball climbs — driver 35 yd, and at the 3D camera's
+    // default 55° lean that high point projects well above the reach line, which
+    // is what used to force the tiles camera to widen mid-flight (gtiles3d
+    // setCamera). Handing it the apex lets it frame the whole shot at address and
+    // then hold perfectly still, so nothing the camera does can reach the ball.
+    // maxH is a rated FULL swing, so scale it by how much of the club's reach
+    // this shot actually uses — a wedge to a near pin must not frame for a full
+    // wedge's height. az = 0 on the green (a putt does not fly) keeps the putting
+    // framing byte-identical.
+    const azYds = onGreen ? 0 : (c ? c.maxH : 30) * TUNE.frameApexK *
+      (clubReachYds > 0 ? Math.min(1, reachYds / clubReachYds) : 1);
     // `hold` freezes the 3D framing the same way `moving` does. Without it the
     // tee hold would only pin the 2D camera: setCamera re-captures its target
     // from these anchors on every at-rest frame, so it would drift to follow my
     // ball anyway once it settled.
     return { bx: b.x, by: b.y, rx: b.x + dirX * Ru, ry: b.y + dirY * Ru,
+             ax: b.x + dirX * Ru * TUNE.frameApexFrac,
+             ay: b.y + dirY * Ru * TUNE.frameApexFrac,
+             az: azYds / YARDS_PER_UNIT,
              moving: !!state.moving, hold: cameraTeeHold() };
   },
   // Mirrors drawTrees()'s own cache/guard exactly (game.js ~3938-3947) so the

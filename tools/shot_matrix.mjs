@@ -65,13 +65,16 @@ const rollDecelMs = (s) => (s === 'green' ? B.greenDecel(DEFAULT_STIMP)
 
 // ---- flight ---------------------------------------------------------------
 
-// game.js:1843-1855. Carry is monotonic in ball speed (unlike launch angle),
-// so this bisection is well-posed.
+// game.js `aeroSpeedForCarry`. Carry is monotonic in ball speed (unlike launch
+// angle), so this bisection is well-posed. Both bracket ends are checked: the
+// low end used to be a bare 20 mph floor, which is 8.4 yd of carry — longer than
+// a whole greenside chip — so every short chip silently returned the floor.
 function aeroSpeedForCarry(Cm, launchDeg, spinRpm) {
   const carryAt = (mph) => B.flyToLanding(
     B.launchState(mph, launchDeg, spinRpm, { x: 1, y: 0 }, 0), {}, { dt: 1 / 120 }).carry;
-  let lo = 20, hi = 240;
+  let lo = 4, hi = 240;
   if (carryAt(hi) < Cm) return hi;
+  if (carryAt(lo) > Cm) return lo;
   for (let k = 0; k < 26; k++) {
     const mid = (lo + hi) / 2;
     if (carryAt(mid) < Cm) lo = mid; else hi = mid;
@@ -227,19 +230,31 @@ function shotFor(club, ef, { chip, chipBias = 0, flightBias = 0, surf = 'green',
   return { ef, launchDeg, rpm, mph, ...flyAndSettle(mph, launchDeg, rpm, surf, chipK) };
 }
 
-// solveChipEf (game.js:3272-3296): bisect ef so the ball COMES TO REST at target
+// game.js `solveChipEf`: bisect ef so the ball COMES TO REST at target. Both
+// bracket ends checked, and the BEST measured probe is returned rather than the
+// final interval midpoint — landD is quantized to whole frames (~7% of the shot
+// at chip ef), so the objective is a staircase and bisection converges onto a
+// step edge. Mirrors game.js; keep the two in step.
 function solveChipEf(club, targetYds, opts) {
   const c = TUNE.clubs[club];
   const landFrac = Math.max(0.5, Math.min(0.98,
     TUNE.chipLandFrac + (opts.chipBias || 0) * TUNE.chipLandSpread));
   const carryEf = Math.min(1, (targetYds * landFrac) / c.carry);
-  let lo = 0.02, hi = Math.min(1, Math.max(carryEf * 2.2, 0.25));
-  if (shotFor(club, hi, opts).restYd < targetYds) return hi;
+  let best = null;
+  const restAt = (ef) => {
+    const d = shotFor(club, ef, opts).restYd;
+    const err = Math.abs(d - targetYds);
+    if (!best || err < best.err) best = { ef, err };
+    return d;
+  };
+  let lo = Math.min(0.02, carryEf * 0.25), hi = Math.min(1, Math.max(carryEf * 2.2, 0.25));
+  if (restAt(hi) < targetYds) return hi;
+  if (restAt(lo) > targetYds) return lo;
   for (let k = 0; k < 14; k++) {
     const mid = (lo + hi) / 2;
-    if (shotFor(club, mid, opts).restYd < targetYds) lo = mid; else hi = mid;
+    if (restAt(mid) < targetYds) lo = mid; else hi = mid;
   }
-  return (lo + hi) / 2;
+  return best ? best.ef : (lo + hi) / 2;
 }
 
 // ---- matrix ---------------------------------------------------------------
@@ -281,7 +296,11 @@ if (argv.includes('--chiploftref')) TUNE.chipLoftRef = +argv[argv.indexOf('--chi
 if (argv.includes('--chiploftboost')) TUNE.chipLoftBoost = +argv[argv.indexOf('--chiploftboost') + 1];
 if (argv.includes('--chiplofthold')) TUNE.chipLoftHoldYds = +argv[argv.indexOf('--chiplofthold') + 1];
 
-const CHIP_TARGETS = [15, 20, 30, 40, 50, 60, 74];
+// 3/5/8/10 exist because that is where the bag's floor used to hide: with
+// aeroSpeedForCarry bracketed at 20 mph the shortest shot the engine could
+// produce was ~14.5 yd total, so an 8 yd chip finished 17-19 yd out and the
+// matrix, which started at 15, never saw it.
+const CHIP_TARGETS = [3, 5, 8, 10, 15, 20, 30, 40, 50, 60, 74];
 // Five representative clubs by default (the gate's release table). `--clubs all`
 // or `--clubs driver,7i` widens it — the whole bag is useful for reading off
 // ball-flight numbers, but slow and noisy as a regression gate.
@@ -393,11 +412,15 @@ if (gate) {
       const r = find(id, 'chip', t);
       if (!r) continue;
       // +-2.2 yd, not tighter: buildFlight quantizes the carry the aero solver
-      // is handed (landD = ceil(C/vh0)*vh0, game.js:1821), which is a ~2 yd
-      // staircase for a wedge. solveChipEf bisects a step function, so it can
-      // only ever land on a tread. Pre-existing; it used to be smeared out by
-      // the rollout the chip no longer has.
-      band(`${id} ${t}yd rest`, r.restYd, t - 2.2, t + 2.2);
+      // is handed (landD = ceil(C/vh0)*vh0), which is a ~2 yd staircase for a
+      // wedge. solveChipEf bisects a step function, so it can only ever land on
+      // a tread — it now returns the closest measured tread rather than the
+      // interval midpoint, but the tread width itself is unchanged.
+      // RELATIVE at the short end: a flat +-2.2 yd would pass a 3 yd chip that
+      // finished 5.2 yd out (+73%), and the short end is precisely where the
+      // ball-speed floor used to hide. 20% or 1.5 yd, whichever is looser.
+      const tol = Math.max(1.5, Math.min(2.2, t * 0.2));
+      band(`${id} ${t}yd rest`, r.restYd, t - tol, t + tol);
       // Hop visibility applies to the PITCHES (>=30 yd), not the running chips.
       // 544ed1e added these because a 40 yd pitch arrived with no visible hop;
       // a 15-20 yd chip legitimately skips once low and then runs, so demanding
