@@ -242,7 +242,8 @@ function refreshGridBatch(n) {
 //    hit). The whole tint/contour/relief patch then sits as a single sheet ON
 //    the mesh instead of per-cell swimming. Until settled: coarse grid.
 const BALL_EXACT_R = 4;    // world units of exact-ball influence
-let _ballOff = null;       // { x, y, off } exact ball column (this frame)
+let _ballOff = null;       // { x, y, off } RENDERED ball column (eases toward _ballTgt)
+let _ballTgt = null;       // { x, y, off } raw exact ball column (noise-gated)
 let _ballRejN = 0;         // consecutive temporal-guard rejections (self-heal cap)
 let _pinOff = null;        // { x, y, off } exact pin column
 let _greenOffs = new Map();// green object -> { samples: [], off: number|null, cursor }
@@ -292,12 +293,38 @@ function refreshPrecisionAnchors() {
     // BUT a persistent disagreement means the stored anchor is the wrong one
     // (e.g. it was taken against the coarse motion-LOD mesh): after ~30
     // consecutive rejections, accept the new value so the anchor can self-heal.
-    if (nb && _ballOff &&
-        Math.hypot(S.ball.x - _ballOff.x, S.ball.y - _ballOff.y) < 5 &&
-        Math.abs(nb.off - _ballOff.off) > 8) {
+    if (nb && _ballTgt &&
+        Math.hypot(S.ball.x - _ballTgt.x, S.ball.y - _ballTgt.y) < 5 &&
+        Math.abs(nb.off - _ballTgt.off) > 8) {
       if (++_ballRejN < 30) nb = null; else _ballRejN = 0;
     } else _ballRejN = 0;
-    _ballOff = keep(_ballOff, nb);
+    // TARGET vs RENDERED. _ballTgt is the raycast answer (noise-gated by keep);
+    // _ballOff is what offsetAt actually serves, and it EASES toward the target.
+    //
+    // The handover that has to be continuous is a NEW column. Through the whole
+    // shot the ball is drawn against the coarse grid — the exact anchor only
+    // reaches BALL_EXACT_R (4u) — so adopting the exact value outright at the new
+    // lie steps the ground under the ball by the 1-2m the anchor exists to
+    // correct: a pop the instant it settles, and the field freeze above makes
+    // that the ONE frame where the two can disagree. Seed a new column from what
+    // was actually being drawn there, then ease across.
+    _ballTgt = keep(_ballTgt, nb);
+    if (_ballTgt) {
+      if (!_ballOff || _ballOff.x !== _ballTgt.x || _ballOff.y !== _ballTgt.y) {
+        // First anchor of the hole SNAPS — nothing has been rendered against it
+        // yet and the grid may still be empty, so there is no continuity to keep
+        // and seeding from an unfilled _offsetBase would start it ~40m out (the
+        // geoid separation) and crawl in. Every later column seeds from what was
+        // actually being drawn there.
+        _ballOff = { x: _ballTgt.x, y: _ballTgt.y,
+                     off: _ballOff ? _offsetBase(_ballTgt.x, _ballTgt.y) : _ballTgt.off };
+      }
+      const bErr = _ballTgt.off - _ballOff.off;
+      // 2cm floor: below it, snap and stop — an asymptote here would re-introduce
+      // exactly the per-frame micro-drift OFF_DEADBAND_M exists to kill.
+      _ballOff.off = Math.abs(bErr) < 0.02 ? _ballTgt.off
+                                           : _ballOff.off + bErr * (1 - Math.exp(-dtA / 250));
+    }
   }
   if (H && H.holePos) _pinOff = keep(_pinOff, exact(H.holePos.x, H.holePos.y));
   // Per-green rigid offsets: a couple of samples per frame for in-play greens.
@@ -370,9 +397,12 @@ function refreshPrecisionAnchors() {
         // camera itself moves (a glide masks them completely) — except a
         // SEVERE misplacement (>3m, the boot heal) which latches one
         // settle-glide and then locks for good at 0.5m.
+        // _fieldFrozen, not _camParked: a ball in flight un-parks the camera by
+        // definition, and a green sheet sliding under an approach shot moves the
+        // landing point under the ball as it arrives.
         if (Math.abs(err) > 3) rec._settling = true;
-        const track = !_camParked || rec._settling;
-        const floor = _camParked ? 0.5 : 0.25;
+        const track = !_fieldFrozen || rec._settling;
+        const floor = _fieldFrozen ? 0.5 : 0.25;
         if (rec._settling && Math.abs(err) <= 0.5) rec._settling = false;
         if (track && Math.abs(err) > floor) {
           if (rec._settling) {
@@ -451,16 +481,24 @@ function _offsetBase(x, y) {
 // via offsetAt() (see above) so overlays lock onto the photoreal ground, not the
 // game DEM's relative elevation. Elevated points (ball arc) ride above it.
 const _p = new THREE.Vector3();
-function project(x, y, zUnits, out) {
+// The one projection implementation. `cam` is a parameter so a CANDIDATE framing
+// can be tested without disturbing the live camera — the apex fit in setCamera
+// aims a scratch camera and projects the shot's high point through it.
+function projectWith(cam, x, y, zUnits, out) {
   out = out || {};
-  if (!ready || !tiles || !camera) { out.x = 0; out.y = 0; out.inFront = false; return out; }
+  if (!tiles || !cam) { out.x = 0; out.y = 0; out.inFront = false; return out; }
   const ll = worldToLngLat(x, y);
   sceneAt(ll[0], ll[1], (zUnits || 0) * M() + offsetAt(x, y), _p);
-  _p.project(camera); // → NDC
+  _p.project(cam); // → NDC
   out.inFront = _p.z < 1;
   out.x = (_p.x * 0.5 + 0.5) * window.innerWidth;
   out.y = (1 - (_p.y * 0.5 + 0.5)) * window.innerHeight;
   return out;
+}
+function project(x, y, zUnits, out) {
+  out = out || {};
+  if (!ready || !tiles || !camera) { out.x = 0; out.y = 0; out.inFront = false; return out; }
+  return projectWith(camera, x, y, zUnits, out);
 }
 
 // Metres from the live camera to world point (x, y, zUnits above ground).
@@ -555,8 +593,16 @@ let _camEase = null; // {Ox,Oy,D} EASED toward target each frame → glide betwe
 let _groundMEase = null; // slew-capped look-at ground height (anti frame-bounce)
 let _lastOxy = null;     // last look-at (for the motion-scaled height cap)
 let _camParked = false;  // eased camera exactly at target, ball at rest
+// Rendered ground height holds still: camera parked OR ball in flight. See the
+// FIELD FREEZE block in setCamera for why the two cases share one latch.
+let _fieldFrozen = false;
+// {Ox,Oy,D,groundM,angle,pitch} latched on the first frame of a shot and held
+// until the ball rests — the camera does not move at all during a shot.
+let _shotCam = null;
 let _gSettling = false;  // severe-error settle-glide latch (boot heal)
 let _fro = null;         // park-edge field snapshot (rendered while parked)
+const _apxOut = {};      // scratch for the apex fit's candidate projection
+let _apexFitN = 0;       // apex-fit widen steps taken this frame (diagnostic)
 let _holeLoadT = 0;      // hole-change timestamp (early-settle window)
 let _introPending = false; // set by enter(): arm the opening pull-back intro
 let _introSeed = false;    // consume on the first frame with a real target framing
@@ -569,13 +615,64 @@ let _aimUx = 0, _aimUy = -1; // last solved aim unit vector (intro pull-back dir
 const INTRO_ZOOM = 1.4;
 const INTRO_MS = 3000;     // cinematic glide duration
 let _camEaseT = 0;
+
+// ---- camera placement -------------------------------------------------------
+// Aim `cam` at world (Ox,Oy) sitting at ground height groundM (metres), from
+// distance D along the bearing `angle` at `pitch` degrees. Factored out of
+// setCamera so the apex fit can aim a THROWAWAY camera at a candidate framing
+// and project through it — the fit needs a real projection, and there is no way
+// to get one without a placed camera. One implementation, so a candidate framing
+// and the framing finally adopted can never disagree.
+const _fitCam = new THREE.PerspectiveCamera(30, 1, 1, 1e6);
+// Bumped whenever the placed camera actually MOVES. Anything caching a
+// projection (game.js's ball trail) keys off this: a frozen camera means the
+// cache is valid forever, which is the whole point of freezing it.
+let _camSeq = 0;
+let _pcLast = null;   // last args placed on the REAL camera (camSeq change test)
+function placeCamera(Ox, Oy, D, groundM, angle, pitch, cam) {
+  if (cam === camera) {
+    // Compare the INPUTS, not the resulting position: bearing and pitch move the
+    // camera's orientation without necessarily moving its position much, and a
+    // consumer caching a projection cares about both.
+    const L = _pcLast;
+    if (!L || L.Ox !== Ox || L.Oy !== Oy || L.D !== D || L.groundM !== groundM ||
+        L.angle !== angle || L.pitch !== pitch) {
+      _camSeq++;
+      _pcLast = { Ox, Oy, D, groundM, angle, pitch };
+    }
+  }
+  const [Olon, Olat] = worldToLngLat(Ox, Oy);
+  sceneAt(Olon, Olat, groundM, _O);
+  sceneAt(Olon, Olat, groundM + 1, _up).sub(_O).normalize();          // ellipsoid up
+  sceneAt(Olon, Olat + 1e-5, groundM, _north).sub(_O).normalize();    // +lat = north
+  sceneAt(Olon + 1e-5, Olat, groundM, _east).sub(_O).normalize();     // +lon = east
+  // Screen-up world dir (toward reach) → scene horizontal. geo affine gives
+  // x≈east, y≈south, so scene horiz = east·dx − north·dy.
+  const dirX = -Math.sin(angle), dirY = -Math.cos(angle);
+  _tmp.copy(_east).multiplyScalar(dirX).addScaledVector(_north, -dirY).normalize(); // fwdHoriz
+  // pitch P (Mapbox sense): 0 = camera straight above O, 90 = level behind O.
+  const P = Math.max(0, Math.min(85, pitch)) * DEG;
+  cam.position.copy(_O)
+    .addScaledVector(_up, D * Math.cos(P))
+    .addScaledVector(_tmp, -D * Math.sin(P));
+  // Up vector blended by pitch so it NEVER parallels the view direction (which
+  // caused a 90° gimbal flip at full-2D/top-down): at P=0 up = fwdHoriz (screen-
+  // up = play direction, matches the flat view heading), at high pitch → ellipsoid
+  // up (level horizon).
+  cam.up.copy(_tmp).multiplyScalar(Math.cos(P)).addScaledVector(_up, Math.sin(P)).normalize();
+  cam.fov = 30;
+  cam.near = Math.max(1, D / 500);
+  cam.far = D * 60 + 8000;
+  cam.aspect = window.innerWidth / window.innerHeight;
+  cam.updateProjectionMatrix();
+  cam.lookAt(_O);
+  cam.updateMatrixWorld();
+}
 function setCamera() {
   if (!_placed || !tiles || !camera) return;
   const g = gb(), view = g.getView(), cam = g.getCamera(), m = M();
   const W = window.innerWidth, H = window.innerHeight;
   const scale = view.scale || cam.scale || 8;   // css px per world unit (flat camera)
-  const geo = g.geoAffine();
-  const toLL = (x, y) => [geo[0] * x + geo[1] * y + geo[2], geo[3] * x + geo[4] * y + geo[5]];
 
   // TARGET framing — exact two-anchor pinhole solve, same math as the flat
   // camera's frameClubReach (game.js): the ball pins at BALL_F of the USABLE
@@ -681,6 +778,64 @@ function setCamera() {
       let D = Rm / (uR / AA(uR) - uB / AA(uB));
       if (!isFinite(D) || D <= 0) D = Rm * 3;           // degenerate-pitch guard
       D = Math.min(D, D_MAX_M);                          // streaming budget
+      // APEX FIT — the reach anchor is where the ball LANDS, not the top of the
+      // shot on screen. The ball climbs (driver ~35 yd), and at the default 55°
+      // lean that high point projects well above the reach line, so the frame
+      // used to widen mid-flight to chase it. That widening is the head of the
+      // chain this whole change exists to break: it moved the camera, which
+      // coarsened tile LOD 6->12, which moved the mesh surface the ball's drawn
+      // height is measured from (see the FIELD FREEZE below) — so the arc bent
+      // whenever the camera did. Frame the apex NOW, at address, and the camera
+      // never has to move during a shot at all.
+      //
+      // Grow D until the apex clears the top of the play band, re-pinning the
+      // ball at BALL_F each step: growing D from a fixed look-at would drag the
+      // ball toward screen centre and leave dead space under it. D is monotone in
+      // "how far toward screen centre a point projects", so a geometric walk
+      // converges fast. D_MAX_M still wins — with the camera frozen for the shot,
+      // a capped hole just lets the ball crest out of frame for a beat, which is
+      // what a broadcast does anyway.
+      //
+      // Runs BEFORE the flat-reference blend below, so at pitch 0 (st = 0) the
+      // fit is discarded wholesale and "pitch 0 IS the flat 2D camera" survives
+      // by construction. That costs nothing: looking straight down, height only
+      // magnifies a point radially by D/(D−z) ≈ 1.04 and the apex sits near the
+      // middle of the band, so there is nothing to fix at pitch 0.
+      if (A.az > 0.01) {
+        const yLimit = rsv.top + REACH_F * availH;
+        const tzf = g.terrainZRender || g.terrainZ || (() => 0);
+        const gEst = _groundMEase != null ? _groundMEase : tzf(A.bx, A.by) * m + offsetAt(A.bx, A.by);
+        const aAng = cam.angle != null ? cam.angle : cam.tAngle;
+        // The crest is sampled at THREE points along the aim, not one. The apex
+        // rides on the GROUND, whose height is `terrainZRender(x,y) + z` — the
+        // same form every other elevated projection in the game passes, and
+        // passing az alone put the apex on the datum, metres low on an uphill
+        // hole. On sloped ground the highest point ON SCREEN is then not at a
+        // fixed fraction of the aim line, so take the worst of a spread around
+        // frameApexFrac rather than trusting one sample.
+        // The apex fraction is recovered from the anchors themselves rather than
+        // read across the bridge, so this file keeps owning no game tunables.
+        const apexF = rd > 1e-6 ? Math.hypot(A.ax - A.bx, A.ay - A.by) / rd : 0.55;
+        const pts = [-0.15, 0, 0.15].map((d) => {
+          const t = Math.max(0.05, Math.min(0.95, apexF + d));
+          const px = A.bx + (A.rx - A.bx) * t, py = A.by + (A.ry - A.by) * t;
+          return { x: px, y: py, z: tzf(px, py) + A.az };
+        });
+        _apexFitN = 0;
+        for (; _apexFitN < 12 && D < D_MAX_M; _apexFitN++) {
+          const sBi = uB * D / AA(uB);
+          placeCamera(A.bx - ux * sBi / m, A.by - uy * sBi / m, D, gEst, aAng, pitchDeg, _fitCam);
+          let top = Infinity, seen = false;
+          for (const p of pts) {
+            const ap = projectWith(_fitCam, p.x, p.y, p.z, _apxOut);
+            if (!ap.inFront) { seen = false; break; }
+            seen = true;
+            if (ap.y < top) top = ap.y;
+          }
+          if (seen && top >= yLimit) break;
+          D = Math.min(D * 1.08, D_MAX_M);
+        }
+      } else _apexFitN = 0;
       // Anchor the look-at off the BALL, not off the reach point. Identical to
       // `reach − sR` whenever D is the exact two-anchor solution (−sB == Rm − sR
       // by construction), but when D got clamped to the budget it is the anchor
@@ -735,8 +890,25 @@ function setCamera() {
     _camEase = { Ox: tOx - _aimUx * back, Oy: tOy - _aimUy * back, D: tD * INTRO_ZOOM };
     _introUntil = now + INTRO_MS;
   }
+  // ---- SHOT FREEZE ---------------------------------------------------------
+  // While the ball is moving the camera is LATCHED: one framing, captured on the
+  // first frame of the shot, held pixel-exact until the ball rests. Nothing the
+  // camera does may reach the ball, and the cheapest way to guarantee that is for
+  // the camera to do nothing at all. The apex fit above is what earns this — the
+  // frame is already wide enough for the whole shot before the swing, so there is
+  // nothing left for a mid-flight widen to fix.
+  const S = g.getState && g.getState();
+  const moving = !!(S && S.moving);
+  // Release on rest, seeding the eases from the latched values so the return to
+  // the at-rest framing is a glide and not a jump.
+  if (!moving && _shotCam) {
+    if (_camEase) { _camEase.Ox = _shotCam.Ox; _camEase.Oy = _shotCam.Oy; _camEase.D = _shotCam.D; }
+    _groundMEase = _shotCam.groundM;
+    _guardK = 1;
+    _shotCam = null;
+  }
   if (!_camEase) _camEase = { Ox: tOx, Oy: tOy, D: tD };
-  else {
+  else if (!_shotCam) {
     _camEase.Ox += (tOx - _camEase.Ox) * es;
     _camEase.Oy += (tOy - _camEase.Oy) * es;
     _camEase.D  += (tD  - _camEase.D)  * es;
@@ -750,14 +922,13 @@ function setCamera() {
       _camEase.Ox = tOx; _camEase.Oy = tOy; _camEase.D = tD;
     }
   }
-  // OFF-SCREEN SAFEGUARD (hard invariant, both pitch modes): if the LIVE
-  // ball's projection leaves the vertical band, widen the framing —
-  // multiplicative, widen-only while the ball moves, eased back + snapped at
-  // rest. Catches whatever the predicted framing missed (apex overshoot, wind,
-  // cart-path deflections, unusual aspect ratios). Uses last frame's camera —
-  // one frame of lag, converges in a few frames.
-  const S = g.getState && g.getState();
-  if (S && S.ball && ready) {
+  // OFF-SCREEN SAFEGUARD, AT REST ONLY. It used to widen while the ball MOVED
+  // too, compounding 1.04/frame up to 2.5x through a flight — that is the
+  // mid-flight zoom-out that bent the arc. The at-rest arm stays: it is what
+  // recovers a framing that lost the ball while the height field healed under it
+  // (measured h6 address yf 1.18), and it cannot run during a shot now, so it
+  // cannot feed back into one.
+  if (S && S.ball && ready && !moving) {
     const bp = project(S.ball.x, S.ball.y,
       (g.terrainZ ? g.terrainZ(S.ball.x, S.ball.y) : 0) + (S.ball.z || 0));
     // Bands measured against the PLAY AREA, not the raw screen. On mobile the top
@@ -767,34 +938,26 @@ function setCamera() {
     const gr = g.hudReserve ? g.hudReserve() : { top: 0, bot: 0 };
     const pTop = gr.top, pBot = H - gr.bot, pH = Math.max(120, pBot - pTop);
     const yf = (bp.y - pTop) / pH;   // 0 = just under the bar, 1 = top of the club UI
-    const off = !bp.inFront || yf < 0.05 || yf > 0.95 || bp.x < -40 || bp.x > W + 40;
-    // fully LOST (not merely at the band edge) — happens at rest too, e.g. the
-    // first seconds on a coastal hole while the height field heals under the
-    // camera and the look-at sits metres off (measured h6 address yf 1.18)
+    // fully LOST — the first seconds on a coastal hole while the height field
+    // heals under the camera and the look-at sits metres off (measured h6
+    // address yf 1.18)
     const lost = !bp.inFront || yf < 0.02 || yf > 0.98 || bp.x < -60 || bp.x > W + 60;
     // rest-lost must PERSIST a few frames before widening (a single boundary
-    // graze would otherwise alternate widen/ease every frame — a shimmer),
-    // and the moving band vs rest band differ so the two can't fight.
+    // graze would otherwise alternate widen/ease every frame — a shimmer).
     // (suspended during the opening flyover — the ball is legitimately far
     // off-frame while the whole course is in view)
     _guardLostN = (lost && performance.now() > _introUntil) ? _guardLostN + 1 : 0;
-    // Time-based, not per-frame: with real 5-7 s flights a fixed per-frame
-    // factor compounds hundreds of times and runs the zoom away.
     const gk = Math.pow(1.04, Math.min(dt, 100) / 16.7);
-    if ((off && S.moving) || _guardLostN >= 5) _guardK = Math.min(_guardK * gk, 2.5);
-    else if (!S.moving && !lost) {
+    if (_guardLostN >= 5) _guardK = Math.min(_guardK * gk, 2.5);
+    else if (!lost) {
       _guardK += (1 - _guardK) * es;
       if (Math.abs(_guardK - 1) < 0.01) _guardK = 1;   // snap — no perpetual micro-pulse
     }
   }
-  const Ox = _camEase.Ox, Oy = _camEase.Oy, D = _camEase.D * _guardK;
+  const Ox = _shotCam ? _shotCam.Ox : _camEase.Ox;
+  const Oy = _shotCam ? _shotCam.Oy : _camEase.Oy;
+  const D  = _shotCam ? _shotCam.D  : _camEase.D * _guardK;
 
-  // O in scene + local ENU basis (finite differences of sceneAt around O).
-  // Height MUST include offsetAt() — same mesh-anchoring project() uses — so the
-  // look-at sits on the real photoreal ground, not the game DEM (~40m off). Skip
-  // it and the close putting camera aims tens of metres off and throws the ball
-  // off-screen.
-  const [Olon, Olat] = toLL(Ox, Oy);
   // Look-at ground height is the WHOLE-FRAME mover: any offset store stepping
   // under it (grid cell refill, pin anchor, green median) used to shift every
   // pixel at once — the "hole is bouncing" reports (h4, h13) during the early
@@ -806,13 +969,30 @@ function setCamera() {
   // setCamera each frame).
   _camParked = !!(_camEase && _camEase.Ox === tOx && _camEase.Oy === tOy &&
                   _camEase.D === tD && !(A && A.moving));
+  // ---- FIELD FREEZE --------------------------------------------------------
+  // Everything that moves RENDERED ground height must also hold still while the
+  // ball is in the air. The drawn ball sits at terrainZRender + offsetAt(), and
+  // offsetAt is fed by raycasts against whatever tile LOD is loaded — so if it
+  // moves, the ARC moves, and the physics never touched it. Two reasons it
+  // moved mid-flight, both now closed here:
+  //   * _fro was released the moment the camera left park, i.e. for the whole
+  //     shot, so every consumer read the live healing field.
+  //   * refreshPrecisionAnchors re-raycasts the ball's own column every frame,
+  //     and its ±8m sanity guard is keyed on the ball having moved LESS than 5
+  //     units — never true in flight, so in exactly the frames that mattered the
+  //     guard was inert and the only bound left was MAX_ABS_OFFSET_M (120 m).
+  // One latch, three consumers (here, the _groundMEase ease below, and the green
+  // sheet in refreshPrecisionAnchors). `moving` and not `_camParked` because the
+  // camera is legitimately un-parked during a shot — that is the whole point.
+  _fieldFrozen = _camParked || moving;
   // Park-edge SNAPSHOT of the offset field. The stores keep healing underneath
   // (frozen stores poisoned the sampler's reference height and stalled the
   // heal entirely) — but everything RENDERED reads the snapshot, so a parked
   // frame is pixel-static: no cell refill, anchor step, or feather blend can
-  // drift the flag/cup/ball while the player lines up. Discarded on any
-  // camera motion — the accumulated heal lands during the glide, invisibly.
-  if (_camParked) {
+  // drift the flag/cup/ball while the player lines up. Discarded on camera
+  // motion with the ball at rest — the accumulated heal lands during the glide
+  // between shots, invisibly.
+  if (_fieldFrozen) {
     if (!_fro && _grid) _fro = {
       off: _grid.off.slice(), ok: _grid.ok.slice(), mean: _gridMean,
       ball: _ballOff ? Object.assign({}, _ballOff) : null,
@@ -821,7 +1001,7 @@ function setCamera() {
   } else _fro = null;
   const gTarget = ((g.terrainZRender || g.terrainZ || (() => 0))(Ox, Oy)) * m + offsetAt(Ox, Oy);
   if (_groundMEase == null) _groundMEase = gTarget;
-  else {
+  else if (!_shotCam) {
     const gd = gTarget - _groundMEase;
     // PARKED = FROZEN (no visible drift once the camera sits over the ball);
     // corrections ride camera motion instead. A severe boot-heal error (>3m)
@@ -831,7 +1011,7 @@ function setCamera() {
     if (_gSettling) {
       // severe settle: fast uncapped ease (~1s at any error size), then lock
       _groundMEase += Math.abs(gd) < 0.1 ? gd : gd * (1 - Math.exp(-dt / 400));
-    } else if (!_camParked) {
+    } else if (!_fieldFrozen) {
       // cap widens with the look-at's own horizontal motion (60% grade
       // allowance) so a glide onto an elevated green keeps height in step.
       const dOh = _lastOxy ? Math.hypot(Ox - _lastOxy.x, Oy - _lastOxy.y) * m : 0;
@@ -840,36 +1020,17 @@ function setCamera() {
     }
   }
   _lastOxy = { x: Ox, y: Oy };
-  const groundM = _groundMEase;
-  sceneAt(Olon, Olat, groundM, _O);
-  sceneAt(Olon, Olat, groundM + 1, _up).sub(_O).normalize();          // ellipsoid up
-  sceneAt(Olon, Olat + 1e-5, groundM, _north).sub(_O).normalize();    // +lat = north
-  sceneAt(Olon + 1e-5, Olat, groundM, _east).sub(_O).normalize();     // +lon = east
-
-  // Screen-up world dir (toward reach) → scene horizontal. geo affine gives
-  // x≈east, y≈south, so scene horiz = east·dx − north·dy. Use the EASED cam.angle
-  // (not the target cam.tAngle) so turning the aim rotates smoothly, not snaps.
-  const a = cam.angle != null ? cam.angle : cam.tAngle;
-  const dirX = -Math.sin(a), dirY = -Math.cos(a);
-  _tmp.copy(_east).multiplyScalar(dirX).addScaledVector(_north, -dirY).normalize(); // fwdHoriz
-
-  // pitch P (Mapbox sense): 0 = camera straight above O, 90 = level behind O.
-  const P = Math.max(0, Math.min(85, pitchDeg)) * DEG;
-  camera.position.copy(_O)
-    .addScaledVector(_up, D * Math.cos(P))
-    .addScaledVector(_tmp, -D * Math.sin(P));
-  // Up vector blended by pitch so it NEVER parallels the view direction (which
-  // caused a 90° gimbal flip at full-2D/top-down): at P=0 up = fwdHoriz (screen-
-  // up = play direction, matches the flat view heading), at high pitch → ellipsoid
-  // up (level horizon).
-  camera.up.copy(_tmp).multiplyScalar(Math.cos(P)).addScaledVector(_up, Math.sin(P)).normalize();
-  camera.fov = 30;
-  camera.near = Math.max(1, D / 500);
-  camera.far = D * 60 + 8000;
-  camera.aspect = W / H;
-  camera.updateProjectionMatrix();
-  camera.lookAt(_O);
-  camera.updateMatrixWorld();
+  const groundM = _shotCam ? _shotCam.groundM : _groundMEase;
+  // Use the EASED cam.angle (not the target cam.tAngle) so turning the aim
+  // rotates smoothly, not snaps.
+  const a = _shotCam ? _shotCam.angle : (cam.angle != null ? cam.angle : cam.tAngle);
+  const pd = _shotCam ? _shotCam.pitch : pitchDeg;
+  placeCamera(Ox, Oy, D, groundM, a, pd, camera);
+  // Latch AFTER placing, so the frozen framing is literally the one the first
+  // frame of the shot rendered — the freeze can never introduce a step of its
+  // own. One normal frame at launch (the ball has barely left the tee) also
+  // guarantees groundM is resolved before it is captured.
+  if (moving && !_shotCam) _shotCam = { Ox, Oy, D, groundM, angle: a, pitch: pd };
 }
 
 // ---- lifecycle -------------------------------------------------------------
@@ -1017,9 +1178,11 @@ function render() {
   //
   // Quiescent means all four: the camera did not move, the errorTarget ramp has
   // walked back down to 6 (so no refinement is pending), the tile queues are
-  // empty (loadProgress 1), and the BALL is not moving — the ball matters
-  // because refreshPrecisionAnchors() below re-solves its height offset, and a
-  // putt under a parked camera would otherwise drift off the mesh.
+  // empty (loadProgress 1), and the BALL is not moving. The ball term used to be
+  // here because refreshPrecisionAnchors() re-solved its height offset every
+  // frame, so a putt under a parked camera would drift off the mesh; the field
+  // freeze has since made that impossible (the anchors do not run at all while
+  // the ball moves). It stays because a moving ball is still a changing scene.
   //
   // _placed && ready are required before parking can ever happen. Without them
   // a tileset that never produces geometry would park immediately (no camera
@@ -1071,14 +1234,22 @@ function render() {
     const H = gb() && gb().getHole();
     if (H !== _lastHole) {
       _grid = null; _hold = null; _camEase = null; _groundMEase = null; _lastHole = H; _guardK = 1;
+      _shotCam = null;
       _holeLoadT = performance.now();
-      _ballOff = null; _pinOff = null; _greenOffs = new Map();
+      _ballOff = null; _ballTgt = null; _pinOff = null; _greenOffs = new Map();
       _introSeed = _introPending;   // seed on the first frame that HAS a target
       _introPending = false;
       _settledAt = 0; _forceRender = 3;   // new hole: nothing about the old frame holds
     }
-    refreshGridBatch(24);
-    refreshPrecisionAnchors();   // exact ball/pin columns + rigid per-green offsets
+    // SKIPPED WHILE THE BALL MOVES. Everything these two produce is frozen for
+    // the duration of a shot (see the FIELD FREEZE in setCamera), so the results
+    // would be discarded — and this is ~26 BVH-less full-scene raycasts per
+    // frame, spent in exactly the frames where the budget matters most. They
+    // re-arm at rest, where the _ballOff ease makes the handover continuous.
+    if (!(_st && _st.moving)) {
+      refreshGridBatch(24);
+      refreshPrecisionAnchors();   // exact ball/pin columns + rigid per-green offsets
+    }
   }
   renderer.render(scene, camera);   // camera was aimed at the top of this frame
 }
@@ -1104,7 +1275,16 @@ function resize() {
   _settledAt = 0; _forceRender = 3;   // setSize cleared the buffer — a parked gate would leave it blank
 }
 
-function setPitch(deg) { pitchDeg = Math.max(0, Math.min(85, deg)); }
+function setPitch(deg) {
+  pitchDeg = Math.max(0, Math.min(85, deg));
+  // The shot camera is frozen, but a pitch drag is an explicit ask to move it —
+  // re-solve the latched framing at the new lean rather than swallowing input.
+  if (_shotCam) _shotCam.pitch = pitchDeg;
+}
+// Increments whenever the placed camera actually moves. Anything caching a
+// world->screen projection keys off this; with the camera frozen for a shot, a
+// cache stays valid for the whole flight (see game.js's ball trail).
+function camSeq() { return _camSeq; }
 // Hide the tiles canvas while a full-screen 2D overlay (cinematic landing, 3D
 // green inspect) is up. Those paint an 0.88 scrim on the TRANSPARENT #game
 // canvas, so without this the live photoreal ground ghosts through and keeps
@@ -1161,6 +1341,8 @@ function debug() {
   });
   return { ready, placed: _placed, failed: _failed, courseId: activeCourseId, pitch: pitchDeg,
     guardK: +_guardK.toFixed(3), easeD: _camEase ? +_camEase.D.toFixed(1) : null,
+    shotCamD: _shotCam ? +_shotCam.D.toFixed(1) : null, fieldFrozen: _fieldFrozen, camSeq: _camSeq,
+    apexFitN: _apexFitN,
     hasToken: !!window.GOOGLE_TILES_TOKEN, tiles: !!tiles,
     tris: renderer ? renderer.info.render.triangles : -1,
     drawCalls: renderer ? renderer.info.render.calls : -1,
@@ -1178,5 +1360,5 @@ function debug() {
 
 window.GTiles3D = {
   enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, pxPerMeterAt, groundSquash, occludedAt, isReady, isSettled, failed,
-  getAttributions, worldToLngLat, lngLatToWorld, debug, anchorDiag,
+  getAttributions, worldToLngLat, lngLatToWorld, debug, anchorDiag, camSeq,
 };
