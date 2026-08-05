@@ -327,6 +327,26 @@ if (has('--gate')) {
     ck(Math.abs(r.errPct) <= tol, `invariance ${r.kind} ${r.v}: ${f(r.errPct, 2)}% (tol ${tol}%)`);
   }
 
+  // The shaping curve itself, in yards. Bands are wide enough not to police
+  // ordinary retuning and tight enough to catch a collapse or a runaway — the
+  // two real failure modes. Their SHAPE is the point: the multiplier over the
+  // pre-rework baseline falls as the arc grows (+40% at bow 0.05, +10% at 0.35),
+  // which is what "small deliberate shapes should register" means and what
+  // curveExp below 1 buys. A flat multiplier across the table means someone
+  // reached for aeroSpinTilt when they wanted curveExp.
+  const YD_BAND = { 0.02: [3.5, 8], 0.05: [10, 16], 0.10: [17, 26], 0.20: [26, 38], 0.35: [31, 45] };
+  for (const r of out.yards) {
+    const band = YD_BAND[r.bow];
+    if (!band) continue;
+    const yd = Math.abs(r['7i']);
+    ck(yd >= band[0] && yd <= band[1],
+       `7i shape at bow ${r.bow}: ${f(yd, 1)} yd outside [${band[0]}, ${band[1]}]`);
+  }
+  // Shaping must not become a distance cheat or a distance tax.
+  for (const r of out.yards)
+    ck(Math.abs(r.carry7iYd - TUNE.clubs['7i'].carry) / TUNE.clubs['7i'].carry <= 0.03,
+       `7i carry drift at bow ${r.bow}: ${f(r.carry7iYd, 1)} yd vs ${TUNE.clubs['7i'].carry}`);
+
   // Bounded + monotone in bow: a bigger arc must never shape LESS.
   let prev = -1;
   for (const bow of [0, 0.05, 0.1, 0.2, 0.35, 0.6, 1.0]) {

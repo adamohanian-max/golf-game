@@ -155,7 +155,7 @@ const TUNE = {
   // club table already specifies, and the rollout still runs off the arc
   // descriptor's landing bookkeeping. Flip false to fly the legacy arc.
   aeroPhysics: true,
-  aeroSpinTilt: 26,      // ° of spin-axis tilt at full swipe curve (draw/fade)
+  aeroSpinTilt: 30,      // ° of spin-axis tilt at full swipe curve (draw/fade)
   // --- Swipe curvature -> draw/fade (see curveFromPath) ---
   // The curve measure is a SAGITTA fit: `bow` = how far the swipe bellies out at
   // its midpoint, as a fraction of its own length, squashed by tanh(curveGain·bow).
@@ -181,12 +181,16 @@ const TUNE = {
                          // it, so there is no step at the edge of the zone. Small
                          // because curveSnr does the real work — this only kills a
                          // clean but meaninglessly tiny arc.
-  curveSnr: 4.5,         // sigma of fit-residual noise the bow must clear before
+  curveSnr: 5.5,         // sigma of fit-residual noise the bow must clear before
                          // it counts as shape. Adapts to swipe length and sample
                          // count, which a fixed deadzone cannot.
-  curveExp: 0.9,         // curve -> tilt shaping. THE small-shape sensitivity
-                         // knob: below 1 it amplifies small arcs far more than
-                         // big ones. Was an inline 0.9 at the sidespin transform.
+  curveExp: 0.72,        // curve -> tilt shaping. THE small-shape sensitivity
+                         // knob, and the reason this is the right lever for
+                         // "shaping should respond more": below 1 it lifts SMALL
+                         // arcs far more than big ones (at c=0.1, 0.72 returns
+                         // 1.41x what 0.9 did; at c=0.5 only 1.11x). So a gentle
+                         // deliberate bow becomes a usable draw without turning a
+                         // full sweep into an unplayable hook. Was inline 0.9.
   // Wall-clock pace multiplier. Real time (1.0) is physically honest but slow to
   // play: a driver hangs ~7 s, then bounces, then a 30 ft putt rolls 6 s. This
   // keeps every trajectory, distance and break EXACTLY as calibrated (the sim
@@ -4391,7 +4395,34 @@ function swingEnd(e) {
 
   const { ang, frac } = swipeToShot(dxs, dys, dt, TUNE.touchPowerSwipe);
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  launchShot(ang, frac, curveFromPath(path), onGreen);
+  const curve = curveFromPath(path);
+  recordSwipeShape(path, curve);
+  launchShot(ang, frac, curve, onGreen);
+}
+
+// Last few gestures, for sizing curveMinPathPx / curveMinSamples / curveSnr
+// against REAL input. Those three are the difference between reading shot shape
+// and reading the sampler, and they were sized against a synthetic generator —
+// but pointer sample rate and jitter are a property of the device, not of us
+// (iOS Safari, Android Chrome, a mouse and a trackpad all differ). No headless
+// harness can measure that, so measure it on the phone: play a few holes, then
+// read window._swipeDebug.log — `rejected` rows are gestures the floors threw
+// away, and if real swipes are landing there the floors are too high.
+const SWIPE_DEBUG_MAX = 40;
+window._swipeDebug = { log: [], max: SWIPE_DEBUG_MAX };
+function recordSwipeShape(path, curve) {
+  const d = window._swipeDebug;
+  if (!d || !path || path.length < 2) return;
+  const a = path[0], b = path[path.length - 1];
+  d.log.push({
+    n: path.length,
+    chordPx: Math.round(Math.hypot(b.x - a.x, b.y - a.y)),
+    durMs: Math.round(b.t - a.t),
+    hz: Math.round(path.length / Math.max((b.t - a.t) / 1000, 1e-3)),
+    curve: Number(curve.toFixed(4)),
+    rejected: curve === 0,
+  });
+  while (d.log.length > (d.max || SWIPE_DEBUG_MAX)) d.log.shift();
 }
 
 canvas.addEventListener("touchstart", swingStart, { passive: true }); // never calls preventDefault — passive avoids blocking on it
