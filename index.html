@@ -14,13 +14,13 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=59">
   <link rel="stylesheet" href="css/base.css?v=71">
-  <link rel="stylesheet" href="css/hud.css?v=100">
+  <link rel="stylesheet" href="css/hud.css?v=103">
   <link rel="stylesheet" href="css/menu.css?v=84">
   <link rel="stylesheet" href="css/courses.css?v=8">
   <link rel="stylesheet" href="css/modals.css?v=82">
   <link rel="stylesheet" href="css/tournament.css?v=60">
   <link rel="stylesheet" href="css/tour.css?v=13">
-  <link rel="stylesheet" href="css/chat.css?v=2">
+  <link rel="stylesheet" href="css/chat.css?v=3">
 
   <!-- three.js, vendored locally (no CDN — Capacitor runs offline behind a strict CSP).
        Powers the Four Oaks 3D course renderer only; every other course stays 2D canvas. -->
@@ -139,6 +139,14 @@
 
   <button id="hud-btn" class="hidden" aria-label="Controls"><span class="ic ic-menu"></span></button>
   <button id="green-view-btn" class="hidden" aria-label="Read green"><span class="ic ic-green3d"></span></button>
+  <!-- Hole mini map (bottom-left, above the view controls and the tour scorebug).
+       Tap = zoom the live camera out until tee, pin and ball are all in frame;
+       tap again to restore the club-reach framing. Like every other HUD panel it
+       is a SIBLING of #game, never a child — that DOM separation, not
+       stopPropagation, is what keeps the tap off the swing path. -->
+  <div id="minimap" class="hidden" role="button" tabindex="0" aria-label="Hole map">
+    <canvas id="mm-canvas"></canvas>
+  </div>
   <!-- 2D↔3D camera tilt: vertical slider, top = 3D lean, bottom = 2D overhead.
        Shown ONLY on courses with a real photoreal ground (Google Photorealistic
        + Apple Flyover) — see updateTiltBtn / #tilt-range wiring in game.js.
@@ -156,6 +164,19 @@
       <div id="club-window" aria-hidden="true"></div>
       <div id="club-strip"></div>
     </div>
+  </div>
+  <!-- Aim roller: full-width bottom drum, mobile only. Spin it left/right to turn
+       the aim; it has club-wheel momentum but no detents (aim is continuous).
+       Like every other HUD panel it is a SIBLING of #game, never a child — that
+       DOM separation, not stopPropagation, is what keeps a drag here off the
+       swing path. #ar-tape's ticks are a repeating gradient whose
+       background-position tracks camera.tAngle: an infinite tape with zero DOM
+       churn, and it re-syncs for free to every other aim source (auto-aim, the
+       Aim-at-pin button, arrow keys, two-finger twist, sideways canvas swipe). -->
+  <div id="aim-roller" class="hidden" aria-label="Aim">
+    <div id="ar-tape" aria-hidden="true"></div>
+    <div id="ar-index" aria-hidden="true"></div>
+    <div id="ar-read"><b id="ar-val">0°</b></div>
   </div>
   <div id="hud-menu" class="hidden">
     <div id="hm-course-items">
@@ -891,6 +912,6 @@
        script so it is also require()-able by tools/ball_calibrate.mjs — the
        calibration gate runs the exact code the browser flies. -->
   <script defer src="ballistics.js?v=5"></script>
-  <script defer src="game.js?v=377"></script>
+  <script defer src="game.js?v=381"></script>
 </body>
 </html>

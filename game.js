@@ -251,16 +251,31 @@ const TUNE = {
   // green scale. A hard clamp would saturate 42% of greens at the cap and delete
   // every green's character, so squash instead: s' = C·tanh(s/C). Identity at
   // small s (a 1.0% green stays 1.0%), asymptote C, order-preserving.
-  gMacroCap:   0.028,    // dimensionless asymptote of the DEM macro tilt
-  // 0.009 left the field with a realistic MEDIAN and no tail: measured across
-  // pinehurst / harbour town / blackwater the p50 sat at 2.2-2.7% (right) but the
-  // steepest point on any green in the game was 3.8-4.4%, against caps of
-  // 5.3-6.6% that were never approached. Real courses have 4-5% shelves, false
-  // fronts and run-offs, so there was no genuinely severe putt anywhere. 0.013
-  // lifts the tail while leaving the median alone; the macro term is deliberately
-  // NOT the lever here, since the DEM's magnitude above ~3% is noise (see
-  // gMacroCap). greenGradCap() still guarantees a ball can always come to rest.
-  gMicroGrade: 0.013,    // target RMS grade of the synthetic undulation lobes
+  // 0.028 -> 0.038 to make greens actually break. This is THE break lever (see
+  // gMicroGrade below for why the other one isn't). Measured on pinehurst: field
+  // p50 2.46% -> 2.78%, 20 ft cross-slope break 2.52 -> ~4 ft.
+  // The ceiling is set by the NOISY courses, not the typical one, and you have
+  // to size this against a per-course raw fit — sizing it off the 3.45% global
+  // median is what made 0.045 look safe when it wasn't. Harbour Town's raw fit
+  // is 9.1% (it is physically FLAT; the coarse DEM carries canopy bias), so it
+  // rides the asymptote: at 0.045 it squashed to 4.35%, went over greenGradCap
+  // and SATURATED — p50 = p90 = steepest = 4.90%, a flat course playing as the
+  // most severe in the game, 5 ft tap-ins at 44%, and gate 15 (course median
+  // grade must stay under 4.0%) correctly failed it. At 0.038 it lands at 3.84%,
+  // while pinehurst keeps essentially all of its gain. Raising this further
+  // needs the squash to be normalised per course, not a bigger asymptote.
+  gMacroCap:   0.038,    // dimensionless asymptote of the DEM macro tilt
+  // NOT a break lever — turning this UP turns break DOWN. The lobes are a
+  // zero-mean sin x cos field, so along the ball's path they oscillate and
+  // largely cancel, while still inflating the local |grad| that a static grade
+  // census samples. Measured both ways. In-game (pinehurst, 20 ft cross p50)
+  // 0.009 -> 0.013 moved the census UP (p50 2.21 -> 2.30%, steepest 3.82 ->
+  // 4.37%) and the actual break DOWN, 2.62 -> 2.52 ft. Independently, the
+  // textbook model integrated at dt 2 ms, 20 ft dead pace on a 2.0% macro tilt:
+  // no micro 2.95 ft, micro RMS 1.3% 2.60 ft, micro RMS 2.0% 2.44 ft. So this
+  // stays at the value that leaves the most break on the table; the grade census
+  // is a MISLEADING proxy for break and the tail belongs to gMacroCap.
+  gMicroGrade: 0.009,    // target RMS grade of the synthetic undulation lobes
   gSynthTilt:  0.020,    // mean macro tilt where there is NO dem (blackwater, hogwarts)
   // Damping exponent on course greenTopo tiltMul/undAmp. Measured on blackwater
   // (1.35/1.7 AND stimp 13.5, which alone buys 1.27x more break than 11): at 0.6
@@ -273,7 +288,20 @@ const TUNE = {
   // greenSpeed: stimp 11 -> 6.56%, 13.5 -> 5.34%, 14.5 -> 4.97%. See
   // greenGradCap(). p99 of the built field is 3.9%, so this only ever bites
   // where a course's greenTopo multipliers stack on a steep DEM.
-  gGradCapFrac: 0.92,
+  // ...as a fraction of that no-rest grade. This is a DECELERATION MARGIN, not a
+  // safety epsilon: on a grade at the cap the slope gives back gGradCapFrac of
+  // the roll decel, so the net downhill decel is (1 - gGradCapFrac) of flat.
+  // 0.92 left only 8%, i.e. a ball on a near-cap downhill crawls ~12x its flat
+  // roll-out. That was survivable only while the field was too tame to reach the
+  // cap; raising gMacroCap to 0.045 (and stimp to 12, which LOWERS the cap
+  // 6.56% -> 6.01%) put real greens there, and it showed up first as a solver
+  // blowup — invertPuttPaceCurved bisects ~50 forward rolls per swing and each
+  // one burned its 9000-step ceiling on a ball that would not stop. Measured on
+  // pinehurst hole 1, ONE distance: >600 s at 0.92, 7.3 s at 0.75. The live cost
+  // is the same shape, per swing, on a phone. 0.75 keeps 25% net decel and still
+  // caps at 4.90% (stimp 12), above the field's p90 ~4.3%, so break is untouched
+  // where it exists and only the extreme tail clamps.
+  gGradCapFrac: 0.75,
   demGradMax: 0.35,      // cap on real terrain slope used for off-green roll
   // --- Green reading: ONE stated exaggeration, ONE absolute reference -------
   // Every visual used to normalise by the green's own gmax, so a 0.5% green drew
@@ -485,6 +513,25 @@ const TUNE = {
   aimHoldMs: 250,        // motionless press this long arms aim-drag
   aimHoldPx: 10,         // "motionless" = whole path within this radius of the press
   aimDragDegPx: 0.15,    // aim pan rate: degrees of camera rotation per screen px
+  // --- Bottom aim roller (mobile) + the sideways-swipe gesture that feeds it ---
+  aimRollDegPx: 0.09,    // roller rate: degrees of aim per px dragged. Deliberately
+                         //   slower than aimDragDegPx — a full 390px phone sweep is
+                         //   ~35°, so fine aim never needs a re-grab.
+  aimRollFling: 0.90,    // per-frame velocity friction (same shape as the club drum)
+  aimRollVelMax: 1.60,   // deg/frame fling cap (~16° of coast at the cap)
+  aimRollVelMin: 0.35,   // deg/frame below which the release does NOT coast at all.
+                         //   Momentum is for big sweeps; a deliberate aiming drag has
+                         //   to stop where the finger stopped. Without this floor a
+                         //   measured 200px sweep still coasted ~7° past the target,
+                         //   which is most of a green at approach range.
+  aimSwipeRatio: 1.60,   // |dx| > |dy| * this  =>  the gesture is sideways, not a swing
+  aimSwipeMinPx: 22,     // travel before a sideways gesture may arm aim
+  aimSwipeMaxPxMs: 0.55, // instantaneous finger speed above this LATCHES the gesture
+                         //   as a SHOT for good. This is the whole "only slow swipes
+                         //   aim" rule, and it has to latch: a swipe that starts slow
+                         //   and accelerates into a sideways flick is a punch-out, not
+                         //   an aim, and it must still fire even though the finger was
+                         //   crawling 80ms earlier.
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
@@ -695,14 +742,16 @@ function setSimScale(next) {
 // there is no read or aim aid here, and swipe aim resolves to about +/-1 deg,
 // which at 5 ft is +/-1.05" against only 1.28" of real margin. So the cup plays
 // larger.
-// 0.055 (11.9", 2.80x real) was too large, and putt_matrix says exactly WHERE:
-// with no read the measured make rates already bracketed tour at short range
-// (3 ft 94%/83% vs 99%, 5 ft 75%/58% vs 77% on pinehurst/blackwater) while the
-// oversize leaked almost entirely into LAG putts, where a slow near-centre
-// arrival gets caught by a cup nearly three times too wide — 20 ft 24% vs a
-// tour 15%, 30 ft 15% vs 7%, 45 ft 12% vs ~4%. Hence a modest cut aimed at the
-// long end (9.9", 2.33x real) rather than the halving that would also gut the
-// 3- and 5-footers that are already honest.
+// 0.055 is 11.9", 2.80x the real 4.25". That looks indefensible until you
+// measure OUTCOMES, so do not "fix" it without reading this. With no read, the
+// measured make rates already sit at tour difficulty where the comparison is
+// valid: 3 ft 94%, 5 ft 75% (pinehurst) vs a tour 99% / 77% WITH a read.
+// Cutting it to 0.046 was tried and reverted — 5 ft fell to 64%, BELOW tour,
+// while the lag putts it was meant to correct moved only 2-3 points. The
+// long-range argument for cutting it does not hold either: at 20-45 ft the
+// break is 2.6-6.2 ft against a 0.5 ft cup radius, so a blind-aim make comes
+// from the flat-spot tail of the sampling, not from a read, and comparing that
+// to tour's read-and-execute rate is apples to oranges.
 const HOLE_RADIUS_UNITS = 0.055;
 // Real golf ball: 1.68" diameter -> ~0.023 yd radius -> ~0.008 units.
 const BALL_RADIUS_UNITS = 0.008;
@@ -711,7 +760,17 @@ const BALL_RADIUS_UNITS = 0.008;
 // hiding the distance scaling the flyover should show. ~0.05u ≈ still small on
 // the ground but foreshortens visibly from tee framing (~4px) to putt zoom.
 const APPLE_BALL_DRAW_UNITS = 0.05;
-const DEFAULT_STIMP = 11;
+// Break is EXACTLY linear in stimp (greenDecel = 1.83^2/(2*S*0.3048), so
+// a_lat/a_roll scales as S), which makes this a clean second break lever on top
+// of gMacroCap — 11 -> 12 is x1.091 — and it independently tightens distance
+// control, since a faster green punishes pace error harder. Tour events run
+// 12-13; only blackwater-vale and hogwarts-grounds set greenSpeed themselves
+// (13.5-14.5), so this is the number every real course plays at.
+// Cost: greenGradCap() tightens 6.56% -> 6.01%. Still well clear of the field's
+// p90 (~4.3% at gMacroCap 0.045), so the clamp stays dormant and a ball can
+// always come to rest. Also speeds up approach-shot release on greens, since
+// rollDecelMs("green") reads the same number — that is what shot_matrix gates.
+const DEFAULT_STIMP = 12;
 
 // =====================================================================
 //  Hole data
@@ -809,18 +868,45 @@ function invertPuttPaceCurved(x, y, ang, D) {
   // +/-15% on bump-and-runs that started in rough and finished on the green,
   // while putts that never left the green solved exactly. Keeping the best
   // measured root costs nothing: the rolls have already been paid for.
+  // Runaway cut-off. The bracket deliberately probes wildly hot paces (hi grows
+  // 1.5x up to ten times), and rolling one of those to rest is pure waste: the
+  // caller only ever asks "is this displacement < D". A ball still moving can
+  // travel at most v^2/(2*aMin) further, where aMin is the NET decel floor —
+  // green roll minus the steepest slope that can give back (gGradCapFrac of it).
+  // So once disp - maxRemaining > D, the final displacement is provably still
+  // > D and the rest of the roll cannot change the answer. Conservative, not a
+  // heuristic: it never truncates a probe whose verdict is still in doubt.
+  // Without this, steeper greens push probes into the 9000-step ceiling — 9000
+  // steps is 300 s of simulated roll at dt 1/30 — and a single 45 ft putt took
+  // ~50 s to solve headless, which is a per-swing cost in the live game too.
+  const K = msPerUF(), K2 = K * K;
+  const restSpeed2 = restSpeedThreshold() * restSpeedThreshold();
+  const aMin = Math.max(1e-6, rollDecelMs("green") * (1 - TUNE.gGradCapFrac));
   let best = null;
   const rollDisp = (v0) => {
     const b = startRollingSpin({ x, y, vx: dirx * v0, vy: diry * v0 });
+    let cut = false;
     for (let i = 0; i < 9000; i++) {
       b.x += b.vx; b.y += b.vy;                   // position first (matches rollStep order)
       clampToWorld(b);                             // ...and the edge bounce, same as rollStep
       stepGroundRoll(b, onGreenAt(b) ? "green" : surfaceAt(b.x, b.y));
-      if (Math.hypot(b.vx, b.vy) < restSpeedThreshold()) break;
+      const sp2 = b.vx * b.vx + b.vy * b.vy;
+      if (sp2 < restSpeed2) break;
+      // disp - maxRemain > D  <=>  disp > D + maxRemain, and both sides are
+      // positive, so compare SQUARES and keep the inner loop free of sqrt —
+      // this runs ~50 rolls deep per swing and the naive form cost ~2x.
+      const maxRemain = (sp2 * K2) / (2 * aMin) / M_PER_UNIT;    // world units
+      const lim = D + maxRemain, ddx = b.x - x, ddy = b.y - y;
+      if (ddx * ddx + ddy * ddy > lim * lim) { cut = true; break; }
     }
     const disp = Math.hypot(b.x - x, b.y - y);
-    const err = Math.abs(disp - D);
-    if (!best || err < best.err) best = { v0, err };
+    // A cut probe's displacement is a LOWER bound, not its rest point, so its
+    // error is understated — never let one win `best`. It is still a valid
+    // ">= D" answer for the bisection, which is all the caller asked for.
+    if (!cut) {
+      const err = Math.abs(disp - D);
+      if (!best || err < best.err) best = { v0, err };
+    }
     return disp;
   };
   // Bracket around the flat-green pace; widen only if slope pushes the root out
@@ -1174,6 +1260,18 @@ function loadCourseAerial(c) {
   img.src = "courses/" + c._aerialFile;
 }
 let gtilesGround = false;
+// True while the photoreal tiles are the thing actually PAINTING the ground.
+// gtilesGround alone only says the course HAS them: the hole overview hides the
+// tiles and hands the ground back to the flat 2D renderer, and every consumer of
+// the tiles camera has to follow. Kept separate from the gtilesGround LATCH on
+// purpose — flipping that would run leave()/enter(), replaying the intro fade
+// and re-placing the camera on every toggle; setHidden is the cheap path.
+// (greenView/cine deliberately are NOT in here: they hide the tiles too, but
+// they cover the screen with their own opaque scrim, so making the flat ground
+// stack run underneath them would be pure wasted work.)
+function gtilesPaints() {
+  return !!(gtilesGround && window.GTiles3D && !overview);
+}
 // Mirrors updateMboxMode for the Google photoreal ground.
 function updateGtilesMode() {
   const want = gtilesGroundActive();
@@ -1804,6 +1902,10 @@ let showOOB = true;        // red OOB overlay toggle (flat courses default on)
 // drawn only after the user explicitly flips the OB toggle this session.
 let oobUserOn = false;
 let greenView = null;      // 3D green inspect overlay — { g, mesh, yaw, tilt, drag } or null
+// Hole overview: the mini map tapped, camera zoomed out to fit tee+pin+ball.
+// Not a full-screen mode — the live scene keeps drawing, just framed wide. On a
+// photoreal-tiles course it also forces the flat 2D ground (see toggleOverview).
+let overview = false;
 // Cinematic 3D landing (auto green view on a great approach — see TUNE.cine*).
 let cine = null;           // active cinematic — { g, mesh, t0, yaw0, tilt, restT } or null
 let cinePending = null;    // armed at launch by a great predicted shot; opens on the descent
@@ -3130,6 +3232,7 @@ function canSwing() {
   return (mode === "course" || mode === "range") && !state.moving && !state.inHole && !holeTransition
     && !greenView  // 3D green inspect open: swings/aiming suspended
     && !cine       // cinematic landing playing: input suspended until it closes
+    && !overview   // zoomed out to the whole hole: a look-around, not an aim mode
     && !chatOpen   // typing a message: a stray gesture must never fire a shot
     && myTurn();   // live match: only the "away" / honors player may swing
 }
@@ -3526,6 +3629,9 @@ function swingStart(e) {
   if (ghostMouse(e)) return;
   if (cine) { closeCine(); return; }              // cinematic landing: tap = skip
   if (greenView) { gvPointerStart(e); return; }   // inspect view owns the pointer
+  // Zoomed out to the whole hole: tapping the map is the discoverable way back
+  // (the mini map itself toggles too, but it's a 96px target in the corner).
+  if (overview) { setOverview(false); return; }
   aimDrag = null;     // ditto a stale aim pan (touchend can be missed)
   // Pin this gesture to whichever touch just landed (undefined for mouse —
   // pointerPos falls back to touches[0]/the event itself in that case).
@@ -3563,7 +3669,9 @@ function swingStart(e) {
   swingIsMouse = !!(e && typeof e.type === "string" && e.type.indexOf("mouse") === 0);
   const p = pointerPos(e, activeTouchId);
   const now = performance.now();
-  swipe = { x: p.x, y: p.y, t: now };
+  // `fast` latches true the moment any sample of this gesture exceeds
+  // TUNE.aimSwipeMaxPxMs — from then on it can only ever be a shot, never an aim.
+  swipe = { x: p.x, y: p.y, t: now, fast: false };
   swipePath = [{ x: p.x, y: p.y, t: now }];
 }
 function swingMove(e) {
@@ -3638,11 +3746,14 @@ function swingMove(e) {
     return;
   }
   if (aimDrag) {
-    // hold-then-slide aim pan: horizontal finger motion rotates the aim slowly.
-    // Same sign as the two-finger twist: dragging right turns the world right.
+    // Aim pan, armed either by the motionless hold or by a slow sideways swipe.
+    // Horizontal finger motion rotates the aim slowly: drag RIGHT, aim RIGHT.
+    // aimTurn() owns that sign so this, the bottom roller and the arrow keys can
+    // never disagree (this used to be a bare `tAngle +=`, which pointed the
+    // opposite way to ArrowRight).
     e.preventDefault();
     const p = pointerPos(e, activeTouchId);
-    camera.tAngle += (p.x - aimDrag.lastX) * TUNE.aimDragDegPx * Math.PI / 180;
+    aimTurn((p.x - aimDrag.lastX) * TUNE.aimDragDegPx);
     aimDrag.lastX = p.x;
     cameraAiming = true;
     frameTarget();
@@ -3652,6 +3763,13 @@ function swingMove(e) {
   e.preventDefault();
   const p = pointerPos(e, activeTouchId);
   const now = performance.now();
+  // Latch this gesture as a swing the instant the finger moves at swing speed.
+  // Sampled against the PREVIOUS point, not the press, so it reads instantaneous
+  // pace: a long slow drag never trips it however far it travels, and a flick
+  // trips it on its first sample. Once set it is never cleared — see swipe.fast.
+  const q0 = swipePath[swipePath.length - 1];
+  const qdt = now - q0.t;
+  if (qdt > 0 && Math.hypot(p.x - q0.x, p.y - q0.y) / qdt > TUNE.aimSwipeMaxPxMs) swipe.fast = true;
   // Arm aim-drag (touch only): finger has been down TUNE.aimHoldMs without ever
   // leaving a TUNE.aimHoldPx radius of the press — this move is the start of a
   // deliberate slide, not a flick. Swings (drives AND putts) translate
@@ -3663,6 +3781,24 @@ function swingMove(e) {
     swipe = null; swipePath = null;
     haptic(3);
     if (earnMilestone("hint-aimdrag")) showToast("Slide to aim", 1800, "gold");
+    return;
+  }
+  // Arm aim-drag the other way (touch only): the gesture has run sideways and has
+  // never gone faster than aiming pace, so the player is turning the view, not
+  // swinging. A fast sideways flick already latched swipe.fast above and still
+  // fires — the punch-out shot survives. Putts and drives are swiped UP-screen,
+  // so the |dx| > |dy| dominance test never trips mid-stroke.
+  const adx = p.x - swipe.x, ady = p.y - swipe.y;
+  if (!swingIsMouse && !swipe.fast &&
+      Math.hypot(adx, ady) >= TUNE.aimSwipeMinPx &&
+      Math.abs(adx) > Math.abs(ady) * TUNE.aimSwipeRatio) {
+    // Seed at the PRESS, not at p: the travel already made is part of the same
+    // slide, so counting it keeps the aim 1:1 with the finger — otherwise the
+    // first aimSwipeMinPx are a dead zone and the world jumps on the next move.
+    aimDrag = { lastX: swipe.x };
+    swipe = null; swipePath = null;
+    haptic(3);
+    if (earnMilestone("hint-aimswipe")) showToast("Swipe sideways to aim", 1800, "gold");
     return;
   }
   swipePath.push({ x: p.x, y: p.y, t: now });
@@ -4023,6 +4159,7 @@ function launchShot(ang, frac, spin, onGreen) {
     frac = Math.min(frac, Math.max(previewFrac, 0.06));
   }
   measurePoint = null; // shot fired — clear the rangefinder marker
+  arStop();            // ball's away: kill any aim-roller momentum still coasting
   previewFracTouched = false; // fresh shot next time — let the chip-assist auto-default re-engage
   // Pace for THIS swing, chosen before anything is solved or predicted below.
   simScale = shotBaseScale = swingTimeScale(onGreen);
@@ -4277,6 +4414,12 @@ const HUD_RESERVE = {
   mobile:  { top: 78, bot: 124, side: 10 }, // px: top bar + wind pill / stat strip / gutters
   desktop: { top: 56, bot: 64 },
 };
+// Height of the mobile aim roller, added to the bottom reserve when it is shown.
+// Must match --ar-h in hud.css. This is a full-width band that really can hide
+// the shot line, so unlike the corner widgets it MUST be reserved — but it is a
+// fixed height that never wraps, so it belongs here as a constant rather than in
+// measureHudBands()'s ResizeObserver (which exists for content-driven heights).
+const AIM_ROLLER_H = 44;
 // Ceiling on how tall (relative to width) the framed play area may get in 2D mode.
 // The fit is greedy min(availW/w, availH/h): a taller viewport buys more zoom. A
 // full-screen native WKWebView is taller than mobile Safari (no browser toolbar),
@@ -4308,13 +4451,29 @@ const AIM_NUDGE = 3 * Math.PI / 180;   // fixed step for a single arrow tap
 // the angle-bucket warp cache calls this per-bucket to get each bucket's own
 // correct scale rather than reusing whatever camera.scale happens to be live.
 function frameScaleForAngle(angle, ox, oy) {
+  return frameFit(angle, [{ x: ox, y: oy }, HOLE.holePos]);
+}
+// Fit an arbitrary set of world points into the play area at `angle`. This is
+// frameScaleForAngle generalised past its two hardcoded points (ball + pin) so
+// the hole overview can fit tee + pin + ball with the same padding, the same
+// HUD-band reserve and the same aspect cap. Also returns the bbox centre back in
+// WORLD coordinates (cx/cy) — the caller's focus point.
+function frameFit(angle, pts) {
   const cos = Math.cos(angle), sin = Math.sin(angle);
-  const bx = cos * ox - sin * oy, by = sin * ox + cos * oy;
-  const px = cos * HOLE.holePos.x - sin * HOLE.holePos.y, py = sin * HOLE.holePos.x + cos * HOLE.holePos.y;
-  const span = Math.max(Math.abs(bx - px), Math.abs(by - py));
+  let lo0 = Infinity, hi0 = -Infinity, lo1 = Infinity, hi1 = -Infinity;
+  for (const p of pts) {
+    const rx = cos * p.x - sin * p.y, ry = sin * p.x + cos * p.y;
+    if (rx < lo0) lo0 = rx; if (rx > hi0) hi0 = rx;
+    if (ry < lo1) lo1 = ry; if (ry > hi1) hi1 = ry;
+  }
+  const dx = hi0 - lo0, dy = hi1 - lo1;
+  const span = Math.max(dx, dy);
   const pad = Math.max(VIEW_PAD_MIN, span * VIEW_PAD_FRAC);
-  const w = Math.max(Math.abs(bx - px) + 2 * pad, VIEW_MIN);
-  const h = Math.max(Math.abs(by - py) + 2 * pad, VIEW_MIN);
+  const w = Math.max(dx + 2 * pad, VIEW_MIN);
+  const h = Math.max(dy + 2 * pad, VIEW_MIN);
+  // centre of the rotated bbox, un-rotated back to world
+  const mx = (lo0 + hi0) / 2, my = (lo1 + hi1) / 2;
+  const cx = cos * mx + sin * my, cy = -sin * mx + cos * my;
   // Fit into the play area between the HUD bands (not the full screen).
   // The tilt squash shrinks screen height by tTilt, so the vertical fit gains
   // that headroom back — the leaned hole still fills the play area.
@@ -4328,12 +4487,27 @@ function frameScaleForAngle(angle, ox, oy) {
   // pitch (gtiles3d setCamera), so anything not shared here is a parity gap.
   if (!appleGroundActive())
     availH = Math.min(availH, availW * PLAY_ASPECT_MAX);
-  return { w, h, scale: Math.min(availW / w, availH / (h * camera.tTilt)) };
+  return { w, h, cx, cy, scale: Math.min(availW / w, availH / (h * camera.tTilt)) };
+}
+// Hole overview framing: fit tee, pin AND ball. The ball is in the set because
+// after a wayward drive it can sit outside the tee↔pin box, and an "overview"
+// that loses the ball is worse than no overview.
+function frameOverview() {
+  const r = frameFit(camera.tAngle, [HOLE.teePos, HOLE.holePos, state.ball]);
+  camera._w = r.w; camera._h = r.h;
+  camera.tScale = r.scale;
+  camera.tFocus.x = r.cx;
+  camera.tFocus.y = r.cy;
 }
 // Target framing (focus = ball↔pin midpoint; scale = fit ball↔pin + pad at the
 // target angle). Tight near the cup (putts), wide off the tee. On Apple-ground
 // courses (off the green) frameClubReach replaces this with the club-reach rule.
 function frameTarget(fx, fy) {
+  // The hole overview owns the framing while it is on. This is the ONE choke
+  // point: every reframe in the game (at-rest settle, club change, tilt slider,
+  // aim-at-pin, arrow keys, setHole) routes through here, so the zoomed-out view
+  // survives all of them without any of those call sites knowing it exists.
+  if (overview && mode === "course" && HOLE && !HOLE.isRange) { frameOverview(); return; }
   // Focus point defaults to my ball; live spectating passes the opponent's ball.
   const ox = (fx == null) ? state.ball.x : fx, oy = (fy == null) ? state.ball.y : fy;
   // Club-reach framing owns off-green shots on EVERY course now — the view
@@ -4507,7 +4681,12 @@ function applyView() {
   // the flat affine so the first frames render, not break. Ground points pass
   // terrainZ (the game DEM) like Course3D; gtiles3d places them on the ellipsoid
   // at that height.
-  view.gtilesProj = (gtilesGround && window.GTiles3D && window.GTiles3D.isReady()) ? true : null;
+  // The hole overview hides the tiles and paints the flat 2D ground (see
+  // gtilesPaints), so every projection has to fall back to the affine with it —
+  // otherwise the ball/cup/contours would be placed by a camera nothing is
+  // rendering. The affine is always current: applyView recomputes view.a..f
+  // unconditionally above, even while the tiles own the ground.
+  view.gtilesProj = (gtilesPaints() && window.GTiles3D.isReady()) ? true : null;
   if (view.gtilesProj) {
     view.kz = 0; view.tilt = 1;
     const b = state.ball, tz = terrainZRender(b.x, b.y);
@@ -4715,9 +4894,13 @@ function hudReserve() {
   if (!IS_DESKTOP) {
     // Mobile: HUD is a top bar + bottom strip -> reserve those, use full width.
     const m = HUD_RESERVE.mobile;
+    // The aim roller is a full-width band, so its height is added rather than
+    // maxed. typeof-guarded because hudVis is declared far below this and
+    // resize()/applyView() both run during boot, before it exists.
+    const roll = (typeof hudVis !== "undefined" && !hudVis.aim) ? 0 : AIM_ROLLER_H;
     return {
       top: Math.max(safeInset.t + m.top, _hudBand.top),
-      bot: Math.max(safeInset.b + m.bot, _hudBand.bot),
+      bot: Math.max(safeInset.b + m.bot + roll, _hudBand.bot),
       left: safeInset.l + m.side,
       right: safeInset.r + m.side,
     };
@@ -7540,13 +7723,15 @@ function draw() {
   computeViewAABB(); // for off-screen polygon culling this frame
   const warp = tilt3d;
   const wSig = warp ? warpSig(cssW, cssH) : null;
-  // Sweeping = the camera is actively rotating via arrow-key aiming (the one
-  // sustained, pure-rotation motion source — see angle-bucket cache above).
+  // Sweeping = the camera is actively rotating via arrow-key aiming or the bottom
+  // aim roller (the sustained, pure-rotation motion sources — see angle-bucket
+  // cache above). Without the roller terms a spin on a tilted course rebuilds the
+  // whole ground warp raster every frame instead of blending pre-baked buckets.
   // Excludes two-finger touch-rotate (camTouch, moves scale/focus too every
   // frame — ghosting a translated blend is much worse than a rotated one) and
   // mid tilt-toggle-transition (brief, already fast via the camEaseT snap).
   let bucketBlend = null;
-  if (warp && (aimKey !== 0 || cameraAiming) && !camTouch && camera.tilt === camera.tTilt) {
+  if (warp && (aimKey !== 0 || cameraAiming || ar.drag || ar.raf) && !camTouch && camera.tilt === camera.tTilt) {
     const bKey = baseWarpKey(cssW, cssH);
     const i0 = angleBucketIndex(camera.angle), i1 = (i0 + 1) % TUNE.tAngleBuckets;
     const e0 = _bucketCache.get(bKey + "#" + i0), e1 = _bucketCache.get(bKey + "#" + i1);
@@ -7563,7 +7748,7 @@ function draw() {
     _tGen++;
     ctx.clearRect(0, 0, cssW, cssH + 2 * _capPad);
     if (!HOLE.isRange) drawGreen(true, greensInPlay());
-  } else if (gtilesGround) {
+  } else if (gtilesPaints()) {
     // Google photoreal tiles are Pebble's ground — same model as Apple/three.js:
     // the tiles paint behind the transparent #game canvas, the common tail draws
     // cup/ball/aim/contours over it via view.gtilesProj.
@@ -8050,6 +8235,136 @@ function draw() {
   }
 
   drawAttribution();
+  drawMinimap();   // its own canvas, but paced by the same paint gate as this one
+}
+
+// ============================================================
+// HOLE MINI MAP (#minimap / #mm-canvas)
+// A schematic of the hole in the bottom-left corner; tapping it toggles the
+// zoomed-out overview (setOverview). Two layers, same split as every other
+// raster in here (buildGreenRelief is the model): the SURFACES are baked once
+// per hole+size into an offscreen with their own world->px affine, and each
+// paint is one drawImage plus the four moving markers.
+// ============================================================
+const elMmCanvas = document.getElementById("mm-canvas");
+let _mmBake = null;   // { key, canvas, m, w, h }
+const MM_INSET = 5;   // css px of margin inside the widget
+
+// world -> bake px, rotated so the hole plays "up" (same convention as the game
+// camera, which setHole seeds from safeTeeAim).
+function mmPt(m, x, y) { return [m.a * x + m.b * y + m.c, m.d * x + m.e * y + m.f]; }
+function mmPoly(g, m, poly) {
+  g.beginPath();
+  for (let i = 0; i < poly.length; i++) {
+    const p = mmPt(m, poly[i].x, poly[i].y);
+    i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]);
+  }
+  g.closePath();
+}
+// A poly is worth drawing only if its bbox lands on the widget. This is not an
+// optimisation, it is required: on a global course HOLE.surfaces is the WHOLE
+// property (Pebble = 18 greens, 116 bunkers) shared by all 18 holes, so without
+// the cull the "hole map" would be a course map with the hole lost in it.
+function mmVisible(m, poly, w, h) {
+  const bb = polyBBox(poly);
+  let lo0 = Infinity, hi0 = -Infinity, lo1 = Infinity, hi1 = -Infinity;
+  for (const c of [[bb.minx, bb.miny], [bb.maxx, bb.miny], [bb.minx, bb.maxy], [bb.maxx, bb.maxy]]) {
+    const p = mmPt(m, c[0], c[1]);
+    if (p[0] < lo0) lo0 = p[0]; if (p[0] > hi0) hi0 = p[0];
+    if (p[1] < lo1) lo1 = p[1]; if (p[1] > hi1) hi1 = p[1];
+  }
+  return hi0 >= -2 && lo0 <= w + 2 && hi1 >= -2 && lo1 <= h + 2;
+}
+function mmFillPolys(g, m, polys, color, w, h) {
+  if (!polys || !polys.length) return;
+  g.fillStyle = color;
+  for (const poly of polys) {
+    if (poly.length < 3 || !mmVisible(m, poly, w, h)) continue;
+    mmPoly(g, m, poly);
+    g.fill();
+  }
+}
+// Bake the hole's surfaces. Keyed on hole + widget size + dpr, so it re-bakes on
+// a hole change or a rotate and is otherwise free.
+function buildMinimap(w, h) {
+  const dpr = window.devicePixelRatio || 1;
+  const key = (course ? course.id : "?") + ":" + (HOLE.num || 0) + ":" + w + "x" + h + ":" + dpr.toFixed(2);
+  if (_mmBake && _mmBake.key === key) return _mmBake;
+  const t = HOLE.teePos, p = HOLE.holePos;
+  const ang = -Math.PI / 2 - Math.atan2(p.y - t.y, p.x - t.x);  // tee->pin points up
+  const cos = Math.cos(ang), sin = Math.sin(ang);
+  // hole extent in the rotated frame, padded so the tee and green aren't on the rim
+  const rt = [cos * t.x - sin * t.y, sin * t.x + cos * t.y];
+  const rp = [cos * p.x - sin * p.y, sin * p.x + cos * p.y];
+  const span = Math.max(Math.abs(rt[0] - rp[0]), Math.abs(rt[1] - rp[1]));
+  const pad = Math.max(6, span * 0.18);
+  const rw = Math.abs(rt[0] - rp[0]) + 2 * pad, rh = Math.abs(rt[1] - rp[1]) + 2 * pad;
+  const s = Math.min((w - 2 * MM_INSET) / rw, (h - 2 * MM_INSET) / rh);
+  const mx = (rt[0] + rp[0]) / 2, my = (rt[1] + rp[1]) / 2;
+  const m = { a: s * cos, b: -s * sin, d: s * sin, e: s * cos, c: 0, f: 0 };
+  m.c = w / 2 - s * mx; m.f = h / 2 - s * my;   // rotated centre -> widget centre
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w * dpr));
+  canvas.height = Math.max(1, Math.round(h * dpr));
+  const g = canvas.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const sf = HOLE.surfaces || {};
+  // Same palette as drawVectorSurfaces so the map reads as a small version of
+  // the vector course, not a second visual language.
+  g.fillStyle = "#2a6c2c";
+  g.fillRect(0, 0, w, h);
+  mmFillPolys(g, m, sf.grass, "#3a9440", w, h);
+  mmFillPolys(g, m, sf.rough, "#2c6e30", w, h);
+  mmFillPolys(g, m, sf.woods, "#2f5d34", w, h);
+  mmFillPolys(g, m, sf.fairway, "#4eb053", w, h);
+  mmFillPolys(g, m, sf.tee, "#5cbf61", w, h);
+  mmFillPolys(g, m, sf.bunker, "#e2d3a4", w, h);
+  mmFillPolys(g, m, sf.water, "#2a86d8", w, h);
+  mmFillPolys(g, m, sf.green, "#7fd07f", w, h);
+  _mmBake = { key, canvas, m, w, h };
+  return _mmBake;
+}
+// One paint of the widget: the baked surfaces, then tee / pin / ball and the
+// line still to play. Called from draw(), so the render pace throttles it.
+function drawMinimap() {
+  if (!elMmCanvas || _mmShown === false) return;
+  if (mode !== "course" || !HOLE || HOLE.isRange || !HOLE.teePos) return;
+  const w = elMmCanvas.clientWidth, h = elMmCanvas.clientHeight;
+  if (!w || !h) return;   // still hidden / not laid out
+  const dpr = window.devicePixelRatio || 1;
+  const bw = Math.max(1, Math.round(w * dpr)), bh = Math.max(1, Math.round(h * dpr));
+  if (elMmCanvas.width !== bw || elMmCanvas.height !== bh) { elMmCanvas.width = bw; elMmCanvas.height = bh; }
+  const bake = buildMinimap(w, h);
+  const g = elMmCanvas.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  g.drawImage(bake.canvas, 0, 0, w, h);
+  const m = bake.m;
+  const b = state.ball;
+  const tp = mmPt(m, HOLE.teePos.x, HOLE.teePos.y);
+  const pp = mmPt(m, HOLE.holePos.x, HOLE.holePos.y);
+  const bp = mmPt(m, b.x, b.y);
+  // what's left of the hole
+  g.strokeStyle = "rgba(255,255,255,0.55)";
+  g.lineWidth = 1;
+  g.setLineDash([2, 2]);
+  g.beginPath(); g.moveTo(bp[0], bp[1]); g.lineTo(pp[0], pp[1]); g.stroke();
+  g.setLineDash([]);
+  // tee
+  g.fillStyle = "rgba(240,236,220,0.85)";
+  g.fillRect(tp[0] - 1.5, tp[1] - 1.5, 3, 3);
+  // pin: dot + a stick with a pennant
+  g.strokeStyle = "rgba(255,255,255,0.9)";
+  g.beginPath(); g.moveTo(pp[0], pp[1]); g.lineTo(pp[0], pp[1] - 7); g.stroke();
+  g.fillStyle = "#e2452f";
+  g.beginPath();
+  g.moveTo(pp[0], pp[1] - 7); g.lineTo(pp[0] + 5, pp[1] - 5.5); g.lineTo(pp[0], pp[1] - 4);
+  g.closePath(); g.fill();
+  // ball
+  g.fillStyle = "#fff";
+  g.strokeStyle = "rgba(0,0,0,0.55)";
+  g.lineWidth = 1;
+  g.beginPath(); g.arc(bp[0], bp[1], 2.6, 0, Math.PI * 2); g.fill(); g.stroke();
 }
 
 // On-map data/imagery credit (ODbL requires visible OSM attribution; NAIP/Esri
@@ -8064,7 +8379,7 @@ function drawAttribution() {
   const isOriginal = meta && meta.region === "Originals";
   const src = HOLE.aerial && HOLE.aerial.src;
   let lines;
-  if (gtilesGround && window.GTiles3D) {
+  if (gtilesPaints()) {
     // Google Photorealistic ground — the tiles' own credits REPLACE the
     // OSM/Esri lines (Map Tiles API ToS mandates showing them). Logo TODO
     // before ship; text credits (start with "Google") cover the prototype.
@@ -8754,6 +9069,10 @@ function setHole(rec) {
   markDirty();   // whole scene changes — must repaint even from a parked pace
   if (greenView) closeGreenView();
   if (cine || cinePending) closeCine();
+  // New hole → back to shot framing. Set directly rather than via setOverview:
+  // its frameTarget() would solve against the OUTGOING hole, and setHole frames
+  // the new one a few lines down anyway.
+  overview = false; elMinimap.classList.remove("mm-open");
   // live match: drop any in-flight shot marker / opponent tween from the last hole
   _shotFrom = null; oppShot = null; _spectating = false;
   shot.carry = shot.total = null; shot.mph = 0; // fresh hole — no stale HUD stats
@@ -8859,6 +9178,7 @@ function setHole(rec) {
   const alpha = safeTeeAim();
   camera.tAngle = -Math.PI / 2 - alpha;
   camera.angle = camera.tAngle; cameraAiming = false; // instant orient on hole change
+  arStop();                                           // no roller momentum across holes
   frameTarget();
   holeFitW = camera._w; holeFitH = camera._h;          // full-hole fit -> refScale
   camera.focus = { x: camera.tFocus.x, y: camera.tFocus.y }; // snap, no ease-in
@@ -9624,6 +9944,16 @@ elCineBtn.addEventListener("click", () => {
 });
 const elGreenViewBtn = document.getElementById("green-view-btn");
 elGreenViewBtn.addEventListener("click", (e) => { e.stopPropagation(); openGreenView(); });
+// Hole mini map: tap = zoom out to the whole hole, tap again = back to the shot.
+// stopPropagation is for the document-level closeHud (same reason as the button
+// above), not for the swing — the swing can't see this element at all, it is a
+// DOM sibling of #game painted on top.
+const elMinimap = document.getElementById("minimap");
+elMinimap.addEventListener("click", (e) => { e.stopPropagation(); toggleOverview(); });
+elMinimap.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;   // it's role="button" — honour both
+  e.preventDefault(); e.stopPropagation(); toggleOverview();
+});
 // The fake tilt "3D view" button was removed; a 3D control is kept only on
 // Google/Apple photoreal grounds, via the 2D↔3D tilt slider wired below.
 // Apple/Google-ground 2D↔3D tilt slider: top = 3D lean
@@ -9661,13 +9991,19 @@ elTiltRange.addEventListener("input", () => {
 // Apple Flyover; every other course has no 3D control at all.
 let _tiltSliderShown = false;
 function updateTiltBtn() {
-  const base = (mode === "course" || mode === "range") && !greenView && !cine;
+  // !overview: the zoomed-out view has no 3D to pitch. On the way back the
+  // gtiles branch below re-seeds the slider from golf.gtilesPitch, which the
+  // slider itself writes on every input — so the lean is restored, not reset.
+  const base = (mode === "course" || mode === "range") && !greenView && !cine && !overview;
   const apple = appleGroundActive();
   const gt = gtilesGround;
   const showSlider = base && (apple || gt) && mode === "course";
   if (showSlider !== _tiltSliderShown) {
     _tiltSliderShown = showSlider;
     elTiltSlider.classList.toggle("hidden", !showSlider);
+    // The mini map tops this column and the slider is ~186px tall — css/hud.css
+    // lifts #minimap over it off this class rather than reserving unconditionally.
+    document.body.classList.toggle("tilt-on", showSlider);
     if (showSlider && gt) {
       // Default to a 3D lean (85 -> ~55°) so Pebble reads as flyover immediately.
       const savedG = parseFloat(lsGet("golf.gtilesPitch"));
@@ -9688,6 +10024,30 @@ function updateGreenViewBtn() {
              && canSwing() && greensInPlay().length > 0;
   if (show !== _gvBtnShown) { _gvBtnShown = show; elGreenViewBtn.classList.toggle("hidden", !show); }
 }
+// The mini map is up whenever there's a hole to map (the driving range has none).
+let _mmShown = false;
+function updateMinimapBtn() {
+  const show = mode === "course" && HOLE && !HOLE.isRange && !greenView && !cine;
+  if (show !== _mmShown) { _mmShown = show; elMinimap.classList.toggle("hidden", !show); }
+}
+// Zoom out to the whole hole / back to the shot framing.
+function setOverview(on) {
+  on = !!on && mode === "course" && !!HOLE && !HOLE.isRange;
+  if (on === overview) return;
+  overview = on;
+  elMinimap.classList.toggle("mm-open", overview);
+  // Pebble's baked 2D aerial is deliberately never downloaded while the photoreal
+  // tiles own the ground (setHole). The overview drops to that flat ground, so
+  // fetch it now — idempotent, and until it lands the vector renderer covers.
+  if (overview && gtilesGround && course) loadCourseAerial(course);
+  // The camera ease starts on the NEXT frame, so a parked pace would otherwise
+  // sit on the old framing until something else moved; and the pace can't infer
+  // the toggle until camera.tScale has actually been re-solved.
+  frameTarget();
+  bumpActivity();
+  markDirty();
+}
+function toggleOverview() { setOverview(!overview); }
 
 function openHud() {
   elHudMenu.classList.remove("hidden"); elHudBtn.classList.add("open");
@@ -10111,6 +10471,7 @@ const HUD_VIS_DEFS = [
   { key: "scorecard", id: "scorecard",   label: "Scorecard bar", icon: "ic-clipboard" },
   { key: "stats",     id: "stats",       label: "Shot info",     icon: "ic-ruler" },
   { key: "club",      id: "hm-club-row", label: "Club selector", icon: "ic-flag" },
+  { key: "aim",       id: "aim-roller",  label: "Aim roller",    icon: "ic-target" },
   { key: "hint",      id: "hint",        label: "Swing hint",    icon: "ic-target" },
 ];
 let hudVis = (() => {
@@ -10125,12 +10486,20 @@ function applyHudVis() {
     const el = document.getElementById(d.id);
     if (el) el.classList.toggle("hud-off", !hudVis[d.key]);
   }
+  // The aim roller is the one panel that owns a reserved BAND rather than a
+  // corner: body.ar-off drops the bottom-left/right controls back down to the
+  // screen edge to fill the gap it leaves (hud.css mobile-bars section).
+  document.body.classList.toggle("ar-off", !hudVis.aim);
 }
 function setHudVis(key, on) {
   hudVis[key] = !!on;
   lsSet(HUD_VIS_KEY, hudVis);
   applyHudVis();
   renderHudVisToggles();
+  // hudReserve() reads hudVis.aim, so hiding/showing the roller changes the
+  // camera's bottom band — rebuild the view matrix or the play area keeps the
+  // old reserve until the next resize.
+  if (key === "aim") applyView();
 }
 function renderHudVisToggles() {
   const host = document.getElementById("hs-display");
@@ -10454,6 +10823,130 @@ elClubWheel.addEventListener("wheel", (e) => {
 }, { passive: false });
 buildClubWheel();
 
+// =====================================================================
+//  AIM ROLLER — full-width bottom drum (mobile). Spin left/right to turn
+//  the aim, club-wheel momentum, no detents (aim is continuous, and a drum
+//  that snaps would fight the ±1° precision the swipe already resolves).
+//
+//  There is no aim state to add: camera.tAngle IS the aim. swipeToShot()
+//  subtracts view.angle to turn a screen swipe into a world bearing, and
+//  frameClubReach / GolfBridge.frameAnchors / gtiles3d placeCamera all read
+//  camera.tAngle, so writing it here steers the shot AND the 3D camera with
+//  no change to any shot-path code.
+// =====================================================================
+// ONE definition of which way "right" turns the aim, so the roller, the
+// hold-then-slide pan, the sideways swipe and the arrow keys can never drift
+// apart. POSITIVE dDeg = aim further RIGHT. The arrow keys set the convention:
+// ArrowRight is dir -1 into aimNudge, i.e. right = camera.tAngle DECREASING.
+function aimTurn(dDeg) { camera.tAngle -= dDeg * Math.PI / 180; }
+const AR_PX_PER_DEG = 6;  // tape scale — must match the tick period in hud.css
+const elAimRoller = document.getElementById("aim-roller");
+const elArTape = document.getElementById("ar-tape");
+const elArVal = document.getElementById("ar-val");
+const ar = { drag: null, vel: 0, raf: 0, lastTs: 0, tickDeg: 0, lastAng: null, shown: null };
+// Aim offset from the ball->pin line, degrees, POSITIVE = aimed right of the pin.
+function arOffsetDeg() {
+  if (!HOLE || !HOLE.holePos) return 0;
+  const b = state.ball;
+  const pinT = -Math.PI / 2 - Math.atan2(HOLE.holePos.y - b.y, HOLE.holePos.x - b.x);
+  return angDiff(pinT, camera.tAngle) * 180 / Math.PI;
+}
+// Paint the tape straight off camera.tAngle rather than off accumulated drag
+// pixels. That is what makes the roller track EVERY other aim source for free —
+// auto-aim on settle, the Aim-at-pin button, arrow keys, the two-finger twist,
+// a sideways canvas swipe — none of which know this widget exists.
+function arRender() {
+  if (!elAimRoller || elAimRoller.classList.contains("hidden")) return;
+  if (ar.lastAng === camera.tAngle) return;   // called from draw(): no-op when parked
+  ar.lastAng = camera.tAngle;
+  elArTape.style.backgroundPositionX =
+    (camera.tAngle * 180 / Math.PI * AR_PX_PER_DEG).toFixed(1) + "px";
+  const d = arOffsetDeg(), n = Math.round(Math.abs(d));
+  elArVal.textContent = n === 0 ? "0°" : (d > 0 ? "R " : "L ") + n + "°";
+}
+// Turn the aim and take the world with it. camera.angle is set DIRECTLY rather
+// than eased via cameraAiming, matching the arrow-key-hold branch in
+// updateCamera: the ease is ~0.12/frame, so routing a finger-held drag through
+// it would visibly lag the world behind the tape under the finger.
+function arApply(dDeg) {
+  if (!dDeg) return;
+  aimTurn(dDeg);
+  camera.angle = camera.tAngle;
+  cameraAiming = false;
+  frameTarget();
+  bumpActivity();       // renderPace() would otherwise idle this to 10fps
+  arRender();
+  // One detent tick per whole degree, but ONLY under the finger. A 16° coast
+  // would otherwise fire 16 haptics in half a second — a buzz, not feedback.
+  const t = Math.round(arOffsetDeg());
+  if (t !== ar.tickDeg) { ar.tickDeg = t; if (ar.drag) haptic(2); }
+}
+function arStop() {
+  if (ar.raf) cancelAnimationFrame(ar.raf);
+  ar.raf = 0; ar.vel = 0; ar.lastTs = 0;
+}
+function arTick(ts) {
+  ar.raf = 0;
+  const dt = Math.min(ar.lastTs ? ts - ar.lastTs : 16.7, 50); ar.lastTs = ts;
+  const fr = dt / 16.7;
+  arApply(ar.vel * fr);
+  ar.vel *= Math.pow(TUNE.aimRollFling, fr);
+  // No end stops and no detent spring here, unlike cwTick: aim is circular and
+  // continuous, so there is nothing to clamp to and nothing to snap into.
+  if (Math.abs(ar.vel) > 0.01) ar.raf = requestAnimationFrame(arTick);
+  else { ar.vel = 0; ar.lastTs = 0; }
+}
+if (elAimRoller) {
+  elAimRoller.addEventListener("pointerdown", (e) => {
+    if (hudEditOn) return;
+    if (!canSwing()) return;   // ball in flight / cine / green view / not my turn
+    arStop();
+    ar.drag = { x: e.clientX, samples: [[performance.now(), 0]], acc: 0 };
+    ar.tickDeg = Math.round(arOffsetDeg());
+    // Capture so the spin survives the finger leaving the 44px band. Throws
+    // InvalidPointerId if the pointer is already gone — the drag still works
+    // off the element's own move events, so swallow it rather than abort here.
+    try { elAimRoller.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault(); e.stopPropagation();
+    haptic(3);
+    if (earnMilestone("hint-aimroll")) showToast("Roll to aim", 1800, "gold");
+  });
+  elAimRoller.addEventListener("pointermove", (e) => {
+    if (!ar.drag) return;
+    const d = (e.clientX - ar.drag.x) * TUNE.aimRollDegPx;
+    ar.drag.x = e.clientX;
+    ar.drag.acc += d;
+    const now = performance.now();
+    ar.drag.samples.push([now, ar.drag.acc]);
+    while (ar.drag.samples.length > 2 && now - ar.drag.samples[0][0] > 90) ar.drag.samples.shift();
+    arApply(d);
+    e.preventDefault();
+  });
+  const arRelease = () => {
+    const d = ar.drag;
+    if (!d) return;
+    ar.drag = null;
+    const s = d.samples, [t0, p0] = s[0], [t1, p1] = s[s.length - 1];
+    ar.vel = t1 > t0 ? (p1 - p0) / ((t1 - t0) / 16.7) : 0;   // degrees per frame
+    ar.vel = Math.min(Math.max(ar.vel, -TUNE.aimRollVelMax), TUNE.aimRollVelMax);
+    if (Math.abs(ar.vel) >= TUNE.aimRollVelMin) { ar.lastTs = 0; ar.raf = requestAnimationFrame(arTick); }
+    else ar.vel = 0;   // deliberate drag: stop dead where the finger stopped
+  };
+  elAimRoller.addEventListener("pointerup", arRelease);
+  elAimRoller.addEventListener("pointercancel", arRelease);
+}
+// Shown while a shot can actually be aimed. Driven from the same tick as
+// #green-view-btn so the two can't disagree about "ball at rest on a hole".
+function updateAimRoller() {
+  if (!elAimRoller) return;
+  const show = mode === "course" && !!HOLE && canSwing();
+  if (show === ar.shown) return;
+  ar.shown = show;
+  if (!show) { ar.drag = null; arStop(); }
+  elAimRoller.classList.toggle("hidden", !show);
+  if (show) { ar.lastAng = null; arRender(); }
+}
+
 // ← / → aim: a single tap is one small eased nudge; holding (OS auto-repeat)
 // switches to a smooth continuous turn (updateCamera). Swipe up fires along it.
 function aimNudge(dir) {
@@ -10465,6 +10958,7 @@ function aimNudge(dir) {
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && greenView) { closeGreenView(); return; }
   if (e.key === "Escape" && cine) { closeCine(); return; }
+  if (e.key === "Escape" && overview) { setOverview(false); return; }
   if (e.key === "ArrowUp" || e.key === "ArrowDown") {
     e.preventDefault();
     if (e.repeat) return;              // one club step per tap
@@ -10490,6 +10984,7 @@ function showMenu() {
   markDirty();
   if (greenView) closeGreenView();
   if (cine || cinePending) closeCine();
+  overview = false; elMinimap.classList.remove("mm-open");
   // Home abandons a local bot/CPU match — there is no resume path, and leaving
   // it live bleeds match HUD (turn banner, "Match:" score) into the next solo
   // round. Online matches are left untouched here (their lifecycle is remote).
@@ -17994,6 +18489,10 @@ function renderPace() {
   if (state.moving || holeDrop || holeTransition || cine || cinePending || greenView) return PACE_ACTIVE;
   if (!cameraParked() || cameraAiming || camTouch || aimKey) return PACE_ACTIVE;
   if (cw.raf) return PACE_ACTIVE;                       // club wheel mid-spin
+  // Aim roller held or coasting. It cannot be inferred: arApply sets camera.angle
+  // straight to tAngle with cameraAiming false, so cameraParked() above reads
+  // PARKED on every roller frame and the whole spin would render at 10fps.
+  if (ar.drag || ar.raf) return PACE_ACTIVE;
   if (particles.length) return PACE_ACTIVE;
   // An opponent's ball is flying on my screen during a live match. Test the
   // tween's own `moving` flag — oppGhostPos() also returns a position for a ball
@@ -18004,7 +18503,10 @@ function renderPace() {
     if (og && og.moving) return PACE_ACTIVE;
   }
   // Photoreal tiles still streaming or refining — those frames genuinely differ.
-  if (gtilesGround && window.GTiles3D && window.GTiles3D.isSettled && !window.GTiles3D.isSettled()) return PACE_ACTIVE;
+  // gtilesPaints(), not gtilesGround: in the hole overview the tiles are hidden
+  // and render() never runs, so "not settled" can never resolve — left as-is it
+  // would pin 60 fps for as long as the overview is open.
+  if (gtilesPaints() && window.GTiles3D.isSettled && !window.GTiles3D.isSettled()) return PACE_ACTIVE;
   if (performance.now() - _lastActivityAt < 400) return PACE_ACTIVE;
   return PACE_IDLE;
 }
@@ -18038,6 +18540,9 @@ function loop() {
   updateStats();
   updateWindChip();
   updateGreenViewBtn();
+  updateMinimapBtn();
+  updateAimRoller();  // same gate as the read-green button (course, ball at rest)
+  arRender();         // memoized on camera.tAngle — a no-op unless the aim moved
   syncChatBtn();      // chat button only in a live HUMAN match (cheap; class-toggle)
   updateTiltBtn();
   update3DMode();  // cheap — no-ops unless mode/course actually changed
@@ -18054,7 +18559,10 @@ function loop() {
       // The cinematic landing + 3D green inspect paint a full-screen 2D scene on
       // the TRANSPARENT #game canvas; hide the tiles behind them (and stop
       // rendering) or the live photoreal ground ghosts through and keeps moving.
-      const overlay = !!(greenView || cine);
+      // The hole overview hides them for a different reason: the tiles camera
+      // can't pull back far enough to frame a whole hole, so the zoomed-out view
+      // is the flat 2D map (draw() falls to the ground stack via gtilesPaints).
+      const overlay = !!(greenView || cine || overview);
       window.GTiles3D.setHidden(overlay);
       if (!overlay) window.GTiles3D.render();  // sync camera + tiles BEFORE draw()
     }

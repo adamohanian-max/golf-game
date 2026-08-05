@@ -181,6 +181,7 @@ body.has-chat #toast { top: calc(var(--sat) + 18% + 62px); }
 body.chat-open #hm-club-row,
 body.chat-open #shot-power,
 body.chat-open #chat-send-btn,
+body.chat-open #aim-roller,
 body.chat-open #hint,
 body.chat-open #live-turn { display: none !important; }
 

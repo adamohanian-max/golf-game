@@ -279,14 +279,45 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
   accent-color: var(--brass);
 }
 
+/* ---- Hole mini map (top of the bottom-left column) ---------
+   Tap = zoom the live camera out to the whole hole; tap again to restore. The
+   `bottom` offset is keyed off whether the tilt slider is on screen (body.tilt-on,
+   set by updateTiltBtn) rather than always reserving for it — the slider is ~186px
+   tall and only exists on the photoreal-ground courses, so reserving unconditionally
+   would float the map a third of the way up every other course's screen. */
+#minimap {
+  position: fixed;
+  left: var(--s-3);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 112px);
+  width: 96px;
+  height: 120px;
+  padding: 0;
+  overflow: hidden;
+  border: var(--border-edge);
+  border-radius: var(--r-md);
+  background: var(--surface-hud);
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  backdrop-filter: blur(var(--blur-xs));
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+  z-index: 15;
+}
+#minimap.hidden { display: none; }
+#minimap canvas { display: block; width: 100%; height: 100%; }
+/* zoomed out right now */
+#minimap.mm-open { border-color: rgba(99, 185, 139, 0.5); box-shadow: var(--shadow-1), 0 0 0 1px rgba(207, 168, 94, 0.45); }
+body.tilt-on #minimap { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 306px); }
+
 /* Inspect view open: clear the HUD out of the overlay's way */
 body.gv-open #hud-btn,
 body.gv-open #hm-club-row,
 body.gv-open #green-view-btn,
+body.gv-open #minimap,
 body.gv-open #tilt-view-btn,
 body.gv-open #tilt-slider,
 body.gv-open #shot-power,
 body.gv-open #scorecard,
+body.gv-open #aim-roller,
 body.gv-open #hint { display: none; }
 
 /* ---- Club selector (bottom-right) ------------------------- */
@@ -357,6 +388,109 @@ body.gv-open #hint { display: none; }
 #hm-club-row.putting #club-window { background: var(--surface-raised); }
 #hm-club-row.putting #club-wheel { opacity: 0.8; cursor: default; }
 #hm-club-row.putting .cw-item.cw-sel b { color: var(--text-muted); }
+
+/* ---- Aim roller (full-width bottom band, mobile) -----------
+   Spin left/right to turn the aim. The ticks are a repeating gradient whose
+   background-position-x is driven straight off camera.tAngle in game.js, so the
+   tape is infinite, costs no DOM, and stays in sync with every OTHER thing that
+   changes aim (auto-aim on settle, the Aim-at-pin button, arrow keys, the
+   two-finger twist, a sideways canvas swipe) without any of them knowing it
+   exists. The tick period below must match AR_PX_PER_DEG in game.js.
+   Mobile only: desktop already aims with the arrow keys and reserves no band. */
+:root { --ar-h: 44px; }
+#aim-roller {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--ar-h) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  background: var(--surface-hud);
+  -webkit-backdrop-filter: blur(var(--blur-xs));
+  backdrop-filter: blur(var(--blur-xs));
+  border-top: var(--border-hair);
+  z-index: 15;
+}
+#aim-roller:active { cursor: grabbing; }
+#aim-roller.hidden,
+#aim-roller.hud-off { display: none; }
+body:not(.is-mobile) #aim-roller { display: none; }
+/* Two tick gradients sharing one background-position: 5° major (tall, bright)
+   painted over 1° minor (short, dim). 6px/deg × 5 = 30px major period — both
+   periods must stay in step with AR_PX_PER_DEG in game.js. Bottom-anchored so
+   the ticks read as a ruler edge and the readout box has clear air above them. */
+#ar-tape {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--ar-h);
+  background-image:
+    repeating-linear-gradient(to right, var(--w-85) 0 1.5px, transparent 1.5px 30px),
+    repeating-linear-gradient(to right, var(--w-55) 0 1px, transparent 1px 6px);
+  background-size: 100% 18px, 100% 9px;
+  background-position: 0 100%, 0 100%;
+  background-repeat: repeat-x;
+  will-change: background-position;
+}
+/* fade the tape into the screen edges so ticks don't collide with the corners */
+#aim-roller::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to right,
+    var(--green-900) 0, transparent 14%, transparent 86%, var(--green-900) 100%);
+  opacity: 0.55;
+}
+/* Index: a brass hairline through the whole band with a caret on top, the fixed
+   reference the tape scrolls under. The readout box is opaque so it can sit
+   right on the index (heading-tape convention) without the ticks showing
+   through and making the number hard to read at a glance. */
+#ar-index {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--brass-bright);
+  pointer-events: none;
+}
+#ar-index::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  margin-left: -6px;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid var(--brass-bright);
+}
+#ar-read {
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  transform: translateX(-50%);
+  padding: 1px 12px;
+  border-radius: var(--r-sm);
+  background: var(--green-900);
+  border: 1px solid var(--brass);
+  pointer-events: none;
+}
+#ar-read b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--w-85);
+  letter-spacing: 0.4px;
+}
 
 /* ---- HUD dropdown menu ------------------------------------- */
 #hud-menu {
@@ -574,10 +708,26 @@ body.is-mobile #scorecard .sc-hole .line,
 body.is-mobile #scorecard .sc-wind { font-size: 12px; }
 body.is-mobile #scorecard .sc-right { column-gap: 12px; }
 
-/* left-column view buttons, stacked in the bottom-left corner (scorecard now up top) */
-body.is-mobile #green-view-btn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4)); }
-body.is-mobile #tilt-view-btn  { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 52px); }
-body.is-mobile #tilt-slider    { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 52px); }
+/* Corner controls sit ABOVE the aim roller band. Every bottom-anchored widget
+   has to clear --ar-h or it lands underneath the roller; #hm-club-row needs an
+   override here because its base rule (top of this file) has no mobile variant.
+   When the roller is toggled off (.hud-off) the band collapses and they drop
+   back down — hudReserve() gives the camera the same 44px back. */
+body.is-mobile #green-view-btn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + var(--ar-h)); }
+body.is-mobile #tilt-view-btn  { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + var(--ar-h) + 52px); }
+body.is-mobile #tilt-slider    { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + var(--ar-h) + 52px); }
+body.is-mobile #hm-club-row    { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + var(--ar-h)); }
+body.is-mobile.ar-off #green-view-btn,
+body.is-mobile.ar-off #hm-club-row { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4)); }
+body.is-mobile.ar-off #tilt-view-btn,
+body.is-mobile.ar-off #tilt-slider { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 52px); }
+/* mini map tops the same column: above the read-green button, or above the tilt
+   slider (~186px tall) on the courses that have one. */
+body.is-mobile #minimap { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + var(--ar-h) + 52px); }
+body.is-mobile.tilt-on #minimap { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + var(--ar-h) + 246px); }
+body.is-mobile.ar-off #minimap { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 52px); }
+body.is-mobile.ar-off.tilt-on #minimap { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 246px); }
+body.is-mobile #minimap { width: 84px; height: 104px; }
 
 body.is-mobile #stats { column-gap: 12px; }
 body.is-mobile #stats .slabel { font-size: 9px; letter-spacing: 0.6px; }
@@ -587,9 +737,10 @@ body.is-mobile #stats .sval { font-size: 13px; }
 body.is-mobile #hint {
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 72px); /* above the corner controls */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + var(--ar-h) + 72px); /* above the corner controls */
   max-width: 86vw;
 }
+body.is-mobile.ar-off #hint { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--s-4) + 72px); }
 /* ball speed is a desktop nerd stat — keep the mobile strip tight */
 body.is-mobile #st-speed-row { display: none; }
 
