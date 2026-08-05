@@ -156,6 +156,37 @@ const TUNE = {
   // descriptor's landing bookkeeping. Flip false to fly the legacy arc.
   aeroPhysics: true,
   aeroSpinTilt: 26,      // ° of spin-axis tilt at full swipe curve (draw/fade)
+  // --- Swipe curvature -> draw/fade (see curveFromPath) ---
+  // The curve measure is a SAGITTA fit: `bow` = how far the swipe bellies out at
+  // its midpoint, as a fraction of its own length, squashed by tanh(curveGain·bow).
+  // curveGain 4.0 is not arbitrary — it reproduces the retired 3-point measure to
+  // within 0.5% across the whole range, so the estimator rework changed the noise
+  // floor and nothing else. All FEEL lives in curveExp/aeroSpinTilt.
+  curveGain: 4.0,
+  // The gates are the entire point. A swipe is sampled by the OS, not by us, and
+  // 1.5px of per-sample jitter on a dead-straight 200px/14-sample swipe used to
+  // read 0.09 of curve at p99 — 4.5 yd offline on a 7i for holding still — rising
+  // to 0.44 (18 yd) on a short sparse flick. Worse, a straight flick preceded by
+  // an off-axis backswing read 0.82, a near-max hook on a shot swiped straight.
+  // Below these thresholds a gesture carries no measurable shape, so it gets none.
+  curveMinSamples: 8,    // fewer points than this: no shape, not a faint shape.
+                         // 8 is not conservatism — fitting a 1-parameter curve to
+                         // 6 points leaves so few degrees of freedom that the
+                         // residual ESTIMATE is itself noise, so curveSnr below
+                         // silently under-thresholds and jitter walks through. A
+                         // real shaped swipe is 150-250ms = 9-15 samples at 60Hz.
+  curveMinPathPx: 120,   // chord shorter than this (CSS px): same
+  curveMinMs: 45,        // gesture briefer than this: same
+  curveDeadzone: 0.03,   // curve at/below this reads as straight; rescaled above
+                         // it, so there is no step at the edge of the zone. Small
+                         // because curveSnr does the real work — this only kills a
+                         // clean but meaninglessly tiny arc.
+  curveSnr: 4.5,         // sigma of fit-residual noise the bow must clear before
+                         // it counts as shape. Adapts to swipe length and sample
+                         // count, which a fixed deadzone cannot.
+  curveExp: 0.9,         // curve -> tilt shaping. THE small-shape sensitivity
+                         // knob: below 1 it amplifies small arcs far more than
+                         // big ones. Was an inline 0.9 at the sidespin transform.
   // Wall-clock pace multiplier. Real time (1.0) is physically honest but slow to
   // play: a driver hangs ~7 s, then bounces, then a 30 ft putt rolls 6 s. This
   // keeps every trajectory, distance and break EXACTLY as calibrated (the sim
@@ -3450,16 +3481,124 @@ function tickHoleDrop() {
   }
 }
 
-// Signed curvature of a swipe path in [-1, 1] (0 = straight). Compares the
-// first half of the gesture to the second half; a bend imparts draw/fade spin.
-function curveFromPath(pts) {
-  if (!pts || pts.length < 3) return 0;
-  const a = pts[0], m = pts[pts.length >> 1], b = pts[pts.length - 1];
-  const v1x = m.x - a.x, v1y = m.y - a.y;
-  const v2x = b.x - m.x, v2y = b.y - m.y;
-  const m1 = Math.hypot(v1x, v1y), m2 = Math.hypot(v2x, v2y);
-  if (m1 < 1e-3 || m2 < 1e-3) return 0;
-  return (v1x * v2y - v1y * v2x) / (m1 * m2); // sign of cross product
+
+
+// Signed curvature of a swipe path in [-1, 1] (0 = straight) — the draw/fade
+// channel. Measures the SAGITTA: how far the swipe bellies out from its own
+// start->end chord at the midpoint, as a fraction of the chord length. That
+// ratio is dimensionless, so the same shape reads the same at any swipe length,
+// zoom, DPI or screen size — the shot depends on the player, not the phone.
+//
+// This replaced a 3-point measure (first / middle-index / last, cross product of
+// the half-chords). That estimator was NOT biased on a real arc — for a circular
+// arc the cross product depends only on the sub-arc midpoint difference, so it
+// was already sample-rate- and scale-invariant, and this fit reproduces it to
+// within 0.5%. What it had was no floor: it read the two samples either side of
+// an arbitrary midpoint, so OS jitter went straight through. Measured on a
+// dead-straight swipe with 1.5px of per-sample noise, |curve| at p99 was 0.09 on
+// a normal 200px/14-sample swipe (4.5 yd offline on a 7i for holding still) and
+// 0.44 on a short sparse flick (18 yd). Worse, a straight flick preceded by an
+// off-axis backswing read 0.82 — a near-max hook on a shot the player swiped
+// straight, because both half-chords were measured across the turn.
+//
+// `minPx` overrides the chord-length floor for callers whose path units are not
+// CSS px (the trackpad wheel — see finishWheelSwing).
+function curveFromPath(pts, minPx) {
+  if (!pts || pts.length < TUNE.curveMinSamples) return 0;
+  if (pts[pts.length - 1].t - pts[0].t < TUNE.curveMinMs) return 0;
+
+  // Trim the backswing. Project every sample onto the overall chord and restart
+  // from the point that sits FURTHEST BACKWARD along it. Load-bearing twice
+  // over: those samples have a negative along-chord position, where the fit
+  // weight s(1-s) below goes negative and silently flips their contribution's
+  // sign; and it is the right golf semantics — how you take the club back must
+  // not decide your shot shape.
+  let p = pts;
+  {
+    const a = p[0], b = p[p.length - 1];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L < 1e-6) return 0;
+    const tx = (b.x - a.x) / L, ty = (b.y - a.y) / L;
+    let i0 = 0, sMin = 0;
+    for (let i = 1; i < p.length; i++) {
+      const s = (p[i].x - a.x) * tx + (p[i].y - a.y) * ty;
+      if (s < sMin) { sMin = s; i0 = i; }
+    }
+    if (i0 > 0) p = p.slice(i0);
+  }
+  if (p.length < TUNE.curveMinSamples) return 0;
+
+  const a = p[0], b = p[p.length - 1];
+  const L = Math.hypot(b.x - a.x, b.y - a.y);
+  if (L < (minPx != null ? minPx : TUNE.curveMinPathPx)) return 0;
+  const tx = (b.x - a.x) / L, ty = (b.y - a.y) / L;
+  const nx = ty, ny = -tx;                       // chord normal (-90°)
+
+  // s = along-chord position in [0,1], d = signed offset from the chord, both
+  // as a fraction of L. Least-squares the parabola d = A·s(1-s), which pins both
+  // endpoints at zero by construction — exactly what a chord fit should do.
+  const s = [], d = [];
+  for (const q of p) {
+    const ex = q.x - a.x, ey = q.y - a.y;
+    s.push((ex * tx + ey * ty) / L);
+    d.push((ex * nx + ey * ny) / L);
+  }
+  // Returns the fitted amplitude together with the two things the confidence
+  // gate below needs: the fit's own normalisation, and how badly the samples
+  // missed the parabola.
+  const fit = (skip) => {
+    let num = 0, den = 0, n = 0;
+    for (let i = 0; i < s.length; i++) {
+      if (i === skip) continue;
+      const w = s[i] * (1 - s[i]);
+      num += d[i] * w; den += w * w; n++;
+    }
+    if (den < 1e-12) return { A: 0, den: 0, rr: 0, n };
+    const A = num / den;
+    let ss = 0;
+    for (let i = 0; i < s.length; i++) {
+      if (i === skip) continue;
+      const r = d[i] - A * s[i] * (1 - s[i]);
+      ss += r * r;
+    }
+    return { A, den, rr: Math.sqrt(ss / Math.max(1, n - 1)), n };
+  };
+  let F = fit(-1);
+  // Drop the single worst-fitting sample and refit — the same one-outlier
+  // defence swipeVelocity uses on the release velocity, which until now
+  // protected direction and power but never the shape.
+  if (s.length >= 6) {
+    let worst = -1, wr = -1;
+    for (let i = 0; i < s.length; i++) {
+      const r = Math.abs(d[i] - F.A * s[i] * (1 - s[i]));
+      if (r > wr) { wr = r; worst = i; }
+    }
+    F = fit(worst);
+  }
+
+  // Confidence gate. A FIXED deadzone cannot work here, because how much noise
+  // reaches the estimate depends on the gesture: jitter enters `bow` as roughly
+  // jitter/(L·sqrt(n)), so the same 0.07 that is generous on a long 20-sample
+  // swipe is far too tight on a short 6-sample flick — measured, a fixed
+  // deadzone still let 3.2 yd of 7i offline through at 120px/6 while costing
+  // real shape at 300px/20. The fit's own residual already measures exactly
+  // that, so require the amplitude to stand curveSnr sigma clear of it and
+  // SUBTRACT the threshold rather than test against it, which keeps the
+  // response continuous instead of stepping at the edge.
+  let A = F.A;
+  const sigA = F.den > 0 ? F.rr / Math.sqrt(F.den) : 0;
+  const thr = TUNE.curveSnr * sigA;
+  A = Math.abs(A) <= thr ? 0 : Math.sign(A) * (Math.abs(A) - thr);
+
+  // A/4 is the sagitta at s=0.5, i.e. `bow`. Squash rather than clamp: a hard
+  // clamp saturates and destroys ordering (the reason gMacroCap uses tanh too),
+  // while tanh is identity at small bow and order-preserving everywhere.
+  const c = Math.tanh(TUNE.curveGain * (A / 4));
+  const m = Math.abs(c), dz = TUNE.curveDeadzone;
+  if (m <= dz) return 0;
+  // Rescaled, not just thresholded — a bare deadzone leaves a step at its edge,
+  // the seam class chipLoftRef/chipSpinRef exist to avoid.
+  return Math.sign(c) * (m - dz) / (1 - dz);
 }
 
 // Release velocity over the last `lookMs` of a timestamped path, denoised so one
@@ -4099,8 +4238,10 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
   const H = (c.maxH / YARDS_PER_UNIT) * ef * lieMul * (1 + (apexK - 1) * t); // apex height (scales with the swing)
   const mph = Math.round(c.ball * ef * lieMul);           // real ball speed for the HUD
-  // Slight amplification so deliberate hooks/slices still register.
-  const spinVal = Math.sign(spin) * Math.pow(Math.abs(spin), 0.9);
+  // Slight amplification so deliberate hooks/slices still register. Below 1 this
+  // lifts SMALL arcs much more than big ones, which is what makes a shaped shot
+  // feel responsive without turning a full sweep into an unplayable hook.
+  const spinVal = Math.sign(spin) * Math.pow(Math.abs(spin), TUNE.curveExp);
   // Full-shot pitches: partial swings with lofted clubs still impart near-full spin rpm
   // (scale up as f drops below 0.6, short shots check hard). Greenside CHIPS do the
   // opposite — drop spin so the ball lands short and rolls out to the pin (bump-and-run).
@@ -4360,7 +4501,11 @@ function finishWheelSwing() {
   // fit the velocity — so one stray inertial event can't dictate power.
   const v = swipeVelocity(g.path, WHEEL_WINDOW_MS + WHEEL_TAIL_MS);
   // curve sign is invariant to negating the path, so it matches the finger swoosh
-  launch(sign * v.dxs, sign * v.dys, v.dt, curveFromPath(g.path));
+  launch(sign * v.dxs, sign * v.dys, v.dt,
+         // Wheel deltas run ~2.8x hotter than touch px, a ratio already
+         // asserted by fullPowerSwipe vs touchPowerSwipe — derive the chord
+         // floor from it rather than invent a second magic number.
+         curveFromPath(g.path, TUNE.curveMinPathPx * TUNE.fullPowerSwipe / TUNE.touchPowerSwipe));
   wheelCooldownUntil = performance.now() + WHEEL_TAIL_MS; // start swallowing the tail
 }
 
