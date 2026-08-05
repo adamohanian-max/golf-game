@@ -3753,10 +3753,8 @@ function swingMove(e) {
     // opposite way to ArrowRight).
     e.preventDefault();
     const p = pointerPos(e, activeTouchId);
-    aimTurn((p.x - aimDrag.lastX) * TUNE.aimDragDegPx);
+    aimTurn((p.x - aimDrag.lastX) * TUNE.aimDragDegPx);  // reframes + pivots about the ball
     aimDrag.lastX = p.x;
-    cameraAiming = true;
-    frameTarget();
     return;
   }
   if (!swipe) return;
@@ -4600,6 +4598,41 @@ function frameClubReach(pNowDeg) {
   camera._w = camera._h = Ru * 2;                   // rough span for consumers of the fit dims
 }
 function frameRemaining() { frameTarget(); }
+// Turn the aim and keep the BALL nailed to its screen point. This is the pivot
+// every continuous aim gesture uses, and it exists because framing and aiming
+// want different things: frameTarget() picks a focus for good FRAMING and
+// updateCamera then EASES the camera onto it, while a finger-driven aim snaps
+// the angle. An eased focus against a snapped angle is exactly what made the
+// whole window swim under the finger — off the green frameClubReach's focus is
+// a point a fixed distance AHEAD of the ball along the aim line, so it rides an
+// arc as you turn, and the ball only stays put when focus and angle move
+// together.
+// Solve the focus that reproduces the ball's previous screen position at the
+// new angle and take it (and the scale) immediately:
+//   screen fixed  =>  (ball − focus)' = (scale/scale') · R(−Δ) · (ball − focus)
+// The 3D tilt's y-squash is a fixed post-transform, so preserving the pre-squash
+// offset preserves the drawn one. Exact in BOTH framing branches: off the green
+// it reproduces frameClubReach's own arc, and on the green it replaces the
+// ball↔pin MIDPOINT pivot, which swung the ball across the screen for a few
+// degrees of read. The hole overview owns its own fit, so it opts out.
+// gtiles/Apple need nothing here — frameAnchors() feeds their camera from
+// camera.tAngle and the ball/reach WORLD points, never from camera.focus.
+function aimRotate(dRad) {
+  const b = state.ball;
+  const a0 = camera.angle, s0 = camera.scale;
+  const ox = b.x - camera.focus.x, oy = b.y - camera.focus.y;
+  camera.tAngle += dRad;
+  camera.angle = camera.tAngle;
+  cameraAiming = false;
+  frameTarget();
+  if (overview && mode === "course" && HOLE && !HOLE.isRange) return;
+  const s1 = camera.tScale || s0;
+  const d = angDiff(camera.angle, a0);   // rotation ACTUALLY applied (angle may have been mid-ease)
+  const c = Math.cos(-d), sn = Math.sin(-d), k = s0 / s1;
+  camera.focus.x = camera.tFocus.x = b.x - k * (c * ox - sn * oy);
+  camera.focus.y = camera.tFocus.y = b.y - k * (sn * ox + c * oy);
+  camera.scale = s1;
+}
 // Jump the camera straight to its target (no easing).
 function snapCamera() {
   camera.angle = camera.tAngle;
@@ -4715,10 +4748,8 @@ function cameraParked() {
 let _camEaseT = 0;  // last updateCamera timestamp (time-based ease below)
 function updateCamera() {
   if (aimKey && (mode === "course" || mode === "range") && canSwing()) {
-    camera.tAngle += aimKey * AIM_RATE;     // hold arrow -> rotate directly (stops on release)
-    camera.angle = camera.tAngle;
-    frameTarget();
-    cameraAiming = false;
+    // hold arrow -> rotate directly (stops on release), pivoting about the ball
+    aimRotate(aimKey * AIM_RATE);
   } else if (cameraAiming) {
     const d = angDiff(camera.tAngle, camera.angle);
     if (Math.abs(d) < 0.004) { camera.angle = camera.tAngle; cameraAiming = false; }
@@ -7731,7 +7762,7 @@ function draw() {
   // frame — ghosting a translated blend is much worse than a rotated one) and
   // mid tilt-toggle-transition (brief, already fast via the camEaseT snap).
   let bucketBlend = null;
-  if (warp && (aimKey !== 0 || cameraAiming || ar.drag || ar.raf) && !camTouch && camera.tilt === camera.tTilt) {
+  if (warp && (aimKey !== 0 || cameraAiming || ar.drag || ar.raf || aimDrag) && !camTouch && camera.tilt === camera.tTilt) {
     const bKey = baseWarpKey(cssW, cssH);
     const i0 = angleBucketIndex(camera.angle), i1 = (i0 + 1) % TUNE.tAngleBuckets;
     const e0 = _bucketCache.get(bKey + "#" + i0), e1 = _bucketCache.get(bKey + "#" + i1);
@@ -10838,7 +10869,9 @@ buildClubWheel();
 // hold-then-slide pan, the sideways swipe and the arrow keys can never drift
 // apart. POSITIVE dDeg = aim further RIGHT. The arrow keys set the convention:
 // ArrowRight is dir -1 into aimNudge, i.e. right = camera.tAngle DECREASING.
-function aimTurn(dDeg) { camera.tAngle -= dDeg * Math.PI / 180; }
+// Delegates the actual turn to aimRotate, so every gesture also shares one
+// pivot: the ball holds its screen point and the world turns around it.
+function aimTurn(dDeg) { aimRotate(-dDeg * Math.PI / 180); }
 const AR_PX_PER_DEG = 6;  // tape scale — must match the tick period in hud.css
 const elAimRoller = document.getElementById("aim-roller");
 const elArTape = document.getElementById("ar-tape");
@@ -10870,10 +10903,7 @@ function arRender() {
 // it would visibly lag the world behind the tape under the finger.
 function arApply(dDeg) {
   if (!dDeg) return;
-  aimTurn(dDeg);
-  camera.angle = camera.tAngle;
-  cameraAiming = false;
-  frameTarget();
+  aimTurn(dDeg);        // snaps the angle, reframes, and pivots about the ball
   bumpActivity();       // renderPace() would otherwise idle this to 10fps
   arRender();
   // One detent tick per whole degree, but ONLY under the finger. A 16° coast
@@ -18489,10 +18519,10 @@ function renderPace() {
   if (state.moving || holeDrop || holeTransition || cine || cinePending || greenView) return PACE_ACTIVE;
   if (!cameraParked() || cameraAiming || camTouch || aimKey) return PACE_ACTIVE;
   if (cw.raf) return PACE_ACTIVE;                       // club wheel mid-spin
-  // Aim roller held or coasting. It cannot be inferred: arApply sets camera.angle
-  // straight to tAngle with cameraAiming false, so cameraParked() above reads
-  // PARKED on every roller frame and the whole spin would render at 10fps.
-  if (ar.drag || ar.raf) return PACE_ACTIVE;
+  // An aim gesture held or coasting. It cannot be inferred: aimRotate snaps the
+  // angle AND the focus with cameraAiming false, so cameraParked() above reads
+  // PARKED on every frame of a turn and the whole spin would render at 10fps.
+  if (ar.drag || ar.raf || aimDrag) return PACE_ACTIVE;
   if (particles.length) return PACE_ACTIVE;
   // An opponent's ball is flying on my screen during a live match. Test the
   // tween's own `moving` flag — oppGhostPos() also returns a position for a ball
