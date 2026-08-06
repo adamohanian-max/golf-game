@@ -1164,8 +1164,33 @@ function render() {
   // player's eye returns to the course. Adopt the new position silently.
   const camMoved = !_justResumed && _lastCamPos
     ? camera.position.distanceTo(_lastCamPos) > 0.5 : false;
+  // ORIENTATION, tested separately from position — the park gate below needs
+  // both and camMoved cannot see a turn. A bearing change ORBITS the camera
+  // about the look-at, so it displaces the position by only R·dθ, and R shrinks
+  // with the framing: at PUTT framing D collapses to ~28 m and R to ~18 m, so
+  // clearing 0.5 m takes 1.6°/frame — about 18 px of aim-roller drag per frame.
+  // Off the green D is 300-500 m and the same test needs 0.09-0.14°/frame, i.e.
+  // it always passes. That asymmetry was the bug: on the green the gate stayed
+  // parked, renderer.render() never ran, and the photoreal ground held its last
+  // frame while the 2D overlay drawn on top of it (green tint, contours, relief,
+  // ball, cup) kept rotating — because setCamera() runs ABOVE this gate and had
+  // already re-aimed the camera that project() reads. Two layers, one camera,
+  // one of them not repainted.
+  // Quaternion angle rather than a bearing delta because it is SCALE-FREE: it
+  // means the same thing at 28 m and at 490 m, which is exactly what a metric
+  // position epsilon does not. 5e-4 rad ≈ 0.029°, against a smallest real aim
+  // input of ~0.36°/frame (one eased aimNudge) — 12x margin — while a genuinely
+  // parked camera reads exactly 0, since the _camEase snap in setCamera drives
+  // every placeCamera input to exact equality.
+  const camTurned = !_justResumed && _lastCamQuat
+    ? camera.quaternion.angleTo(_lastCamQuat) > 5e-4 : false;
   _justResumed = false;
   (_lastCamPos = _lastCamPos || new THREE.Vector3()).copy(camera.position);
+  // clone() on the first frame rather than new THREE.Quaternion(): the bundled
+  // gtiles THREE is a re-export and this file must not depend on which of its
+  // constructors made it through the build.
+  if (_lastCamQuat) _lastCamQuat.copy(camera.quaternion);
+  else _lastCamQuat = camera.quaternion.clone();
   // errorTarget RAMP, not a binary flip: the old 6↔12 switch made every tile
   // needing refinement swap in the SAME frame — the "refine wave a beat after
   // rest" pop. Coarsen instantly on motion; walk back 12→6 over ~0.8s parked so
@@ -1197,7 +1222,12 @@ function render() {
   // motion, empty queues) and deadlock: the FAIL_TIMEOUT_MS check below needs
   // frames to run in order to give up and hand the course back to the 2D aerial.
   const _st = gb() && gb().getState ? gb().getState() : null;
-  const quiet = !camMoved && _errT <= 6.001 && tiles.loadProgress >= 1 && !(_st && _st.moving);
+  // camTurned is in here but deliberately NOT in the _errT ramp above. Those are
+  // different questions: _errT asks "is the camera gliding, so don't chase
+  // refinements", and feeding a 0.1° aim tweak into it would coarsen to 12 and
+  // walk back = a full refine wave and a visible tile pop after every small aim
+  // adjustment. This asks "do the pixels differ", and a turn changes every one.
+  const quiet = !camMoved && !camTurned && _errT <= 6.001 && tiles.loadProgress >= 1 && !(_st && _st.moving);
   _settledAt = quiet ? (_settledAt || nowR) : 0;
   // Hold past quiescence: TilesFadePlugin cross-fades each refinement over
   // 500 ms, so parking on the first quiet frame freezes a half-faded tile.
@@ -1263,6 +1293,7 @@ function render() {
 }
 let _lastHole = null;
 let _lastCamPos = null;
+let _lastCamQuat = null;      // last camera orientation (park gate — see render())
 let _errT = 6, _errTAt = 0;   // ramped errorTarget (motion-coarse LOD)
 let _justResumed = false;     // set by setHidden(false); one-frame motion amnesty
 // Park gate (see render()). _settledAt = when the scene first went quiescent,
