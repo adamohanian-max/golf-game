@@ -1,12 +1,13 @@
 // Google Photorealistic 3D Tiles ground engine for the main game (Pebble Beach).
 //
-// A ground backend beside course3d.js (Four Oaks three.js) and the Apple MapKit
-// flyover — it replaced the old Mapbox GL ground (deleted 2026-07-24). Same
+// The game's photoreal ground backend, beside course3d.js (Four Oaks three.js).
+// It replaced the old Mapbox GL ground (deleted 2026-07-24) and then the native
+// Apple MapKit flyover ground (deleted 2026-08-05). Same
 // compositing model: a full-screen 3D canvas (#cgt) sits behind the transparent
 // #game canvas; all gameplay (cup/ball/aim/contours) keeps drawing on #game,
 // glued to the photoreal ground by the projection bridge. game.js routes
 // wx()/wy()/ws()/screenToWorld() through window.GTiles3D.project/unproject when
-// view.gtilesProj is set (the same pattern the three.js/Apple grounds use).
+// view.gtilesProj is set (the same pattern the three.js ground uses).
 //
 // Streams Google's real-world photoreal mesh via 3d-tiles-renderer. Because the
 // root app vendors three r160 but the renderer needs three >=0.167, the renderer
@@ -30,7 +31,10 @@ import {
 } from "gtiles";
 
 const M_FALLBACK = 2.7432;   // metres per world unit (1 unit = 3 yd), matches game.js
-const APPLE_CAM_K = 1.866;   // 1/(2·tan15°) — the FOV constant the game camera math uses
+// 1/(2·tan15°) — the ~30° vertical-FOV constant. game.js declares the SAME value
+// as CAM_K for frameClubReach; the two must agree or this camera and the flat
+// affine it blends toward at low pitch disagree.
+const CAM_K = 1.866;
 const DEG = Math.PI / 180;
 
 let container = null;   // #cgt canvas
@@ -754,7 +758,7 @@ function setCamera() {
   const fsx = W / 2 - view.c, fsy = H / 2 - view.f;
   const fOx = (view.e * fsx - view.b * fsy) / det;
   const fOy = (-view.d * fsx + view.a * fsy) / det;
-  const fD = m * H * APPLE_CAM_K / scale;
+  const fD = m * H * CAM_K / scale;
   let tOx, tOy, tD;
   if (A && (A.moving || A.hold) && _hold) {
     // FROZEN while the ball is in flight, and while the match camera is held on

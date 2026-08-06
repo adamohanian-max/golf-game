@@ -46,7 +46,10 @@ tiles.registerPlugin(new CesiumIonPlugin({ apiToken: ION_KEY, assetId })); // Ce
 
 ## Coverage, cost, licensing — READ before choosing a source
 
-- **Google Photorealistic 3D Tiles**: cities/high-density only — **NO rural golf-course coverage**. Billed per root-tile session, ~$6 CPM (1000 free/mo). MUST display the Google logo + aggregated `asset.copyright` attributions. Good for a clubhouse/urban-course skyline, useless for a rural fairway.
+- **Google Photorealistic 3D Tiles**: coverage is **broad, not city-only** — this line used to claim "cities/high-density only, NO rural golf-course coverage" and that was **wrong**. It is the game's live ground for Pebble Beach, Butter Brook, Liberty National and Torrey Pines South. Billed per root-tile session, ~$6 CPM (1000 free/mo). MUST display the Google logo + aggregated `asset.copyright` attributions.
+  - **Measure coverage, don't guess.** Walk the tileset toward the site and record the smallest `geometricError` that resolves to real GLB geometry. Measured 2026-08-05: Manhattan 2.01 m, Butter Brook (Westford MA) 2.01 m, Pebble Beach 4.01 m, Liberty National 4.01 m, Torrey Pines South 4.01 m.
+  - **The trap:** test the site's whole vertical line (ellipsoidal h ≈ −120…+400 m), not h = 0. Deep tiles have tight vertical bounds, so a course sitting ~60 m up falls outside the correct child and the walk terminates early — reading as 128 m / "no coverage" at a site that actually resolves to 2 m.
+  - Photogrammetry is blobby up close (fused trees, melty foreground) but readable mid-range.
 - **Cesium ion**: can tile your own LiDAR/drone data to 3D Tiles; Community tier is non-commercial, Commercial is **$149/mo**. Self-hosting avoids the fee.
 - **Self-hosted (recommended for courses)**: export OGC 3D Tiles from WebODM (see [[drone-photogrammetry]]) or any tiler, drop the static tree under `web/public/tiles/<course>/`, point `TilesRenderer` at `tileset.json`. **$0 recurring, no key, no attribution beyond your own capture.**
 
@@ -57,4 +60,4 @@ The renderer surfaces per-tile copyright; display it. For Google, the logo + cre
 - Photoreal **buildings/trees/context** where coverage exists → Google via this lib.
 - Photoreal **whole hero course** anywhere → self-host drone tiles ([[drone-photogrammetry]]).
 - Sharp **terrain undulations only** (no photoreal mesh) → cheaper to bake a DEM: [[lidar-terrain]].
-- Apple-grade native 3D on iPhone → [[mapkit-flyover]] (not this).
+- (The native Apple MapKit Flyover ground was removed 2026-08-05; this skill is the only photoreal ground path now.)

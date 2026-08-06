@@ -14,7 +14,7 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=59">
   <link rel="stylesheet" href="css/base.css?v=71">
-  <link rel="stylesheet" href="css/hud.css?v=103">
+  <link rel="stylesheet" href="css/hud.css?v=104">
   <link rel="stylesheet" href="css/menu.css?v=84">
   <link rel="stylesheet" href="css/courses.css?v=8">
   <link rel="stylesheet" href="css/modals.css?v=82">
@@ -149,7 +149,7 @@
   </div>
   <!-- 2D↔3D camera tilt: vertical slider, top = 3D lean, bottom = 2D overhead.
        Shown ONLY on courses with a real photoreal ground (Google Photorealistic
-       + Apple Flyover) — see updateTiltBtn / #tilt-range wiring in game.js.
+       3D Tiles) — see updateTiltBtn / #tilt-range wiring in game.js.
        (The old fake-tilt "3D view" button was removed.) -->
   <div id="tilt-slider" class="hidden">
     <span class="cs-end cs-top">3D</span>
@@ -907,11 +907,11 @@
        they run, so game.js's (lazy, in-function) use of window.supabase is unaffected -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./three3d/course3d.js?v=35"></script>
-  <script type="module" src="./three3d/gtiles3d.js?v=57"></script>
+  <script type="module" src="./three3d/gtiles3d.js?v=58"></script>
   <!-- Real ball aerodynamics (drag + Magnus + spin decay, SI units). Plain
        script so it is also require()-able by tools/ball_calibrate.mjs — the
        calibration gate runs the exact code the browser flies. -->
   <script defer src="ballistics.js?v=5"></script>
-  <script defer src="game.js?v=383"></script>
+  <script defer src="game.js?v=384"></script>
 </body>
 </html>

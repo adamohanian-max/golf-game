@@ -242,7 +242,7 @@ body.is-mobile #live-turn { bottom: calc(env(safe-area-inset-bottom, 0px) + var(
 #tilt-view-btn.hidden { display: none; }
 #tilt-view-btn.active { background: rgba(46, 125, 79, 0.4); border-color: rgba(99, 185, 139, 0.5); }
 
-/* Apple-ground camera tilt slider — replaces #tilt-view-btn there. Same left
+/* Photoreal-ground camera tilt slider — replaces #tilt-view-btn there. Same left
    anchor as the button; vertical range shares the #attr-slider treatment
    (top = 3D lean, bottom = 2D overhead). */
 #tilt-slider {

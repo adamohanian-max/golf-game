@@ -1,7 +1,11 @@
 #!/usr/bin/env node
-// Playthrough probe — Pebble Beach on Google 3D tiles (gtiles ground).
+// Playthrough probe — any course on the Google 3D tiles (gtiles) ground.
 //
-//   node tools/playthrough_probe.mjs --holes 1-3 [--shots 8] [--outdir /tmp/gt-play]
+//   node tools/playthrough_probe.mjs [--course <id>] --holes 1-3 [--shots 8] [--outdir /tmp/gt-play]
+//
+// The Map Tiles key is NOT stored here. It comes from $GOOGLE_TILES_TOKEN, else
+// the gitignored local-config.js (write it with: python3 tools/local_config.py).
+// It used to be a hardcoded literal, which committed a live billed key to the repo.
 //
 // Boots each hole fresh, plays it via the real shot entry (autoClub + aimAtHole
 // + launchShot — same path a swipe takes), and captures per hole/shot:
@@ -16,13 +20,22 @@
 //   - screenshots: address + final per hole
 // One JSON line per hole on stdout; screenshots + summary JSON in --outdir.
 import { chromium } from '../web/node_modules/playwright/index.mjs';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const [h0, h1] = arg('--holes', '1-1').split('-').map(Number);
 const SHOT_CAP = +arg('--shots', 8);
 const OUT = arg('--outdir', '/tmp/gt-play');
-const TOKEN = 'AIzaSyCDMxunZ7Lx8OZbg5JY3OYhR02n3gCjmBk';
+const COURSE = arg('--course', 'pebble-beach-golf-course');
+const TOKEN = process.env.GOOGLE_TILES_TOKEN || (() => {
+  try {
+    return /window\.GOOGLE_TILES_TOKEN\s*=\s*"([^"]+)"/
+      .exec(readFileSync(new URL('../local-config.js', import.meta.url), 'utf8'))[1];
+  } catch (e) {
+    console.error('No Map Tiles key: set $GOOGLE_TILES_TOKEN or run  python3 tools/local_config.py');
+    process.exit(2);
+  }
+})();
 mkdirSync(OUT, { recursive: true });
 
 const b = await chromium.launch();
@@ -33,7 +46,7 @@ for (let hn = h0; hn <= (h1 || h0); hn++) {
   pg.on('console', m => { if (m.type() === 'error') errors.push(m.text().slice(0, 200)); });
   pg.on('pageerror', e => errors.push(String(e).slice(0, 200)));
   await pg.addInitScript(t => localStorage.setItem('golf.googleTilesToken', t), TOKEN);
-  await pg.goto(`http://localhost:8080/index.html?course=pebble-beach-golf-course&hole=${hn}`);
+  await pg.goto(`http://localhost:8080/index.html?course=${COURSE}&hole=${hn}`);
   // wait for real tile geometry (or declared failure → 2D fallback)
   const mode = await pg.waitForFunction(() => {
     const G = window.GTiles3D;

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "game.js",
   "scripts": {
-    "test": "node scripts/test-apple-geo-affine.mjs"
+    "test": "node tools/shot_matrix.mjs --gate"
   },
   "repository": {
     "type": "git",

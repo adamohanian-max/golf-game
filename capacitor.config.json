@@ -24,7 +24,6 @@
   "packageClassList": [
     "HapticsPlugin",
     "SplashScreenPlugin",
-    "StatusBarPlugin",
-    "CourseMap3DPlugin"
+    "StatusBarPlugin"
   ]
 }

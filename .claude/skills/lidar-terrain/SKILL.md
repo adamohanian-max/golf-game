@@ -42,4 +42,4 @@ The `--lidar-dem` path samples the LiDAR GeoTIFF onto the **same dict shape**, s
 ## Notes
 - Terrarium encoding (4mm quant), NOT Mapbox terrain-RGB (100mm) — greens go to cliffs otherwise.
 - Slope arrows use a plane-fit over each green (noise ≈ signal on raw points).
-- Photoreal *mesh* (not just terrain) → [[3d-tiles]] / [[drone-photogrammetry]]. Native Apple 3D → [[mapkit-flyover]].
+- Photoreal *mesh* (not just terrain) → [[3d-tiles]] / [[drone-photogrammetry]].

@@ -32,4 +32,4 @@ Apple Maps Flyover is moving to **3D Gaussian Splatting** (WWDC 2026) — that n
 ## When NOT to use this
 - Just need sharper undulations, not a photoreal mesh → cheaper to bake a DEM: [[lidar-terrain]].
 - Photoreal context in a city where coverage exists → Google via [[3d-tiles]].
-- Apple-grade 3D on iPhone with zero capture → [[mapkit-flyover]] (uses Apple's own mesh where covered).
+- Photoreal 3D with zero capture, where Google covers it → [[3d-tiles]] (Google Photorealistic; the game's only photoreal ground).
