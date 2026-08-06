@@ -181,6 +181,19 @@ const TUNE = {
                          // it, so there is no step at the edge of the zone. Small
                          // because curveSnr does the real work — this only kills a
                          // clean but meaninglessly tiny arc.
+  // --- Strike dispersion (see rollDispersion / buildTrialShot) ---
+  // Until now a struck shot had NO execution error at all: given (angle, power,
+  // curve, lie, club) the result was exact, every time. That is the single
+  // biggest reason the game played easy — the only way to miss a green was to
+  // aim or read wrong, never to hit it badly.
+  dispDeg: 1.2,          // 1 sigma offline aim error at the reference club speed
+                         // and a clean lie. 7i: ~3.6 yd at 1 sigma, ~7 at 2.
+  dispCarry: 0.025,      // 1 sigma carry error, as a fraction. 7i ~ +-4 yd.
+  dispSpeedRef: 123,     // ball mph the above are quoted at (a 7 iron). Club
+                         // scaling is c.ball/this rather than a 15-row table:
+                         // an ANGULAR error already grows with distance, so the
+                         // geometry does most of the work and this only adds the
+                         // honest extra, that a faster clubhead magnifies a fault.
   curveSnr: 5.5,         // sigma of fit-residual noise the bow must clear before
                          // it counts as shape. Adapts to swipe length and sample
                          // count, which a fixed deadzone cannot.
@@ -384,6 +397,13 @@ const TUNE = {
   lie: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.72, bunker: 0.5, water: 0.5, woods: 0.5, ob: 0.5 },
   // Lie spin penalty: backspin multiplier by the surface you're hitting FROM. Rough = "flyer"
   // (grass between club & ball kills backspin -> ball releases and runs out); sand also robs spin.
+  // Lie accuracy penalty. Rough and sand did not just cost distance and spin —
+  // they cost NOTHING in accuracy, which is why a bad lie was never frightening:
+  // the recovery was as straight as a fairway shot, just shorter. Multiplies the
+  // strike dispersion below, so it can only ever amplify a miss the dice already
+  // dealt; it cannot bend a shot on its own.
+  lieAccuracy: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 2.2,
+                 bunker: 3.0, water: 3.0, woods: 3.5, ob: 3.5 },
   lieSpin: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.55, bunker: 0.6, water: 0.6, woods: 0.6, ob: 0.6 },
   // Chip lie penalty: chips already solve carry off the pin gap directly, so the full `lie`
   // factor (which robs full-shot distance) would double-count and leave chips stranded short
@@ -4059,7 +4079,7 @@ function solveChipEf(ang, frac, spin, onGreen, targetYds, club) {
   }
   return best ? best.ef : (lo + hi) / 2;
 }
-function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
+function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride, disp) {
   if (frac <= 0.05) return null;
   const b = state.ball; // read position only
   const f = Math.min(frac, 1);
@@ -4142,6 +4162,25 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   // chip mode every club flies its rated carry at full swing, floored at clubMinFrac. The
   // club still sets the arc/spin, so a LW pops-and-checks, a 9i runs.
   const chipActive = chipActiveNow();  // chip mode on, off green, within pin range
+  // Strike dispersion. Applied HERE — before ef is solved — for two reasons:
+  // solveChipEf then converges along the erred line, so a mishit chip misses
+  // sideways instead of finishing short (a chip is solved to the pin, and a
+  // distance error there would be invisible); and everything downstream
+  // (elevAdjustCarry, buildFlight, attachAero) inherits the angle for free.
+  // Guarded on chipEfOverride so the chip solver's own probes, which re-enter
+  // this function with the already-erred ang, cannot apply it a second time.
+  const lieSurf = surfaceAt(b.x, b.y);
+  let dispCarryMul = 1;
+  if (disp && chipEfOverride == null) {
+    const accRaw = lieEffectEnabled ? (TUNE.lieAccuracy[lieSurf] ?? 1) : 1;
+    // Chips take the geometric mean toward 1, mirroring lieSpinMul below. A chip
+    // is auto-solved to the pin and has no recovery in it, so the full bunker
+    // multiplier would make greenside sand simply unplayable.
+    const accK = chipActive ? Math.sqrt(accRaw) : accRaw;
+    const spdK = (c.ball || TUNE.dispSpeedRef) / TUNE.dispSpeedRef;
+    ang += disp.ang * accK * spdK;
+    dispCarryMul = 1 + disp.carry * accK;
+  }
   let ef;
   if (chipActive) {
     // Tight band: f=0 -> chipReachLo, f=1 -> chipReachHi of pin distance. chipLandFrac
@@ -4220,7 +4259,7 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   const chipK = chipActive
     ? 1 - Math.max(0, Math.min(1, pinYds / TUNE.chipRangeYds)) : 0;
   // Lie penalty: rough/sand grab the club -> less carry, lower flight, less ball speed.
-  const lieSurf = surfaceAt(b.x, b.y);
+  // (lieSurf is read above, where the dispersion needs it.)
   const lieMul = lieEffectEnabled ? (TUNE.lie[lieSurf] ?? 1) : 1;
   // Chips carry off a mild lie tax (see TUNE.lieChip) instead of the full full-shot lie —
   // `ef` above already solved carry to the pin gap, so the full factor would double-count.
@@ -4236,7 +4275,7 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
   const spinK  = hiT >= 0 ? TUNE.flightHiSpin  : TUNE.flightLoSpin;
   const carryK = hiT >= 0 ? TUNE.flightHiCarry : TUNE.flightLoCarry;
   const windK  = hiT >= 0 ? TUNE.flightHiWind  : TUNE.flightLoWind;
-  let C = (c.carry / YARDS_PER_UNIT) * ef * (chipActive ? chipLieMul : lieMul) * (1 - (1 - carryK) * t); // carry (world units)
+  let C = (c.carry / YARDS_PER_UNIT) * ef * (chipActive ? chipLieMul : lieMul) * (1 - (1 - carryK) * t) * dispCarryMul; // carry (world units)
   // Elevation: make a full shot finish at the plays-like distance (uphill shorter,
   // downhill longer). Chips already fold plays-like into their reach, so skip them.
   if (!chipActive) C = elevAdjustCarry(b.x, b.y, ang, C);
@@ -4290,7 +4329,42 @@ function buildTrialShot(ang, frac, spin, onGreen, chipEfOverride) {
            vx: flr.vx, vy: flr.vy, z: flr.z, vz: flr.vz, spin: spinVal, flight: flr.flight };
 }
 
-function launchShot(ang, frac, spin, onGreen) {
+// One shot's worth of execution error, drawn ONCE at the moment the player
+// commits and then threaded explicitly into the shot that gets built.
+//
+// Seeded, not Math.random(). The draw is still unpredictable to the player,
+// which is all "the ball doesn't always go where you aimed" needs — but a daily
+// challenge deals every player the same luck, a tournament round is
+// reproducible, and a bug report can be replayed. Bare randomness would make all
+// three impossible.
+//
+// Never rolled inside buildTrialShot: that function is also the PREDICTION path
+// (safeTeeAim's advisory sim, solveChipEf's 14 probes, simShotRest's cine
+// forecast). A prediction that draws its own dice disagrees with the shot it is
+// predicting, which is the exact failure mode CLAUDE.md records for
+// stepGroundRoll and landingRelease/resolveCup.
+function rollDispersion() {
+  // round.pinSeed carries the right semantics already: it varies per round, and
+  // in daily mode it is date-seeded, so every player gets identical luck on the
+  // daily and nobody can reroll a bad break by restarting. Ball position is in
+  // the key so a penalty replay from lastSafe deals the same card again rather
+  // than letting a player re-roll trouble by hitting it into the water.
+  const b = state.ball;
+  const key = (HOLE.num | 0) + ":" + (state.strokes | 0) + ":" +
+              Math.round(b.x * 8) + ":" + Math.round(b.y * 8) + ":" + (round.pinSeed | 0);
+  const rnd = mulberry32(strSeed(key));
+  // Box-Muller, clamped at 2.5 sigma. The clamp matters: an unclamped normal has
+  // no worst case, and one 6-sigma tee shot into the trees reads as a bug rather
+  // than as bad luck.
+  const norm = () => {
+    let u = 0; while (u === 0) u = rnd();
+    const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd());
+    return Math.max(-2.5, Math.min(2.5, z));
+  };
+  return { ang: norm() * TUNE.dispDeg * Math.PI / 180, carry: norm() * TUNE.dispCarry };
+}
+
+function launchShot(ang, frac, spin, onGreen, disp) {
   if (!canSwing() || frac <= 0.05) return;
   // Power slider = a real MAX ceiling on this swing (panel visible, same context it shows
   // in), not just a preview reference — clamp the flick-derived frac down to it. Never
@@ -4310,7 +4384,7 @@ function launchShot(ang, frac, spin, onGreen) {
   // scale alone — it gates the landing slo-mo, and a putt never lands.
   shotIsChip = !onGreen && simScale !== TUNE.timeScale;
   landSlowUntil = 0;
-  const trial = buildTrialShot(ang, frac, spin, onGreen);
+  const trial = buildTrialShot(ang, frac, spin, onGreen, null, disp || rollDispersion());
   if (!trial) return;
   const b = state.ball;
   shot.startX = b.x; shot.startY = b.y;
