@@ -14,7 +14,7 @@
   <link rel="preload" href="fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/tokens.css?v=59">
   <link rel="stylesheet" href="css/base.css?v=71">
-  <link rel="stylesheet" href="css/hud.css?v=104">
+  <link rel="stylesheet" href="css/hud.css?v=105">
   <link rel="stylesheet" href="css/menu.css?v=84">
   <link rel="stylesheet" href="css/courses.css?v=8">
   <link rel="stylesheet" href="css/modals.css?v=82">
@@ -38,11 +38,21 @@
        Rebuild the bundle via `cd web && npm run build:gtiles`. -->
   <script>
     // Google Maps Platform key with the Map Tiles API enabled — powers the Google
-    // photoreal ground (Pebble). Online + billed per session. Empty = self-
-    // disabled (course falls back to the flat 2D baked aerial). Kept gated for now:
-    // set localStorage "golf.googleTilesToken" to enable. To ship publicly, inline
-    // a referrer-restricted key here (+ render the real Google logo, ToS).
-    window.GOOGLE_TILES_TOKEN = "" ||
+    // photoreal ground (Pebble, Butter Brook, Liberty National, Torrey Pines South).
+    // Online + billed per session, ~$6 CPM. Empty = self-disabled (course falls back
+    // to the flat 2D baked aerial).
+    //
+    // THIS KEY IS PUBLIC. It ships in a tracked file in a PUBLIC repo and is visible
+    // to anyone who opens devtools — that is inherent to a client-side Maps key, not
+    // a mistake. What keeps it from being abused is the restrictions set on it in the
+    // Google Cloud console, so it MUST carry all three:
+    //   1. Application restriction: HTTP referrers -> yo-golf.com/*, www.yo-golf.com/*
+    //      (the iOS app is a webview onto that origin, so it is covered)
+    //   2. API restriction: Map Tiles API only
+    //   3. A quota cap + billing alert — a referrer restriction is NOT a spend cap
+    // Rotate it if it ever bills unexpectedly. Still TODO before a wide public push:
+    // render the real Google logo instead of the text-only credit (ToS).
+    window.GOOGLE_TILES_TOKEN = "AIzaSyCDMxunZ7Lx8OZbg5JY3OYhR02n3gCjmBk" ||
       (function () { try { return localStorage.getItem("golf.googleTilesToken") || ""; } catch (e) { return ""; } })();
 
     // Local dev overrides. local-config.js is GITIGNORED — it is where a dev key
@@ -912,6 +922,6 @@
        script so it is also require()-able by tools/ball_calibrate.mjs — the
        calibration gate runs the exact code the browser flies. -->
   <script defer src="ballistics.js?v=5"></script>
-  <script defer src="game.js?v=384"></script>
+  <script defer src="game.js?v=385"></script>
 </body>
 </html>
