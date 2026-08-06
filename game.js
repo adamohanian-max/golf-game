@@ -127,8 +127,16 @@ const TUNE = {
   puttControlFrac: 0.72,   // fraction of input devoted to that wide control band
   // Pace forgiveness: on-green putt distance is clamped to this band around the cup
   // distance (plays-like). f=0 -> Lo, f=0.5 -> ~1.0, f=1 -> Hi. Putting = aim, not pace.
-  puttBandLo: 0.8,   // softest swipe still rolls 80% of the way (never more than 20% short)
-  puttBandHi: 1.2,   // hardest swipe rolls 120% (never more than 20% long)
+  // Pace forgiveness band. Every putt is clamped to this fraction of the ACTUAL
+  // cup distance, so badly wrong pace was structurally impossible. Widened from
+  // 0.8/1.2 — a 20% ceiling on the worst pace you can produce is a lot of help
+  // on a green already read for you by contours, relief and flow dots.
+  // MUST stay symmetric about 1.0: putt_matrix fires every gate putt at f=0.5,
+  // where the band evaluates to (Lo+Hi)/2, so an asymmetric pair silently aims
+  // every gated putt long or short and moves pace error for reasons that have
+  // nothing to do with the change.
+  puttBandLo: 0.72,  // softest swipe still rolls 72% of the way
+  puttBandHi: 1.28,  // hardest swipe rolls 128%
   puttFloorFt: 6,    // inside this distance a putt is never left short — floor pace to reach the cup
                      // on flat (a soft downhill putt otherwise dies: its launch speed drops below
                      // slopeStopSpeed before the downhill slope-aid it was discounted for kicks in)
@@ -10671,7 +10679,7 @@ const SETTING_DEFS = [
 // Immutable fallback for each setting — used when a saved/loaded settings row
 // predates a key (e.g. a global Supabase row baked before "chip" existed). A
 // MISSING key falls back to this default, NOT to false.
-const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: false, slope: true, oob: true, rangefinder: false, chip: true, lieEffect: true, powerPreview: false };
+const SETTING_DEFAULTS = { autoClub: true, autoAim: true, wind: true, slope: true, oob: true, rangefinder: false, chip: true, lieEffect: true, powerPreview: false };
 let gameDefaults = Object.assign({}, SETTING_DEFAULTS);
 let activeSettings = Object.assign({}, gameDefaults); // settings in force for the current round
 

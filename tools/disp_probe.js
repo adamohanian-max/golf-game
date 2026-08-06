@@ -149,7 +149,9 @@ function run(argv) {
     lines.push("");
     if (fails.length) { lines.push("FAIL (" + fails.length + ")"); for (var m of fails) lines.push("  x " + m); }
     else lines.push("PASS");
-    if (fails.length) { console.log(lines.join("\n")); $.NSApplication; throw new Error("disp gate failed"); }
+    // Print the table before throwing — osascript surfaces the throw as a
+    // non-zero exit, but the numbers are what tell you WHICH invariant broke.
+    if (fails.length) { console.log(lines.join("\n")); throw new Error("disp gate failed"); }
   }
   return lines.join("\n");
 }
