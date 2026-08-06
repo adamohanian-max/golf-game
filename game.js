@@ -1220,15 +1220,29 @@ function update3DMode() {
 //
 // An explicit allow-list, NOT `course.geo` alone: four-oaks-dracut also carries a
 // geo block but renders via the separate three.js path (window.Course3D) and must
-// stay off the tiles. Google's coverage was measured before each id was added
-// here, by walking the tileset to the course and recording the finest
-// geometricError that resolves to real geometry: Butter Brook 2.01 m, Liberty
-// National 4.01 m, Torrey Pines South 4.01 m, against Pebble's 4.01 m. (Probe the
-// whole vertical line, not h=0 — deep tiles have tight vertical bounds, so an
-// inland course reads as "no coverage" if you only test the ellipsoid.)
+// stay off the tiles.
+//
+// BEFORE ADDING AN ID, MEASURE THE MESH GEOMETRY, NOT THE TILE RESOLUTION.
+// `node tools/gtiles_geom_probe.mjs --course <id>` reports verts-per-mesh off the
+// live engine. Google serves tiles almost everywhere, but PHOTOGRAMMETRY only
+// where it has flown: outside that, you get aerial imagery draped on near-flat
+// ground, which looks the same as the baked NAIP aerial the course already has
+// for free — while costing a billed tile session per visit. Measured 2026-08-06:
+//
+//     pebble-beach-golf-course     1519 verts/mesh   real 3D
+//     liberty-national-golf-club   1007 verts/mesh   real 3D
+//     torrey-pines-south-course     912 verts/mesh   real 3D
+//     butter-brook-golf-club         85 verts/mesh   FLAT — removed again
+//
+// Butter Brook was added here on 2026-08-05 and removed on 2026-08-06. The
+// mistake that put it in: `geometricError` was used as the coverage test, but
+// that measures tile SUBDIVISION/texture resolution — a flat textured quad
+// scores 2.01 m, finer than Pebble's 4.01 m. The tell was there and got
+// rationalised away: its finest glb is 15 KB against Manhattan's 212 KB, i.e. a
+// quad plus a texture. On-device it renders correctly and reads as "the trees
+// are 2D", because they are. ~600 verts/mesh separates the two regimes.
 const GTILES_IDS = new Set([
   "pebble-beach-golf-course",
-  "butter-brook-golf-club",
   "liberty-national-golf-club",
   "torrey-pines-south-course",
 ]);
