@@ -402,7 +402,15 @@ const TUNE = {
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
   // Rough/sand grab the club and cost distance; clean lies (fairway/tee/green) full.
-  lie: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.72, bunker: 0.5, water: 0.5, woods: 0.5, ob: 0.5 },
+  // Lie POWER penalty. Softened (rough 0.72 -> 0.85, bunker 0.5 -> 0.62) because
+  // these had been inert in production: the live admin game_settings row carried
+  // lieEffect:false, so TUNE.lie/lieSpin/lieLand cost nothing at all. Switching
+  // that back on turns FOUR penalties on at once — distance, spin, descent angle
+  // and (new) dispersion — and 28% of a 7 iron on top of 2.2x the scatter is a
+  // different game, not a harder one. 0.85 is also closer to honest: a moderate
+  // rough lie costs a tour player 5-15%, not 28%. Recovery lies (water/woods/ob)
+  // stay at 0.5 — a punch-out SHOULD be a half shot.
+  lie: { fairway: 1.0, tee: 1.0, green: 1.0, rough: 0.85, bunker: 0.62, water: 0.5, woods: 0.5, ob: 0.5 },
   // Lie spin penalty: backspin multiplier by the surface you're hitting FROM. Rough = "flyer"
   // (grass between club & ball kills backspin -> ball releases and runs out); sand also robs spin.
   // Lie accuracy penalty. Rough and sand did not just cost distance and spin —
@@ -9452,8 +9460,13 @@ function setHole(rec) {
   // New wind each hole (no wind on driving range)
   if (!HOLE.isRange && windEnabled) {
     wind.dir   = Math.random() * Math.PI * 2;
-    wind.speed = Math.random() < 0.1 ? Math.floor(Math.random() * 2)  // 10% calm (0-1 mph)
-                                     : Math.round(Math.random() * 8) + 2; // 2-10 mph
+    // 4-18 mph, up from 2-10. A 10 mph ceiling is a gentle breeze that never
+    // forces a club change, so wind was on but weightless; at 18 it is a real
+    // input to club choice and to the FLIGHT selector (which rides or punches
+    // through it via flightHiWind/flightLoWind). The calm day survives as
+    // variety — a round where wind never matters should still happen sometimes.
+    wind.speed = Math.random() < 0.1 ? Math.floor(Math.random() * 3)   // 10% calm (0-2 mph)
+                                     : Math.round(Math.random() * 14) + 4; // 4-18 mph
   } else {
     wind.speed = 0;
   }
