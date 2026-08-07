@@ -27,7 +27,12 @@ ENV = ROOT / "web" / ".env.local"
 OUT = ROOT / "local-config.js"
 
 # Courses whose ground is Google photoreal tiles (GTILES_IDS in game.js).
-GTILES_COURSES = ["pebble-beach-golf-course"]
+GTILES_COURSES = [
+    "pebble-beach-golf-course",
+    "butter-brook-golf-club",
+    "liberty-national-golf-club",
+    "torrey-pines-south-course",
+]
 
 
 def key_from_env() -> str:

@@ -4,7 +4,7 @@
 
 **Stack:** MapLibre GL JS v5 (base map + terrain + draped course furniture) + Three.js (the ball as a real 3D object, correctly depth-tested against terrain).
 
-**Reusability note:** this code is the shared gameplay engine. The iOS app uses native MapKit for a lighter static preview; the real ball-flight logic lives here so it isn't written twice. Keep the physics/ball module framework-agnostic (plain TS, no MapLibre imports) so it can be lifted out.
+**Reusability note:** this code is the shared gameplay engine. (The iOS app was once planned to use native MapKit for a lighter static preview — retired 2026-08-05; the native Apple ground is gone and iOS is a webview onto the same JS.) The real ball-flight logic lives here so it isn't written twice. Keep the physics/ball module framework-agnostic (plain TS, no MapLibre imports) so it can be lifted out.
 
 ---
 

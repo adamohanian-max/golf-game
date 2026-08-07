@@ -1,12 +1,13 @@
 // Google Photorealistic 3D Tiles ground engine for the main game (Pebble Beach).
 //
-// A ground backend beside course3d.js (Four Oaks three.js) and the Apple MapKit
-// flyover — it replaced the old Mapbox GL ground (deleted 2026-07-24). Same
+// The game's photoreal ground backend, beside course3d.js (Four Oaks three.js).
+// It replaced the old Mapbox GL ground (deleted 2026-07-24) and then the native
+// Apple MapKit flyover ground (deleted 2026-08-05). Same
 // compositing model: a full-screen 3D canvas (#cgt) sits behind the transparent
 // #game canvas; all gameplay (cup/ball/aim/contours) keeps drawing on #game,
 // glued to the photoreal ground by the projection bridge. game.js routes
 // wx()/wy()/ws()/screenToWorld() through window.GTiles3D.project/unproject when
-// view.gtilesProj is set (the same pattern the three.js/Apple grounds use).
+// view.gtilesProj is set (the same pattern the three.js ground uses).
 //
 // Streams Google's real-world photoreal mesh via 3d-tiles-renderer. Because the
 // root app vendors three r160 but the renderer needs three >=0.167, the renderer
@@ -30,7 +31,10 @@ import {
 } from "gtiles";
 
 const M_FALLBACK = 2.7432;   // metres per world unit (1 unit = 3 yd), matches game.js
-const APPLE_CAM_K = 1.866;   // 1/(2·tan15°) — the FOV constant the game camera math uses
+// 1/(2·tan15°) — the ~30° vertical-FOV constant. game.js declares the SAME value
+// as CAM_K for frameClubReach; the two must agree or this camera and the flat
+// affine it blends toward at low pitch disagree.
+const CAM_K = 1.866;
 const DEG = Math.PI / 180;
 
 let container = null;   // #cgt canvas
@@ -754,7 +758,7 @@ function setCamera() {
   const fsx = W / 2 - view.c, fsy = H / 2 - view.f;
   const fOx = (view.e * fsx - view.b * fsy) / det;
   const fOy = (-view.d * fsx + view.a * fsy) / det;
-  const fD = m * H * APPLE_CAM_K / scale;
+  const fD = m * H * CAM_K / scale;
   let tOx, tOy, tD;
   if (A && (A.moving || A.hold) && _hold) {
     // FROZEN while the ball is in flight, and while the match camera is held on
@@ -1164,8 +1168,33 @@ function render() {
   // player's eye returns to the course. Adopt the new position silently.
   const camMoved = !_justResumed && _lastCamPos
     ? camera.position.distanceTo(_lastCamPos) > 0.5 : false;
+  // ORIENTATION, tested separately from position — the park gate below needs
+  // both and camMoved cannot see a turn. A bearing change ORBITS the camera
+  // about the look-at, so it displaces the position by only R·dθ, and R shrinks
+  // with the framing: at PUTT framing D collapses to ~28 m and R to ~18 m, so
+  // clearing 0.5 m takes 1.6°/frame — about 18 px of aim-roller drag per frame.
+  // Off the green D is 300-500 m and the same test needs 0.09-0.14°/frame, i.e.
+  // it always passes. That asymmetry was the bug: on the green the gate stayed
+  // parked, renderer.render() never ran, and the photoreal ground held its last
+  // frame while the 2D overlay drawn on top of it (green tint, contours, relief,
+  // ball, cup) kept rotating — because setCamera() runs ABOVE this gate and had
+  // already re-aimed the camera that project() reads. Two layers, one camera,
+  // one of them not repainted.
+  // Quaternion angle rather than a bearing delta because it is SCALE-FREE: it
+  // means the same thing at 28 m and at 490 m, which is exactly what a metric
+  // position epsilon does not. 5e-4 rad ≈ 0.029°, against a smallest real aim
+  // input of ~0.36°/frame (one eased aimNudge) — 12x margin — while a genuinely
+  // parked camera reads exactly 0, since the _camEase snap in setCamera drives
+  // every placeCamera input to exact equality.
+  const camTurned = !_justResumed && _lastCamQuat
+    ? camera.quaternion.angleTo(_lastCamQuat) > 5e-4 : false;
   _justResumed = false;
   (_lastCamPos = _lastCamPos || new THREE.Vector3()).copy(camera.position);
+  // clone() on the first frame rather than new THREE.Quaternion(): the bundled
+  // gtiles THREE is a re-export and this file must not depend on which of its
+  // constructors made it through the build.
+  if (_lastCamQuat) _lastCamQuat.copy(camera.quaternion);
+  else _lastCamQuat = camera.quaternion.clone();
   // errorTarget RAMP, not a binary flip: the old 6↔12 switch made every tile
   // needing refinement swap in the SAME frame — the "refine wave a beat after
   // rest" pop. Coarsen instantly on motion; walk back 12→6 over ~0.8s parked so
@@ -1197,7 +1226,12 @@ function render() {
   // motion, empty queues) and deadlock: the FAIL_TIMEOUT_MS check below needs
   // frames to run in order to give up and hand the course back to the 2D aerial.
   const _st = gb() && gb().getState ? gb().getState() : null;
-  const quiet = !camMoved && _errT <= 6.001 && tiles.loadProgress >= 1 && !(_st && _st.moving);
+  // camTurned is in here but deliberately NOT in the _errT ramp above. Those are
+  // different questions: _errT asks "is the camera gliding, so don't chase
+  // refinements", and feeding a 0.1° aim tweak into it would coarsen to 12 and
+  // walk back = a full refine wave and a visible tile pop after every small aim
+  // adjustment. This asks "do the pixels differ", and a turn changes every one.
+  const quiet = !camMoved && !camTurned && _errT <= 6.001 && tiles.loadProgress >= 1 && !(_st && _st.moving);
   _settledAt = quiet ? (_settledAt || nowR) : 0;
   // Hold past quiescence: TilesFadePlugin cross-fades each refinement over
   // 500 ms, so parking on the first quiet frame freezes a half-faded tile.
@@ -1263,6 +1297,7 @@ function render() {
 }
 let _lastHole = null;
 let _lastCamPos = null;
+let _lastCamQuat = null;      // last camera orientation (park gate — see render())
 let _errT = 6, _errTAt = 0;   // ramped errorTarget (motion-coarse LOD)
 let _justResumed = false;     // set by setHidden(false); one-frame motion amnesty
 // Park gate (see render()). _settledAt = when the scene first went quiescent,

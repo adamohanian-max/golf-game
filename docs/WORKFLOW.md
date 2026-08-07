@@ -2,7 +2,7 @@
 
 Multi-model Claude Code orchestration for two workstreams:
 - **WEB:** MapLibre GL JS v5 + Three.js course viewer (the reusable engine)
-- **IOS:** MapKit static 3D preview (lightweight, no custom physics)
+- ~~**IOS:** MapKit static 3D preview (lightweight, no custom physics)~~ — **RETIRED 2026-08-05.** Never built, and the direction is dead: the game's native Apple MapKit ground was removed and every photoreal course now renders through Google Photorealistic 3D Tiles (`three3d/gtiles3d.js`), one JS path that already runs in the iOS webview. Phase 7 and the `ios-implementer` agent spec below are kept only as a record of the abandoned plan.
 
 Companion spec: `web_course_viewer_spec.md` (the technical brief — this file is the *process*, that file is the *content*).
 
@@ -338,7 +338,9 @@ If verification fails, produce a triage: what failed, the exact error, your best
 hypothesis, and which specialist should own the fix. Then stop.
 ```
 
-### `.claude/agents/ios-implementer.md`
+### `.claude/agents/ios-implementer.md` — RETIRED, do not run
+> Superseded 2026-08-05 along with the whole iOS MapKit workstream (see the
+> header). Apple Flyover is no longer a ground backend anywhere in this project.
 ```markdown
 ---
 name: ios-implementer
@@ -479,7 +481,7 @@ Sky layer, terrain exaggeration tuning, shadow blob under ball, camera framing f
 
 ### IOS workstream
 
-**Phase 7 — MapKit preview** · `ios-implementer` (sonnet)
+**Phase 7 — MapKit preview** · `ios-implementer` (sonnet) — **RETIRED, skip**
 Runs *after* Phase 3 (needs the hole-data schema locked) and is independent of Phases 4–6. Fable may run it in parallel with the web phases if you want wall-clock speed — at the cost of concurrent token burn.
 *Accept:* project builds in Xcode; pitched flyover view with tee/green/arrows/ball renders.
 

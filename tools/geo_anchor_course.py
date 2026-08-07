@@ -12,9 +12,26 @@ robust to any per-hole noise) using each hole's PIN as a correspondence point
 (pins are never moved; tees can be scorecard-stretched by the baker, so we
 avoid using them here — see CLAUDE.md "Baker: stretch tee back...").
 
+PREFER --greens. The default correspondence (baker pin <-> OSM hole-way
+ENDPOINT) is noisy by construction: a hole way's last vertex is wherever the
+mapper stopped drawing, routinely tens of metres from the pin it stands in for.
+--greens instead pairs this course's BAKED GREEN POLYGON CENTROIDS with the same
+OSM golf=green polygons they were baked from — the same physical object, defined
+the same way on both sides. Since the baker projects with a pure scale+offset,
+that relation is exactly affine, so the fit RECOVERS the baking transform rather
+than approximating it. Measured on butter-brook-golf-club: green centroids give
+held-out (2-fold) and leave-one-out residuals of 0.002 m over 18 greens, where
+the pin fit reported 4.77 m mean / 8.57 m max and left a real 1.48 m mean /
+3.03 m max offset against the greens.
+
+Do NOT compare the two modes on the pin metric — it reads ~5 m median for ANY
+affine, including the exact one, because the noise is in the target.
+
+Overpass 504s/429s are frequent here: retry serially, never in parallel.
+
 Usage:
     python3 tools/geo_anchor_course.py --id butter-brook-golf-club \
-        --near 42.534868,-71.407785 --write
+        --near 42.534868,-71.407785 --greens --write
 """
 import argparse, json, math, os, sys, urllib.parse, urllib.request
 
@@ -70,6 +87,9 @@ def main():
     ap.add_argument("--near", required=True, help="lat,lon near the course")
     ap.add_argument("--boundary-rel", type=int, help="force OSM relation id as the course boundary (skip nearest-lookup)")
     ap.add_argument("--boundary-way", type=int, help="force OSM way id as the course boundary (skip nearest-lookup)")
+    ap.add_argument("--greens", action="store_true",
+                    help="fit baked green-polygon centroids against OSM golf=green centroids "
+                         "(exact — recovers the baking affine; see the module docstring)")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
 
@@ -107,7 +127,39 @@ def main():
 
     world_pts, lon_targets, lat_targets = [], [], []
     matched, skipped = [], []
-    for h in course["holes"]:
+
+    if args.greens:
+        # Green-centroid mode (preferred — see module docstring). Pair each baked
+        # green with its OSM source by nearest centroid under the CURRENT affine;
+        # a green is ~25 m across, so a 45 m cap can only ever admit the right one.
+        if not greens:
+            sys.exit("--greens: no golf=green ways returned by Overpass.")
+        cur = (course.get("geo") or {}).get("toLonLat")
+        if not cur:
+            sys.exit("--greens needs an existing course.geo to seed the pairing; "
+                     "run once without it first, then re-run with --greens.")
+        mlat = sum(g[0] for g in greens) / len(greens)
+        mpdlat, mpdlon = 111320.0, 111320.0 * math.cos(math.radians(mlat))
+        for gi, poly in enumerate(course["surfaces"].get("green", [])):
+            cx = sum(q["x"] for q in poly) / len(poly)
+            cy = sum(q["y"] for q in poly) / len(poly)
+            plat = cur[3] * cx + cur[4] * cy + cur[5]
+            plon = cur[0] * cx + cur[1] * cy + cur[2]
+            best = min(greens, key=lambda g: math.hypot((g[0] - plat) * mpdlat,
+                                                        (g[1] - plon) * mpdlon))
+            d = math.hypot((best[0] - plat) * mpdlat, (best[1] - plon) * mpdlon)
+            if d > 45:
+                skipped.append(f"green{gi}({d:.0f}m)")
+                continue
+            world_pts.append((cx, cy))
+            lat_targets.append(best[0])
+            lon_targets.append(best[1])
+            matched.append(f"g{gi}")
+
+    # --greens REPLACES the pin correspondence; it must never also collect pins.
+    # (Appending both "worked" only because outlier rejection happened to drop
+    # every pin point against an exact green fit — luck, not design.)
+    for h in ([] if args.greens else course["holes"]):
         n = h.get("num")
         line = hole_lines.get(n)
         if not line or "pin" not in h:
@@ -164,13 +216,18 @@ def main():
     mean_err_m = sum(errs) / len(errs)
     max_err_m = max(errs)
 
-    print(f"Matched {len(matched)}/18 holes: {matched}" + (f"  (skipped: {skipped})" if skipped else ""))
+    label = "greens" if args.greens else "holes"
+    print(f"Matched {len(matched)}/18 {label}: {matched}" + (f"  (skipped: {skipped})" if skipped else ""))
     per_hole = residuals(lon_coef, lat_coef, range(len(world_pts)))
-    print("Per-hole residuals (m): " + ", ".join(f"{matched[i]}:{per_hole[i]:.0f}" for i in range(len(matched))))
+    print("Per-point residuals (m): " + ", ".join(
+        f"{matched[i]}:{per_hole[i]:.2f}" for i in range(len(matched))))
     if dropped:
-        print("Dropped as outliers: " + ", ".join(f"hole {n} ({e:.0f}m)" for n, e in dropped))
-    print(f"Fit residual: mean {mean_err_m:.2f}m, max {max_err_m:.2f}m over {len(idx)} pin points")
-    to_lon_lat = [round(float(v), 10) for v in
+        print("Dropped as outliers: " + ", ".join(f"{n} ({e:.0f}m)" for n, e in dropped))
+    print(f"Fit residual: mean {mean_err_m:.2f}m, max {max_err_m:.2f}m over {len(idx)} {label} points")
+    # Significant digits, NOT decimal places: at round(v, 10) the scale terms
+    # (~3e-05) lose real precision and the small-but-real shear terms (~1e-11)
+    # collapse to 0.0.
+    to_lon_lat = [float(f"{float(v):.12g}") for v in
                   [lon_coef[0], lon_coef[1], lon_coef[2], lat_coef[0], lat_coef[1], lat_coef[2]]]
     print(f"geo.toLonLat = {to_lon_lat}")
     print("  lon = a*worldX + b*worldY + c ; lat = d*worldX + e*worldY + f")
@@ -178,12 +235,19 @@ def main():
     if args.write:
         course["geo"] = {
             "toLonLat": to_lon_lat,
-            "note": "lon = a*wx+b*wy+c, lat = d*wx+e*wy+f (world units -> WGS84). "
-                    "Derived via least-squares fit of hole-pin world coords against fresh "
-                    "OSM golf=hole endpoints, matched to golf=green centroids. Tees excluded "
-                    "(may be scorecard-stretched by the baker). tools/geo_anchor_course.py",
+            "note": ("lon = a*wx+b*wy+c, lat = d*wx+e*wy+f (world units -> WGS84). "
+                     + ("Least-squares fit of BAKED GREEN-POLYGON CENTROIDS against the same "
+                        "OSM golf=green polygons they were baked from -- exact, recovers the "
+                        "baking affine (the baker projects with a pure scale+offset). "
+                        if args.greens else
+                        "Least-squares fit of hole-pin world coords against fresh OSM golf=hole "
+                        "ENDPOINTS, matched to golf=green centroids -- noisy target, prefer "
+                        "--greens. Tees excluded (may be scorecard-stretched by the baker). ")
+                     + "tools/geo_anchor_course.py"),
             "residualMeanM": round(mean_err_m, 2),
             "residualMaxM": round(max_err_m, 2),
+            "fitMethod": "green-centroids" if args.greens else "pin-endpoints",
+            "fitPoints": len(idx),
         }
         with open(path, "w") as f:
             json.dump(course, f)
