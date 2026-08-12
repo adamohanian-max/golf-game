@@ -404,6 +404,23 @@ const TUNE = {
   // (both are PER-FRAME accumulators: the 2026-07 float retune added ~17.5%
   // more airborne frames — measured driver 64→75 — so these scale down by the
   // same ratio to keep shot shape / wind drift unchanged in world terms)
+  // --- Weather (see rollWind). A round gets ONE day: a prevailing bearing and a
+  // base speed, both drifting slowly hole to hole instead of being re-rolled
+  // from scratch. That is the whole point — an 18-hole round used to be 18
+  // independent draws, so an out-and-back nine could play downwind both ways and
+  // the wind never told you anything about the course.
+  windMaxMph: 15,        // hard ceiling on wind speed, gusts included
+  windGustMph: 3.6,      // swing around the day's base speed, mph
+  windDirSpreadDeg: 30,  // swing around the day's prevailing bearing, degrees
+  windHolePeriod: 5.0,   // holes per drift cycle — how fast the sustained wind wanders
+  windBuild: 0.18,       // fraction the base rises from hole 1 to 18 (afternoon build)
+  // Share of that swing which is INDEPENDENT per hole rather than part of the
+  // slow drift. Smooth noise alone cannot make consecutive holes differ much —
+  // measured, every all-smooth mix topped out around 0.7 mph / 5° between holes,
+  // so the wind chip sat on one number for five holes and read as frozen. This
+  // is the "what it happens to be doing on this tee" term over the sustained
+  // wind; at 0.35 consecutive holes differ by 0.8 mph / 6.5° median.
+  windHoleShare: 0.35,
   playsLikePerFoot: 1.0, // caddie "plays like": yards added per foot of climb to the pin (uphill plays longer)
 
   // Lie penalty: launch power multiplier by the surface you're hitting FROM.
@@ -1457,6 +1474,79 @@ let markerDrag = null;     // active drag of the dropped marker: { moved, x, y }
 const MARKER_HIT_PX = 22;  // touch/click radius around the marker to grab/dismiss it
 let selectedClub = "driver"; // driver | iron | wedge (putter auto on the green)
 let wind = { dir: 0, speed: 0 }; // dir = compass bearing wind comes FROM (radians, 0=N), speed in mph
+
+// =====================================================================
+//  WEATHER — one day's wind per round
+//
+//  Wind used to be two independent Math.random() draws per hole, which is not
+//  what weather does: the bearing teleported around the compass between holes,
+//  so a hole never played "into it" as a property of the DAY, and an out-and-back
+//  nine could ride a tailwind in both directions. It also meant the wind chip
+//  carried no information — nothing you learned on hole 3 was true on hole 4.
+//
+//  Now a round has a DAY: one prevailing bearing and one base speed, drawn once,
+//  each drifting slowly hole to hole. The wind you face still changes constantly,
+//  but because the HOLES turn, not because the air does — which is exactly where
+//  wind strategy comes from in real golf.
+//
+//  Deterministic in (round seed, hole number), NOT a stateful random walk. That
+//  matters: the hole picker can jump to 12 and back, a hole can be replayed, and
+//  the wind is the same each time. It also means everyone in a match or a
+//  tournament plays the same weather, since round.pinSeed is already frozen for
+//  those (see startCourse) — same convention as the pins.
+// =====================================================================
+const WIND_SEED_SALT = 0x9e3779b9;  // keep the day's draw off pinSeed's own stream
+// One smoothed value-noise sample in [-1,1] over a CONTINUOUS hole axis. The
+// lattice is one unit wide, so `t` must be scaled (windHolePeriod) before it is
+// called — at t = integer hole numbers the lattice points are independent and
+// this degenerates back into the per-hole coin flip it exists to replace.
+function windUnit(seed, n) { return mulberry32((seed ^ Math.imul(n | 0, 2654435761)) >>> 0)(); }
+function windNoise(seed, t) {
+  const i = Math.floor(t), f = t - i;
+  const s = f * f * (3 - 2 * f);   // smoothstep — C1, so no kink at a hole boundary
+  const a = windUnit(seed, i), b = windUnit(seed, i + 1);
+  return (a + (b - a) * s) * 2 - 1;
+}
+// The day's constants, from the round seed alone (no hole term).
+function windDay() {
+  const r = mulberry32((round.pinSeed ^ WIND_SEED_SALT) >>> 0);
+  const dir0 = r() * Math.PI * 2;
+  // Triangular (mean of two uniforms) over 1–14 mph: a bell, so most rounds sit
+  // near 7-8 and both the dead-calm day and the near-cap day stay uncommon. Calm
+  // is a property of the DAY here, not a 10% per-hole coin flip — that is what
+  // makes a becalmed round a thing that happens, instead of one quiet hole.
+  const base = 1 + 13 * (r() + r()) / 2;
+  return { dir0, base };
+}
+// Wind on a given hole. Pure: same answer every time for a given round + hole.
+function windForHole(holeNum) {
+  const d = windDay();
+  const h = holeNum || 1;
+  const t = h / TUNE.windHolePeriod;
+  // Three terms in [-1,1]: a slow drift (the sustained wind), a faster ripple,
+  // and a per-hole independent draw (windHoleShare — see the TUNE note). The two
+  // smooth octaves split what is left 0.69/0.31. Speed and bearing use different
+  // seed salts or they would move in lockstep, which reads as a scripted gust.
+  const w3 = TUNE.windHoleShare, sm = 1 - w3;
+  const term = (salt) => sm * 0.69 * windNoise((round.pinSeed ^ salt) >>> 0, t)
+                       + sm * 0.31 * windNoise((round.pinSeed ^ (salt + 101)) >>> 0, t * 2.2)
+                       + w3 * (windUnit((round.pinSeed ^ (salt + 211)) >>> 0, h) * 2 - 1);
+  const dir = d.dir0 + term(0x51ED270B) * TUNE.windDirSpreadDeg * Math.PI / 180;
+  // Afternoon build: the base lifts a little across the round. holeNum is the
+  // course's own numbering, so a 9-hole loop gets the front half of the ramp.
+  const build = 1 + TUNE.windBuild * (h - 1) / 17;
+  const raw = d.base * build + term(0x2545F491) * TUNE.windGustMph;
+  return { dir, speed: Math.max(0, Math.min(TUNE.windMaxMph, raw)) };
+}
+// Point `wind` at this hole. Speed stays CONSTANT for the whole hole on purpose
+// — a gust that lands mid-flight is unreadable, so the variation lives between
+// holes where the player can see it on the chip and club for it.
+function rollWind(holeNum) {
+  if (HOLE && HOLE.isRange) { wind.speed = 0; return; }   // no wind on the range
+  if (!windEnabled) { wind.speed = 0; return; }
+  const w = windForHole(holeNum);
+  wind.dir = w.dir; wind.speed = w.speed;
+}
 // Last-shot stats for the HUD (carry / ball speed / total / dist-to-pin).
 const shot = { startX: 0, startY: 0, mph: 0, carry: null, total: null, carried: false };
 
@@ -8686,19 +8776,8 @@ function setHole(rec) {
 
   resetState();
   resetChipSpin();  // re-center the chip spin slider to neutral for the new hole
-  // New wind each hole (no wind on driving range)
-  if (!HOLE.isRange && windEnabled) {
-    wind.dir   = Math.random() * Math.PI * 2;
-    // 4-18 mph, up from 2-10. A 10 mph ceiling is a gentle breeze that never
-    // forces a club change, so wind was on but weightless; at 18 it is a real
-    // input to club choice and to the FLIGHT selector (which rides or punches
-    // through it via flightHiWind/flightLoWind). The calm day survives as
-    // variety — a round where wind never matters should still happen sometimes.
-    wind.speed = Math.random() < 0.1 ? Math.floor(Math.random() * 3)   // 10% calm (0-2 mph)
-                                     : Math.round(Math.random() * 14) + 4; // 4-18 mph
-  } else {
-    wind.speed = 0;
-  }
+  // This hole's wind, drawn from the round's ONE day (see rollWind / windForHole).
+  rollWind(HOLE.num);
   autoClubEnabled = !!activeSettings.autoClub; // honor the round's default each new hole
   manualClubThisShot = false; // fresh hole starts clean (no carried-over override)
   autoClub(); // tee club for the hole length (range lets the player choose)
@@ -9627,7 +9706,11 @@ if (elSoundBtn) {
 function setWind(on) {
   windEnabled = on;
   document.getElementById("hm-wind").classList.toggle("active", on);
-  if (!on) wind.speed = 0; // kill current wind immediately when toggled off
+  // Apply immediately either way. Toggling back ON used to leave the round dead
+  // calm until the next hole, because wind was only ever rolled in setHole; the
+  // day is deterministic now, so this hole's wind can just be recomputed.
+  if (!on) wind.speed = 0;
+  else if (mode === "course" && HOLE) rollWind(HOLE.num);
 }
 function setAutoAim(on) {
   autoAimEnabled = on;
