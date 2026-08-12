@@ -206,35 +206,6 @@
    "priority": 4
   },
   {
-   "id": "hogwarts-grounds",
-   "holes": 18,
-   "green": 18,
-   "fairway": 14,
-   "bunker": 41,
-   "water": 6,
-   "has_aerial": true,
-   "has_mask": true,
-   "has_dem": false,
-   "has_boundary": true,
-   "flags": [
-    "missing-bunkers(~12409u2 sand, 4.79x mapped)",
-    "tone-outlier(z2.26)"
-   ],
-   "bunker_units2": 2589.7,
-   "sand_units2": 14010.6,
-   "sand_uncovered_units2": 12409.0,
-   "sand_uncovered_frac": 0.886,
-   "sand_unmapped_ratio": 4.79,
-   "turf_lab": [
-    52.4,
-    -21.1,
-    29.6
-   ],
-   "turf_px": 8474,
-   "turf_z": 2.26,
-   "priority": 3
-  },
-  {
    "id": "the-country-club-at-castle-pines",
    "holes": 18,
    "green": 18,
@@ -927,34 +898,6 @@
    "turf_px": 15978,
    "turf_z": 1.37,
    "priority": 2
-  },
-  {
-   "id": "blackwater-vale",
-   "holes": 18,
-   "green": 18,
-   "fairway": 15,
-   "bunker": 44,
-   "water": 10,
-   "has_aerial": true,
-   "has_mask": true,
-   "has_dem": false,
-   "has_boundary": true,
-   "flags": [
-    "tone-outlier(z2.3)"
-   ],
-   "bunker_units2": 3067.6,
-   "sand_units2": 1656.8,
-   "sand_uncovered_units2": 0.0,
-   "sand_uncovered_frac": 0.0,
-   "sand_unmapped_ratio": 0.0,
-   "turf_lab": [
-    51.3,
-    -21.5,
-    29.8
-   ],
-   "turf_px": 14817,
-   "turf_z": 2.3,
-   "priority": 1
   },
   {
    "id": "la-quinta-country-club",

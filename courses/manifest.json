@@ -14,17 +14,6 @@
     ]
   },
   {
-    "id": "blackwater-vale",
-    "name": "Blackwater Vale",
-    "sub": "Original design · Par 72",
-    "par": 72,
-    "yards": 7980,
-    "holes": 18,
-    "location": "Original design",
-    "region": "Other",
-    "tags": []
-  },
-  {
     "id": "four-oaks-dracut",
     "name": "Four Oaks Country Club",
     "sub": "Dracut, MA · Par 70",
@@ -1142,17 +1131,6 @@
     "yards": 6509,
     "holes": 18,
     "location": "Imagery test",
-    "region": "Other",
-    "tags": []
-  },
-  {
-    "id": "hogwarts-grounds",
-    "name": "Hogwarts Grounds",
-    "sub": "Original design · Par 72",
-    "par": 72,
-    "yards": 7105,
-    "holes": 18,
-    "location": "Original design",
     "region": "Other",
     "tags": []
   },
