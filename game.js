@@ -273,8 +273,23 @@ const TUNE = {
     // true rolling resistance in m/s2, dig = share of horizontal speed the
     // pitch mark absorbs. Green values are FITTED to real release distances
     // (5i 10 yd, 7i 6, PW 2, LW checks dead); the rest hold the club totals.
-    fairway: { e: 0.10, mu: 0.40, roll: 5.60, dig: 0.30 },
-    tee:     { e: 0.10, mu: 0.40, roll: 5.60, dig: 0.30 },
+    //
+    // `roll` HERE IS NO LONGER THE SOURCE OF TRUTH — rollDecelMs() derives it
+    // from TURF_STIMP (below the table) for every surface. The numbers are kept
+    // because tools/shot_matrix.mjs reads them out of this file as text, and
+    // because they record what the hand-fitted values used to be. They were
+    // wrong in a specific, diagnosable way: off-green `roll` exceeded the skid
+    // decel mu*g (5.60 vs 3.92 fairway, 9.00 vs 5.40 rough), i.e. the ball
+    // decelerated HARDER once it stopped skidding, which no turf does.
+    // dig 0.30 -> 0.40. The old 5.60 roll was doing two jobs: real rolling
+    // resistance AND standing in for a pitch mark that absorbed too little, and
+    // it hid the second one by killing the ball inside 3 yd — right up until a
+    // green was in range, where nothing killed it and an approach landing 12 yd
+    // short ran 37. Deriving roll honestly exposed that, so the crater term now
+    // carries its own weight. Still below the green's 0.55: a receptive green
+    // takes the deeper mark, which is what makes it hold.
+    fairway: { e: 0.10, mu: 0.40, roll: 5.60, dig: 0.50 },
+    tee:     { e: 0.10, mu: 0.40, roll: 5.60, dig: 0.50 },
     // Green e was 0.08 with dig 0.72: the rebound came out below aeroSettleVz,
     // so an approach got ONE ~0.1 ft hop lasting 2-3 render frames (invisible at
     // timeScale 3.75) and dig deleted 72% of its forward speed in that single
@@ -299,6 +314,23 @@ const TUNE = {
     woods:   { e: 0.12, mu: 0.80, roll: 6.00, dig: 0.80 },
     ob:      { e: 0.12, mu: 0.80, roll: 6.00, dig: 0.80 },
   },
+  // Rolling resistance for every OFF-GREEN surface, expressed as the stimpmeter
+  // reading that turf would give. rollDecelMs() runs these through the same
+  // Ballistics.greenDecel() the green already uses, so all turf comes from ONE
+  // physical formula instead of hand-fitted m/s2 that drifted into being 10-20x
+  // too high and inverted against the skid decel. Green is deliberately absent —
+  // it reads the per-hole HOLE.greenSpeed.
+  //
+  // TUNE THE STIMP, NEVER THE m/s2. The ordering green < fairway < rough <
+  // bunker and the invariant roll < mu*g are both asserted by
+  // tools/approach_matrix.js --gate, and both are properties of these numbers.
+  // Fitted against real release distances the way the green row was, by sweeping
+  // `node tools/shot_matrix.mjs --surface fairway --turf e,mu,dig,roll`:
+  // fairway 3 puts 5i 14.6 yd / 7i 9.1 / PW 4.3 inside the tour band (8-15 /
+  // 5-10 / 2-4). The driver comes out at 16.9 against a real 20-30 — that is the
+  // known ~6 deg descent-angle error on the driver (see ball_calibrate.mjs),
+  // which over-digs it, NOT a turf number to chase.
+  turfStimp: { fairway: 3, rough: 1.5, bunker: 1, woods: 1.2, ob: 1.2, tee: 3, water: 1 },
   // --- Green surface, in real units (built by buildGreenTopo) ---------------
   // The macro tilt is the baked DEM, plane-fit over the green polygon. The raw
   // fit is NOT usable as a grade: over 2851 greens it medians 3.45% and p90
@@ -2287,7 +2319,15 @@ function rollDecelMs(surf) {
     return window.Ballistics.greenDecel(
       (HOLE && HOLE.greenSpeed) || DEFAULT_STIMP);
   }
-  return (TUNE.turf[surf] || TUNE.turf.fairway).roll;
+  // Off-green turf is the same physics as a green, just a slower one, so it goes
+  // through the same stimp->m/s2 conversion instead of carrying its own units.
+  // That is what keeps the surfaces ordered and stops `roll` drifting above the
+  // skid decel mu*g, which is what it had done (fairway 5.60 vs 3.92).
+  // rollDecelFromStimp, NOT greenDecel: greenDecel floors the reading at 3 ft as
+  // a green sanity guard, which would collapse rough (2), bunker (1) and woods
+  // (1.5) onto one value.
+  const st = TUNE.turfStimp[surf] || TUNE.turfStimp.fairway;
+  return window.Ballistics.rollDecelFromStimp(st);
 }
 // A putt leaves the face ROLLING, not sliding. Without this the ball entered
 // skidRoll with slip u = sv and spent its whole first tick on KINETIC friction
@@ -2331,8 +2371,12 @@ function rollStepSI(b, surf, grad) {
   // Skid-then-roll: kinetic friction while the contact point slips (an order of
   // magnitude stronger than rolling resistance), then true rolling. This is the
   // whole reason an approach shot holds a green and a putt does not.
+  // EVERY surface takes its roll from rollDecelMs, not just the green. This used
+  // to read `surf === "green" ? {...} : t`, so off-green the raw TUNE.turf row's
+  // `roll` reached the ball and the derived value was dead — the numbers could
+  // (and did) drift above mu*g with nothing to catch it.
   const t = turfFor(surf, b._chipK);
-  const prof = surf === "green" ? { mu: t.mu, roll: rollDecelMs("green") } : t;
+  const prof = { mu: t.mu, roll: rollDecelMs(surf) };
   const r = Bal.skidRoll(sv, b.spinW || 0, prof, dt);
   sv = r.sv; b.spinW = r.w;
   if (Math.abs(sv) <= TUNE.aeroStopMs) {

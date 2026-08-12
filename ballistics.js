@@ -328,9 +328,19 @@
   // at 1.83 m/s and the stimp reading IS how far it rolls, so a = v²/(2d).
   // A 13.5 green gives 0.41 m/s²; the old engine ran 5.4, which is why putts
   // died in under two seconds.
+  // The conversion itself, with no floor: ANY turf can be described by the
+  // stimpmeter, and off-green surfaces are simply much slower ones (game.js
+  // TUNE.turfStimp: fairway 5, rough 2, bunker 1). Split out of greenDecel
+  // because that function's floor of 3 ft is a GREEN sanity guard, and reusing
+  // it for turf silently collapsed rough, bunker and woods onto one value.
+  function rollDecelFromStimp(stimpFt) {
+    return (1.83 * 1.83) / (2 * Math.max(0.5, stimpFt || 1) * 0.3048);
+  }
+  // Greens only. Floors the reading at 3 ft: anything slower is not a putting
+  // surface, and a bad greenSpeed in a course JSON must not hand the putter a
+  // different game.
   function greenDecel(stimpFt) {
-    const d = Math.max(3, stimpFt || 11) * 0.3048;
-    return (1.83 * 1.83) / (2 * d);
+    return rollDecelFromStimp(Math.max(3, stimpFt || 11));
   }
   // A rolling (not sliding) ball on a slope accelerates at (5/7)·g·sinθ — the
   // 5/7 is the rolling-inertia factor for a solid sphere. Replaces the old
@@ -340,7 +350,7 @@
   return {
     BALL, RHO_SEA, G, COEF,
     liftCoef, dragCoef, accel, step, launchState, flyToLanding,
-    bounce, skidRoll, greenDecel, SLOPE_ROLL_K,
+    bounce, skidRoll, greenDecel, rollDecelFromStimp, SLOPE_ROLL_K,
     MPH_PER_MS: 2.23694, M_PER_YD: 0.9144,
   };
 });

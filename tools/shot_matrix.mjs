@@ -55,13 +55,36 @@ function readTune() {
   return T;
 }
 
+// Green speed, read from game.js rather than copied. It sets rollDecelMs('green'),
+// i.e. how far an approach shot RELEASES after it lands — which is exactly what
+// the release table below gates. Hardcoding it meant a stimp change in game.js
+// left this gate quietly testing the old green: it went 11 -> 12 and the gate
+// still passed, because it was still simulating 11.
+function readDefaultStimp() {
+  const src = readFileSync(join(ROOT, 'game.js'), 'utf8');
+  const m = src.match(/^const DEFAULT_STIMP\s*=\s*([0-9.]+)\s*;/m);
+  if (!m) throw new Error('DEFAULT_STIMP not found in game.js');
+  return Number(m[1]);
+}
+
 const TUNE = readTune();
 const YARDS_PER_UNIT = 3.0;          // game.js:446 default
 const M_PER_UNIT = 2.7432;           // game.js:450
-const DEFAULT_STIMP = 11;            // game.js:471
+const DEFAULT_STIMP = readDefaultStimp();
 const simDt = () => TUNE.timeScale / 60;                 // game.js:457
-const rollDecelMs = (s) => (s === 'green' ? B.greenDecel(DEFAULT_STIMP)
-                                          : (TUNE.turf[s] || TUNE.turf.fairway).roll);
+// game.js:rollDecelMs. Off-green turf is derived from TUNE.turfStimp through the
+// SAME stimp->m/s2 conversion the green uses (rollDecelFromStimp, which unlike
+// greenDecel has no 3 ft floor). TUNE.turf[s].roll is no longer the source of
+// truth in game.js, so reading it here would silently test the retired numbers —
+// the exact drift this mirror exists to avoid. `_rollOverride` is set by --turf.
+let _rollOverride = null;
+const rollDecelMs = (s) => {
+  if (_rollOverride != null && s === SURF) return _rollOverride;
+  if (s === 'green') return B.greenDecel(DEFAULT_STIMP);
+  const st = (TUNE.turfStimp || {})[s];
+  if (st == null) throw new Error('no TUNE.turfStimp entry for "' + s + '"');
+  return B.rollDecelFromStimp(st);
+};
 
 // ---- flight ---------------------------------------------------------------
 
@@ -148,8 +171,11 @@ function flyAndSettle(mph, launchDeg, spinRpm, surf, chipK = 0) {
   let sv = A.v.x * dx + A.v.y * dy;
   let w = A.spin.y * dx - A.spin.x * dy;
 
-  // rollStepSI (game.js:2229-2265), flat ground (no slope term)
-  const prof = surf === 'green' ? { mu: turf.mu, roll: rollDecelMs('green') } : turf;
+  // rollStepSI (game.js), flat ground (no slope term). EVERY surface takes its
+  // roll from rollDecelMs — this used to be `surf === 'green' ? {...} : turf`,
+  // which fed skidRoll the raw turf row off-green and so kept reporting the old
+  // hand-fitted numbers after game.js had moved to deriving them.
+  const prof = { mu: turf.mu, roll: rollDecelMs(surf) };
   let dist = 0, skid = 0;
   const r = B.BALL.r;
   for (let k = 0; k < 20000; k++) {
@@ -267,8 +293,13 @@ const SURF = argv.includes('--surface') ? argv[argv.indexOf('--surface') + 1] : 
 if (argv.includes('--turf')) {
   const [e, mu, dig, roll] = argv[argv.indexOf('--turf') + 1].split(',').map(Number);
   const t = TUNE.turf[SURF];
+  // Was unguarded, so `--surface grass --turf ...` died on "Cannot set
+  // properties of undefined" instead of saying which surface it did not know.
+  if (!t) throw new Error('--turf: no TUNE.turf entry for surface "' + SURF + '"');
   t.e = e; t.mu = mu; t.dig = dig;
-  if (Number.isFinite(roll)) t.roll = roll;
+  // roll no longer lives on the turf row (it is derived from TUNE.turfStimp), so
+  // an explicit override has to bypass the derivation rather than write to it.
+  if (Number.isFinite(roll)) _rollOverride = roll;
 }
 // --timescale N runs the whole matrix at a different wall-clock pace. Chips are
 // played at TUNE.chipTimeScale rather than TUNE.timeScale so their launch and
@@ -360,7 +391,16 @@ const H = ['club', 'mode', 'tgt', 'ef', 'lnch', 'rpm', 'mph', 'carry', 'apexFt',
            'desc', 'hangS', 'hopFt', 'hopS', 'n', 'skid', 'roll', 'rest'];
 const W = [7, 7, 5, 6, 6, 7, 6, 7, 7, 6, 6, 6, 6, 3, 6, 6, 7];
 const fmt = (v, i) => String(v).padStart(W[i]);
-console.log('landing surface: ' + SURF + '  ' + JSON.stringify(TUNE.turf[SURF]));
+// Print the roll actually in force (derived), not TUNE.turf[SURF].roll, which is
+// now a historical value the sim no longer reads.
+{
+  const t = TUNE.turf[SURF] || {};
+  const r = rollDecelMs(SURF), muG = (t.mu || 0) * 9.81;
+  console.log('landing surface: ' + SURF +
+    '  {e:' + t.e + ', mu:' + t.mu + ', dig:' + t.dig + '}' +
+    '  roll ' + r.toFixed(2) + ' m/s2  (mu*g ' + muG.toFixed(2) + ')' +
+    (r > muG ? '  <-- INVERTED' : ''));
+}
 console.log(H.map(fmt).join(''));
 for (const r of rows) {
   console.log([r.club, r.mode, r.target ?? '-', r.ef.toFixed(3), r.launchDeg.toFixed(1),
