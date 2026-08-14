@@ -1174,9 +1174,25 @@ function safeTeeAim() {
     return mine <= other;
   }
   function simTeeShot(ang) {
-    const t = buildTrialShot(ang, 1, 0, false); // frac=1: autoClub picked this club for full carry
-    if (!t || !t.flight) return null;
-    return simShotRest({ x: b.x, y: b.y, vx: t.vx, vy: t.vy, z: t.z, vz: t.vz, spin: t.spin }, t.flight);
+    // CALM AIR, deliberately. The aid answers "which line does this HOLE want?",
+    // and that is a property of the hole, not of today's weather. Wind is
+    // re-rolled per hole, so leaving it in meant a crosswind quietly swung the
+    // default tee aim off the fairway line — and the player, who can see the
+    // wind chip and is expected to play the allowance themselves, then had to
+    // undo an allowance the game had already made invisibly. Doubling it is the
+    // worst of both. The real shot still flies in the real wind; only this probe
+    // is calm.
+    //
+    // Zeroing wind.speed (not windEnabled) covers BOTH readers: aeroWindVec()
+    // returns null on a zero speed, and the legacy per-frame push in
+    // simShotRest is guarded by `wind.speed > 0`.
+    const ws = wind.speed;
+    wind.speed = 0;
+    try {
+      const t = buildTrialShot(ang, 1, 0, false); // frac=1: autoClub picked this club for full carry
+      if (!t || !t.flight) return null;
+      return simShotRest({ x: b.x, y: b.y, vx: t.vx, vy: t.vy, z: t.z, vz: t.vz, spin: t.spin }, t.flight);
+    } finally { wind.speed = ws; }
   }
   // Largest probe-ring radius (world units) whose samples are all fairway/green —
   // bigger = deeper in the fairway. The "middle of the fairway" metric.
