@@ -458,6 +458,39 @@ def main():
     world = {"w": round((MAXX - MINX) * SCALE + 2 * MARGIN, 2),
              "h": round((MAXY - MINY) * SCALE + 2 * MARGIN, 2)}
 
+    # --- geo anchor: world units -> WGS84, EXACT and free -------------------
+    # The Google photoreal ground needs course.geo to place the tileset, and
+    # tools/geo_anchor_course.py recovers it by least-squares fitting baked
+    # geometry back against fresh OSM. That is a reconstruction of something we
+    # are holding right here: W() is a pure scale+offset and fc.project() is
+    # equirectangular, so the composition is affine in closed form with zero
+    # residual. Emitting it at bake time also removes the tool's dependency on
+    # OSM having usable greens — Vesper CC has ONE green polygon for 18 holes,
+    # which made the fit diverge to a 290 m mean residual and an affine whose
+    # origin landed off West Africa.
+    #
+    # Inverse of W() composed with fc.unproject():
+    #   m_east = (wx - MARGIN)/SCALE + MINX ;  m_north = MAXY - (wy - MARGIN)/SCALE
+    #   lon = lon0 + deg(m_east / (R cos lat0)) ;  lat = lat0 + deg(m_north / R)
+    _R = fc.R_EARTH
+    _coslat = math.cos(math.radians(lat0))
+    _a = math.degrees(1.0 / (SCALE * _R * _coslat))          # deg lon per world unit
+    _e = -math.degrees(1.0 / (SCALE * _R))                   # deg lat per world unit (y grows south)
+    geo = {
+        "toLonLat": [
+            _a, 0.0, lon0 + math.degrees((MINX - MARGIN / SCALE) / (_R * _coslat)),
+            0.0, _e, lat0 + math.degrees((MAXY + MARGIN / SCALE) / _R),
+        ],
+        "note": ("lon = a*wx+b*wy+c, lat = d*wx+e*wy+f (world units -> WGS84). "
+                 "Closed form from the baker's own projection (equirectangular "
+                 "about lat0/lon0 composed with the world-frame scale+offset), so "
+                 "it is exact rather than fitted. fetch_course_global.py"),
+        "residualMeanM": 0.0,
+        "residualMaxM": 0.0,
+        "fitMethod": "bake-exact",
+        "fitPoints": 0,
+    }
+
     # --- per-hole tee/pin in global coords (already oriented tee->pin above) ---
     surfaces = {"green": [], "fairway": [], "bunker": [], "water": [], "tee": [],
                 "woods": [], "cartpath": [], "grass": [], "rough": []}
@@ -572,7 +605,7 @@ def main():
             dem = bake_dem(Wd, Hd, MARGIN, SCALE, MINX, MAXY, lat0, lon0)
 
     course = {"id": args.id, "name": args.name, "yardsPerUnit": YPU, "global": True,
-              "world": world, "aerial": aerial, "surfaces": surfaces,
+              "world": world, "geo": geo, "aerial": aerial, "surfaces": surfaces,
               "synthFairways": synth,
               "holes": sorted(out_holes, key=lambda h: h["num"])}
     if boundary_world:

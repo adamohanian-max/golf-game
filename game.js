@@ -1389,6 +1389,12 @@ function update3DMode() {
 //     torrey-pines-south-course     912 verts/mesh   real 3D
 //     butter-brook-golf-club         85 verts/mesh   FLAT — removed again
 //
+// Re-measured 2026-08-14 on one rig, with the two above as live controls
+// (pebble 1572, butter-brook 78 — both reproduce):
+//
+//     vesper-country-club          2377 verts/mesh   real 3D
+//     atkinson-resort-country-club  104 verts/mesh   FLAT — listed anyway, see below
+//
 // Butter Brook was added here on 2026-08-05 and removed on 2026-08-06. The
 // mistake that put it in: `geometricError` was used as the coverage test, but
 // that measures tile SUBDIVISION/texture resolution — a flat textured quad
@@ -1396,10 +1402,20 @@ function update3DMode() {
 // rationalised away: its finest glb is 15 KB against Manhattan's 212 KB, i.e. a
 // quad plus a texture. On-device it renders correctly and reads as "the trees
 // are 2D", because they are. ~600 verts/mesh separates the two regimes.
+//
+// ATKINSON IS A DELIBERATE EXCEPTION, NOT A REPEAT OF THAT MISTAKE. It was
+// measured first (104 verts/mesh, credited "Google, Airbus" — satellite imagery
+// on flat ground, the Butter Brook signature exactly) and listed anyway as a
+// product decision, 2026-08-14. It costs a billed tile session per visit for
+// ground that looks like the baked NAIP aerial it already has for free, and the
+// 2D↔3D slider reveals a flat photo when leaned. Do not "fix" this by removing
+// it — that is a call for whoever owns the billing, not a correctness bug.
 const GTILES_IDS = new Set([
   "pebble-beach-golf-course",
   "liberty-national-golf-club",
   "torrey-pines-south-course",
+  "vesper-country-club",
+  "atkinson-resort-country-club",   // FLAT tiles — deliberate, see the note above
 ]);
 function gtilesGroundActive() {
   return !!(course && GTILES_IDS.has(course.id) && course.geo &&
