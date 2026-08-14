@@ -8,6 +8,14 @@ const TUNE = {
   touchPowerSwipe: 200,  // touch/mouse flick speed (world u/s) = max power (halved: full power at half the flick)
   wheelSensitivity: 1.0, // two-finger trackpad swipe -> swing power scaling
   wheelInvert: false,    // true if you use classic (non-natural) scrolling
+  // Trackpad-vs-mouse-wheel discrimination (see onWheel/finishWheelSwing). A
+  // mouse wheel must never swing: one notch scrolled UP used to fire a
+  // full-power shot 180° from the aim. A trackpad swipe is many small deltas at
+  // high rate; a notch is one big delta. Browser-dependent — retune on a real
+  // wheel + trackpad if a swipe ever stops registering.
+  wheelMaxNotchPx: 60,   // a single delta bigger than this is a wheel notch
+  wheelMinEvents: 3,     // events required before a gesture may fire
+  wheelMinSpanMs: 25,    // and the span they must cover
   stopThreshold: 0.005,  // speed below this = ball stopped
   captureSpeed: 0.05,    // ball must be slower than this to drop in cup (low = hard)
   lipOutMaxSpeed: 0.18,  // putt at/under this that misses the cup is grabbed by the lip and dies 1–2 ft past; faster rams roll on
@@ -658,6 +666,17 @@ const TUNE = {
                          //   and accelerates into a sideways flick is a punch-out, not
                          //   an aim, and it must still fire even though the finger was
                          //   crawling 80ms earlier.
+  // A shot may not be struck backwards. Screen-up is the aim by construction,
+  // so this is the half-angle of a screen-space cone around it (see
+  // swipeToShot). WIDER than 90° deliberately — the sideways punch-out is a real
+  // shot and a 90° cone would reject one by a pixel. Measured before this
+  // existed: a drag straight UP the screen that stalled and settled before the
+  // click came out 172.9° off the aim, and one mouse-wheel notch came out at
+  // 180° and FULL power, because ef = max(f, clubMinFrac) floors a 5px accident
+  // at 85% of the club's rated carry.
+  swingMaxOffDeg: 100,
+  headMinPx: 8,          // chord below this carries no heading — fall back to the
+                         //   release vector (a tap-in putt lives here)
   // Landing behaviour per surface: e = vertical restitution (bounce height),
   // h = horizontal speed retained on impact (grab/check). Real per-course
   // values will come from the course API later.
@@ -3121,30 +3140,55 @@ function tickHoleDrop() {
 //
 // `minPx` overrides the chord-length floor for callers whose path units are not
 // CSS px (the trackpad wheel — see finishWheelSwing).
+// Trim the backswing. Project every sample onto the overall chord and restart
+// from the point that sits FURTHEST BACKWARD along it. Returns the surviving
+// slice (the input array itself when nothing is trimmed), or null when the
+// chord has no length at all.
+//
+// Load-bearing for curveFromPath twice over: those samples have a negative
+// along-chord position, where its fit weight s(1-s) goes negative and silently
+// flips their contribution's sign; and it is the right golf semantics — how you
+// take the club back must not decide your shot shape. swipeHeading wants the
+// same answer for the same reason, so this is ONE definition of where the
+// forward stroke begins rather than two that can drift apart.
+function trimBackswing(pts) {
+  const a = pts[0], b = pts[pts.length - 1];
+  const L = Math.hypot(b.x - a.x, b.y - a.y);
+  if (L < 1e-6) return null;
+  const tx = (b.x - a.x) / L, ty = (b.y - a.y) / L;
+  let i0 = 0, sMin = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const s = (pts[i].x - a.x) * tx + (pts[i].y - a.y) * ty;
+    if (s < sMin) { sMin = s; i0 = i; }
+  }
+  return i0 > 0 ? pts.slice(i0) : pts;
+}
+// HEADING of a swipe: the chord of the forward stroke, backswing trimmed.
+//
+// Deliberately NOT swipeVelocity's release window, which is where the shot
+// direction used to come from. That window is the right place to read POWER —
+// how hard you let go — but the wrong place to read AIM, and the difference is
+// a device property: a finger lifts off the glass while still moving, so its
+// last 80 ms is the fastest part of the gesture, whereas a mouse STOPS and only
+// then releases the button, so its last 80 ms is deceleration, settle, or the
+// hand drifting back toward the body. Measured on a drag straight up the screen
+// with a normal settle before the click: the shot came out 172.9° off the aim.
+// Null when the chord is too short to carry a direction (a tap-in putt) — the
+// caller falls back to the release vector, which is the old behaviour.
+function swipeHeading(path) {
+  if (!path || path.length < 2) return null;
+  const p = trimBackswing(path);
+  if (!p || p.length < 2) return null;
+  const a = p[0], b = p[p.length - 1];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  return Math.hypot(dx, dy) >= TUNE.headMinPx ? { dx, dy } : null;
+}
 function curveFromPath(pts, minPx) {
   if (!pts || pts.length < TUNE.curveMinSamples) return 0;
   if (pts[pts.length - 1].t - pts[0].t < TUNE.curveMinMs) return 0;
 
-  // Trim the backswing. Project every sample onto the overall chord and restart
-  // from the point that sits FURTHEST BACKWARD along it. Load-bearing twice
-  // over: those samples have a negative along-chord position, where the fit
-  // weight s(1-s) below goes negative and silently flips their contribution's
-  // sign; and it is the right golf semantics — how you take the club back must
-  // not decide your shot shape.
-  let p = pts;
-  {
-    const a = p[0], b = p[p.length - 1];
-    const L = Math.hypot(b.x - a.x, b.y - a.y);
-    if (L < 1e-6) return 0;
-    const tx = (b.x - a.x) / L, ty = (b.y - a.y) / L;
-    let i0 = 0, sMin = 0;
-    for (let i = 1; i < p.length; i++) {
-      const s = (p[i].x - a.x) * tx + (p[i].y - a.y) * ty;
-      if (s < sMin) { sMin = s; i0 = i; }
-    }
-    if (i0 > 0) p = p.slice(i0);
-  }
-  if (p.length < TUNE.curveMinSamples) return 0;
+  const p = trimBackswing(pts);
+  if (!p || p.length < TUNE.curveMinSamples) return 0;
 
   const a = p[0], b = p[p.length - 1];
   const L = Math.hypot(b.x - a.x, b.y - a.y);
@@ -3268,9 +3312,38 @@ function swipeVelocity(path, lookMs) {
 // derivations can never drift apart. `powerScale` differs by input method
 // (TUNE.touchPowerSwipe vs TUNE.fullPowerSwipe) — that asymmetry is existing
 // tuning, not something to unify here.
-function swipeToShot(dxs, dys, dt, powerScale) {
+// `dir` (optional) overrides where the HEADING is read from while power still
+// comes from the release vector — see swipeHeading. Absent, the release vector
+// supplies both, which is the pre-2026-08 behaviour.
+//
+// Returns `blocked: true` for a swipe pointing backwards. Screen-up IS the aim
+// by construction (a pure up-screen swipe resolves to exactly camera.tAngle),
+// so the test is a screen-space cone and needs no world bearing — which also
+// makes it identical under the flat, gtiles and three.js branches below, since
+// it reads the INPUT vector rather than the projected output. It is measured
+// against view.angle, the RENDERED camera, i.e. what the player actually saw.
+// How far off the aim a screen-space swipe vector points, in radians, 0..π.
+// 0 = straight up-screen, which IS straight at the aim: a pure up-screen swipe
+// resolves to exactly camera.tAngle (see swipeToShot). Kept as its own pure
+// function so the gate in tools/swipe_matrix.mjs can slice this exact code
+// rather than restate the formula and quietly disagree with it.
+function swipeOffAim(hx, hy, tilt) { return Math.abs(Math.atan2(hx, -hy / (tilt || 1))); }
+// A rejected swing must SAY so. Silence reads as dropped input, and the player
+// has no way to discover that the gesture went backwards. Rate-limited because
+// the wheel path can present several in a row.
+let _rejectToastAt = 0;
+function rejectBackwardsSwing() {
+  const now = performance.now();
+  if (now - _rejectToastAt < 1000) return;
+  _rejectToastAt = now;
+  showToast("Swipe toward the target", 1400);
+}
+function swipeToShot(dxs, dys, dt, powerScale, dir) {
   const speed = (Math.hypot(dxs, dys) / refScale) / Math.max(dt, 0.001);
   const frac = Math.min(speed * swingSens / powerScale, 1);
+  const hx = dir ? dir.dx : dxs, hy = dir ? dir.dy : dys;
+  if (swipeOffAim(hx, hy, view.tilt) > TUNE.swingMaxOffDeg * Math.PI / 180)
+    return { ang: 0, frac: 0, blocked: true };
   let ang;
   if (view.threeProj) {
     // Three.js (Course3D) 3D: the camera's yaw/pitch don't map to a fixed
@@ -3282,7 +3355,7 @@ function swipeToShot(dxs, dys, dt, powerScale) {
     const bh = terrainZ(b.x, b.y);
     const s0 = window.Course3D.project(b.x, b.y, bh);
     const p0 = window.Course3D.unproject(s0.x, s0.y, bh);
-    const p1 = window.Course3D.unproject(s0.x + dxs, s0.y + dys, bh);
+    const p1 = window.Course3D.unproject(s0.x + hx, s0.y + hy, bh);
     ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
   } else if (view.gtilesProj) {
     // Google photoreal 3D: the flat affine
@@ -3311,15 +3384,15 @@ function swipeToShot(dxs, dys, dt, powerScale) {
     // in and is then rotated back out of, so the result does not depend on it
     // being the tiles camera's exact bearing.
     if (s0.inFront && sU.inFront && sR.inFront && Math.abs(det) > 1e-9) {
-      const wr = (j11 * dxs - j01 * dys) / det;   // world units along screen-right
-      const wu = (-j10 * dxs + j00 * dys) / det;  // world units along screen-up
+      const wr = (j11 * hx - j01 * hy) / det;   // world units along screen-right
+      const wu = (-j10 * hx + j00 * hy) / det;  // world units along screen-up
       const wxw = -uy * wr + ux * wu, wyw = ux * wr + uy * wu;
       ang = Math.atan2(wyw, wxw);
     } else {
-      ang = Math.atan2(dys / view.tilt, dxs) - view.angle;  // degenerate camera only (never in normal play)
+      ang = Math.atan2(hy / view.tilt, hx) - view.angle;  // degenerate camera only (never in normal play)
     }
   } else {
-    ang = Math.atan2(dys / view.tilt, dxs) - view.angle; // undo tilt squash, then rotation
+    ang = Math.atan2(hy / view.tilt, hx) - view.angle; // undo tilt squash, then rotation
   }
   return { ang, frac };
 }
@@ -3414,6 +3487,10 @@ function swingStart(e) {
   if (!canSwing()) return;
   camTouch = null;
   swingIsMouse = !!(e && typeof e.type === "string" && e.type.indexOf("mouse") === 0);
+  // Left button only. swingStart never read e.button, so a right- or middle-click
+  // opened a real swing — and a right-click also raises the context menu, which
+  // is exactly how the matching mouseup goes missing.
+  if (swingIsMouse && e.button !== 0) return;
   const p = pointerPos(e, activeTouchId);
   const now = performance.now();
   // `fast` latches true the moment any sample of this gesture exceeds
@@ -3495,6 +3572,11 @@ function swingMove(e) {
     return;
   }
   if (!swipe) return;
+  // A mouse move with no button held is a HOVER, not a drag. swingMove had no
+  // button test, so a swing whose mouseup went missing kept sampling the cursor
+  // as it wandered and the next click fired a stroke assembled from two
+  // different gestures. Touch has no equivalent (a touchmove implies contact).
+  if (swingIsMouse && e.buttons === 0) { cancelGesture(); return; }
   e.preventDefault();
   const p = pointerPos(e, activeTouchId);
   const now = performance.now();
@@ -3999,7 +4081,8 @@ function launch(dxs, dys, dt, spin = 0) {
   if (!canSwing()) return;
   swingIsMouse = false;   // trackpad/wheel path — not a mouse drag
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
-  const { ang, frac } = swipeToShot(dxs, dys, dt, TUNE.fullPowerSwipe); // full swing at fullPowerSwipe
+  const { ang, frac, blocked } = swipeToShot(dxs, dys, dt, TUNE.fullPowerSwipe); // full swing at fullPowerSwipe
+  if (blocked) { rejectBackwardsSwing(); return; }
   launchShot(ang, frac, spin, onGreen);
 }
 
@@ -4041,7 +4124,11 @@ function swingEnd(e) {
     return;
   }
 
-  const { ang, frac } = swipeToShot(dxs, dys, dt, TUNE.touchPowerSwipe);
+  // HEADING from the whole forward stroke, POWER from the release above. The
+  // release window is the right place to read how hard you let go and the wrong
+  // place to read where you aimed — see swipeHeading.
+  const { ang, frac, blocked } = swipeToShot(dxs, dys, dt, TUNE.touchPowerSwipe, swipeHeading(path));
+  if (blocked) { rejectBackwardsSwing(); return; }   // no stroke, and no marker drop
   const onGreen = surfaceAt(state.ball.x, state.ball.y) === "green";
   const curve = curveFromPath(path);
   recordSwipeShape(path, curve);
@@ -4078,14 +4165,28 @@ canvas.addEventListener("touchmove", swingMove, { passive: false });
 canvas.addEventListener("touchend", swingEnd);
 // system gesture stole the touch (notification pull, app switch): drop all
 // in-flight input state so the next tap starts clean
-canvas.addEventListener("touchcancel", () => {
+// ONE definition of "abandon whatever gesture is in flight". touchcancel had
+// this inline and desktop had no equivalent at all, which is how a mouse press
+// could stay armed forever: mousedown/mousemove are on the CANVAS but mouseup is
+// on the WINDOW, so a mouseup lost to a context menu, an alt-tab, or a release
+// over browser chrome left `swipe` set, plain HOVER kept feeding swipePath, and
+// the next click anywhere on the page fired a stroke whose start point belonged
+// to a different gesture.
+function cancelGesture() {
   swipe = null; swipePath = null; camTouch = null; markerDrag = null; measureDragging = false;
   activeTouchId = null; aimDrag = null;
+  wheelGesture = null;
   if (greenView) greenView.drag = null;
-});
+}
+canvas.addEventListener("touchcancel", cancelGesture);
 canvas.addEventListener("mousedown", swingStart);
 canvas.addEventListener("mousemove", swingMove);
 window.addEventListener("mouseup", swingEnd);
+// Desktop counterparts of touchcancel. Without these a swing can be armed and
+// never disarmed — see cancelGesture.
+canvas.addEventListener("mouseleave", cancelGesture);
+window.addEventListener("blur", cancelGesture);
+window.addEventListener("contextmenu", cancelGesture);
 
 // --- Left-edge swipe = back (standard mobile UX) ---
 // Only arms when a "backable" overlay is open, so it never touches gameplay
@@ -4161,11 +4262,24 @@ function onWheel(e) {
   // Each tail event pushes the cooldown out, so the whole tail is swallowed.
   if (now < wheelCooldownUntil) { wheelCooldownUntil = now + WHEEL_TAIL_MS; return; }
   if (!canSwing()) return;
+  // Only a TRACKPAD may swing. A mouse wheel notch used to fire a full-power
+  // shot with no gesture at all: scroll-up gives deltaY < 0, the sign flip below
+  // makes that down-screen, i.e. 180° from the aim — and because one notch is a
+  // single event, the two path samples share a timestamp, swipeVelocity takes
+  // its 2-point fallback with dt floored to 0.001 s, and frac saturates to 1.
+  //
+  // deltaMode alone does not separate them: Chrome reports 0 (pixels) for mouse
+  // wheels too, just in large discrete jumps. So gate on SHAPE — a trackpad
+  // swipe is many small deltas at high rate, a notch is one big one. The event
+  // COUNT is the robust half; the per-event size is the cheap early reject.
+  if (e.deltaMode !== 0) return;                                  // line/page mode = wheel
+  if (Math.abs(e.deltaY) > TUNE.wheelMaxNotchPx) return;          // one big jump = wheel
   if (!wheelGesture) {
-    wheelGesture = { sx: 0, sy: 0, t0: now, path: [{ x: 0, y: 0, t: now }] };
+    wheelGesture = { sx: 0, sy: 0, t0: now, n: 0, path: [{ x: 0, y: 0, t: now }] };
     setTimeout(finishWheelSwing, WHEEL_WINDOW_MS);
     if (earnMilestone("hint-keys")) showToast("← → aim · ↑ ↓ club", 2400, "gold");
   }
+  wheelGesture.n++;
   wheelGesture.sx += e.deltaX;
   wheelGesture.sy += e.deltaY;
   wheelGesture.path.push({ x: wheelGesture.sx, y: wheelGesture.sy, t: now });
@@ -4175,6 +4289,12 @@ function finishWheelSwing() {
   const g = wheelGesture;
   wheelGesture = null;
   if (!g) return;
+  // Too few events, or over too short a span, to be a two-finger swipe — the
+  // other half of the mouse-wheel gate in onWheel. The span floor also stops a
+  // degenerate path (samples sharing a timestamp) reaching swipeVelocity's
+  // 2-point fallback, where dt bottoms out at 0.001 s and power saturates.
+  if (g.n < TUNE.wheelMinEvents) return;
+  if (g.path[g.path.length - 1].t - g.t0 < TUNE.wheelMinSpanMs) return;
   const sign = (TUNE.wheelInvert ? 1 : -1) * TUNE.wheelSensitivity;
   // Denoise the wheel stream the same way as touch — drop the worst delta spike and
   // fit the velocity — so one stray inertial event can't dictate power.
@@ -8734,6 +8854,7 @@ function setHole(rec) {
   // its frameTarget() would solve against the OUTGOING hole, and setHole frames
   // the new one a few lines down anyway.
   overview = false; elMinimap.classList.remove("mm-open");
+  cancelGesture();   // a gesture armed on the last hole must not survive into this one
   // live match: drop any in-flight shot marker / opponent tween from the last hole
   _shotFrom = null; oppShot = null; _spectating = false;
   shot.carry = shot.total = null; shot.mph = 0; // fresh hole — no stale HUD stats

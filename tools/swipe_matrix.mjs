@@ -63,7 +63,8 @@ const TUNE = readTune();
 function bind(over) {
   const T = { ...TUNE, ...(over || {}) };
   const body = readFn('curveFromPath') + '\n' + readFn('swipeVelocity') +
-               '\nreturn { curveFromPath, swipeVelocity };';
+               '\n' + readFn('trimBackswing') + '\n' + readFn('swipeHeading') + '\n' + readFn('swipeOffAim') +
+               '\nreturn { curveFromPath, swipeVelocity, trimBackswing, swipeHeading, swipeOffAim };';
   return new Function('TUNE', body)(T);
 }
 const G = bind();                                  // live constants
@@ -178,9 +179,9 @@ const has = (f) => argv.includes(f);
 const num = (f, d) => { const i = argv.indexOf(f); return i < 0 ? d : Number(argv[i + 1]); };
 const SEEDS = num('--seeds', 800);
 
-const out = { tune: {}, noise: [], response: [], reject: [], invariance: [], yards: [] };
+const out = { tune: {}, noise: [], response: [], reject: [], invariance: [], yards: [], heading: [] };
 for (const k of ['curveGain', 'curveMinSamples', 'curveMinPathPx', 'curveMinMs',
-                 'curveDeadzone', 'curveExp', 'aeroSpinTilt'])
+                 'curveDeadzone', 'curveExp', 'aeroSpinTilt', 'swingMaxOffDeg', 'headMinPx'])
   out.tune[k] = TUNE[k] != null ? TUNE[k] : null;
 
 // 1. NOISE FLOOR — a dead-straight swipe with realistic per-sample jitter.
@@ -263,6 +264,47 @@ for (const bow of [0.02, 0.05, 0.10, 0.20, 0.35]) {
   out.yards.push(row);
 }
 
+// 6. HEADING — where the shot is AIMED, as opposed to what shape it is.
+//    This is the channel that let a mouse hit the ball backwards: the heading
+//    used to come from swipeVelocity's 80 ms release window, the same window as
+//    power. A finger lifts off the glass still moving, so that window is the
+//    fastest part of the gesture; a mouse STOPS and only then releases, so it is
+//    deceleration, settle, or the hand drifting back toward the body.
+//
+//    Each row reports the off-aim angle both ways — from the release window
+//    (`relDeg`, the retired source) and from the trimmed chord (`chordDeg`, the
+//    live one) — so a regression shows up as the two swapping roles.
+const DEG = 180 / Math.PI;
+// pts: [dx, dy, dwellMs] steps from the origin, dispatched at ~12 ms unless said
+const gest = (steps) => {
+  const p = [{ x: 0, y: 0, t: 0 }];
+  let x = 0, y = 0, t = 0;
+  for (const [dx, dy, ms] of steps) { x += dx; y += dy; t += (ms == null ? 12 : ms); p.push({ x, y, t }); }
+  return p;
+};
+const rep = (n, step) => Array.from({ length: n }, () => step);
+
+const HEAD_CASES = [
+  // label, path, must the shot be allowed?
+  ['straight up (control)',        gest(rep(10, [0, -30])), true],
+  // the regression: a forward drag that stalls, then the hand settles BACK
+  ['up, stall, settle back',       gest([...rep(10, [0, -30]), [0, 0, 60], [0, 0, 60],
+                                         [2, 9, 16], [2, 9, 16], [1, 8, 16]]), true],
+  ['backswing then flick up',      gest([...rep(4, [0, 25]), ...rep(10, [0, -35])]), true],
+  ['sideways punch-out',           gest(rep(10, [30, 0])), true],
+  ['diagonal 45 forward',          gest(rep(10, [21, -21])), true],
+  ['straight down',                gest(rep(10, [0, 30])), false],
+  ['down-and-back 135',            gest(rep(10, [-21, 21])), false],
+];
+for (const [label, path, allow] of HEAD_CASES) {
+  const v = G.swipeVelocity(path, 80);
+  const h = G.swipeHeading(path);
+  const relDeg = G.swipeOffAim(v.dxs, v.dys, 1) * DEG;
+  const chordDeg = h ? G.swipeOffAim(h.dx, h.dy, 1) * DEG : null;
+  out.heading.push({ label, allow, relDeg, chordDeg,
+                     blocked: chordDeg == null ? false : chordDeg > TUNE.swingMaxOffDeg });
+}
+
 // ---- report ----------------------------------------------------------------
 if (has('--json')) { console.log(JSON.stringify(out, null, 2)); process.exit(0); }
 
@@ -285,6 +327,11 @@ for (const r of out.reject) console.log(`  ${r.label.padEnd(32)} ${f(r.curve)}`)
 console.log('\n=== INVARIANCE (deviation from 200px/14/uniform) ===');
 for (const r of out.invariance)
   console.log(`  ${r.kind.padEnd(8)} ${String(r.v).padEnd(8)} ${f(r.errPct, 2)}%`);
+
+console.log('\n=== HEADING (off-aim deg; 0 = straight at the aim) ===');
+console.log('  gesture                        release-window   trimmed chord   verdict');
+for (const r of out.heading)
+  console.log(`  ${r.label.padEnd(28)} ${f(r.relDeg, 1).padStart(10)}      ${(r.chordDeg == null ? '   -  ' : f(r.chordDeg, 1)).padStart(10)}      ${r.blocked ? 'BLOCKED' : 'fires'}`);
 
 console.log('\n=== OFFLINE YARDS AT TOUCHDOWN ===');
 console.log('    bow    curve    tilt   driver      5i      7i      pw   7i carry');
@@ -314,6 +361,27 @@ if (has('--gate')) {
   for (const r of out.response)
     ck(Math.abs(r.rawErrPct) <= (r.bow <= 0.1 ? 3.5 : 8),
        `response drift at bow ${r.bow}: ${f(r.rawErrPct, 2)}% vs the retired formula`);
+
+  // HEADING. A shot must never be struck backwards, and — the regression that
+  // motivated this section — a forward gesture must stay forward even when the
+  // release window points the other way.
+  for (const r of out.heading) {
+    if (r.allow) {
+      ck(!r.blocked, `heading: "${r.label}" was BLOCKED (chord ${f(r.chordDeg, 1)}deg off aim)`);
+      ck(r.chordDeg != null && r.chordDeg <= 90,
+         `heading: "${r.label}" reads ${f(r.chordDeg, 1)}deg off aim — a forward gesture must stay forward`);
+    } else {
+      ck(r.blocked, `heading: "${r.label}" was ALLOWED (chord ${f(r.chordDeg, 1)}deg off aim) — backwards shots must be blocked`);
+    }
+  }
+  // The stall/settle case is the whole point: prove the release window really
+  // does disagree, so this gate cannot pass vacuously if the two sources are
+  // ever accidentally re-unified.
+  {
+    const r = out.heading.find((x) => x.label === 'up, stall, settle back');
+    ck(r && r.relDeg > 120 && r.chordDeg < 20,
+       `heading: the stall/settle case no longer exercises the bug (release ${f(r && r.relDeg, 1)}deg, chord ${f(r && r.chordDeg, 1)}deg)`);
+  }
 
   // Sign. A flip turns every draw into a fade and nothing throws.
   const rightBow = arc({ bow: 0.15, lengthPx: 200, n: 14 });

@@ -24,9 +24,11 @@ from PIL import Image, ImageChops, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COURSES = os.path.join(ROOT, "courses")
-SKIP = {"index", "manifest", "geocode", "range",
-        "blackwater-vale"}  # Originals ship a ground-truth mask (make_fictional_course
-                            # bake_mask) — a heuristic remask would overwrite it
+# Hand-authored courses ship a ground-truth mask (make_fictional_course.py
+# bake_mask) and must never be heuristically remasked. blackwater-vale was the
+# only such course and was deleted 2026-08-05; re-add an id here if the
+# generator is ever run again.
+SKIP = {"index", "manifest", "geocode", "range"}
 AUDIT_BAND_UNITS = 8  # half-width of the tee->pin "near play" audit band
 
 
