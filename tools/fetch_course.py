@@ -56,6 +56,9 @@ FAIRWAY_NEAR_YDS = 70     # real fairway assigned to a hole if centroid within t
 BUNKER_NEAR_YDS = 50      # bunker assigned to a hole if centroid within this
 WATER_NEAR_YDS = 70
 TEE_NEAR_YDS = 35
+# See fetch_course_global.GREEN_SNAP_M — a green farther than this from a hole
+# line end belongs to no hole (practice green) and must not place a pin.
+GREEN_SNAP_M = 40.0
 TEE_STRETCH_MIN_YDS = 15  # scorecard-vs-geometry gap before we push the tee back
 TEE_GREEN_CLEAR_YDS = 8   # clearance past a foreign green edge when un-sticking a tee
 WOODS_NEAR_YDS = 90       # woods/grass are big & numerous -> wider catch
@@ -786,7 +789,12 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
                si=None, yards_override=None, rough_els=()):
     line_m = list(line_m)
 
-    # Orient: pin = endpoint nearest a green centroid; tee = the other end.
+    # Orient by the OSM convention: a golf=hole way is drawn tee -> green, so
+    # vertex 0 is the tee. Only override that when a mapped green really sits on
+    # the other end. Flipping on "whichever end is nearer ANY green" assumes every
+    # hole has one; at Vesper CC the only golf=green is the practice putting green
+    # by the clubhouse, and that single distant landmark flipped 8 of 18 holes and
+    # collapsed every pin onto itself. Mirrors fetch_course_global.py.
     gc = [(centroid([project(p["lat"], p["lon"], lat0, lon0) for p in g["geometry"]]), g)
           for g in greens]
     def nearest_green(pt):
@@ -794,10 +802,16 @@ def build_hole(cid, num, par, line_m, greens, fairway_els, bunker_els, waters,
         return best, dist(pt, best[0])
     (_, d_start) = nearest_green(line_m[0])
     (_, d_end) = nearest_green(line_m[-1])
-    if d_start < d_end:
+    if d_start < GREEN_SNAP_M and d_start < d_end:
         line_m = line_m[::-1]
     tee_m, pin_m = line_m[0], line_m[-1]
     (green_c, green_el), green_d = nearest_green(pin_m)
+    # No green on this hole -> the line's own end IS the pin. It is what the
+    # yardage was measured along; a green elsewhere on the property is not.
+    if green_d > GREEN_SNAP_M:
+        # green_d goes with it, or the two `green_d <= GREEN_NEAR_M` guards below
+        # (70 m, wider than GREEN_SNAP_M) would still fire and dereference None.
+        green_c, green_el, green_d = pin_m, None, float("inf")
 
     length_m = sum(dist(line_m[i], line_m[i + 1]) for i in range(len(line_m) - 1))
     geom_yards = round(length_m / M_PER_YARD)

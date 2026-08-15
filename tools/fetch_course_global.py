@@ -261,6 +261,17 @@ YPU = fc.YARDS_PER_UNIT          # 3 yards/unit
 MPY = fc.M_PER_YARD
 SCALE = 1.0 / (YPU * MPY)        # meters -> world units
 MARGIN = fc.MARGIN_UNITS
+# How close a golf=green centroid must sit to a hole line's end before we accept
+# it AS that hole's green. A green matching no hole is a practice/putting green
+# and must not move a pin: OSM's only green at Vesper CC is exactly that, and
+# snapping to it put all 18 pins on one point 61-892 yards from the real greens.
+# Beyond this the hole line's own endpoint is the better answer — it is what the
+# yardage was measured along.
+GREEN_SNAP_M = 40.0
+# A real routing walks a short way from each green to the next tee. Well above
+# this and the holes are mis-oriented or mis-assigned (Vesper measured 331 yd
+# median while broken, 64 yd once fixed).
+ROUTING_WALK_WARN_YDS = 150.0
 IMG_MAX_PX = 3584                # one big aerial over the whole course (zoom headroom; NAIP native ~0.6 m/px)
 IMG_PAD = 1.04
 
@@ -389,9 +400,19 @@ def main():
     oriented_lines = []
     for n, lm in hole_lines:
         lm = list(lm)
-        d0 = fc.dist(lm[0], nearest_green(lm[0])[0])
+        # ORIENTATION: OSM draws a golf=hole way tee -> green, so vertex 0 is the
+        # tee and the last vertex is the green. Trust that.
+        #
+        # This used to flip the line whenever vertex 0 was nearer a green than the
+        # last vertex was, which silently assumes every hole HAS a mapped green.
+        # Vesper CC's only golf=green is the practice putting green by the
+        # clubhouse, so that one distant landmark decided the orientation of all
+        # 18 holes and got 8 of them backwards. Only override the convention when
+        # a green actually sits on the far end (below) — i.e. when there is real
+        # evidence, not merely a nearest-neighbour.
+        d0 = fc.dist(lm[0],  nearest_green(lm[0])[0])
         d1 = fc.dist(lm[-1], nearest_green(lm[-1])[0])
-        if d0 < d1:
+        if d0 < GREEN_SNAP_M and d0 < d1:
             lm = lm[::-1]
         tee_m, pin_m = lm[0], lm[-1]
         length_m = sum(fc.dist(lm[i], lm[i + 1]) for i in range(len(lm) - 1))
@@ -495,6 +516,7 @@ def main():
     surfaces = {"green": [], "fairway": [], "bunker": [], "water": [], "tee": [],
                 "woods": [], "cartpath": [], "grass": [], "rough": []}
     out_holes, synth = [], 0
+    missing_greens = []   # holes with no mapped green — pin falls back to the line end
     synth_fw_jobs = []   # (index in surfaces["fairway"], centerline world pts, half_w units)
     card_count = 0
     # which holes have a real mapped fairway nearby (else synthesize a corridor)
@@ -510,7 +532,13 @@ def main():
         card = scorecard.get(str(n), {})
         par, si, yov, _csrc = fc.resolve_card(h["tags"], card)
         tee_m, pin_m = lm[0], lm[-1]
-        green_c = nearest_green(pin_m)[0]
+        # PIN: the hole line's own far end, unless a mapped green really is there.
+        # Snapping unconditionally to nearest_green() is what collapsed all 18 of
+        # Vesper's pins onto one practice green — pin_m is what the hole's yardage
+        # was measured along, so it is the safe answer when no green matches.
+        gc_near, gel_near = nearest_green(pin_m)
+        has_green = fc.dist(pin_m, gc_near) <= GREEN_SNAP_M
+        green_c = gc_near if has_green else pin_m
         geom_yards = geom_yards_by_hole[n]
         rec = {"num": n, "par": par, "yards": yov if yov else geom_yards,
                "tee": W(tee_m), "pin": W(green_c)}
@@ -521,23 +549,32 @@ def main():
         out_holes.append(rec)
         # --- pin positions: front / middle / back measured along the tee->pin axis
         u = fc.unit(fc.sub(pin_m, tee_m))            # tee->pin direction
-        gpoly_m = projall(nearest_green(pin_m)[1]["geometry"])
-        gcm = fc.centroid(gpoly_m)
-        alongs = [(p[0] - tee_m[0]) * u[0] + (p[1] - tee_m[1]) * u[1] for p in gpoly_m]
-        amin, amax = min(alongs), max(alongs)
-        span = (amax - amin) or 1.0
-        ag = (gcm[0] - tee_m[0]) * u[0] + (gcm[1] - tee_m[1]) * u[1]
-        pouts = []
-        def add_pin(at, label):
-            at = max(amin + 0.12 * span, min(amax - 0.12 * span, at))
-            pm = (gcm[0] + u[0] * (at - ag), gcm[1] + u[1] * (at - ag))
-            if not fc.point_in_poly(pm, gpoly_m):
-                pm = gcm
-            w = W(pm); pouts.append({"x": w["x"], "y": w["y"], "name": label})
-        add_pin(amin + 0.30 * span, "Front")
-        add_pin(ag,                 "Middle")
-        add_pin(amax - 0.30 * span, "Back")
-        rec["pins"] = pouts
+        if not has_green:
+            # No mapped green on this hole: one centre pin at the line end. Front/
+            # Middle/Back would be fiction, and measuring them against a green
+            # somewhere else on the property is how all 54 of Vesper's pin
+            # positions ended up inside the practice green.
+            w = W(green_c)
+            rec["pins"] = [{"x": w["x"], "y": w["y"], "name": "Middle"}]
+            missing_greens.append(n)
+        else:
+            gpoly_m = projall(gel_near["geometry"])
+            gcm = fc.centroid(gpoly_m)
+            alongs = [(p[0] - tee_m[0]) * u[0] + (p[1] - tee_m[1]) * u[1] for p in gpoly_m]
+            amin, amax = min(alongs), max(alongs)
+            span = (amax - amin) or 1.0
+            ag = (gcm[0] - tee_m[0]) * u[0] + (gcm[1] - tee_m[1]) * u[1]
+            pouts = []
+            def add_pin(at, label):
+                at = max(amin + 0.12 * span, min(amax - 0.12 * span, at))
+                pm = (gcm[0] + u[0] * (at - ag), gcm[1] + u[1] * (at - ag))
+                if not fc.point_in_poly(pm, gpoly_m):
+                    pm = gcm
+                w = W(pm); pouts.append({"x": w["x"], "y": w["y"], "name": label})
+            add_pin(amin + 0.30 * span, "Front")
+            add_pin(ag,                 "Middle")
+            add_pin(amax - 0.30 * span, "Back")
+            rec["pins"] = pouts
         if card:
             card_count += 1
         if yov and abs(yov - geom_yards) > 60:
@@ -551,6 +588,29 @@ def main():
                                   fc.FAIRWAY_HALF_W_YDS * MPY * SCALE))
             surfaces["fairway"].append([W(p) for p in corr])
             synth += 1
+
+    # --- routing sanity: a real course walks a short way green -> next tee ------
+    # Costs nothing and catches the whole class of orientation/assignment failure
+    # in one number. Vesper measured 331 yd median while its holes were flipped
+    # and pinned to a practice green, 64 yd once they were right.
+    if missing_greens:
+        print(f"  ! {len(missing_greens)}/{len(out_holes)} holes have no mapped green "
+              f"— pin fell back to the hole line's end: {missing_greens}", file=sys.stderr)
+    byn = {r["num"]: r for r in out_holes}
+    nums = sorted(byn)
+    if len(nums) >= 2:
+        walk = []
+        for i, n in enumerate(nums):
+            m = nums[(i + 1) % len(nums)]
+            g, t = byn[n]["pin"], byn[m]["tee"]
+            walk.append(math.hypot(g["x"] - t["x"], g["y"] - t["y"]) * YPU)
+        walk.sort()
+        med = walk[len(walk) // 2]
+        print(f"routing: green->next-tee walk median {med:.0f}y, max {walk[-1]:.0f}y")
+        if med > ROUTING_WALK_WARN_YDS:
+            print(f"  ! routing walk median {med:.0f}y is implausible for a real "
+                  f"course — holes are probably mis-oriented or mis-numbered",
+                  file=sys.stderr)
 
     # --- global surfaces (whole course, shared) ---
     for g in greens: surfaces["green"].append(polyU(g["geometry"]))

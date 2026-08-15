@@ -141,11 +141,46 @@ def main():
         return (sum(v["x"] for v in p) / n, sum(v["y"] for v in p) / n)
     gcent = [poly_centroid(p) for p in surf.get("green", []) if p]
     if gcent:
-        far = [h["num"] for h in holes
-               if min(math.hypot(h["pin"]["x"] - c[0], h["pin"]["y"] - c[1]) for c in gcent) > 30]
+        # Which green each pin claims, not just how far the nearest one is. The
+        # distance-only form passed Vesper CC at grade B while EVERY pin sat on
+        # the SAME practice green at distance 0 — a vacuous pass, because each pin
+        # had been *set to* a green centroid. A shared green legitimately serves
+        # two holes (St Andrews has 7), so the bar is coverage, not uniqueness:
+        # a green may not be claimed by more than a handful of holes.
+        claim, far = {}, []
+        for h in holes:
+            di = [(math.hypot(h["pin"]["x"] - c[0], h["pin"]["y"] - c[1]), i)
+                  for i, c in enumerate(gcent)]
+            d, i = min(di)
+            if d > 30: far.append(h["num"])
+            else: claim.setdefault(i, []).append(h["num"])
         r.soft(not far, f"every pin sits on a real green ({len(gcent)} greens; off-green holes: {far})")
+        crowd = {i: hs for i, hs in claim.items() if len(hs) > 3}
+        r.hard(not crowd,
+               f"no green serves more than 3 holes (crowded: { {i: hs for i, hs in crowd.items()} })")
     else:
         r.soft(False, "no greens mapped")
+
+    # --- greens exist at all (HARD) ----------------------------------------
+    # Putting is dead without them: surfaceAt() only returns "green" inside a
+    # green polygon, so no green = no putter, no contours, no break, no 3D read.
+    # Hard so that a rebake which drops hand-traced greens fails loudly instead
+    # of silently un-playing the course (the trap ocean_water_bake.py:17 records).
+    r.hard(len(surf.get("green", [])) >= len(holes) * 0.8,
+           f"green polygons {len(surf.get('green', []))} >= 80% of {len(holes)} holes")
+
+    # --- routing continuity (SOFT) -----------------------------------------
+    # A real course walks a short way from each green to the next tee. One number
+    # that catches mis-orientation and mis-numbering; Vesper measured 331y median
+    # while broken and 64y once fixed.
+    byn = {h["num"]: h for h in holes}
+    nums = sorted(byn)
+    if len(nums) >= 2:
+        walk = sorted(math.hypot(byn[n]["pin"]["x"] - byn[nums[(i + 1) % len(nums)]]["tee"]["x"],
+                                 byn[n]["pin"]["y"] - byn[nums[(i + 1) % len(nums)]]["tee"]["y"]) * YPU
+                      for i, n in enumerate(nums))  # YPU: fixed 3.0, see line 18
+        med = walk[len(walk) // 2]
+        r.soft(med <= 150, f"routing walk green->next tee: median {med:.0f}y, max {walk[-1]:.0f}y (<=150y)")
 
     # --- engine smoke test (HARD) ------------------------------------------
     if not args.no_engine:
