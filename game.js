@@ -17943,7 +17943,16 @@ function renderProgress() {
   // separately from the resync above because this one is not match-specific —
   // it applies to every mode, and liveResync() no-ops outside a live match.)
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) markDirty();
+    if (!document.hidden) {
+      markDirty();
+      // markDirty() only forces the 2D canvas. The tiles renderer has its own,
+      // independent park gate, and _settledAt survives backgrounding — so the
+      // forced paint would call GTiles3D.render() and it would return at that
+      // gate, leaving whatever the compositor did to the WebGL layer while we
+      // were away on screen. Nudge the tiles too, or the two layers resume out
+      // of step.
+      if (gtilesGround && window.GTiles3D && window.GTiles3D.wake) window.GTiles3D.wake();
+    }
   });
   window.addEventListener("online", () => liveResync());
 })();

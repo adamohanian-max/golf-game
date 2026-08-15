@@ -1065,6 +1065,26 @@ function buildRenderer() {
   ensureContainer();
   renderer = new THREE.WebGLRenderer({ canvas: container, antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0);
+  // CONTEXT LOSS. preserveDrawingBuffer is false (deliberately — it is a real
+  // cost on a per-frame renderer), so the park gate's "canvas keeps its last
+  // frame" holds only while the compositor keeps that layer cached. On a phone
+  // it does not always: backgrounding, memory pressure or a GPU-process restart
+  // can drop it, and because the gate has already parked, NOTHING re-renders —
+  // the ground vanishes to the #0e1f16 page tone under a still-correct 2D
+  // overlay until the player happens to move the camera. Default-preventing the
+  // loss event is what lets the browser restore the context at all.
+  container.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault();
+    ready = false; _settledAt = 0; _forceRender = 3;
+    try { console.warn("[gtiles3d] webgl context lost"); } catch (err) {}
+  }, false);
+  container.addEventListener("webglcontextrestored", () => {
+    // Force several frames: the first one after a restore re-uploads textures and
+    // can still draw nothing, and `ready` only re-arms once triangles land.
+    _settledAt = 0; _forceRender = 5; _justResumed = true;
+    resize();
+    try { console.warn("[gtiles3d] webgl context restored"); } catch (err) {}
+  }, false);
   scene = new THREE.Scene();
   // Opaque scene background: an unstreamed-tile gap must read as dark ground
   // tone (tokens --green-900), never the page behind the canvas.
@@ -1231,7 +1251,21 @@ function render() {
   // refinements", and feeding a 0.1° aim tweak into it would coarsen to 12 and
   // walk back = a full refine wave and a visible tile pop after every small aim
   // adjustment. This asks "do the pixels differ", and a turn changes every one.
-  const quiet = !camMoved && !camTurned && _errT <= 6.001 && tiles.loadProgress >= 1 && !(_st && _st.moving);
+  // camDrift measures against the pose the last RENDERED frame used, not against
+  // last frame's pose. camMoved/camTurned are per-frame deltas whose reference is
+  // refreshed every call, so motion slower than 0.5 m or 5e-4 rad PER FRAME never
+  // trips them however far it travels in total — and setCamera() runs at the top
+  // of this function while renderer.render() runs at the bottom, so a parked
+  // frame re-aims the camera that project() reads while leaving the photo
+  // underneath at the old pose. Accumulated drift is exactly "the picture on
+  // screen no longer matches the camera the overlay is projecting through", and
+  // it is the only form of it that per-frame epsilons cannot see. A genuinely
+  // static camera reads 0 against the drawn pose forever, so parking (and the
+  // battery win behind it) is untouched.
+  const camDrift = !_justResumed && _drawnCamPos
+    ? (camera.position.distanceTo(_drawnCamPos) > 0.5 ||
+       camera.quaternion.angleTo(_drawnCamQuat) > 5e-4) : false;
+  const quiet = !camMoved && !camTurned && !camDrift && _errT <= 6.001 && tiles.loadProgress >= 1 && !(_st && _st.moving);
   _settledAt = quiet ? (_settledAt || nowR) : 0;
   // Hold past quiescence: TilesFadePlugin cross-fades each refinement over
   // 500 ms, so parking on the first quiet frame freezes a half-faded tile.
@@ -1277,6 +1311,15 @@ function render() {
     if (H !== _lastHole) {
       _grid = null; _hold = null; _camEase = null; _groundMEase = null; _lastHole = H; _guardK = 1;
       _shotCam = null;
+      // _fro too, and it is the one that BITES. Nulling _camEase above makes the
+      // next setCamera() seed it exactly at the target, so _camParked — and
+      // therefore _fieldFrozen — is true on the FIRST frame of every hole after
+      // the first. The `if (!_fro && _grid)` capture then sees a non-null _fro
+      // and keeps the PREVIOUS hole's field, which _offsetBase goes on to index
+      // with this hole's grid dimensions: wrong cells, or out of range and so
+      // the old hole's global median offset, plus its ball/pin bubbles at the
+      // old hole's coordinates. Held until the camera moves.
+      _fro = null;
       _holeLoadT = performance.now();
       _ballOff = null; _ballTgt = null; _pinOff = null; _greenOffs = new Map();
       _introSeed = _introPending;   // seed on the first frame that HAS a target
@@ -1294,10 +1337,23 @@ function render() {
     }
   }
   renderer.render(scene, camera);   // camera was aimed at the top of this frame
+  // Record the pose this frame was DRAWN with — the reference the park gate's
+  // drift test compares against. Only here, never in the per-frame block: the
+  // whole point is that it goes stale while the camera keeps moving.
+  if (_drawnCamPos) _drawnCamPos.copy(camera.position);
+  else _drawnCamPos = camera.position.clone();
+  if (_drawnCamQuat) _drawnCamQuat.copy(camera.quaternion);
+  else _drawnCamQuat = camera.quaternion.clone();
 }
 let _lastHole = null;
 let _lastCamPos = null;
 let _lastCamQuat = null;      // last camera orientation (park gate — see render())
+// The pose the last ACTUALLY-RENDERED frame used. Distinct from _lastCamPos/
+// _lastCamQuat, which are refreshed every call: those answer "did the camera
+// move this instant", these answer "does the photo on screen still match the
+// camera project() is reading". See the drift test in render().
+let _drawnCamPos = null;
+let _drawnCamQuat = null;
 let _errT = 6, _errTAt = 0;   // ramped errorTarget (motion-coarse LOD)
 let _justResumed = false;     // set by setHidden(false); one-frame motion amnesty
 // Park gate (see render()). _settledAt = when the scene first went quiescent,
@@ -1377,6 +1433,10 @@ function anchorDiag() {
     offAtPin: pin ? +offsetAt(pin.x, pin.y).toFixed(1) : null,
   };
 }
+// Re-open the park gate from outside. For the cases where the SCENE changed
+// without the camera moving, which the gate's motion tests cannot see by
+// construction: returning from a backgrounded tab, a dropped drawing buffer.
+function wake() { _settledAt = 0; _forceRender = 3; }
 function debug() {
   let meshes = 0, verts = 0;
   if (tiles && tiles.group) tiles.group.traverse((o) => {
@@ -1385,6 +1445,13 @@ function debug() {
   return { ready, placed: _placed, failed: _failed, courseId: activeCourseId, pitch: pitchDeg,
     guardK: +_guardK.toFixed(3), easeD: _camEase ? +_camEase.D.toFixed(1) : null,
     shotCamD: _shotCam ? +_shotCam.D.toFixed(1) : null, fieldFrozen: _fieldFrozen, camSeq: _camSeq,
+    // How far the live camera has drifted from the frame actually on screen.
+    // Non-zero while parked means the overlay is sliding over a stale photo —
+    // the exact symptom this readout exists to make measurable.
+    driftM: (_drawnCamPos && camera) ? +camera.position.distanceTo(_drawnCamPos).toFixed(3) : null,
+    driftRad: (_drawnCamQuat && camera) ? +camera.quaternion.angleTo(_drawnCamQuat).toFixed(5) : null,
+    settledAt: _settledAt ? +(performance.now() - _settledAt).toFixed(0) : 0,
+    forceRender: _forceRender,
     apexFitN: _apexFitN,
     hasToken: !!window.GOOGLE_TILES_TOKEN, tiles: !!tiles,
     tris: renderer ? renderer.info.render.triangles : -1,
@@ -1403,5 +1470,5 @@ function debug() {
 
 window.GTiles3D = {
   enter, leave, render, resize, setPitch, setHidden, project, unproject, distanceTo, pxPerMeterAt, groundSquash, occludedAt, isReady, isSettled, failed,
-  getAttributions, worldToLngLat, lngLatToWorld, debug, anchorDiag, camSeq,
+  getAttributions, worldToLngLat, lngLatToWorld, debug, anchorDiag, camSeq, wake,
 };
