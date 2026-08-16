@@ -1395,6 +1395,18 @@ function update3DMode() {
 //     vesper-country-club          2377 verts/mesh   real 3D
 //     atkinson-resort-country-club  104 verts/mesh   FLAT — listed anyway, see below
 //
+// Re-measured 2026-08-16, controls in the same run (pebble 1497, vesper 1764):
+//
+//     trull-brook-golf-course      1205 verts/mesh   real 3D
+//
+// Trull Brook is 6 km from Butter Brook and reads 14x its verts/mesh, so the
+// Merrimack Valley is not uniformly uncovered — measure each course, never
+// infer coverage from a neighbour. It also needed a geo anchor first: it was
+// baked without one, and gtilesGroundActive() requires course.geo, so listing
+// the id alone would have silently done nothing. Anchored via
+// `tools/geo_anchor_course.py --greens` (0.00 m residual over 21 greens — the
+// greens fit recovers the baking affine exactly; the default pin fit gave 5.54 m).
+//
 // Butter Brook was added here on 2026-08-05 and removed on 2026-08-06. The
 // mistake that put it in: `geometricError` was used as the coverage test, but
 // that measures tile SUBDIVISION/texture resolution — a flat textured quad
@@ -1415,6 +1427,7 @@ const GTILES_IDS = new Set([
   "liberty-national-golf-club",
   "torrey-pines-south-course",
   "vesper-country-club",
+  "trull-brook-golf-course",
   "atkinson-resort-country-club",   // FLAT tiles — deliberate, see the note above
 ]);
 function gtilesGroundActive() {
