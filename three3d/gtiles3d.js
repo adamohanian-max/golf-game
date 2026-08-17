@@ -954,6 +954,23 @@ function setCamera() {
     // heals under the camera and the look-at sits metres off (measured h6
     // address yf 1.18)
     const lost = !bp.inFront || yf < 0.02 || yf > 0.98 || bp.x < -60 || bp.x > W + 60;
+    // HYSTERESIS. Arm on `lost`, release only on the strictly tighter `safe` —
+    // never on !lost. Using one threshold for both is a limit cycle by
+    // construction, because the thing being measured (the ball's screen
+    // position) is a function of the thing being set (D = _camEase.D * _guardK):
+    // widen until the ball is inside the band, ease back until it is outside it,
+    // repeat. That is the "pulse" — the camera visibly zooming in and out with
+    // the ball at rest. The 5-frame counter below debounces a single graze but
+    // cannot break the cycle; it only sets its period. Measured on Pebble over
+    // four shots before this: _guardK peaked 1.077 with 2 direction reversals,
+    // and at the D of 229 m where it happened that is ~18 m of camera travel.
+    //
+    // The release band MUST sit outside BALL_F (0.88 at high pitch, 0.93 at
+    // pitch 0 — see the anchor fractions above), or the ball's own resting
+    // anchor never reads "safe" and the guard stays widened forever, which
+    // trades a pulse for a permanently pulled-back camera. 0.96 clears 0.93 with
+    // room and still leaves a real dead zone against the 0.98 arm.
+    const safe = bp.inFront && yf > 0.06 && yf < 0.96 && bp.x > 0 && bp.x < W;
     // rest-lost must PERSIST a few frames before widening (a single boundary
     // graze would otherwise alternate widen/ease every frame — a shimmer).
     // (suspended during the opening flyover — the ball is legitimately far
@@ -961,10 +978,13 @@ function setCamera() {
     _guardLostN = (lost && performance.now() > _introUntil) ? _guardLostN + 1 : 0;
     const gk = Math.pow(1.04, Math.min(dt, 100) / 16.7);
     if (_guardLostN >= 5) _guardK = Math.min(_guardK * gk, 2.5);
-    else if (!lost) {
+    else if (safe) {
       _guardK += (1 - _guardK) * es;
       if (Math.abs(_guardK - 1) < 0.01) _guardK = 1;   // snap — no perpetual micro-pulse
     }
+    // Between the two bands _guardK simply HOLDS. A ball parked in the dead zone
+    // keeps whatever widening got it there: stable and visible, which is the
+    // whole point, rather than oscillating back out of frame.
   }
   const Ox = _shotCam ? _shotCam.Ox : _camEase.Ox;
   const Oy = _shotCam ? _shotCam.Oy : _camEase.Oy;
