@@ -9127,9 +9127,19 @@ const HIDDEN_COURSE_IDS = new Set(["four-oaks-dracut"]);
 function visibleCourses() {
   return isTournamentAdmin() ? COURSES : COURSES.filter((c) => !HIDDEN_COURSE_IDS.has(c.id));
 }
+// The Google photoreal courses are the shop window — they play on real 3D mesh
+// instead of a flat aerial, so they sort to the TOP of the picker and are free
+// for everyone. Membership is GTILES_IDS alone, deliberately not gtilesOwnsGround():
+// a player with no Map Tiles token still gets the course, it just renders as the
+// flat 2D aerial, and hiding it from them would be worse than a lesser ground.
+function photorealCourse(id) { return GTILES_IDS.has(id); }
 // Marquee courses earned by deed, not ladder position.
+// pebble-beach-golf-course used to sit here behind `first-ace`; it is a photoreal
+// course and those are free now, so the entry was removed rather than left
+// claiming to unlock something every player already has. NOTE: `first-ace`
+// therefore no longer unlocks any course — it survives as a Trophy Room
+// achievement only, until another marquee is pointed at it.
 const ACHIEVEMENT_COURSES = {
-  "pebble-beach-golf-course":   { milestone: "first-ace", label: "Make a hole-in-one" },
   "augusta-national-golf-club": { milestone: "break-par", label: "Break par in an 18-hole round" },
   // Took over this slot when Blackwater Vale (the fictional course) was deleted.
   "oakmont-country-club":       { milestone: "match-win", label: "Win a quick match" },
@@ -9145,7 +9155,7 @@ function courseTierMap() {           // Map(courseId -> bot tier index)
   const m = new Map();
   let i = 0;
   for (const c of COURSES) {
-    if (FREE_COURSE_IDS.includes(c.id) || ACHIEVEMENT_COURSES[c.id]) continue;
+    if (FREE_COURSE_IDS.includes(c.id) || ACHIEVEMENT_COURSES[c.id] || photorealCourse(c.id)) continue;
     m.set(c.id, Math.min(Math.floor(i / TIER_SIZE), BOTS.length - 1));
     i++;
   }
@@ -9158,7 +9168,7 @@ function purchasedCourse(id) { return !!getEntitlements().courses[id]; }
 
 // Single source of truth for "what does it take to play this course".
 function unlockReq(id) {
-  if (FREE_COURSE_IDS.includes(id)) return { type: "free", label: "", met: true };
+  if (FREE_COURSE_IDS.includes(id) || photorealCourse(id)) return { type: "free", label: "", met: true };
   const ach = ACHIEVEMENT_COURSES[id];
   if (ach) return { type: "milestone", milestoneId: ach.milestone, label: ach.label,
                     met: !!getMilestones()[ach.milestone] };
@@ -9407,8 +9417,16 @@ function renderCourseCards() {
       " · " + uc.unlocked + " unlocked";
   }
   if (!list.length) { elCsGrid.innerHTML = `<div class="cs-empty">No courses match.</div>`; return; }
-  // Unlocked courses first (stable partition — manifest order kept within each group).
-  const ordered = [...list.filter((c) => courseUnlocked(c.id)), ...list.filter((c) => !courseUnlocked(c.id))];
+  // Photoreal 3D courses, then the rest unlocked, then locked. Stable partition,
+  // so manifest order is kept WITHIN each group — sorting here and not in
+  // courses/manifest.json is deliberate: courseTierMap() walks the manifest in
+  // order and that order is append-only precisely so a course's unlock tier
+  // never moves under a player who already earned it.
+  const ordered = [
+    ...list.filter((c) => photorealCourse(c.id)),
+    ...list.filter((c) => !photorealCourse(c.id) && courseUnlocked(c.id)),
+    ...list.filter((c) => !photorealCourse(c.id) && !courseUnlocked(c.id)),
+  ];
   const frag = document.createDocumentFragment();
   for (const c of ordered) {
     const locked = !courseUnlocked(c.id);
