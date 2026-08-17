@@ -1398,6 +1398,7 @@ function update3DMode() {
 // Re-measured 2026-08-16, controls in the same run (pebble 1497, vesper 1764):
 //
 //     trull-brook-golf-course      1205 verts/mesh   real 3D
+//     sky-meadow-country-club      1487 verts/mesh   real 3D  (pebble control 1516)
 //
 // Trull Brook is 6 km from Butter Brook and reads 14x its verts/mesh, so the
 // Merrimack Valley is not uniformly uncovered — measure each course, never
@@ -1428,6 +1429,7 @@ const GTILES_IDS = new Set([
   "torrey-pines-south-course",
   "vesper-country-club",
   "trull-brook-golf-course",
+  "sky-meadow-country-club",
   "atkinson-resort-country-club",   // FLAT tiles — deliberate, see the note above
 ]);
 function gtilesGroundActive() {
