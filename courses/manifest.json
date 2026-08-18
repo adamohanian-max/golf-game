@@ -1276,5 +1276,16 @@
     "location": "West Boylston, MA",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "sandy-burr-country-club",
+    "name": "Sandy Burr Country Club",
+    "sub": "Par 72 · 18 holes · 42.36, -71.36",
+    "par": 72,
+    "yards": 6326,
+    "holes": 18,
+    "location": "Wayland, MA",
+    "region": "USA",
+    "tags": []
   }
 ]

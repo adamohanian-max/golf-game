@@ -16360,14 +16360,14 @@
   "type": "way"
  },
  "sandy-burr-country-club": {
-  "boundaryWay": 29776422,
+  "boundaryWay": 13389341,
   "center": [
-   42.357025,
-   -71.36003
+   42.35635,
+   -71.36222
   ],
   "name": "Sandy Burr Country Club",
-  "source": "cc0",
-  "type": "way"
+  "source": "osm",
+  "type": "relation"
  },
  "sandy-run-country-club": {
   "boundaryWay": 131428482,
