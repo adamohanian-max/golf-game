@@ -1320,5 +1320,16 @@
     "location": "Falmouth, MA",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "falmouth-country-club",
+    "name": "Falmouth Country Club",
+    "sub": "Par 72 · 18 holes · 41.59, -70.55",
+    "par": 72,
+    "yards": 5918,
+    "holes": 18,
+    "location": "Falmouth, MA",
+    "region": "USA",
+    "tags": []
   }
 ]

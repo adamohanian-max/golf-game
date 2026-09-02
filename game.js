@@ -1424,6 +1424,7 @@ function update3DMode() {
 //     pinehills-nicklaus             50 verts/mesh   FLAT — listed anyway, see below
 //     samoset-resort-golf-course     85 verts/mesh   FLAT — listed anyway, see below
 //     cape-cod-country-club          78 verts/mesh   FLAT — listed anyway, see below
+//     falmouth-country-club          42 verts/mesh   FLAT — listed anyway, see below
 //
 // Butter Brook was added here on 2026-08-05 and removed on 2026-08-06. The
 // mistake that put it in: `geometricError` was used as the coverage test, but
@@ -1436,7 +1437,8 @@ function update3DMode() {
 // THE `FLAT tiles` ENTRIES BELOW ARE DELIBERATE EXCEPTIONS, NOT A REPEAT OF
 // THAT MISTAKE. Every one was measured FIRST and listed anyway as a product
 // decision — atkinson 104 (2026-08-14), sandy-burr 78 (2026-08-18),
-// pinehills-nicklaus 50, samoset 85 and cape-cod 78 (2026-09-02) — all credited
+// pinehills-nicklaus 50, samoset 85, cape-cod 78 and falmouth 42 (2026-09-02)
+// — all credited
 // "Google, Airbus", i.e. satellite imagery on flat ground, the Butter Brook
 // signature exactly. Each costs a billed tile session per visit for ground that
 // looks like the baked NAIP aerial it already has for free, and the 2D↔3D
@@ -1456,6 +1458,7 @@ const GTILES_IDS = new Set([
   "pinehills-nicklaus",            // FLAT tiles — deliberate, see the note above
   "samoset-resort-golf-course",    // FLAT tiles — deliberate, see the note above
   "cape-cod-country-club",         // FLAT tiles — deliberate, see the note above
+  "falmouth-country-club",         // FLAT tiles — deliberate, see the note above
 ]);
 function gtilesGroundActive() {
   return !!(course && GTILES_IDS.has(course.id) && course.geo &&

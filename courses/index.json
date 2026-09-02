@@ -5500,13 +5500,13 @@
   "type": "way"
  },
  "falmouth-country-club-golf-course": {
-  "boundaryWay": 29843313,
+  "boundaryWay": 29843255,
   "center": [
-   41.593156,
-   -70.548897
+   41.5945,
+   -70.5522
   ],
-  "name": "Falmouth Country Club Golf Course",
-  "source": "cc0",
+  "name": "Falmouth Country Club",
+  "source": "osm",
   "type": "way"
  },
  "far-corner-golf": {
