@@ -449,8 +449,14 @@ const TUNE = {
   // from scratch. That is the whole point — an 18-hole round used to be 18
   // independent draws, so an out-and-back nine could play downwind both ways and
   // the wind never told you anything about the course.
-  windMaxMph: 15,        // hard ceiling on wind speed, gusts included
-  windGustMph: 3.6,      // swing around the day's base speed, mph
+  windMaxMph: 12,        // hard ceiling on wind speed, gusts included
+  windCalmMph: 0.5,      // floor of the day's base speed
+  windDayMph: 12,        // span above the floor the day's base can reach (see
+                         // windDay — the draw across it is right-skewed, so the
+                         // MEAN base lands near a third of this, not half)
+  windGustMph: 2.6,      // swing around the day's base speed, mph. Scaled down
+                         // with the base: +-3.6 on a 4.5 mph day is most of the
+                         // wind, which read as gusty rather than calm.
   windDirSpreadDeg: 30,  // swing around the day's prevailing bearing, degrees
   windHolePeriod: 5.0,   // holes per drift cycle — how fast the sustained wind wanders
   windBuild: 0.18,       // fraction the base rises from hole 1 to 18 (afternoon build)
@@ -1628,11 +1634,18 @@ function windNoise(seed, t) {
 function windDay() {
   const r = mulberry32((round.pinSeed ^ WIND_SEED_SALT) >>> 0);
   const dir0 = r() * Math.PI * 2;
-  // Triangular (mean of two uniforms) over 1–14 mph: a bell, so most rounds sit
-  // near 7-8 and both the dead-calm day and the near-cap day stay uncommon. Calm
-  // is a property of the DAY here, not a 10% per-hole coin flip — that is what
-  // makes a becalmed round a thing that happens, instead of one quiet hole.
-  const base = 1 + 13 * (r() + r()) / 2;
+  // RIGHT-SKEWED (min of two uniforms, density 2(1-x)) over windCalmMph ..
+  // +windDayMph: most days are a light breeze and a real blow is uncommon.
+  // Calm is a property of the DAY here, not a per-hole coin flip — that is what
+  // makes a becalmed ROUND a thing that happens, instead of one quiet hole.
+  //
+  // This replaced a TRIANGULAR draw centred on 7.5 mph, which was symmetric and
+  // therefore made a strong wind exactly as likely as a calm one. Measured over
+  // 20k rounds it put 52% of HOLES at 8+ mph and had 52% of ROUNDS touch 10+ and
+  // 28% touch 12+ — so "windy" was the median day, not the exception, and a 7
+  // iron was routinely giving up two clubs. Skewing (rather than just lowering
+  // the mean) keeps the occasional genuine blow while making it the exception.
+  const base = TUNE.windCalmMph + TUNE.windDayMph * Math.min(r(), r());
   return { dir0, base };
 }
 // Wind on a given hole. Pure: same answer every time for a given round + hole.
