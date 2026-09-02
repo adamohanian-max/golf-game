@@ -1413,6 +1413,11 @@ function update3DMode() {
 //
 //     sandy-burr-country-club        78 verts/mesh   FLAT — listed anyway, see below
 //
+// Re-measured 2026-09-02, controls in the same run (pebble 1516, butter-brook 86):
+//
+//     pinehills-nicklaus             50 verts/mesh   FLAT — listed anyway, see below
+//     samoset-resort-golf-course     85 verts/mesh   FLAT — listed anyway, see below
+//
 // Butter Brook was added here on 2026-08-05 and removed on 2026-08-06. The
 // mistake that put it in: `geometricError` was used as the coverage test, but
 // that measures tile SUBDIVISION/texture resolution — a flat textured quad
@@ -1421,14 +1426,17 @@ function update3DMode() {
 // quad plus a texture. On-device it renders correctly and reads as "the trees
 // are 2D", because they are. ~600 verts/mesh separates the two regimes.
 //
-// ATKINSON AND SANDY BURR ARE DELIBERATE EXCEPTIONS, NOT A REPEAT OF THAT
-// MISTAKE. Both were measured FIRST (atkinson 104, sandy-burr 78 verts/mesh,
-// both credited "Google, Airbus" — satellite imagery on flat ground, the Butter
-// Brook signature exactly) and listed anyway as a product decision, 2026-08-14
-// and 2026-08-18. Each costs a billed tile session per visit for ground that
+// THE `FLAT tiles` ENTRIES BELOW ARE DELIBERATE EXCEPTIONS, NOT A REPEAT OF
+// THAT MISTAKE. Every one was measured FIRST and listed anyway as a product
+// decision — atkinson 104 (2026-08-14), sandy-burr 78 (2026-08-18),
+// pinehills-nicklaus 50 and samoset 85 (2026-09-02) — all credited
+// "Google, Airbus", i.e. satellite imagery on flat ground, the Butter Brook
+// signature exactly. Each costs a billed tile session per visit for ground that
 // looks like the baked NAIP aerial it already has for free, and the 2D↔3D
 // slider reveals a flat photo when leaned. Do not "fix" this by removing them —
-// that is a call for whoever owns the billing, not a correctness bug.
+// that is a call for whoever owns the billing, not a correctness bug. Keep
+// measuring new ids regardless: the number is what makes this a CHOICE rather
+// than the mistake, and a course that turns out to be real 3D should be known.
 const GTILES_IDS = new Set([
   "pebble-beach-golf-course",
   "liberty-national-golf-club",
@@ -1438,6 +1446,8 @@ const GTILES_IDS = new Set([
   "sky-meadow-country-club",
   "atkinson-resort-country-club",   // FLAT tiles — deliberate, see the note above
   "sandy-burr-country-club",       // FLAT tiles — deliberate, see the note above
+  "pinehills-nicklaus",            // FLAT tiles — deliberate, see the note above
+  "samoset-resort-golf-course",    // FLAT tiles — deliberate, see the note above
 ]);
 function gtilesGroundActive() {
   return !!(course && GTILES_IDS.has(course.id) && course.geo &&

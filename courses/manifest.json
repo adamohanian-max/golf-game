@@ -1287,5 +1287,27 @@
     "location": "Wayland, MA",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "pinehills-nicklaus",
+    "name": "Pinehills Golf Club — Nicklaus",
+    "sub": "Par 72 · 18 holes · 41.89, -70.59",
+    "par": 72,
+    "yards": 7191,
+    "holes": 18,
+    "location": "Plymouth, MA",
+    "region": "USA",
+    "tags": []
+  },
+  {
+    "id": "samoset-resort-golf-course",
+    "name": "Samoset Resort Golf Course",
+    "sub": "Par 70 · 18 holes · 44.12, -69.08",
+    "par": 70,
+    "yards": 6084,
+    "holes": 18,
+    "location": "Rockport, ME",
+    "region": "USA",
+    "tags": []
   }
 ]
