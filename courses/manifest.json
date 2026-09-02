@@ -1309,5 +1309,16 @@
     "location": "Rockport, ME",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "cape-cod-country-club",
+    "name": "Cape Cod Country Club",
+    "sub": "Par 71 · 18 holes · 41.62, -70.56",
+    "par": 71,
+    "yards": 5807,
+    "holes": 18,
+    "location": "Falmouth, MA",
+    "region": "USA",
+    "tags": []
   }
 ]
