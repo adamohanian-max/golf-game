@@ -1331,5 +1331,16 @@
     "location": "Falmouth, MA",
     "region": "USA",
     "tags": []
+  },
+  {
+    "id": "quashnet-valley-country-club",
+    "name": "Quashnet Valley Country Club",
+    "sub": "Par 72 · 18 holes · 41.63, -70.50",
+    "par": 72,
+    "yards": 6250,
+    "holes": 18,
+    "location": "Mashpee, MA",
+    "region": "USA",
+    "tags": []
   }
 ]

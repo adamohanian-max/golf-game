@@ -14989,6 +14989,16 @@
   "source": "cc0",
   "type": "way"
  },
+ "quashnet-valley-golf-course": {
+  "boundaryWay": 16647013,
+  "center": [
+   41.626829,
+   -70.4975155
+  ],
+  "name": "Quashnet Valley Golf Course",
+  "source": "osm",
+  "type": "relation"
+ },
  "queenwood-golf-course": {
   "boundaryWay": 157467156,
   "center": [
