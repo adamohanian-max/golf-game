@@ -1312,7 +1312,7 @@ function roundShareText() {
   if (dailyMode) {
     const st = getDaily();
     const date = (dailyInfo && dailyInfo.date) || todayStr();
-    return `Golf Daily ${date} · ${totStrk} (${formatToPar(round.score)}) · ⛳️🔥${st.streak || 1}`;
+    return `Daily 9 ${date} · ${totStrk} (${formatToPar(round.score)}) · ⛳️🔥${st.streak || 1}`;
   }
   const cn = course ? course.name : "Golf";
   return `⛳️ I shot ${totStrk} (${formatToPar(round.score)}) at ${cn} on Golf`;
@@ -4092,9 +4092,18 @@ function rollDispersion() {
   // daily and nobody can reroll a bad break by restarting. Ball position is in
   // the key so a penalty replay from lastSafe deals the same card again rather
   // than letting a player re-roll trouble by hitting it into the water.
+  //
+  // DAILY is different: same dice PER STROKE. Ball position leaves the key, so
+  // every player's Nth stroke on a hole draws the identical error (scaled by
+  // their own club and lie). With position in it, two players were never in the
+  // same spot and so never shared luck — unfair on a shared leaderboard, and a
+  // non-starter for a prize contest. A penalty replay gets a fresh card because
+  // the stroke count moved on; that is the accepted trade.
   const b = state.ball;
-  const key = (HOLE.num | 0) + ":" + (state.strokes | 0) + ":" +
-              Math.round(b.x * 8) + ":" + Math.round(b.y * 8) + ":" + (round.pinSeed | 0);
+  const key = dailyMode
+    ? "d9:" + (HOLE.num | 0) + ":" + (state.strokes | 0) + ":" + (round.pinSeed | 0)
+    : (HOLE.num | 0) + ":" + (state.strokes | 0) + ":" +
+      Math.round(b.x * 8) + ":" + Math.round(b.y * 8) + ":" + (round.pinSeed | 0);
   const rnd = mulberry32(strSeed(key));
   // Box-Muller, clamped at 2.5 sigma. The clamp matters: an unclamped normal has
   // no worst case, and one 6-sigma tee shot into the trees reads as a bug rather
@@ -8535,7 +8544,7 @@ function showResult() {
   // Ordinary hole (par or worse, no personal best, mid-round): skip the modal —
   // quick score toast + auto-advance. A forced tap on all 18 holes adds up.
   if ((level === 0 || conceded) && !hb.isBest && !dailyMode && !matchDecided &&
-      !(course && holeIndex >= roundHoleCount() - 1)) {
+      !(course && onLastRoundHole())) {
     // Match play: say what the hole meant ("Hole lost · 2 down") when the
     // opponent's score is already in; otherwise the running score.
     // Match play never falls back to the gross total — if the opponent hasn't
@@ -8586,12 +8595,16 @@ function advanceFromResult() {
   // Last hole → show full round summary instead of advancing. A match plays a
   // capped number of holes (9 or 18), so end on roundHoleCount() not the full
   // course length.
-  if (course && holeIndex >= roundHoleCount() - 1) {
+  if (course && onLastRoundHole()) {
     showRoundSummary();
     return;
   }
   const doAdvance = () => advanceHole(() => {
-    if (course) {
+    if (course && dailyMode && dailyInfo && dailyInfo.seq) {
+      dailyInfo.step++;
+      holeIndex = dailyInfo.seq[dailyInfo.step];
+      setHole(course.holes[holeIndex]);
+    } else if (course) {
       holeIndex = (holeIndex + 1) % course.holes.length;
       setHole(course.holes[holeIndex]);
     } else {
@@ -9911,12 +9924,16 @@ function buildHoleGrid() {
   // In a match (online or CPU), holes you've already finished are locked — no
   // going back to re-play a completed hole. The current hole stays selectable.
   const finished = inMatch() ? new Set(round.holeStats.map((h) => h.hole)) : null;
+  // Daily: only the day's 9 are listed, and none can be jumped to — one
+  // attempt, played in order, or the shared leaderboard means nothing.
+  const dSeq = dailyMode && dailyInfo && dailyInfo.seq ? new Set(dailyInfo.seq) : null;
   course.holes.forEach((h, i) => {
+    if (dSeq && !dSeq.has(i)) return;
     const num = h.num || i + 1;
-    const locked = finished && finished.has(num) && i !== holeIndex;
+    const locked = (dSeq && i !== holeIndex) || (finished && finished.has(num) && i !== holeIndex);
     const cell = document.createElement("button");
     cell.className = "hole-cell" + (i === holeIndex ? " current" : "") + (locked ? " done" : "");
-    cell.innerHTML = `<span class="hn">${num}</span><span class="hp">${locked ? "Done" : "Par " + h.par}</span>`;
+    cell.innerHTML = `<span class="hn">${num}</span><span class="hp">${locked && finished && finished.has(num) ? "Done" : "Par " + h.par}</span>`;
     if (locked) {
       cell.disabled = true;
     } else {
@@ -10855,6 +10872,10 @@ function showMenu() {
   dailyMode = false;
   stopTourPoll();
   updateTourBug();
+  // Daily 9 has no main menu: home IS today's 9. Before the manifest lands the
+  // pick would come from FALLBACK_COURSES (the wrong course), so boot defers
+  // this to loadManifest's then().
+  if (DAILY9) { elMenu.classList.add("hidden"); if (COURSES.length) openDailyHome(); }
 }
 
 // Home-menu chips: daily streak + today's featured (free) course.
@@ -11014,17 +11035,91 @@ function strSeed(s) {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
-function todayStr() {
-  const d = new Date(), p = (n) => String(n).padStart(2, "0");
-  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+// The daily rolls over at midnight US EASTERN for every player, wherever they
+// are. A device-local date gave a California player a different course than a
+// New York one for three hours a night, and split one day's leaderboard in two.
+const DAILY_TZ = "America/New_York";
+// Daily 9 shell: ?d9=1 (or daily9.html) is a one-mode build — boots straight to
+// the daily home, every "home" path returns there, the main menu never shows.
+const DAILY9 = (() => {
+  try { return new URLSearchParams(location.search).has("d9") || /daily9(\.html)?$/.test(location.pathname); }
+  catch (e) { return false; }
+})();
+if (DAILY9) document.body.classList.add("d9");
+function etDateStr(ms) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: DAILY_TZ,
+      year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(ms == null ? Date.now() : ms));
+    const g = (t) => (parts.find((x) => x.type === t) || {}).value;
+    return g("year") + "-" + g("month") + "-" + g("day");
+  } catch (e) {   // no Intl tz data: fall back to device-local
+    const d = new Date(ms == null ? Date.now() : ms), p = (n) => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  }
 }
-function dailyCourseFor(dateStr) {
+function todayStr() { return etDateStr(); }
+// Calendar arithmetic on a "YYYY-MM-DD" string (UTC math, so no DST edge).
+function dayShift(dateStr, n) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+// ms until the next ET midnight — the "next 9 in" countdown.
+function msToNextDaily() {
+  const now = Date.now(), today = etDateStr(now);
+  // Step an hour at a time to the first instant ET reads tomorrow (<= 25 steps,
+  // survives DST), then refine by the minute.
+  let t = now - (now % 6e4);
+  while (etDateStr(t) === today) t += 36e5;
+  t -= 36e5;
+  while (etDateStr(t) === today) t += 6e4;
+  return Math.max(0, t - now);
+}
+// Leaderboard key for a day's Daily 9. New prefix: the seeded-9 field must not
+// mix with the old front-9 "daily_" rounds.
+function dailyBoardKey(dateStr) { return "daily9_" + (dateStr || todayStr()); }
+// Photoreal (Google tiles) courses cost a billed tile session per visit; a
+// daily sends the whole player base to one course, so keep them out by default.
+const DAILY_EXCLUDE_GTILES = true;
+function dailyCoursePool() {
   // Unconditional exclusion (not the viewer's-own-admin-status visibleCourses()
   // filter) — the daily pick is the same course for every player that day, so
   // it can't depend on who's asking.
-  const pool = (COURSES.length ? COURSES : FALLBACK_COURSES).filter((c) => !HIDDEN_COURSE_IDS.has(c.id));
-  const rnd = mulberry32(strSeed(dateStr));
-  return pool[Math.floor(rnd() * pool.length)];
+  const all = (COURSES.length ? COURSES : FALLBACK_COURSES).filter((c) =>
+    !HIDDEN_COURSE_IDS.has(c.id) && (c.holes == null || c.holes >= 9) &&
+    !(DAILY_EXCLUDE_GTILES && GTILES_IDS.has(c.id)));
+  return all.length ? all : (COURSES.length ? COURSES : FALLBACK_COURSES);
+}
+function dailyCourseFor(dateStr) {
+  // Rendezvous hash, not pool[floor(rnd*len)]: that index reshuffled the day's
+  // course every time a bake grew the manifest — mid-day, under players already
+  // on it. Highest hash wins, so a new course only changes today if it wins.
+  let best = null, bestH = -1;
+  for (const c of dailyCoursePool()) {
+    const h = strSeed("d9:" + dateStr + ":" + c.id);
+    if (h > bestH) { bestH = h; best = c; }
+  }
+  return best;
+}
+// The day's 9: hole INDICES into course.holes, ascending (played in course
+// order). Seeded by date + course; re-drawn until par lands 34..37 with at least
+// one par 3 and one par 5, so no day is nine par 4s. A course of <= 9 holes
+// plays them all.
+function dailyHoleSeq(dateStr, holes) {
+  const n = holes.length;
+  const all = holes.map((_, i) => i);
+  if (n <= 9) return all;
+  let fallback = null;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const rnd = mulberry32(strSeed("d9holes:" + dateStr + ":" + attempt));
+    const idx = all.slice();
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    const pick = idx.slice(0, 9).sort((a, b) => a - b);
+    const pars = pick.map((i) => holes[i].par || 4);
+    const par = pars.reduce((a, b) => a + b, 0);
+    if (!fallback) fallback = pick;
+    if (par >= 34 && par <= 37 && pars.includes(3) && pars.includes(5)) return pick;
+  }
+  return fallback;
 }
 
 // Daily featured course: one normally-locked course is free for everyone
@@ -11046,10 +11141,13 @@ function dailyDoneToday() { return getDaily().lastDate === todayStr(); }
 // for testing). Wired to the #play-daily menu button.
 async function openDailyHome() {
   const dateStr = todayStr();
+  const h2 = document.querySelector("#daily-home .dh-head h2");
+  if (h2) h2.textContent = DAILY9 ? "Daily 9" : "Daily Challenge";
   const c = dailyCourseFor(dateStr);
   const dateEl = document.getElementById("dh-date");
   if (dateEl) {
-    try { dateEl.textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }); }
+    // Format the ET day itself (noon UTC of it), never the device's local date.
+    try { dateEl.textContent = new Date(dateStr + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }); }
     catch (e) { dateEl.textContent = dateStr; }
   }
   const par = c.par != null ? c.par : "—";
@@ -11088,7 +11186,7 @@ async function renderDailyHomeBoard(dateStr) {
   empty.textContent = "Loading…"; empty.classList.remove("hidden");
   if (!LB_ON()) { empty.textContent = "Leaderboard not configured."; return; }
   try {
-    const rows = await fetchLeaderboard("daily_" + (dateStr || todayStr()));
+    const rows = await fetchLeaderboard(dailyBoardKey(dateStr));
     if (!rows || !rows.length) { empty.textContent = "No scores yet — be the first!"; return; }
     const me = getPlayerName().toLowerCase();
     tb.innerHTML = rows.map((r, i) => {
@@ -11129,10 +11227,14 @@ async function startDailyRound() {
   try {
     if (!course || course.id !== c.id) await loadCourse(c.id);
     setYardsPerUnit(course.yardsPerUnit);
-    holeIndex = 0;                         // front nine — play holes 1..9 in order
-    dailyInfo = { date: dateStr, courseId: c.id };
-    setHole(course.holes[0]);
-    showToast(`Daily: ${c.name} · Front 9`, 2400);
+    // The day's seeded 9, played in course order. dailyInfo.step walks it;
+    // holeIndex stays the real index into course.holes so everything else
+    // (pins, scorecard hole numbers, wind) keys off the true hole.
+    const seq = dailyHoleSeq(dateStr, course.holes);
+    dailyInfo = { date: dateStr, courseId: c.id, seq, step: 0 };
+    holeIndex = seq[0];
+    setHole(course.holes[holeIndex]);
+    showToast(`Daily 9: ${c.name}`, 2400);
   } catch (e) {
     console.warn("daily load failed", e);
     dailyInfo = { date: dateStr, courseId: c.id };
@@ -11149,9 +11251,7 @@ function finishDaily(totStrk) {
   const dateStr = (dailyInfo && dailyInfo.date) || todayStr();
   const st = getDaily();
   if (st.lastDate !== dateStr) {
-    const day = 864e5, p = (n) => String(n).padStart(2, "0");
-    const fmt = (ms) => { const d = new Date(ms); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); };
-    const yest = fmt(Date.now() - day), dbefore = fmt(Date.now() - 2 * day);
+    const yest = dayShift(dateStr, -1), dbefore = dayShift(dateStr, -2);
     if (st.lastDate === yest || st.lastDate === dbefore) st.streak = (st.streak || 0) + 1; // consecutive (+1 grace day)
     else st.streak = 1;                                                                    // streak broke
     st.lastDate = dateStr; st.lastScore = totStrk; st.lastToPar = round.score;
@@ -11684,8 +11784,8 @@ function buildRoundPayload() {
   const proxHoles = stats.filter(h => h.proximity !== null);
   const avgProx = proxHoles.length ? proxHoles.reduce((s, h) => s + h.proximity, 0) / proxHoles.length : null;
   const strokes = stats.reduce((s, h) => s + h.strokes, 0);
-  // Daily forms its own date-keyed board (front nine), no schema change.
-  const courseId = dailyMode ? ("daily_" + ((dailyInfo && dailyInfo.date) || todayStr())) : selectedCourseId;
+  // Daily forms its own date-keyed board (the seeded 9), no schema change.
+  const courseId = dailyMode ? dailyBoardKey(dailyInfo && dailyInfo.date) : selectedCourseId;
   const holeCount = dailyMode ? n : course.holes.length;   // holes actually played (9, or fewer on a short course)
   return {
     name: getPlayerName(), user_id: (currentUser() || {}).id || null,
@@ -11816,7 +11916,7 @@ function populateLbCourses() {
   const sel = document.getElementById("lb-course");
   if (!sel) return;
   const today = todayStr();
-  const daily = `<option value="daily_${today}">Daily Challenge (${today})</option>`;
+  const daily = `<option value="${dailyBoardKey(today)}">Daily Challenge (${today})</option>`;
   sel.innerHTML = daily + visibleCourses().map(c => `<option value="${c.id}">${c.name}</option>`).join("");
 }
 
@@ -13762,7 +13862,7 @@ function openDailyBoard() {
   _lbReturn = "round-end";
   populateLbCourses();
   document.getElementById("leaderboard").classList.remove("hidden");
-  renderLeaderboard("daily_" + date);
+  renderLeaderboard(dailyBoardKey(date));
 }
 
 // Generic tokens dropped before matching ESPN venue names to our manifest.
@@ -14694,7 +14794,7 @@ async function loadDailyBoard(dateStr) {
   _dailyBoard = null;
   if (!LB_ON()) return;
   try {
-    const rows = await fetchLeaderboard("daily_" + (dateStr || todayStr()));
+    const rows = await fetchLeaderboard(dailyBoardKey(dateStr));
     const me = currentUser(), meName = (getPlayerName() || "").toLowerCase();
     // Drop my own prior row so I'm never listed twice (live row is added separately).
     _dailyBoard = (rows || []).filter((r) =>
@@ -14720,7 +14820,7 @@ function updateDailyBug() {
   const rows = [];
   for (let i = 0; i < Math.min(3, field.length); i++) rows.push([tourPos(positions[i]), field[i]]);
   if (meIdx >= 3) rows.push([tourPos(positions[meIdx]), field[meIdx]]);
-  bug.querySelector(".tbug-head").textContent = "Daily · Front 9";
+  bug.querySelector(".tbug-head").textContent = "Daily 9";
   bug.querySelector(".tbug-list").innerHTML = rows.map(([r, p]) => _bugRowHTML(r, p)).join("");
   bug.querySelector(".tbug-cut").classList.add("hidden");   // daily has no cut
 }
@@ -15102,9 +15202,18 @@ function pushMatchShot(extra) {
 }
 
 // --- helpers shared with startCourse/play-again ---
+function dailySeqLen() {
+  return dailyInfo && dailyInfo.seq ? dailyInfo.seq.length : Math.min(9, course ? course.holes.length : 9);
+}
+// True on the round's final hole. Daily walks a seeded index list, so "last"
+// is the step, not holeIndex (the 9th daily hole can be course hole 17).
+function onLastRoundHole() {
+  if (dailyMode && dailyInfo && dailyInfo.seq) return dailyInfo.step >= dailyInfo.seq.length - 1;
+  return holeIndex >= roundHoleCount() - 1;
+}
 function roundHoleCount() {
   if (matchLive() && course) return Math.min(matchHoleCount, course.holes.length);
-  if (dailyMode && course) return Math.min(9, course.holes.length);   // daily = front nine
+  if (dailyMode && course) return dailySeqLen();                       // daily = the day's seeded 9
   return course ? course.holes.length : 18;
 }
 
@@ -18534,6 +18643,12 @@ const DEV_COURSE_BOOT = new URLSearchParams(location.search).get("course");
 loadManifest().then(() => {
   buildCourseList();      // refresh list from courses/manifest.json (admin-baked courses)
   renderMenuChips();      // featured course needs the real manifest
+  if (DAILY9) {
+    openDailyHome();
+    // Preload today's course: instant Play, and the backdrop is the real course.
+    const dc = dailyCourseFor(todayStr());
+    return dc ? loadCourse(dc.id) : null;
+  }
   if (DEV_COURSE_BOOT && COURSES.some((c) => c.id === DEV_COURSE_BOOT)) {
     selectedCourseId = DEV_COURSE_BOOT;
     startCourse();        // loads the course itself

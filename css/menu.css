@@ -773,3 +773,8 @@ body.is-desktop .menu-box {
 }
 body.is-desktop .menu-box h1 { font-size: 84px; }
 body.is-desktop #course-list { width: 340px; max-width: 70vw; }
+
+/* Daily 9 shell (?d9=1): one mode. No main menu, and the daily home has nowhere
+   to "close" back to. */
+body.d9 #menu,
+body.d9 #dh-close { display: none !important; }
