@@ -4136,8 +4136,15 @@ function launchShot(ang, frac, spin, onGreen, disp) {
   // scale alone — it gates the landing slo-mo, and a putt never lands.
   shotIsChip = !onGreen && simScale !== TUNE.timeScale;
   landSlowUntil = 0;
-  const trial = buildTrialShot(ang, frac, spin, onGreen, null, disp || rollDispersion());
+  disp = disp || rollDispersion();
+  const trial = buildTrialShot(ang, frac, spin, onGreen, null, disp);
   if (!trial) return;
+  // Daily: bank the stroke BEFORE the ball moves, with every input the shot was
+  // built from, so closing the app mid-flight replays this exact shot on resume
+  // instead of handing out a mulligan. `frac` here is post-clamp; previewFrac is
+  // restored too, so the replay's own clamp is a no-op.
+  if (dailyMode && !_d9Replaying) d9Snapshot({ ang, frac, spin, onGreen, disp,
+    club: selectedClub, previewFrac, powerPreviewEnabled, chipSpinBias, flightSpinBias });
   const b = state.ball;
   shot.startX = b.x; shot.startY = b.y;
   shot.carry = null; shot.total = null; shot.carried = onGreen; shot._landed = false;
@@ -9151,6 +9158,9 @@ const FALLBACK_COURSES = [
   { id: "bethpage-black", name: "Bethpage Black", sub: "Farmingdale, NY · Par 71", aerial: "naip" },
 ];
 let COURSES = FALLBACK_COURSES.slice();
+// COURSES starts as the fallback copy, so "has courses" is not "has the
+// manifest". The daily pick must wait for the real list (see showMenu / DAILY9).
+let _manifestLoaded = false;
 
 let selectedCourseId = COURSES[0].id;
 // Replace COURSES from courses/manifest.json (admin bakes append to it). Falls
@@ -9162,6 +9172,7 @@ async function loadManifest() {
     const arr = await res.json();
     if (Array.isArray(arr) && arr.length) COURSES = arr;
   } catch (e) { console.warn("manifest load failed, using fallback courses:", e); }
+  _manifestLoaded = true;
   if (!COURSES.some((c) => c.id === selectedCourseId)) selectedCourseId = COURSES[0].id;
 }
 
@@ -10875,7 +10886,7 @@ function showMenu() {
   // Daily 9 has no main menu: home IS today's 9. Before the manifest lands the
   // pick would come from FALLBACK_COURSES (the wrong course), so boot defers
   // this to loadManifest's then().
-  if (DAILY9) { elMenu.classList.add("hidden"); if (COURSES.length) openDailyHome(); }
+  if (DAILY9) { elMenu.classList.add("hidden"); if (_manifestLoaded) openDailyHome(); }
 }
 
 // Home-menu chips: daily streak + today's featured (free) course.
@@ -11162,7 +11173,13 @@ async function openDailyHome() {
   const done = dailyDoneToday() && !isTournamentAdmin();
   const playBtn = document.getElementById("dh-play");
   const locked = document.getElementById("dh-locked");
-  if (playBtn) playBtn.classList.toggle("hidden", done);
+  if (playBtn) {
+    playBtn.classList.toggle("hidden", done);
+    const saved = !done && d9LoadResume(dateStr, c.id);
+    playBtn.textContent = saved
+      ? `Resume — thru ${saved.round.holesPlayed} (${formatToPar(saved.round.score)})`
+      : "Play today’s 9";
+  }
   if (locked) {
     locked.classList.toggle("hidden", !done);
     if (done) {
@@ -11207,6 +11224,9 @@ async function renderDailyHomeBoard(dateStr) {
 async function startDailyRound() {
   const dateStr = todayStr();
   const c = dailyCourseFor(dateStr);
+  // dailyInfo nulled first: d9Tick runs every frame while loadCourse awaits, and
+  // a stale dailyInfo from an earlier round would overwrite today's save.
+  dailyInfo = null;
   mode = "course"; dailyMode = true; activeTournamentRound = null;
   track("round_start", { mode: "daily", course: c });
   activeSettings = normalizeSettings(gameDefaults);
@@ -11230,11 +11250,19 @@ async function startDailyRound() {
     // The day's seeded 9, played in course order. dailyInfo.step walks it;
     // holeIndex stays the real index into course.holes so everything else
     // (pins, scorecard hole numbers, wind) keys off the true hole.
-    const seq = dailyHoleSeq(dateStr, course.holes);
-    dailyInfo = { date: dateStr, courseId: c.id, seq, step: 0 };
-    holeIndex = seq[0];
-    setHole(course.holes[holeIndex]);
-    showToast(`Daily 9: ${c.name}`, 2400);
+    const saved = d9LoadResume(dateStr, c.id);
+    if (saved) {
+      _d9Sig = "";
+      const live = d9ApplyResume(saved);
+      if (!live) { setTimeout(showRoundSummary, 300); }
+      else showToast(`Resumed · Hole ${HOLE.num}`, 2000);
+    } else {
+      const seq = dailyHoleSeq(dateStr, course.holes);
+      dailyInfo = { date: dateStr, courseId: c.id, seq, step: 0 };
+      holeIndex = seq[0];
+      setHole(course.holes[holeIndex]);
+      showToast(`Daily 9: ${c.name}`, 2400);
+    }
   } catch (e) {
     console.warn("daily load failed", e);
     dailyInfo = { date: dateStr, courseId: c.id };
@@ -11245,10 +11273,110 @@ async function startDailyRound() {
 }
 
 function getDaily() { return lsGet("golf.daily", { lastDate: null, streak: 0 }); }
+
+// ---- Daily resume -----------------------------------------------------------
+// One attempt per day means closing the app must never cost the round, and must
+// never be a way to take a shot back. Two kinds of snapshot, one key:
+//  - AT REST (d9Tick): ball position + the hole's counters + the round so far.
+//  - AT LAUNCH (launchShot): the PRE-shot state plus the shot's exact inputs, as
+//    `pending`. If the app dies before the ball settles, resume re-fires that
+//    shot through launchShot — the dice are seeded by stroke and the wind by
+//    hole, so it is the same shot, not a fresh swing.
+// The at-rest save overwrites the pending one the moment the ball stops.
+const D9_RESUME_KEY = "golf.d9resume";
+let _d9Sig = "", _d9Replaying = false;
+function d9ClearResume() { try { localStorage.removeItem(D9_RESUME_KEY); } catch (e) {} _d9Sig = ""; }
+function d9HoleDone() { return round.holeStats.some((h) => h.hole === HOLE.num); }
+function d9Snapshot(pending) {
+  if (!dailyMode || !dailyInfo || !dailyInfo.seq || !course) return;
+  const st = state;
+  lsSet(D9_RESUME_KEY, {
+    v: 1, date: dailyInfo.date, courseId: dailyInfo.courseId,
+    seq: dailyInfo.seq, step: dailyInfo.step,
+    round: { score: round.score, holesPlayed: round.holesPlayed, holeStats: round.holeStats },
+    hole: {
+      num: HOLE.num, done: d9HoleDone(), x: st.ball.x, y: st.ball.y, lastSafe: st.lastSafe,
+      strokes: st.strokes, putts: st.putts, strokesOffGreen: st.strokesOffGreen,
+      greenReached: st.greenReached, proximity: st.proximity, gir: st.gir,
+      fairwayHit: st.fairwayHit, _teeShot: st._teeShot,
+    },
+    pending: pending || null,
+  });
+}
+function d9Tick() {
+  if (!dailyMode || mode !== "course" || !dailyInfo || !dailyInfo.seq || !state || state.moving || _d9Replaying) return;
+  // Holed but not yet scored (drop animation running): keep the launch snapshot,
+  // so a close here replays the holing shot rather than leaving the ball on the lip.
+  if (state.inHole && !d9HoleDone()) return;
+  const sig = dailyInfo.step + ":" + round.holesPlayed + ":" + state.strokes + ":" + HOLE.num;
+  if (sig === _d9Sig) return;
+  _d9Sig = sig;
+  d9Snapshot(null);
+}
+// Today's saved round, or null (stale day / different course / already done).
+function d9LoadResume(dateStr, courseId) {
+  const r = lsGet(D9_RESUME_KEY, null);
+  if (!r) return null;
+  // Only a past day's save is garbage. A course mismatch is never cleared: it
+  // means the caller resolved the pick from an incomplete course list, and
+  // wiping the save there would quietly hand the player a fresh round.
+  if (r.v !== 1 || r.date !== dateStr || !Array.isArray(r.seq)) { d9ClearResume(); return null; }
+  return r.courseId === courseId ? r : null;
+}
+// Put a loaded course back exactly where the snapshot left it. Returns false if
+// the round turned out to be over (last hole holed) — caller shows the summary.
+function d9ApplyResume(r) {
+  dailyInfo = { date: r.date, courseId: r.courseId, seq: r.seq, step: r.step };
+  round.score = r.round.score; round.holesPlayed = r.round.holesPlayed;
+  round.holeStats = r.round.holeStats || [];
+  if (r.hole.done) {                       // closed on the result card: move on
+    if (r.step >= r.seq.length - 1) { holeIndex = r.seq[r.step]; setHole(course.holes[holeIndex]); return false; }
+    dailyInfo.step = r.step + 1;
+    holeIndex = r.seq[dailyInfo.step];
+    setHole(course.holes[holeIndex]);
+    return true;
+  }
+  holeIndex = r.seq[r.step];
+  setHole(course.holes[holeIndex]);
+  const h = r.hole;
+  Object.assign(state, {
+    strokes: h.strokes, putts: h.putts, strokesOffGreen: h.strokesOffGreen,
+    greenReached: h.greenReached, proximity: h.proximity, gir: h.gir,
+    fairwayHit: h.fairwayHit, _teeShot: h._teeShot,
+    lastSafe: h.lastSafe || state.lastSafe,
+  });
+  state.ball.x = h.x; state.ball.y = h.y;
+  frameRemaining();
+  if (autoAimEnabled) aimAtHole();
+  snapCamera();
+  autoClub();
+  updateScorecard();
+  if (r.pending) d9ReplayPending(r.pending);
+  return true;
+}
+// Re-fire the shot that was in the air when the app closed. Waits for the hole
+// to become swingable (intro/transition), restores the shot context, fires.
+function d9ReplayPending(p) {
+  // Held true until the shot fires: d9Tick must not overwrite the pending save
+  // with an at-rest one, or closing again before the replay would be a mulligan.
+  _d9Replaying = true;
+  const t0 = performance.now();
+  const iv = setInterval(() => {
+    if (!dailyMode) { clearInterval(iv); _d9Replaying = false; return; }
+    if (!canSwing()) { if (performance.now() - t0 > 15000) { clearInterval(iv); _d9Replaying = false; } return; }
+    clearInterval(iv);
+    selectedClub = p.club; previewFrac = p.previewFrac; powerPreviewEnabled = p.powerPreviewEnabled;
+    chipSpinBias = p.chipSpinBias || 0; flightSpinBias = p.flightSpinBias || 0;
+    showToast("Resuming your last shot", 1600);
+    try { launchShot(p.ang, p.frac, p.spin, p.onGreen, p.disp); }
+    finally { _d9Replaying = false; }
+  }, 150);
+}
 // Called once on completing today's daily: update streak (with a 1-day grace),
 // celebrate, and copy a shareable result.
 function finishDaily(totStrk) {
   const dateStr = (dailyInfo && dailyInfo.date) || todayStr();
+  d9ClearResume();
   const st = getDaily();
   if (st.lastDate !== dateStr) {
     const yest = dayShift(dateStr, -1), dbefore = dayShift(dateStr, -2);
@@ -18501,6 +18629,7 @@ function loop() {
   // letting it grow unbounded (which would spiral into permanent catch-up).
   if (steps === PHYS_MAX_STEPS) _physAccum = 0;
 
+  d9Tick();           // daily: snapshot the round whenever the ball settles
   tickHoleDrop();
   tickHoleTransition(); // Next Hole button: unconditional so it still works when draw() is skipped (Four Oaks 3D)
   tickCine();         // cinematic landing: cut in on the descent, close after rest

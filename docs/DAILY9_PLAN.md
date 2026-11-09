@@ -21,7 +21,7 @@ later phase; the choices marked (S) below keep that door open.
 ## Build order
 
 1. ✅ ET date, stable course pick, seeded 9, same-dice dispersion, `?d9=1` shell
-2. Mid-round resume (save after every stroke; one attempt/day means closing the app must never cost the round)
+2. ✅ Mid-round resume — at-rest snapshot + launch-time snapshot with exact shot inputs; a close mid-flight REPLAYS the shot (bit-identical), never a mulligan. Key `golf.d9resume`
 3. Per-hole scores table + `daily_percentile(date, hole, my_cum)` RPC → "Thru 4: −1 · better than 72% of 1,284" on the hole card. (S) store swipe inputs per stroke alongside, for later server replay
 4. End screen: emoji share grid, stats (histogram, avg, best, birdie/par/bogey %), countdown to next 9
 5. First-run tutorial (3 cards or a guided hole)
