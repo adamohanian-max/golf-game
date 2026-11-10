@@ -4143,8 +4143,11 @@ function launchShot(ang, frac, spin, onGreen, disp) {
   // built from, so closing the app mid-flight replays this exact shot on resume
   // instead of handing out a mulligan. `frac` here is post-clamp; previewFrac is
   // restored too, so the replay's own clamp is a no-op.
-  if (dailyMode && !_d9Replaying) d9Snapshot({ ang, frac, spin, onGreen, disp,
-    club: selectedClub, previewFrac, powerPreviewEnabled, chipSpinBias, flightSpinBias });
+  if (dailyMode && !_d9Replaying) {
+    d9RecordShot({ ang, frac, spin, onGreen, disp, club: selectedClub, previewFrac, chipSpinBias, flightSpinBias });
+    d9Snapshot({ ang, frac, spin, onGreen, disp,
+      club: selectedClub, previewFrac, powerPreviewEnabled, chipSpinBias, flightSpinBias });
+  }
   const b = state.ball;
   shot.startX = b.x; shot.startY = b.y;
   shot.carry = null; shot.total = null; shot.carried = onGreen; shot._landed = false;
@@ -8575,6 +8578,9 @@ function showResult() {
   else if (hb.isBest && hb.prev == null && !HOLE.isRange) detail += `\nFirst time on this hole — best set`;
   else if (hb.prev != null) detail += `\nYour best: ${hb.prev}` + (state.strokes > hb.prev ? ` — ${state.strokes - hb.prev} to beat` : "");
   document.getElementById("result-detail").textContent = detail;
+  const pctEl = document.getElementById("result-pct");
+  if (pctEl) pctEl.classList.add("hidden");
+  if (dailyMode && !HOLE.isRange) d9OnHoleDone();
   elResult.classList.remove("hidden");
 
   // Juice: sound + confetti + camera punch scaled to the moment
@@ -11268,6 +11274,7 @@ async function startDailyRound() {
     dailyInfo = { date: dateStr, courseId: c.id };
     setHole(FALLBACK_HOLE);
   }
+  d9FlushOutbox();           // retry holes that never reached the server
   loadDailyBoard(dateStr);   // fetch today's field for the live scorebug (async, non-blocking)
   updateDailyBug();
 }
@@ -11299,6 +11306,7 @@ function d9Snapshot(pending) {
       strokes: st.strokes, putts: st.putts, strokesOffGreen: st.strokesOffGreen,
       greenReached: st.greenReached, proximity: st.proximity, gir: st.gir,
       fairwayHit: st.fairwayHit, _teeShot: st._teeShot,
+      shots: _d9ShotsHole === HOLE.num ? _d9Shots : [],
     },
     pending: pending || null,
   });
@@ -11345,6 +11353,7 @@ function d9ApplyResume(r) {
     fairwayHit: h.fairwayHit, _teeShot: h._teeShot,
     lastSafe: h.lastSafe || state.lastSafe,
   });
+  _d9Shots = Array.isArray(h.shots) ? h.shots : []; _d9ShotsHole = HOLE.num;
   state.ball.x = h.x; state.ball.y = h.y;
   frameRemaining();
   if (autoAimEnabled) aimAtHole();
@@ -11354,6 +11363,107 @@ function d9ApplyResume(r) {
   if (r.pending) d9ReplayPending(r.pending);
   return true;
 }
+// ---- Daily per-hole scores + live percentile -------------------------------
+// Each holed daily hole posts one daily_holes row (supabase/schema.sql); the
+// percentile then compares MY running total with everyone else's at the SAME
+// step — not with finished rounds, which is what the old scorebug did.
+// Rows go through an outbox written BEFORE the network call, so a closed app,
+// a dead connection or a missing table never loses a hole; every later post
+// retries the backlog (first write wins server-side, so retries are safe).
+let _d9Shots = [], _d9ShotsHole = null;
+function d9PlayerKey() {
+  const u = currentUser();
+  if (u && u.id) return "u:" + u.id;
+  let id = lsGet("golf.d9pid", null);
+  if (!id) {
+    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+       : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    lsSet("golf.d9pid", id);
+  }
+  return "a:" + id;
+}
+// Launch inputs per stroke — stored with the hole row for a future server-side
+// replay check (prize contests). Compact; dice included so a replay is exact.
+function d9RecordShot(p) {
+  if (_d9ShotsHole !== HOLE.num) { _d9Shots = []; _d9ShotsHole = HOLE.num; }
+  const r5 = (v) => Math.round(v * 1e5) / 1e5;
+  _d9Shots.push({ c: p.club, a: r5(p.ang), f: r5(p.frac), s: r5(p.spin || 0), g: p.onGreen ? 1 : 0,
+    pf: r5(p.previewFrac), cb: p.chipSpinBias || 0, fb: p.flightSpinBias || 0,
+    da: p.disp ? r5(p.disp.ang) : 0, dc: p.disp ? r5(p.disp.carry) : 0,
+    x: r5(state.ball.x), y: r5(state.ball.y) });
+}
+const D9_OUTBOX_KEY = "golf.d9outbox";
+async function d9FlushOutbox() {
+  const q = lsGet(D9_OUTBOX_KEY, []);
+  if (!q.length || !LB_ON()) return !q.length;
+  try {
+    const res = await fetch(LB_URL + "/rest/v1/daily_holes?on_conflict=day,player_key,step", {
+      method: "POST",
+      headers: authHeaders({ Prefer: "resolution=ignore-duplicates,return=minimal" }),
+      body: JSON.stringify(q),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    // Only drop what we sent — a hole queued meanwhile stays.
+    const sent = new Set(q.map((r) => r.day + "|" + r.step + "|" + r.player_key));
+    lsSet(D9_OUTBOX_KEY, lsGet(D9_OUTBOX_KEY, []).filter((r) => !sent.has(r.day + "|" + r.step + "|" + r.player_key)));
+    return true;
+  } catch (e) { console.warn("daily hole post failed (kept in outbox)", e); return false; }
+}
+function d9QueueHole() {
+  const row = {
+    day: dailyInfo.date, player_key: d9PlayerKey(),
+    user_id: (currentUser() || {}).id || null,
+    name: (getPlayerName() || "").slice(0, 24) || null,
+    course_id: dailyInfo.courseId, step: dailyInfo.step,
+    hole_num: HOLE.num, par: HOLE.par, strokes: state.strokes, to_par_cum: round.score,
+    shots: _d9ShotsHole === HOLE.num ? _d9Shots : [],
+  };
+  // Keep only today's rows (a stale backlog from a past day is just noise), cap it.
+  const q = lsGet(D9_OUTBOX_KEY, []).filter((r) => r.day === row.day && r.step !== row.step);
+  q.push(row);
+  lsSet(D9_OUTBOX_KEY, q.slice(-20));
+}
+async function d9FetchPercentile(step, cum) {
+  if (!LB_ON()) return null;
+  const res = await fetch(LB_URL + "/rest/v1/rpc/daily_percentile", {
+    method: "POST", headers: lbHeaders(),
+    body: JSON.stringify({ p_day: dailyInfo.date, p_step: step, p_cum: cum, p_player: d9PlayerKey() }),
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows[0] : rows;
+}
+// "better than X%": share of the field (excluding me) I beat, ties count half.
+function d9PctOf(r) { return r && r.field > 0 ? Math.round(100 * (r.worse + r.ties / 2) / r.field) : null; }
+function fmtAvgToPar(v) { const n = Number(v); return (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(2); }
+// Called from showResult on every holed daily hole: queue + post the row, then
+// fill the result card's percentile line once the field answers.
+function d9OnHoleDone() {
+  if (!dailyInfo || !dailyInfo.seq) return;
+  const step = dailyInfo.step, cum = round.score, thru = step + 1;
+  d9QueueHole();
+  d9FlushOutbox();
+  const el = document.getElementById("result-pct");
+  if (!el) return;
+  el.classList.remove("hidden");
+  el.textContent = `Thru ${thru}: ${formatToPar(cum)} · ranking…`;
+  d9FetchPercentile(step, cum).then((r) => {
+    if (!dailyInfo || dailyInfo.step !== step) return;   // already on the next hole
+    const pct = d9PctOf(r);
+    dailyInfo.pct = dailyInfo.pct || [];
+    dailyInfo.pct[step] = pct;
+    let line = pct == null
+      ? `Thru ${thru}: ${formatToPar(cum)} · first one through today`
+      : `Thru ${thru}: ${formatToPar(cum)} · better than ${pct}% of ${(r.field + 1).toLocaleString()}`;
+    if (r && r.field > 0 && r.hole_avg != null) line += `\nField on this hole: ${fmtAvgToPar(r.hole_avg)}`;
+    el.textContent = line;
+    updateDailyBug();
+  }).catch((e) => {
+    console.warn("daily percentile failed", e);
+    if (dailyInfo && dailyInfo.step === step) el.textContent = `Thru ${thru}: ${formatToPar(cum)}`;
+  });
+}
+
 // Re-fire the shot that was in the air when the app closed. Waits for the hole
 // to become swingable (intro/transition), restores the shot context, fires.
 function d9ReplayPending(p) {
@@ -14948,7 +15058,8 @@ function updateDailyBug() {
   const rows = [];
   for (let i = 0; i < Math.min(3, field.length); i++) rows.push([tourPos(positions[i]), field[i]]);
   if (meIdx >= 3) rows.push([tourPos(positions[meIdx]), field[meIdx]]);
-  bug.querySelector(".tbug-head").textContent = "Daily 9";
+  const lastPct = dailyInfo && dailyInfo.pct ? dailyInfo.pct.filter((v) => v != null).pop() : null;
+  bug.querySelector(".tbug-head").textContent = lastPct != null ? `Daily 9 · top ${Math.max(1, 100 - lastPct)}%` : "Daily 9";
   bug.querySelector(".tbug-list").innerHTML = rows.map(([r, p]) => _bugRowHTML(r, p)).join("");
   bug.querySelector(".tbug-cut").classList.add("hidden");   // daily has no cut
 }

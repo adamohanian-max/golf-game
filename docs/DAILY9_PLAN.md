@@ -22,7 +22,7 @@ later phase; the choices marked (S) below keep that door open.
 
 1. ✅ ET date, stable course pick, seeded 9, same-dice dispersion, `?d9=1` shell
 2. ✅ Mid-round resume — at-rest snapshot + launch-time snapshot with exact shot inputs; a close mid-flight REPLAYS the shot (bit-identical), never a mulligan. Key `golf.d9resume`
-3. Per-hole scores table + `daily_percentile(date, hole, my_cum)` RPC → "Thru 4: −1 · better than 72% of 1,284" on the hole card. (S) store swipe inputs per stroke alongside, for later server replay
+3. ✅ Per-hole scores (`daily_holes`) + `daily_percentile` RPC → "Thru 4: −1 · better than 72% of 1,284" + field average on the hole card, "top N%" in the scorebug. Offline outbox (`golf.d9outbox`). Each stroke's launch inputs stored in `shots` for later server replay. **SQL must be applied by hand** in the Supabase SQL editor (end of `supabase/schema.sql`)
 4. End screen: emoji share grid, stats (histogram, avg, best, birdie/par/bogey %), countdown to next 9
 5. First-run tutorial (3 cards or a guided hole)
 6. Second wave: friends board, reminder notifications, archive/practice (unranked), badges, hole flyover reveal

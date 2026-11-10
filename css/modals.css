@@ -609,3 +609,12 @@ body.is-mobile #match-standings { width: min(240px, 60vw); min-width: 0; box-siz
   background: var(--accent-soft); color: var(--accent);
   font-weight: var(--fw-bold); font-size: 13px; text-align: center;
 }
+
+/* Daily 9: live percentile under the hole result ("Thru 4: −1 · better than 72% of 1,284") */
+#result-pct {
+  white-space: pre-line;
+  margin-top: calc(-1 * var(--s-3));
+  color: var(--brass, var(--text));
+  font-weight: var(--fw-bold);
+}
+#result-pct.hidden { display: none; }
